@@ -1,0 +1,111 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww17240\viewh10480\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 # Proyecto: chpapp\
+\
+## Qu\'e9 es\
+\
+Calculadora interna de oportunidad de cogeneraci\'f3n para clientes industriales en M\'e9xico. Procesa 12 facturas reales de CFE y 12 facturas de gas natural de un cliente, analiza su comportamiento energ\'e9tico hist\'f3rico y calcula el ahorro neto que obtendr\'eda al instalar un sistema de cogeneraci\'f3n con motor de gas natural.\
+\
+Es una herramienta de uso interno del equipo comercial, no un producto SaaS para el cliente final. No requiere autenticaci\'f3n multiusuario, multi-tenant ni interfaz pulida orientada a terceros.\
+\
+Es la fase 1 de un proyecto mayor que eventualmente ser\'e1 una plataforma SaaS de monitoreo en tiempo real de motores de cogeneraci\'f3n con integraci\'f3n IoT, m\'f3dulos de mantenimiento, contexto regulatorio y API p\'fablica. Todo lo que se construya en fase 1 debe ser reutilizable en las fases posteriores.\
+\
+## Alcance estricto de fase 1\
+\
+Dentro del alcance:\
+- Parser de un solo modelo de factura CFE (tarifa industrial con desglose horario)\
+- Parser de facturas de un solo distribuidor de gas natural\
+- Motor de c\'e1lculo de oportunidad de cogeneraci\'f3n con par\'e1metros configurables\
+- Persistencia local de clientes, facturas procesadas y an\'e1lisis\
+- Interfaz web m\'ednima para carga, configuraci\'f3n y visualizaci\'f3n\
+- Generador de reporte de salida (PDF y/o Excel)\
+\
+Fuera de alcance en fase 1:\
+- Gesti\'f3n de motores como activos\
+- Alertas u \'f3rdenes de servicio\
+- Aplicaci\'f3n m\'f3vil\
+- Conectividad IoT o telemetr\'eda en tiempo real\
+- API p\'fablica para terceros\
+- Multi-tenant\
+- Autenticaci\'f3n robusta\
+\
+## Stack tecnol\'f3gico\
+\
+- Lenguaje: Python 3.11 o superior\
+- Extracci\'f3n de PDF: pdfplumber como base, expresiones regulares para campos espec\'edficos\
+- Persistencia: SQLite en fase 1\
+- Backend web: FastAPI\
+- Frontend: HTML + Jinja2 templates con interactividad m\'ednima en JavaScript vanilla; sin SPA\
+- Generaci\'f3n de reportes: reportlab para PDF, openpyxl para Excel\
+- Gesti\'f3n de dependencias: uv o pip con requirements.txt\
+- Tests: pytest\
+\
+## Par\'e1metros del motor candidato (configurables, con valores por defecto)\
+\
+- Cobertura objetivo: 75% del consumo el\'e9ctrico mensual del cliente (rango editable 50-95%)\
+- Rendimiento el\'e9ctrico: 40%\
+- Rendimiento t\'e9rmico: 25%\
+- Eficiencia caldera de referencia: 85%\
+- Horas de operaci\'f3n previstas: 720 horas mensuales (operaci\'f3n continua)\
+\
+## L\'f3gica de c\'e1lculo (resumida)\
+\
+Paso 1. Dimensionamiento: consumo el\'e9ctrico mensual del cliente \'d7 cobertura objetivo = energ\'eda a generar (kWh)\
+\
+Paso 2. Distribuci\'f3n horaria: el consumo cubierto se reparte proporcionalmente entre punta, intermedio y base seg\'fan la distribuci\'f3n horaria de la tarifa\
+\
+Paso 3. Ahorro el\'e9ctrico bruto por horario: consumo cubierto en cada horario \'d7 costo unitario de ese horario en la factura del cliente\
+\
+Paso 4. Costo de gas adicional: energ\'eda el\'e9ctrica generada / rendimiento el\'e9ctrico = energ\'eda contenida en gas requerido. Convertir a m3 con poder calor\'edfico de las facturas reales \'d7 costo unitario del gas del cliente\
+\
+Paso 5. Ahorro t\'e9rmico: energ\'eda contenida en gas (paso 4) \'d7 rendimiento t\'e9rmico = calor recuperable. Calor recuperable / eficiencia caldera referencia = gas que el cliente deja de quemar en su caldera. Multiplicar por costo unitario del gas\
+\
+Paso 6. Ahorro neto = ahorro el\'e9ctrico bruto + ahorro t\'e9rmico \uc0\u8722  costo de gas adicional\
+\
+## Entregables incrementales\
+\
+Entregable 1: Parser CFE funcional sobre una factura real. Devuelve objeto estructurado con todos los campos. Persistencia b\'e1sica en SQLite. Sin interfaz; ejecuci\'f3n por l\'ednea de comandos.\
+\
+Entregable 2: Parser gas natural funcional. Validador de coherencia. Carga en bloque de las 12 facturas de cada tipo. An\'e1lisis de comportamiento hist\'f3rico generado como salida estructurada.\
+\
+Entregable 3: Motor de c\'e1lculo de oportunidad de cogeneraci\'f3n implementado. Configurador de par\'e1metros del motor por archivo de configuraci\'f3n o l\'ednea de comandos.\
+\
+Entregable 4: Interfaz web m\'ednima con FastAPI para carga, configuraci\'f3n y visualizaci\'f3n. Generador de reporte de salida en PDF y Excel.\
+\
+Cada entregable se valida con datos reales antes de avanzar al siguiente.\
+\
+## Decisiones arquitect\'f3nicas tomadas\
+\
+- Aunque sea uso interno en fase 1, el c\'f3digo debe organizarse en m\'f3dulos independientes con interfaces claras (parser, validador, almac\'e9n, motor de c\'e1lculo, generador de reporte) para reutilizarse en fases posteriores\
+- La base de datos debe dise\'f1arse pensando en multi-cliente desde el inicio, aunque en fase 1 lo opere una sola persona\
+- Los parsers deben ser intercambiables v\'eda interfaz com\'fan, para que en el futuro se agreguen m\'e1s tarifas y distribuidores sin tocar el resto del sistema\
+- Toda la l\'f3gica de c\'e1lculo debe estar separada de la capa de presentaci\'f3n, para que en el futuro se exponga v\'eda API sin reescribir\
+- Se prefiere c\'f3digo documentado y legible sobre c\'f3digo optimizado prematuramente\
+\
+## Supuestos y limitaciones documentadas\
+\
+- La carga base se aproxima como porcentaje del consumo total mensual, no como demanda m\'ednima sostenida (limitaci\'f3n inherente a operar sobre facturas mensuales)\
+- Se asume operaci\'f3n continua del motor; el operador puede ajustar la distribuci\'f3n horaria si el r\'e9gimen real es distinto\
+- Se asume que el cliente aprovecha el calor recuperable; si no, el operador configura rendimiento t\'e9rmico reducido o cero\
+- Se asume que las 12 facturas representan un a\'f1o t\'edpico del cliente; el operador valida representatividad antes de generar reporte\
+- El costo unitario del gas se asume constante en el periodo proyectado\
+\
+## Restricciones de comunicaci\'f3n\
+\
+- Responder en espa\'f1ol\
+- Estilo directo, minimalista, ejecutivo\
+- Sin vi\'f1etas ni guiones en explicaciones; usar prosa estructurada en p\'e1rrafos\
+- Cuestionar decisiones cuando algo no parezca correcto, no aceptar acr\'edticamente\
+- Si faltan datos para tomar una decisi\'f3n, detenerse y solicitar la informaci\'f3n espec\'edfica\
+- Si una decisi\'f3n depende de informaci\'f3n desconocida, plantear escenarios y pedir instrucciones\
+\
+## C\'f3mo trabajar con este proyecto\
+\
+Cada sesi\'f3n de trabajo se enfoca en un entregable espec\'edfico. Al iniciar la sesi\'f3n, leer este archivo para retomar contexto. Al cerrar, actualizar este archivo si hubo decisiones nuevas que afecten futuras sesiones.\
+\
+Antes de implementar, explicar la aproximaci\'f3n y esperar confirmaci\'f3n. Antes de tomar decisiones que no est\'e9n documentadas aqu\'ed, preguntar.}
