@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 
 
 @dataclass
@@ -24,9 +25,9 @@ class CFEConsumoHorario:
 @dataclass
 class CFEInvoice:
     # Identificación CFDI
-    uuid_cfdi: Optional[str]
+    uuid_cfdi: str | None
     folio: str
-    serie: Optional[str]
+    serie: str | None
     fecha_emision: date
     periodo_inicio: date
     periodo_fin: date
@@ -36,7 +37,7 @@ class CFEInvoice:
     nombre_cliente: str
     rfc_cliente: str
     numero_servicio: str
-    rmu: Optional[str]
+    rmu: str | None
 
     # Suministro
     tarifa: str
