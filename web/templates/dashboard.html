@@ -347,41 +347,42 @@ dropZone.addEventListener("click", e => {
 
 async function subirArchivos(files) {
   if (!files || files.length === 0) return;
-  statusDiv.innerHTML = '<span class="text-info">&#9203; Subiendo ' + files.length + ' archivo(s)...</span>';
+  const total = files.length;
+  let procesados = 0, errores = [];
 
-  const fd = new FormData();
-  for (const f of files) fd.append("facturas", f);
-
-  try {
-    const resp = await fetch("/upload", { method: "POST", body: fd });
-    const data = await resp.json();
-
-    statusDiv.innerHTML = "";
-
-    if (data.procesados > 0) {
-      const ok = document.createElement("span");
-      ok.className = "text-success";
-      ok.textContent = "✓ " + data.procesados + " factura(s) procesada(s).";
-      statusDiv.appendChild(ok);
-      statusDiv.appendChild(document.createTextNode(" "));
+  for (let i = 0; i < total; i++) {
+    const f = files[i];
+    statusDiv.innerHTML = '<span class="text-info">&#9203; Subiendo ' + (i + 1) + ' / ' + total + ': ' + f.name + '</span>';
+    try {
+      const fd = new FormData();
+      fd.append("facturas", f);
+      const resp = await fetch("/upload", { method: "POST", body: fd });
+      if (!resp.ok) { errores.push({ nombre: f.name, error: "HTTP " + resp.status }); continue; }
+      const data = await resp.json();
+      procesados += data.procesados || 0;
+      if (data.errores) errores = errores.concat(data.errores);
+    } catch (e) {
+      errores.push({ nombre: f.name, error: e.message });
     }
-    if (data.errores && data.errores.length > 0) {
-      const err = document.createElement("span");
-      err.className = "text-danger";
-      err.textContent = "✗ " + data.errores.length + " error(es): " +
-        data.errores.map(e => (e.nombre || "") + ": " + (e.error || "")).join("; ");
-      statusDiv.appendChild(err);
-    }
+  }
 
-    if (data.procesados > 0) {
-      setTimeout(() => window.location.reload(), 1500);
-    }
-  } catch (err) {
-    statusDiv.innerHTML = "";
+  statusDiv.innerHTML = "";
+  if (procesados > 0) {
+    const ok = document.createElement("span");
+    ok.className = "text-success";
+    ok.textContent = "✓ " + procesados + " factura(s) procesada(s).";
+    statusDiv.appendChild(ok);
+    statusDiv.appendChild(document.createTextNode(" "));
+  }
+  if (errores.length > 0) {
     const errSpan = document.createElement("span");
     errSpan.className = "text-danger";
-    errSpan.textContent = "Error de red: " + err.message;
+    errSpan.textContent = "✗ " + errores.length + " error(es): " +
+      errores.map(e => (e.nombre || "") + ": " + (e.error || "")).join("; ");
     statusDiv.appendChild(errSpan);
+  }
+  if (procesados > 0) {
+    setTimeout(() => window.location.reload(), 1500);
   }
 }
 </script>
