@@ -49,7 +49,7 @@ def test_upload_non_pdf_returns_error(client):
     resp = client.post("/upload", data=data, content_type="multipart/form-data")
     assert resp.status_code == 200
     body = resp.get_json()
-    assert body["errores"] != [] or body["procesados"] == 0
+    assert body["errores"] != []
 
 
 def test_upload_refreshes_dashboard(client):

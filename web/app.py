@@ -71,6 +71,21 @@ def _refresh_resultado(app: Flask) -> None:
     app.config["RESULTADO"] = _cargar_resultado(invoices_dir, db_path)
 
 
+def _detect_tipo(pdf_path: Path) -> str:
+    """Return 'cfe' or 'gas' by scanning the first page text."""
+    import pdfplumber
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            text = (pdf.pages[0].extract_text() or "").upper()
+    except Exception as e:
+        raise ValueError(f"No se pudo leer el PDF: {e}") from e
+    if "COMISIÓN FEDERAL" in text or "C.F.E." in text or "CFE" in text:
+        return "cfe"
+    if "ENGIE" in text or "GAS NATURAL" in text:
+        return "gas"
+    raise ValueError("No se pudo determinar el tipo de factura (CFE o Gas)")
+
+
 def create_app(
     invoices_dir: str | Path = "invoices",
     db_path: str | Path | None = None,
@@ -155,20 +170,6 @@ def create_app(
     def healthz():
         return "ok", 200
 
-    def _detect_tipo(pdf_path: Path) -> str:
-        """Return 'cfe' or 'gas' by scanning the first page text."""
-        import pdfplumber
-        try:
-            with pdfplumber.open(pdf_path) as pdf:
-                text = (pdf.pages[0].extract_text() or "").upper()
-        except Exception as e:
-            raise ValueError(f"No se pudo leer el PDF: {e}") from e
-        if "COMISIÓN FEDERAL" in text or "C.F.E." in text or "CFE" in text:
-            return "cfe"
-        if "ENGIE" in text or "GAS NATURAL" in text or "GAS" in text:
-            return "gas"
-        raise ValueError("No se pudo determinar el tipo de factura (CFE o Gas)")
-
     @app.route("/upload", methods=["POST"])
     def upload_facturas():
         import tempfile
@@ -187,25 +188,28 @@ def create_app(
         ok_count = 0
         errors = []
 
-        for f in files:
-            suffix = Path(f.filename).suffix.lower() if f.filename else ".pdf"
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                f.save(tmp.name)
-                tmp_path = Path(tmp.name)
-            try:
-                tipo = _detect_tipo(tmp_path)
-                if tipo == "cfe":
-                    procesar_factura_cfe(tmp_path, conn)
-                else:
-                    procesar_factura_gas(tmp_path, conn)
-                ok_count += 1
-            except Exception as e:
-                errors.append({"nombre": f.filename or "", "error": str(e)})
-            finally:
-                tmp_path.unlink(missing_ok=True)
+        try:
+            for f in files:
+                suffix = Path(f.filename).suffix.lower() if (f.filename and Path(f.filename).suffix) else ".pdf"
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                    f.save(tmp.name)
+                    tmp_path = Path(tmp.name)
+                try:
+                    tipo = _detect_tipo(tmp_path)
+                    if tipo == "cfe":
+                        procesar_factura_cfe(tmp_path, conn)
+                    else:
+                        procesar_factura_gas(tmp_path, conn)
+                    ok_count += 1
+                except Exception as e:
+                    errors.append({"nombre": f.filename or "", "error": str(e)})
+                finally:
+                    tmp_path.unlink(missing_ok=True)
+        finally:
+            conn.close()
 
-        conn.close()
-        _refresh_resultado(app)
+        if ok_count > 0:
+            _refresh_resultado(app)
 
         return jsonify({"procesados": ok_count, "errores": errors})
 
