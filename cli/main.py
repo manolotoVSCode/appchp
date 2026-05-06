@@ -62,6 +62,42 @@ def procesar_factura_cfe(
     return factura_id
 
 
+def procesar_factura_gas(pdf_path: Path, conn: sqlite3.Connection) -> int:
+    """Parsea y persiste una factura de gas ENGIE.
+
+    Args:
+        pdf_path: ruta al PDF.
+        conn: conexión SQLite inicializada con init_db().
+
+    Returns:
+        id de la fila en gas_facturas.
+
+    Raises:
+        FileNotFoundError: si el PDF no existe.
+    """
+    from parsers.gas import get_gas_parser
+    from storage.repository import save_gas_invoice
+
+    pdf_path = Path(pdf_path)
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"PDF no encontrado: {pdf_path}")
+
+    parser = get_gas_parser()
+    invoice = parser.parse(pdf_path)
+    errores = parser.validate(invoice)
+
+    for adv in invoice.advertencias:
+        print(f"  [ADVERTENCIA] {adv}")
+    for err in errores:
+        print(f"  [ERROR] {err}")
+
+    factura_id = save_gas_invoice(conn, invoice)
+    print(f"  [OK] {pdf_path.name} → gas_facturas.id={factura_id}  "
+          f"GJ={invoice.consumo_total_gj:,.4f}  "
+          f"total=${invoice.total_mxn:,.2f}")
+    return factura_id
+
+
 def _main() -> None:
     parser = argparse.ArgumentParser(description="Procesador de facturas CFE")
     parser.add_argument("pdf", help="Ruta al PDF de la factura CFE")
