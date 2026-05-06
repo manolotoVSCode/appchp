@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Base de datos
+*.db
+*.sqlite
+*.sqlite3
+
+# Facturas (datos sensibles)
+invoices/
+
+# Tests temporales
+.pytest_cache/
+*.pytest_tmp/
+htmlcov/
+.coverage
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporales
+*.tmp
+*.log
+tmp/
