@@ -98,6 +98,43 @@ def procesar_factura_gas(pdf_path: Path, conn: sqlite3.Connection) -> int:
     return factura_id
 
 
+def generar_analisis_cogen(conn: sqlite3.Connection, output_path: Path) -> Path:
+    """Carga todas las facturas de la BD, calcula cogeneración y genera Excel.
+
+    Args:
+        conn: conexión SQLite con facturas CFE y Gas ya persistidas.
+        output_path: ruta del archivo .xlsx a generar.
+
+    Returns:
+        output_path (Path) del archivo generado.
+    """
+    from storage.repository import list_cfe_invoices, load_cfe_invoice
+    from storage.repository import list_gas_invoices, load_gas_invoice
+    from calc.cogen import calcular_cogen
+    from models.cogen_result import CoGenParams
+    from reports.excel import generar_excel
+
+    cfe_rows = list_cfe_invoices(conn)
+    cfe_invoices = [load_cfe_invoice(conn, r["id"]) for r in cfe_rows]
+
+    gas_rows = list_gas_invoices(conn)
+    gas_invoices = [load_gas_invoice(conn, r["id"]) for r in gas_rows]
+
+    params = CoGenParams()
+    resultado = calcular_cogen(cfe_invoices, gas_invoices, params)
+
+    output_path = Path(output_path)
+    generar_excel(resultado, output_path)
+
+    print(f"[OK] Análisis generado: {output_path}")
+    print(f"     Meses pareados:     {len(resultado.meses)}")
+    print(f"     EBITDA anual:       ${resultado.ebitda_anual_mxn:>16,.2f}")
+    print(f"     Ahorro electricidad:${resultado.ahorro_electricidad_anual_mxn:>16,.2f}")
+    print(f"     Ahorro caldera:     ${resultado.ahorro_caldera_anual_mxn:>16,.2f}")
+    print(f"     Costo gas cogen:    ${resultado.costo_gas_cogen_anual_mxn:>16,.2f}")
+    return output_path
+
+
 def _main() -> None:
     parser = argparse.ArgumentParser(description="Procesador de facturas CFE")
     parser.add_argument("pdf", help="Ruta al PDF de la factura CFE")
