@@ -155,4 +155,58 @@ def create_app(
     def healthz():
         return "ok", 200
 
+    def _detect_tipo(pdf_path: Path) -> str:
+        """Return 'cfe' or 'gas' by scanning the first page text."""
+        import pdfplumber
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                text = (pdf.pages[0].extract_text() or "").upper()
+        except Exception as e:
+            raise ValueError(f"No se pudo leer el PDF: {e}") from e
+        if "COMISIÓN FEDERAL" in text or "C.F.E." in text or "CFE" in text:
+            return "cfe"
+        if "ENGIE" in text or "GAS NATURAL" in text or "GAS" in text:
+            return "gas"
+        raise ValueError("No se pudo determinar el tipo de factura (CFE o Gas)")
+
+    @app.route("/upload", methods=["POST"])
+    def upload_facturas():
+        import tempfile
+        from flask import jsonify, request
+
+        files = request.files.getlist("facturas")
+        if not files:
+            return jsonify({"procesados": 0, "errores": [{"nombre": "", "error": "No se enviaron archivos"}]}), 400
+
+        db_path_str = app.config.get("DB_PATH")
+        db_path_val = Path(db_path_str) if db_path_str else None
+
+        conn = get_connection(str(db_path_val) if db_path_val else None)
+        init_db(conn)
+
+        ok_count = 0
+        errors = []
+
+        for f in files:
+            suffix = Path(f.filename).suffix.lower() if f.filename else ".pdf"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                f.save(tmp.name)
+                tmp_path = Path(tmp.name)
+            try:
+                tipo = _detect_tipo(tmp_path)
+                if tipo == "cfe":
+                    procesar_factura_cfe(tmp_path, conn)
+                else:
+                    procesar_factura_gas(tmp_path, conn)
+                ok_count += 1
+            except Exception as e:
+                errors.append({"nombre": f.filename or "", "error": str(e)})
+            finally:
+                tmp_path.unlink(missing_ok=True)
+
+        conn.close()
+        _refresh_resultado(app)
+
+        return jsonify({"procesados": ok_count, "errores": errors})
+
     return app
