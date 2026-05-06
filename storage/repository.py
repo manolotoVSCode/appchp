@@ -19,7 +19,7 @@ def _upsert_cliente(conn: Any, nombre: str, rfc: str) -> int:
         "INSERT INTO clientes (nombre, rfc) VALUES (?, ?) RETURNING id",
         (nombre, rfc),
     )
-    cur.fetchall()  # drain cursor so commit() can proceed on raw sqlite3
+    cur.fetchall()  # drain RETURNING cursor so raw sqlite3 can commit
     conn.commit()
     return cur.lastrowid
 
@@ -76,7 +76,7 @@ def save_cfe_invoice(conn: Any, invoice: CFEInvoice) -> int:
         ),
     )
     factura_id = cur.lastrowid
-    cur.fetchall()  # drain RETURNING cursor so commit() can proceed on raw sqlite3
+    cur.fetchall()  # drain RETURNING cursor so raw sqlite3 can commit
 
     for p in invoice.periodos:
         conn.execute(
@@ -238,7 +238,7 @@ def save_gas_invoice(conn: Any, invoice) -> int:
         ),
     )
     factura_id = cur.lastrowid
-    cur.fetchall()  # drain RETURNING cursor so commit() can proceed on raw sqlite3
+    cur.fetchall()  # drain RETURNING cursor so raw sqlite3 can commit
     conn.commit()
 
     for c in invoice.conceptos:
@@ -269,13 +269,11 @@ def load_gas_invoice(conn: Any, factura_id: int) -> GasInvoice:
     ).fetchone()
 
     if row is None:
-        conn.row_factory = None
         raise ValueError(f"Factura de gas con id={factura_id} no encontrada")
 
     conceptos_rows = conn.execute(
         "SELECT * FROM gas_conceptos WHERE factura_id = ? ORDER BY id", (factura_id,)
     ).fetchall()
-    conn.row_factory = None
 
     conceptos = [
         GasConcepto(

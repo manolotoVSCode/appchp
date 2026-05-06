@@ -194,6 +194,7 @@ class _PgConn(Conn):
         """Execute multiple statements separated by semicolons."""
         cur = self._raw.cursor()
         try:
+            # Note: splits on ";" — DDL must not contain semicolons inside string literals or comments
             for stmt in sql.split(";"):
                 stmt = stmt.strip()
                 if stmt and not stmt.startswith("PRAGMA"):

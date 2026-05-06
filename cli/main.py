@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from parsers.cfe import get_cfe_parser
+from storage.db import get_connection
 from storage.schema import init_db
 from storage.repository import save_cfe_invoice, list_cfe_invoices
 
@@ -143,8 +144,9 @@ def _main() -> None:
     parser.add_argument("--db", default="chpapp.db", help="Ruta a la base de datos SQLite")
     args = parser.parse_args()
 
-    conn = sqlite3.connect(args.db)
-    conn.execute("PRAGMA foreign_keys = ON")
+    import os
+    os.environ.setdefault("SQLITE_PATH", args.db)
+    conn = get_connection()
     init_db(conn)
 
     try:
