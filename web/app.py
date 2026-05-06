@@ -137,4 +137,8 @@ def create_app(
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+    @app.route("/healthz")
+    def healthz():
+        return "ok", 200
+
     return app
