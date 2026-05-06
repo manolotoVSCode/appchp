@@ -55,9 +55,7 @@ def create_app() -> Flask:
         finally:
             app.config["CARGANDO"] = False
 
-    # Production: Supabase query is fast — load synchronously so CARGANDO becomes
-    # False before gunicorn starts serving requests.
-    _cargar_en_segundo_plano()
+    threading.Thread(target=_cargar_en_segundo_plano, daemon=True).start()
 
     @app.route("/")
     def dashboard():
