@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import sqlite3
+import threading
 from contextlib import redirect_stdout
 from pathlib import Path
 
@@ -46,14 +47,30 @@ def _cargar_resultado(invoices_dir: Path):
 
 
 def create_app(invoices_dir: str | Path = "invoices") -> Flask:
-    """Flask app factory. Carga los PDFs de invoices_dir al crear la app."""
+    """Flask app factory. El puerto abre de inmediato; los PDFs cargan en segundo plano."""
     app = Flask(__name__)
+    app.config["RESULTADO"] = None
+    app.config["CARGANDO"] = True
 
-    resultado = _cargar_resultado(Path(invoices_dir))
-    app.config["RESULTADO"] = resultado
+    def _cargar_en_segundo_plano():
+        app.config["RESULTADO"] = _cargar_resultado(Path(invoices_dir))
+        app.config["CARGANDO"] = False
+        print("✓ Facturas cargadas — dashboard listo")
+
+    threading.Thread(target=_cargar_en_segundo_plano, daemon=True).start()
 
     @app.route("/")
     def dashboard():
+        if app.config["CARGANDO"]:
+            return (
+                "<html><head><meta http-equiv='refresh' content='5'>"
+                "<title>Cargando...</title></head>"
+                "<body style='font-family:sans-serif;padding:2rem'>"
+                "<h2>⏳ Cargando facturas...</h2>"
+                "<p>Esta página se actualiza automáticamente cada 5 segundos.</p>"
+                "</body></html>",
+                503,
+            )
         r = app.config["RESULTADO"]
         chart_labels = [m.periodo_inicio.strftime("%b %Y") for m in r.meses]
         chart_ebitda = [float(m.ebitda_mes_mxn) for m in r.meses]

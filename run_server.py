@@ -19,10 +19,9 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
 
-    print(f"Cargando facturas desde '{args.invoices}'...")
     app = create_app(args.invoices)
-    print(f"Servidor listo → http://{args.host}:{args.port}/")
-    app.run(host=args.host, port=args.port, debug=False)
+    print(f"Servidor → http://{args.host}:{args.port}/  (cargando facturas en segundo plano...)")
+    app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
 
 
 if __name__ == "__main__":
