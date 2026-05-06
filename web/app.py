@@ -114,7 +114,15 @@ def create_app(
         finally:
             app.config["CARGANDO"] = False
 
-    threading.Thread(target=_cargar_en_segundo_plano, daemon=True).start()
+    db_url = os.environ.get("DATABASE_URL", "")
+    if db_url:
+        # Production: DB query is fast — load synchronously so CARGANDO becomes
+        # False before gunicorn starts serving requests.
+        _cargar_en_segundo_plano()
+    else:
+        # Local: PDF parsing can take minutes — use background thread so the
+        # port opens immediately with the "Cargando..." splash page.
+        threading.Thread(target=_cargar_en_segundo_plano, daemon=True).start()
 
     @app.route("/")
     def dashboard():
