@@ -77,6 +77,47 @@
     </div>
   </div>
 
+  <!-- Sliders de sensibilidad -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Análisis de sensibilidad</h5>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label small">
+            Cobertura eléctrica: <strong id="val-cobertura">75</strong>%
+          </label>
+          <input type="range" class="form-range" id="cobertura"
+                 min="50" max="100" step="1" value="75">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">
+            Rendimiento eléctrico: <strong id="val-rendimiento-elec">40</strong>%
+          </label>
+          <input type="range" class="form-range" id="rendimiento-elec"
+                 min="20" max="60" step="1" value="40">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">
+            Rendimiento térmico: <strong id="val-rendimiento-term">25</strong>%
+          </label>
+          <input type="range" class="form-range" id="rendimiento-term"
+                 min="5" max="45" step="1" value="25">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">
+            Eficiencia caldera: <strong id="val-caldera">85</strong>%
+          </label>
+          <input type="range" class="form-range" id="caldera"
+                 min="60" max="99" step="1" value="85">
+        </div>
+      </div>
+      <div class="mt-2 small text-muted">
+        EBITDA anual estimado:
+        <strong class="text-success fs-5" id="ebitda-sensibilidad">—</strong>
+      </div>
+    </div>
+  </div>
+
   <!-- Gráfica -->
   <div class="card shadow-sm mb-4">
     <div class="card-body">
@@ -221,6 +262,46 @@ new Chart(ctx, {
     }
   }
 });
+</script>
+<script>
+// ── Datos base (inmutables) ────────────────────────────────────────────────
+const meses_raw = {{ meses_raw | tojson }};
+
+function recalcularMes(m, p) {
+  const kwh_cub    = m.kwh_total * p.cobertura;
+  const gj_cogen   = kwh_cub * 0.0036 / p.rend_elec;
+  const costo_gas  = gj_cogen * m.costo_unitario_gj;
+  const ah_elec    = kwh_cub * m.costo_promedio_kwh;
+  const calor_rec  = gj_cogen * p.rend_term;
+  const ah_caldera = (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
+  return ah_elec + ah_caldera - costo_gas;
+}
+
+function leerParams() {
+  return {
+    cobertura:    document.getElementById("cobertura").value / 100,
+    rend_elec:    document.getElementById("rendimiento-elec").value / 100,
+    rend_term:    document.getElementById("rendimiento-term").value / 100,
+    efic_caldera: document.getElementById("caldera").value / 100,
+  };
+}
+
+function actualizarSensibilidad() {
+  const p = leerParams();
+  document.getElementById("val-cobertura").textContent       = Math.round(p.cobertura * 100);
+  document.getElementById("val-rendimiento-elec").textContent = Math.round(p.rend_elec * 100);
+  document.getElementById("val-rendimiento-term").textContent = Math.round(p.rend_term * 100);
+  document.getElementById("val-caldera").textContent         = Math.round(p.efic_caldera * 100);
+
+  const ebitda_anual = meses_raw.reduce((sum, m) => sum + recalcularMes(m, p), 0);
+  document.getElementById("ebitda-sensibilidad").textContent =
+    "$" + ebitda_anual.toLocaleString("es-MX", {maximumFractionDigits: 0});
+}
+
+["cobertura","rendimiento-elec","rendimiento-term","caldera"].forEach(id => {
+  document.getElementById(id).addEventListener("input", actualizarSensibilidad);
+});
+actualizarSensibilidad();
 </script>
 </body>
 </html>

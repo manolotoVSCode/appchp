@@ -86,3 +86,11 @@ def test_export_excel_descarga_xlsx(client):
 def test_dashboard_contiene_boton_exportar(client):
     resp = client.get("/")
     assert b"export/excel" in resp.data
+
+
+def test_dashboard_contiene_sliders(client):
+    resp = client.get("/")
+    html = resp.data
+    assert b'type="range"' in html
+    assert b"cobertura" in html
+    assert b"meses_raw" in html
