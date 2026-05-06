@@ -26,8 +26,9 @@ def _cargar_resultado(invoices_dir: Path, db_path: Path | None = None):
     db_url = os.environ.get("DATABASE_URL", "")
 
     if db_url:
-        # Production: Supabase PostgreSQL — data already in DB from uploads
+        # Production: Supabase PostgreSQL
         conn = get_connection()
+        init_db(conn)  # idempotent — creates tables if not exist
     elif db_path and db_path.exists():
         # Local fast-load from existing SQLite file
         conn = get_connection(str(db_path))
