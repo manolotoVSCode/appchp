@@ -17,8 +17,14 @@ def get_connection(sqlite_path: str | None = None) -> "Conn":
     """
     db_url = os.environ.get("DATABASE_URL", "")
     if db_url:
-        import psycopg2
-        import psycopg2.extras
+        try:
+            import psycopg2
+            import psycopg2.extras
+        except ImportError:
+            raise ImportError(
+                "DATABASE_URL is set but psycopg2 is not installed. "
+                "Run: pip install psycopg2-binary"
+            ) from None
         raw = psycopg2.connect(db_url)
         raw.autocommit = False
         return _PgConn(raw)
@@ -167,25 +173,33 @@ class _PgConn(Conn):
         cur = self._raw.cursor(cursor_factory=self._cursor_factory)
         cur.execute(pg_sql, params if params else None)
 
-        # If RETURNING id is present, capture the id now (cursor position moves)
+        # If RETURNING is present, capture the id now (cursor position moves)
         lastrowid = None
-        if "RETURNING id" in sql.upper():
+        if "RETURNING" in sql.upper():
             row = cur.fetchone()
-            lastrowid = dict(row)["id"] if row else None
+            if row:
+                row_dict = dict(row)
+                lastrowid = row_dict.get("id") or next(iter(row_dict.values()), None)
 
         return _PgCur(cur, lastrowid)
 
     def executemany(self, sql: str, seq: Any) -> None:
         cur = self._raw.cursor()
-        cur.executemany(_to_pg(sql), seq)
+        try:
+            cur.executemany(_to_pg(sql), seq)
+        finally:
+            cur.close()
 
     def executescript(self, sql: str) -> None:
         """Execute multiple statements separated by semicolons."""
         cur = self._raw.cursor()
-        for stmt in sql.split(";"):
-            stmt = stmt.strip()
-            if stmt and not stmt.startswith("PRAGMA"):
-                cur.execute(stmt)
+        try:
+            for stmt in sql.split(";"):
+                stmt = stmt.strip()
+                if stmt and not stmt.startswith("PRAGMA"):
+                    cur.execute(stmt)
+        finally:
+            cur.close()
         self._raw.commit()
 
     def commit(self) -> None:
