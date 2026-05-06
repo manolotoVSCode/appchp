@@ -347,7 +347,7 @@ dropZone.addEventListener("click", e => {
 
 async function subirArchivos(files) {
   if (!files || files.length === 0) return;
-  statusDiv.innerHTML = `<span class="text-info">&#9203; Subiendo ${files.length} archivo(s)...</span>`;
+  statusDiv.innerHTML = '<span class="text-info">&#9203; Subiendo ' + files.length + ' archivo(s)...</span>';
 
   const fd = new FormData();
   for (const f of files) fd.append("facturas", f);
@@ -356,22 +356,32 @@ async function subirArchivos(files) {
     const resp = await fetch("/upload", { method: "POST", body: fd });
     const data = await resp.json();
 
-    let html = "";
+    statusDiv.innerHTML = "";
+
     if (data.procesados > 0) {
-      html += `<span class="text-success">&#10003; ${data.procesados} factura(s) procesada(s).</span> `;
+      const ok = document.createElement("span");
+      ok.className = "text-success";
+      ok.textContent = "✓ " + data.procesados + " factura(s) procesada(s).";
+      statusDiv.appendChild(ok);
+      statusDiv.appendChild(document.createTextNode(" "));
     }
     if (data.errores && data.errores.length > 0) {
-      html += `<span class="text-danger">&#10007; ${data.errores.length} error(es): `;
-      html += data.errores.map(e => `${e.nombre}: ${e.error}`).join("; ");
-      html += "</span>";
+      const err = document.createElement("span");
+      err.className = "text-danger";
+      err.textContent = "✗ " + data.errores.length + " error(es): " +
+        data.errores.map(e => (e.nombre || "") + ": " + (e.error || "")).join("; ");
+      statusDiv.appendChild(err);
     }
-    statusDiv.innerHTML = html;
 
     if (data.procesados > 0) {
       setTimeout(() => window.location.reload(), 1500);
     }
   } catch (err) {
-    statusDiv.innerHTML = `<span class="text-danger">Error de red: ${err.message}</span>`;
+    statusDiv.innerHTML = "";
+    const errSpan = document.createElement("span");
+    errSpan.className = "text-danger";
+    errSpan.textContent = "Error de red: " + err.message;
+    statusDiv.appendChild(errSpan);
   }
 }
 </script>
