@@ -189,3 +189,138 @@ def list_cfe_invoices(conn: sqlite3.Connection) -> list[dict]:
         """
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── Gas invoices ─────────────────────────────────────────────────────────────
+
+def save_gas_invoice(conn: sqlite3.Connection, invoice) -> int:
+    """Persiste una GasInvoice completa. Devuelve el id de gas_facturas."""
+    cliente_id = _upsert_cliente(conn, invoice.nombre_cliente, invoice.rfc_cliente)
+    cur = conn.execute(
+        """INSERT INTO gas_facturas (
+            cliente_id, uuid_cfdi, folio, fecha_emision, periodo_inicio, periodo_fin,
+            fecha_limite_pago, nombre_proveedor, rfc_proveedor, numero_cliente,
+            cuenta_contrato, punto_suministro, numero_caseta, tipo_lectura,
+            consumo_m3_corregidos, consumo_sin_corregir_m3, poder_calorifico_gj_m3,
+            consumo_total_gj, costo_unitario_total_gj,
+            subtotal_mxn, iva_mxn, total_mxn, pdf_path, advertencias
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            cliente_id,
+            invoice.uuid_cfdi,
+            invoice.folio,
+            invoice.fecha_emision.isoformat(),
+            invoice.periodo_inicio.isoformat(),
+            invoice.periodo_fin.isoformat(),
+            invoice.fecha_limite_pago.isoformat(),
+            invoice.nombre_proveedor,
+            invoice.rfc_proveedor,
+            invoice.numero_cliente,
+            invoice.cuenta_contrato,
+            invoice.punto_suministro,
+            invoice.numero_caseta,
+            invoice.tipo_lectura,
+            str(invoice.consumo_m3_corregidos),
+            str(invoice.consumo_sin_corregir_m3),
+            str(invoice.poder_calorifico_gj_m3),
+            str(invoice.consumo_total_gj),
+            str(invoice.costo_unitario_total_gj),
+            str(invoice.subtotal_mxn),
+            str(invoice.iva_mxn),
+            str(invoice.total_mxn),
+            invoice.pdf_path,
+            json.dumps(invoice.advertencias),
+        ),
+    )
+    conn.commit()
+    factura_id = cur.lastrowid
+
+    for c in invoice.conceptos:
+        conn.execute(
+            """INSERT INTO gas_conceptos
+               (factura_id, descripcion, clave_producto, cantidad_gj, precio_unitario_gj, importe_mxn)
+               VALUES (?,?,?,?,?,?)""",
+            (
+                factura_id,
+                c.descripcion,
+                c.clave_producto,
+                str(c.cantidad_gj),
+                str(c.precio_unitario_gj),
+                str(c.importe_mxn),
+            ),
+        )
+    conn.commit()
+    return factura_id
+
+
+def load_gas_invoice(conn: sqlite3.Connection, factura_id: int):
+    """Carga una GasInvoice completa desde SQLite. Lanza ValueError si no existe."""
+    from models.gas_invoice import GasConcepto, GasInvoice as _GI
+
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT * FROM gas_facturas WHERE id = ?", (factura_id,)
+    ).fetchone()
+
+    if row is None:
+        conn.row_factory = None
+        raise ValueError(f"Factura de gas con id={factura_id} no encontrada")
+
+    conceptos_rows = conn.execute(
+        "SELECT * FROM gas_conceptos WHERE factura_id = ? ORDER BY id", (factura_id,)
+    ).fetchall()
+    conn.row_factory = None
+
+    conceptos = [
+        GasConcepto(
+            descripcion=c["descripcion"],
+            clave_producto=c["clave_producto"],
+            cantidad_gj=Decimal(c["cantidad_gj"]),
+            precio_unitario_gj=Decimal(c["precio_unitario_gj"]),
+            importe_mxn=Decimal(c["importe_mxn"]),
+        )
+        for c in conceptos_rows
+    ]
+
+    return _GI(
+        uuid_cfdi=row["uuid_cfdi"] or "",
+        folio=row["folio"],
+        fecha_emision=date.fromisoformat(row["fecha_emision"]),
+        periodo_inicio=date.fromisoformat(row["periodo_inicio"]),
+        periodo_fin=date.fromisoformat(row["periodo_fin"]),
+        fecha_limite_pago=date.fromisoformat(row["fecha_limite_pago"]),
+        nombre_proveedor=row["nombre_proveedor"],
+        rfc_proveedor=row["rfc_proveedor"],
+        nombre_cliente="",
+        rfc_cliente="",
+        numero_cliente=row["numero_cliente"],
+        cuenta_contrato=row["cuenta_contrato"],
+        punto_suministro=row["punto_suministro"],
+        numero_caseta=row["numero_caseta"],
+        tipo_lectura=row["tipo_lectura"],
+        consumo_m3_corregidos=Decimal(row["consumo_m3_corregidos"]),
+        consumo_sin_corregir_m3=Decimal(row["consumo_sin_corregir_m3"]),
+        poder_calorifico_gj_m3=Decimal(row["poder_calorifico_gj_m3"]),
+        consumo_total_gj=Decimal(row["consumo_total_gj"]),
+        conceptos=conceptos,
+        costo_unitario_total_gj=Decimal(row["costo_unitario_total_gj"]),
+        subtotal_mxn=Decimal(row["subtotal_mxn"]),
+        iva_mxn=Decimal(row["iva_mxn"]),
+        total_mxn=Decimal(row["total_mxn"]),
+        pdf_path=row["pdf_path"],
+        advertencias=json.loads(row["advertencias"]),
+    )
+
+
+def list_gas_invoices(conn: sqlite3.Connection) -> list[dict]:
+    """Devuelve resumen de todas las facturas de gas guardadas."""
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """SELECT gf.id, gf.folio, gf.periodo_inicio, gf.periodo_fin,
+                  gf.consumo_total_gj, gf.total_mxn, c.rfc AS rfc_cliente
+           FROM gas_facturas gf
+           JOIN clientes c ON c.id = gf.cliente_id
+           ORDER BY gf.periodo_inicio"""
+    ).fetchall()
+    conn.row_factory = None
+    return [dict(r) for r in rows]
