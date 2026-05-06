@@ -94,3 +94,10 @@ def test_dashboard_contiene_sliders(client):
     assert b'type="range"' in html
     assert b"cobertura" in html
     assert b"meses_raw" in html
+
+
+def test_dashboard_contiene_upload_zone(client):
+    resp = client.get("/")
+    html = resp.data
+    assert b"/upload" in html
+    assert b"Subir Facturas" in html or b"Arrastra" in html
