@@ -10,9 +10,13 @@ INVOICES_DIR = "invoices"
 def client():
     """Flask test client cargado con los 24 PDFs reales.
     scope=module para parsear los PDFs sólo una vez.
+    Espera a que el hilo de carga termine antes de ceder el cliente.
     """
+    import time
     app = create_app(INVOICES_DIR)
     app.config["TESTING"] = True
+    while app.config.get("CARGANDO", False):
+        time.sleep(0.5)
     with app.test_client() as c:
         yield c
 
