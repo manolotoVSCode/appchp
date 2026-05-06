@@ -25,7 +25,7 @@ def get_connection(sqlite_path: str | None = None) -> "Conn":
                 "DATABASE_URL is set but psycopg2 is not installed. "
                 "Run: pip install psycopg2-binary"
             ) from None
-        raw = psycopg2.connect(db_url)
+        raw = psycopg2.connect(db_url, connect_timeout=10)
         raw.autocommit = False
         return _PgConn(raw)
 
