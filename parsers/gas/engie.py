@@ -52,13 +52,13 @@ RE_CONSUMO_BLOQUE = re.compile(
     r'CONSUMO\s+M3\s+CORREGIDOS.*?\n([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([\d.]+),Gj/m3',
     re.IGNORECASE | re.DOTALL,
 )
-# Líneas de conceptos
+# Líneas de conceptos — clave capturada dinámicamente (varía entre años)
 RE_COMPRAVENTA = re.compile(
-    r'83101601\s+Compraventa de Gas Natural'
+    r'(\d+)\s+Compraventa de Gas Natural'
     r'\s+[\d.]+\s+[\d.]+\s+([\d,.]+)\s+GJ\s+\$([\d,.]+)\s+\$([\d,.]+)'
 )
 RE_TRANSPORTE = re.compile(
-    r'78102101\s+Transporte por Ducto Gas Natural'
+    r'(\d+)\s+Transporte por Ducto Gas Natural'
     r'\s+[\d.]+\s+[\d.]+\s+([\d,.]+)\s+GJ\s+\$([\d,.]+)\s+\$([\d,.]+)'
 )
 RE_SUBTOTAL = re.compile(r'SUB-TOTAL:\s*([\d,]+\.?\d*)')
@@ -156,10 +156,10 @@ class ENGIEParser(InvoiceParser):
         if m_comp:
             conceptos.append(GasConcepto(
                 descripcion="Compraventa de Gas Natural",
-                clave_producto="83101601",
-                cantidad_gj=_parse_decimal(m_comp.group(1)),
-                precio_unitario_gj=_parse_decimal(m_comp.group(2)),
-                importe_mxn=_parse_decimal(m_comp.group(3)),
+                clave_producto=m_comp.group(1),
+                cantidad_gj=_parse_decimal(m_comp.group(2)),
+                precio_unitario_gj=_parse_decimal(m_comp.group(3)),
+                importe_mxn=_parse_decimal(m_comp.group(4)),
             ))
         else:
             advertencias.append("Campo no encontrado: compraventa")
@@ -168,15 +168,15 @@ class ENGIEParser(InvoiceParser):
         if m_trans:
             conceptos.append(GasConcepto(
                 descripcion="Transporte por Ducto Gas Natural",
-                clave_producto="78102101",
-                cantidad_gj=_parse_decimal(m_trans.group(1)),
-                precio_unitario_gj=_parse_decimal(m_trans.group(2)),
-                importe_mxn=_parse_decimal(m_trans.group(3)),
+                clave_producto=m_trans.group(1),
+                cantidad_gj=_parse_decimal(m_trans.group(2)),
+                precio_unitario_gj=_parse_decimal(m_trans.group(3)),
+                importe_mxn=_parse_decimal(m_trans.group(4)),
             ))
         else:
             advertencias.append("Campo no encontrado: transporte")
 
-        compraventa = next((c for c in conceptos if c.clave_producto == "83101601"), None)
+        compraventa = next((c for c in conceptos if c.descripcion == "Compraventa de Gas Natural"), None)
         consumo_total_gj    = compraventa.cantidad_gj if compraventa else Decimal("0")
         costo_unitario_total = sum((c.precio_unitario_gj for c in conceptos), Decimal("0"))
 
