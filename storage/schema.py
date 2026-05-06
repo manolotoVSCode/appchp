@@ -65,6 +65,45 @@ CREATE TABLE IF NOT EXISTS cfe_mem_componentes (
     cargo_energia_mxn   TEXT    NOT NULL,
     importe_mxn         TEXT    NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS gas_facturas (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id               INTEGER NOT NULL REFERENCES clientes(id),
+    uuid_cfdi                TEXT,
+    folio                    TEXT    NOT NULL,
+    fecha_emision            TEXT    NOT NULL,
+    periodo_inicio           TEXT    NOT NULL,
+    periodo_fin              TEXT    NOT NULL,
+    fecha_limite_pago        TEXT    NOT NULL,
+    nombre_proveedor         TEXT    NOT NULL,
+    rfc_proveedor            TEXT    NOT NULL,
+    numero_cliente           TEXT    NOT NULL,
+    cuenta_contrato          TEXT    NOT NULL,
+    punto_suministro         TEXT    NOT NULL,
+    numero_caseta            TEXT    NOT NULL,
+    tipo_lectura             TEXT    NOT NULL,
+    consumo_m3_corregidos    TEXT    NOT NULL,
+    consumo_sin_corregir_m3  TEXT    NOT NULL,
+    poder_calorifico_gj_m3   TEXT    NOT NULL,
+    consumo_total_gj         TEXT    NOT NULL,
+    costo_unitario_total_gj  TEXT    NOT NULL,
+    subtotal_mxn             TEXT    NOT NULL,
+    iva_mxn                  TEXT    NOT NULL,
+    total_mxn                TEXT    NOT NULL,
+    pdf_path                 TEXT    NOT NULL,
+    advertencias             TEXT    NOT NULL DEFAULT '[]',
+    created_at               TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS gas_conceptos (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    factura_id          INTEGER NOT NULL REFERENCES gas_facturas(id) ON DELETE CASCADE,
+    descripcion         TEXT    NOT NULL,
+    clave_producto      TEXT    NOT NULL,
+    cantidad_gj         TEXT    NOT NULL,
+    precio_unitario_gj  TEXT    NOT NULL,
+    importe_mxn         TEXT    NOT NULL
+);
 """
 
 
