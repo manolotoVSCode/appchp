@@ -4,25 +4,27 @@ import json
 import sqlite3
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice
 
 
-def _upsert_cliente(conn: sqlite3.Connection, nombre: str, rfc: str) -> int:
+def _upsert_cliente(conn: Any, nombre: str, rfc: str) -> int:
     """Inserta o reutiliza el cliente por RFC. Devuelve su id."""
     row = conn.execute("SELECT id FROM clientes WHERE rfc = ?", (rfc,)).fetchone()
     if row:
-        return row[0]
+        return row["id"] if isinstance(row, dict) else row[0]
     cur = conn.execute(
-        "INSERT INTO clientes (nombre, rfc) VALUES (?, ?)",
+        "INSERT INTO clientes (nombre, rfc) VALUES (?, ?) RETURNING id",
         (nombre, rfc),
     )
+    cur.fetchall()  # drain cursor so commit() can proceed on raw sqlite3
     conn.commit()
     return cur.lastrowid
 
 
-def save_cfe_invoice(conn: sqlite3.Connection, invoice: CFEInvoice) -> int:
+def save_cfe_invoice(conn: Any, invoice: CFEInvoice) -> int:
     """Persiste un CFEInvoice completo. Devuelve el id de la fila en cfe_facturas."""
     cliente_id = _upsert_cliente(conn, invoice.nombre_cliente, invoice.rfc_cliente)
 
@@ -39,6 +41,7 @@ def save_cfe_invoice(conn: sqlite3.Connection, invoice: CFEInvoice) -> int:
             derecho_alumbrado_publico_mxn, credito_aplicado_mxn, total_mxn,
             pdf_path, advertencias
         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        RETURNING id
         """,
         (
             cliente_id,
@@ -73,6 +76,7 @@ def save_cfe_invoice(conn: sqlite3.Connection, invoice: CFEInvoice) -> int:
         ),
     )
     factura_id = cur.lastrowid
+    cur.fetchall()  # drain RETURNING cursor so commit() can proceed on raw sqlite3
 
     for p in invoice.periodos:
         conn.execute(
@@ -94,7 +98,7 @@ def save_cfe_invoice(conn: sqlite3.Connection, invoice: CFEInvoice) -> int:
     return factura_id
 
 
-def load_cfe_invoice(conn: sqlite3.Connection, factura_id: int) -> CFEInvoice:
+def load_cfe_invoice(conn: Any, factura_id: int) -> CFEInvoice:
     """Carga un CFEInvoice completo desde SQLite."""
     conn.row_factory = sqlite3.Row
     row = conn.execute(
@@ -177,7 +181,7 @@ def load_cfe_invoice(conn: sqlite3.Connection, factura_id: int) -> CFEInvoice:
     )
 
 
-def list_cfe_invoices(conn: sqlite3.Connection) -> list[dict]:
+def list_cfe_invoices(conn: Any) -> list[dict]:
     """Devuelve resumen de todas las facturas CFE (id, rfc, periodo, total)."""
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
@@ -194,7 +198,7 @@ def list_cfe_invoices(conn: sqlite3.Connection) -> list[dict]:
 
 # ── Gas invoices ─────────────────────────────────────────────────────────────
 
-def save_gas_invoice(conn: sqlite3.Connection, invoice) -> int:
+def save_gas_invoice(conn: Any, invoice) -> int:
     """Persiste una GasInvoice completa. Devuelve el id de gas_facturas."""
     cliente_id = _upsert_cliente(conn, invoice.nombre_cliente, invoice.rfc_cliente)
     cur = conn.execute(
@@ -205,7 +209,7 @@ def save_gas_invoice(conn: sqlite3.Connection, invoice) -> int:
             consumo_m3_corregidos, consumo_sin_corregir_m3, poder_calorifico_gj_m3,
             consumo_total_gj, costo_unitario_total_gj,
             subtotal_mxn, iva_mxn, total_mxn, pdf_path, advertencias
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id""",
         (
             cliente_id,
             invoice.uuid_cfdi,
@@ -233,8 +237,9 @@ def save_gas_invoice(conn: sqlite3.Connection, invoice) -> int:
             json.dumps(invoice.advertencias),
         ),
     )
-    conn.commit()
     factura_id = cur.lastrowid
+    cur.fetchall()  # drain RETURNING cursor so commit() can proceed on raw sqlite3
+    conn.commit()
 
     for c in invoice.conceptos:
         conn.execute(
@@ -254,7 +259,7 @@ def save_gas_invoice(conn: sqlite3.Connection, invoice) -> int:
     return factura_id
 
 
-def load_gas_invoice(conn: sqlite3.Connection, factura_id: int) -> GasInvoice:
+def load_gas_invoice(conn: Any, factura_id: int) -> GasInvoice:
     """Carga una GasInvoice completa desde SQLite. Lanza ValueError si no existe."""
     from models.gas_invoice import GasConcepto, GasInvoice as _GI
 
@@ -313,7 +318,7 @@ def load_gas_invoice(conn: sqlite3.Connection, factura_id: int) -> GasInvoice:
     )
 
 
-def list_gas_invoices(conn: sqlite3.Connection) -> list[dict]:
+def list_gas_invoices(conn: Any) -> list[dict]:
     """Devuelve resumen de todas las facturas de gas guardadas."""
     conn.row_factory = sqlite3.Row
     rows = conn.execute(

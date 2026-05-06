@@ -45,3 +45,16 @@ def test_cfe_facturas_referencia_clientes(conn):
     info = conn.execute("PRAGMA foreign_key_list(cfe_facturas)").fetchall()
     tablas_ref = {row[2] for row in info}
     assert "clientes" in tablas_ref
+
+
+def test_init_db_accepts_conn_adapter(tmp_path):
+    """init_db must work with Conn adapter, not just raw sqlite3."""
+    from storage.db import get_connection
+    conn = get_connection(str(tmp_path / "test.db"))
+    from storage.schema import init_db
+    init_db(conn)  # must not raise
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    names = {r["name"] for r in rows}
+    assert "cfe_facturas" in names
+    assert "gas_facturas" in names
+    conn.close()

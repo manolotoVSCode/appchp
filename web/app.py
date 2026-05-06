@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import io
-import sqlite3
+import os
 import threading
 from contextlib import redirect_stdout
 from pathlib import Path
 
 from flask import Flask, render_template, send_file
 
+from storage.db import get_connection
 from storage.schema import init_db
 from cli.main import procesar_factura_cfe, procesar_factura_gas
 from calc.cogen import calcular_cogen
@@ -16,21 +17,24 @@ from models.cogen_result import CoGenParams
 
 
 def _cargar_resultado(invoices_dir: Path, db_path: Path | None = None):
-    """Carga CoGenResultado desde DB existente o parseando PDFs.
+    """Load CoGenResultado from DB or by parsing PDFs.
 
-    Si db_path apunta a un archivo existente, lo usa directamente.
-    Si db_path se da pero no existe, parsea los PDFs y guarda en db_path.
-    Si db_path es None, parsea en memoria.
+    Production (DATABASE_URL set): connect to PostgreSQL, skip PDF parsing.
+    Local with db_path: use that SQLite file.
+    Local without db_path: use :memory: SQLite and parse PDFs.
     """
-    if db_path and db_path.exists():
-        # Carga rápida: DB ya construida
-        conn = sqlite3.connect(str(db_path))
-        conn.execute("PRAGMA foreign_keys = ON")
+    db_url = os.environ.get("DATABASE_URL", "")
+
+    if db_url:
+        # Production: Supabase PostgreSQL — data already in DB from uploads
+        conn = get_connection()
+    elif db_path and db_path.exists():
+        # Local fast-load from existing SQLite file
+        conn = get_connection(str(db_path))
     else:
-        # Primera vez: parsear PDFs
-        target = str(db_path) if db_path else ":memory:"
-        conn = sqlite3.connect(target)
-        conn.execute("PRAGMA foreign_keys = ON")
+        # Local: parse PDFs and store in SQLite (file or memory)
+        target = str(db_path) if db_path else None
+        conn = get_connection(target)
         init_db(conn)
 
         buf = io.StringIO()
@@ -59,14 +63,24 @@ def _cargar_resultado(invoices_dir: Path, db_path: Path | None = None):
     return calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
 
 
+def _refresh_resultado(app: Flask) -> None:
+    """Reload analysis from DB and update app.config. Called after uploads."""
+    db_path_str = app.config.get("DB_PATH")
+    db_path = Path(db_path_str) if db_path_str else None
+    invoices_dir = Path(app.config.get("INVOICES_DIR", "invoices"))
+    app.config["RESULTADO"] = _cargar_resultado(invoices_dir, db_path)
+
+
 def create_app(
     invoices_dir: str | Path = "invoices",
     db_path: str | Path | None = None,
 ) -> Flask:
-    """Flask app factory. Puerto abre de inmediato; PDFs cargan en segundo plano."""
+    """Flask app factory. Port opens immediately; data loads in background."""
     app = Flask(__name__)
     app.config["RESULTADO"] = None
     app.config["CARGANDO"] = True
+    app.config["DB_PATH"] = str(db_path) if db_path else None
+    app.config["INVOICES_DIR"] = str(invoices_dir)
 
     _invoices = Path(invoices_dir)
     _db = Path(db_path) if db_path else None
@@ -74,8 +88,8 @@ def create_app(
     def _cargar_en_segundo_plano():
         app.config["RESULTADO"] = _cargar_resultado(_invoices, _db)
         app.config["CARGANDO"] = False
-        src = f"DB: {_db}" if (_db and _db.exists()) else f"PDFs: {_invoices}"
-        print(f"✓ Facturas cargadas ({src}) — dashboard listo")
+        src = os.environ.get("DATABASE_URL", "") or (str(_db) if _db else str(_invoices))
+        print(f"✓ Datos cargados ({src}) — dashboard listo")
 
     threading.Thread(target=_cargar_en_segundo_plano, daemon=True).start()
 

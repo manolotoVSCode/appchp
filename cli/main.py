@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 from parsers.cfe import get_cfe_parser
 from storage.schema import init_db
@@ -17,7 +18,7 @@ from storage.repository import save_cfe_invoice, list_cfe_invoices
 
 def procesar_factura_cfe(
     pdf_path: Path,
-    conn: sqlite3.Connection,
+    conn: Any,
     tarifa: str = "GDMTH",
 ) -> int:
     """
@@ -62,7 +63,7 @@ def procesar_factura_cfe(
     return factura_id
 
 
-def procesar_factura_gas(pdf_path: Path, conn: sqlite3.Connection) -> int:
+def procesar_factura_gas(pdf_path: Path, conn: Any) -> int:
     """Parsea y persiste una factura de gas ENGIE.
 
     Args:
@@ -98,7 +99,7 @@ def procesar_factura_gas(pdf_path: Path, conn: sqlite3.Connection) -> int:
     return factura_id
 
 
-def generar_analisis_cogen(conn: sqlite3.Connection, output_path: Path) -> Path:
+def generar_analisis_cogen(conn: Any, output_path: Path) -> Path:
     """Carga todas las facturas de la BD, calcula cogeneración y genera Excel.
 
     Args:
