@@ -1,75 +1,25 @@
 # web/app.py
 from __future__ import annotations
 
-import io
-import os
 import threading
-from contextlib import redirect_stdout
 from pathlib import Path
 
 from flask import Flask, render_template, send_file
 
-from storage.db import get_connection
-from storage.schema import init_db
+from storage.repository import get_all_cfe_invoices, get_all_gas_invoices
 from cli.main import procesar_factura_cfe, procesar_factura_gas
 from calc.cogen import calcular_cogen
 from models.cogen_result import CoGenParams
 
 
-def _cargar_resultado(invoices_dir: Path, db_path: Path | None = None):
-    """Load CoGenResultado from DB or by parsing PDFs.
-
-    Production (DATABASE_URL set): connect to PostgreSQL, skip PDF parsing.
-    Local with db_path: use that SQLite file.
-    Local without db_path: use :memory: SQLite and parse PDFs.
-    """
-    db_url = os.environ.get("DATABASE_URL", "")
-
-    if db_url:
-        # Production: Supabase PostgreSQL
-        conn = get_connection()
-        init_db(conn)  # idempotent — creates tables if not exist
-    elif db_path and db_path.exists():
-        # Local fast-load from existing SQLite file
-        conn = get_connection(str(db_path))
-    else:
-        # Local: parse PDFs and store in SQLite (file or memory)
-        target = str(db_path) if db_path else None
-        conn = get_connection(target)
-        init_db(conn)
-
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            for pdf in sorted(invoices_dir.glob("CFE/*.pdf")):
-                try:
-                    procesar_factura_cfe(pdf, conn)
-                except Exception:
-                    pass
-            for pdf in sorted(invoices_dir.glob("Gas/*.pdf")):
-                try:
-                    procesar_factura_gas(pdf, conn)
-                except Exception:
-                    pass
-
-    from storage.repository import (
-        list_cfe_invoices, load_cfe_invoice,
-        list_gas_invoices, load_gas_invoice,
-    )
-    cfe_rows = list_cfe_invoices(conn)
-    cfe_invoices = [load_cfe_invoice(conn, r["id"]) for r in cfe_rows]
-    gas_rows = list_gas_invoices(conn)
-    gas_invoices = [load_gas_invoice(conn, r["id"]) for r in gas_rows]
-    conn.close()
-
+def _cargar_resultado():
+    cfe_invoices = get_all_cfe_invoices()
+    gas_invoices = get_all_gas_invoices()
     return calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
 
 
 def _refresh_resultado(app: Flask) -> None:
-    """Reload analysis from DB and update app.config. Called after uploads."""
-    db_path_str = app.config.get("DB_PATH")
-    db_path = Path(db_path_str) if db_path_str else None
-    invoices_dir = Path(app.config.get("INVOICES_DIR", "invoices"))
-    app.config["RESULTADO"] = _cargar_resultado(invoices_dir, db_path)
+    app.config["RESULTADO"] = _cargar_resultado()
 
 
 def _detect_tipo(pdf_path: Path) -> str:
@@ -87,25 +37,16 @@ def _detect_tipo(pdf_path: Path) -> str:
     raise ValueError("No se pudo determinar el tipo de factura (CFE o Gas)")
 
 
-def create_app(
-    invoices_dir: str | Path = "invoices",
-    db_path: str | Path | None = None,
-) -> Flask:
+def create_app() -> Flask:
     """Flask app factory. Port opens immediately; data loads in background."""
     app = Flask(__name__)
     app.config["RESULTADO"] = None
     app.config["CARGANDO"] = True
-    app.config["DB_PATH"] = str(db_path) if db_path else None
-    app.config["INVOICES_DIR"] = str(invoices_dir)
-
-    _invoices = Path(invoices_dir)
-    _db = Path(db_path) if db_path else None
 
     def _cargar_en_segundo_plano():
         try:
-            app.config["RESULTADO"] = _cargar_resultado(_invoices, _db)
-            src = os.environ.get("DATABASE_URL", "") or (str(_db) if _db else str(_invoices))
-            print(f"✓ Datos cargados ({src}) — dashboard listo")
+            app.config["RESULTADO"] = _cargar_resultado()
+            print("✓ Datos cargados desde Supabase — dashboard listo")
         except Exception as e:
             import traceback
             print(f"ERROR cargando datos: {e}")
@@ -114,15 +55,9 @@ def create_app(
         finally:
             app.config["CARGANDO"] = False
 
-    db_url = os.environ.get("DATABASE_URL", "")
-    if db_url:
-        # Production: DB query is fast — load synchronously so CARGANDO becomes
-        # False before gunicorn starts serving requests.
-        _cargar_en_segundo_plano()
-    else:
-        # Local: PDF parsing can take minutes — use background thread so the
-        # port opens immediately with the "Cargando..." splash page.
-        threading.Thread(target=_cargar_en_segundo_plano, daemon=True).start()
+    # Production: Supabase query is fast — load synchronously so CARGANDO becomes
+    # False before gunicorn starts serving requests.
+    _cargar_en_segundo_plano()
 
     @app.route("/")
     def dashboard():
@@ -205,34 +140,25 @@ def create_app(
         if not files:
             return jsonify({"procesados": 0, "errores": [{"nombre": "", "error": "No se enviaron archivos"}]}), 400
 
-        db_path_str = app.config.get("DB_PATH")
-        db_path_val = Path(db_path_str) if db_path_str else None
-
-        conn = get_connection(str(db_path_val) if db_path_val else None)
-        init_db(conn)
-
         ok_count = 0
         errors = []
 
-        try:
-            for f in files:
-                suffix = Path(f.filename).suffix.lower() if (f.filename and Path(f.filename).suffix) else ".pdf"
-                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                    f.save(tmp.name)
-                    tmp_path = Path(tmp.name)
-                try:
-                    tipo = _detect_tipo(tmp_path)
-                    if tipo == "cfe":
-                        procesar_factura_cfe(tmp_path, conn)
-                    else:
-                        procesar_factura_gas(tmp_path, conn)
-                    ok_count += 1
-                except Exception as e:
-                    errors.append({"nombre": f.filename or "", "error": str(e)})
-                finally:
-                    tmp_path.unlink(missing_ok=True)
-        finally:
-            conn.close()
+        for f in files:
+            suffix = Path(f.filename).suffix.lower() if (f.filename and Path(f.filename).suffix) else ".pdf"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                f.save(tmp.name)
+                tmp_path = Path(tmp.name)
+            try:
+                tipo = _detect_tipo(tmp_path)
+                if tipo == "cfe":
+                    procesar_factura_cfe(tmp_path)
+                else:
+                    procesar_factura_gas(tmp_path)
+                ok_count += 1
+            except Exception as e:
+                errors.append({"nombre": f.filename or "", "error": str(e)})
+            finally:
+                tmp_path.unlink(missing_ok=True)
 
         if ok_count > 0:
             _refresh_resultado(app)

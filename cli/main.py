@@ -1,33 +1,27 @@
 """
-CLI para procesar facturas CFE e insertarlas en SQLite.
+CLI para procesar facturas CFE e insertarlas en Supabase.
 
 Uso:
-    python -m cli.main ruta/factura.pdf [--tarifa GDMTH] [--db chpapp.db]
+    python -m cli.main ruta/factura.pdf [--tarifa GDMTH]
 """
 from __future__ import annotations
 
 import argparse
-import sqlite3
 from pathlib import Path
-from typing import Any
 
 from parsers.cfe import get_cfe_parser
-from storage.db import get_connection
-from storage.schema import init_db
-from storage.repository import save_cfe_invoice, list_cfe_invoices
+from storage.repository import save_cfe_invoice, get_all_cfe_invoices
 
 
 def procesar_factura_cfe(
     pdf_path: Path,
-    conn: Any,
     tarifa: str = "GDMTH",
 ) -> int:
     """
-    Parsea una factura CFE, valida coherencia y persiste en SQLite.
+    Parsea una factura CFE, valida coherencia y persiste en Supabase.
 
     Args:
         pdf_path: Ruta al archivo PDF.
-        conn: Conexión SQLite ya inicializada.
         tarifa: Código de tarifa CFE. Default "GDMTH".
 
     Returns:
@@ -55,7 +49,7 @@ def procesar_factura_cfe(
         for a in invoice.advertencias:
             print(f"  - {a}")
 
-    factura_id = save_cfe_invoice(conn, invoice)
+    factura_id = save_cfe_invoice(invoice)
     print(
         f"[OK] Factura guardada: id={factura_id}, "
         f"periodo={invoice.periodo_inicio}→{invoice.periodo_fin}, "
@@ -64,12 +58,11 @@ def procesar_factura_cfe(
     return factura_id
 
 
-def procesar_factura_gas(pdf_path: Path, conn: Any) -> int:
+def procesar_factura_gas(pdf_path: Path) -> int:
     """Parsea y persiste una factura de gas ENGIE.
 
     Args:
         pdf_path: ruta al PDF.
-        conn: conexión SQLite inicializada con init_db().
 
     Returns:
         id de la fila en gas_facturas.
@@ -93,34 +86,29 @@ def procesar_factura_gas(pdf_path: Path, conn: Any) -> int:
     for err in errores:
         print(f"  [ERROR] {err}")
 
-    factura_id = save_gas_invoice(conn, invoice)
+    factura_id = save_gas_invoice(invoice)
     print(f"  [OK] {pdf_path.name} → gas_facturas.id={factura_id}  "
           f"GJ={invoice.consumo_total_gj:,.4f}  "
           f"total=${invoice.total_mxn:,.2f}")
     return factura_id
 
 
-def generar_analisis_cogen(conn: Any, output_path: Path) -> Path:
-    """Carga todas las facturas de la BD, calcula cogeneración y genera Excel.
+def generar_analisis_cogen(output_path: Path) -> Path:
+    """Carga todas las facturas de Supabase, calcula cogeneración y genera Excel.
 
     Args:
-        conn: conexión SQLite con facturas CFE y Gas ya persistidas.
         output_path: ruta del archivo .xlsx a generar.
 
     Returns:
         output_path (Path) del archivo generado.
     """
-    from storage.repository import load_cfe_invoice
-    from storage.repository import list_gas_invoices, load_gas_invoice
+    from storage.repository import get_all_cfe_invoices, get_all_gas_invoices
     from calc.cogen import calcular_cogen
     from models.cogen_result import CoGenParams
     from reports.excel import generar_excel
 
-    cfe_rows = list_cfe_invoices(conn)
-    cfe_invoices = [load_cfe_invoice(conn, r["id"]) for r in cfe_rows]
-
-    gas_rows = list_gas_invoices(conn)
-    gas_invoices = [load_gas_invoice(conn, r["id"]) for r in gas_rows]
+    cfe_invoices = get_all_cfe_invoices()
+    gas_invoices = get_all_gas_invoices()
 
     params = CoGenParams()
     resultado = calcular_cogen(cfe_invoices, gas_invoices, params)
@@ -141,18 +129,9 @@ def _main() -> None:
     parser = argparse.ArgumentParser(description="Procesador de facturas CFE")
     parser.add_argument("pdf", help="Ruta al PDF de la factura CFE")
     parser.add_argument("--tarifa", default="GDMTH", help="Tarifa CFE (default: GDMTH)")
-    parser.add_argument("--db", default="chpapp.db", help="Ruta a la base de datos SQLite")
     args = parser.parse_args()
 
-    import os
-    os.environ.setdefault("SQLITE_PATH", args.db)
-    conn = get_connection()
-    init_db(conn)
-
-    try:
-        procesar_factura_cfe(Path(args.pdf), conn, tarifa=args.tarifa)
-    finally:
-        conn.close()
+    procesar_factura_cfe(Path(args.pdf), tarifa=args.tarifa)
 
 
 if __name__ == "__main__":

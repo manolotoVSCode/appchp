@@ -5,8 +5,10 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn "web.app:create_app()" --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-2} --timeout 120
     envVars:
-      - key: DATABASE_URL
-        sync: false   # Set manually from Supabase. Consumed by storage/db.py (Task 2).
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
       - key: PYTHON_VERSION
         value: "3.11"
       - key: WEB_CONCURRENCY
