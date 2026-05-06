@@ -74,3 +74,15 @@ def test_carga_desde_db_existente(tmp_path):
         resp = c.get("/")
     assert resp.status_code == 200
     assert resp.data.count(b"mes-row") == 1
+
+
+def test_export_excel_descarga_xlsx(client):
+    resp = client.get("/export/excel")
+    assert resp.status_code == 200
+    assert "spreadsheetml" in resp.content_type
+    assert len(resp.data) > 1000
+
+
+def test_dashboard_contiene_boton_exportar(client):
+    resp = client.get("/")
+    assert b"export/excel" in resp.data
