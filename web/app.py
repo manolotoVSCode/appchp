@@ -102,10 +102,17 @@ def create_app(
     _db = Path(db_path) if db_path else None
 
     def _cargar_en_segundo_plano():
-        app.config["RESULTADO"] = _cargar_resultado(_invoices, _db)
-        app.config["CARGANDO"] = False
-        src = os.environ.get("DATABASE_URL", "") or (str(_db) if _db else str(_invoices))
-        print(f"✓ Datos cargados ({src}) — dashboard listo")
+        try:
+            app.config["RESULTADO"] = _cargar_resultado(_invoices, _db)
+            src = os.environ.get("DATABASE_URL", "") or (str(_db) if _db else str(_invoices))
+            print(f"✓ Datos cargados ({src}) — dashboard listo")
+        except Exception as e:
+            import traceback
+            print(f"ERROR cargando datos: {e}")
+            traceback.print_exc()
+            app.config["RESULTADO"] = None
+        finally:
+            app.config["CARGANDO"] = False
 
     threading.Thread(target=_cargar_en_segundo_plano, daemon=True).start()
 
@@ -122,6 +129,16 @@ def create_app(
                 503,
             )
         r = app.config["RESULTADO"]
+        if r is None:
+            return (
+                "<html><head><title>Error</title></head>"
+                "<body style='font-family:sans-serif;padding:2rem'>"
+                "<h2>&#9888; Error al cargar datos</h2>"
+                "<p>Revisa los logs del servidor para ver el error.</p>"
+                "<p><a href='/healthz'>Estado del servidor</a></p>"
+                "</body></html>",
+                500,
+            )
         chart_labels = [m.periodo_inicio.strftime("%b %Y") for m in r.meses]
         chart_ebitda = [float(m.ebitda_mes_mxn) for m in r.meses]
         chart_ahorro_elec = [float(m.ahorro_electricidad_mxn) for m in r.meses]
