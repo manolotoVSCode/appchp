@@ -1,7 +1,6 @@
 # web/app.py
 from __future__ import annotations
 
-import threading
 from pathlib import Path
 
 from flask import Flask, render_template, send_file
@@ -16,10 +15,6 @@ def _cargar_resultado():
     cfe_invoices = get_all_cfe_invoices()
     gas_invoices = get_all_gas_invoices()
     return calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
-
-
-def _refresh_resultado(app: Flask) -> None:
-    app.config["RESULTADO"] = _cargar_resultado()
 
 
 def _detect_tipo(pdf_path: Path) -> str:
@@ -38,48 +33,27 @@ def _detect_tipo(pdf_path: Path) -> str:
 
 
 def create_app() -> Flask:
-    """Flask app factory. Port opens immediately; data loads in background."""
+    """Flask app factory. Data loads on first request."""
     app = Flask(__name__)
     app.config["RESULTADO"] = None
-    app.config["CARGANDO"] = True
-
-    def _cargar_en_segundo_plano():
-        try:
-            app.config["RESULTADO"] = _cargar_resultado()
-            print("✓ Datos cargados desde Supabase — dashboard listo")
-        except Exception as e:
-            import traceback
-            print(f"ERROR cargando datos: {e}")
-            traceback.print_exc()
-            app.config["RESULTADO"] = None
-        finally:
-            app.config["CARGANDO"] = False
-
-    threading.Thread(target=_cargar_en_segundo_plano, daemon=True).start()
 
     @app.route("/")
     def dashboard():
-        if app.config["CARGANDO"]:
-            return (
-                "<html><head><meta http-equiv='refresh' content='5'>"
-                "<title>Cargando...</title></head>"
-                "<body style='font-family:sans-serif;padding:2rem'>"
-                "<h2>&#9203; Cargando facturas...</h2>"
-                "<p>Esta página se actualiza automáticamente cada 5 segundos.</p>"
-                "</body></html>",
-                503,
-            )
+        if app.config["RESULTADO"] is None:
+            try:
+                app.config["RESULTADO"] = _cargar_resultado()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return (
+                    "<html><head><title>Error</title></head>"
+                    "<body style='font-family:sans-serif;padding:2rem'>"
+                    f"<h2>&#9888; Error al cargar datos</h2>"
+                    f"<pre>{e}</pre>"
+                    "</body></html>",
+                    500,
+                )
         r = app.config["RESULTADO"]
-        if r is None:
-            return (
-                "<html><head><title>Error</title></head>"
-                "<body style='font-family:sans-serif;padding:2rem'>"
-                "<h2>&#9888; Error al cargar datos</h2>"
-                "<p>Revisa los logs del servidor para ver el error.</p>"
-                "<p><a href='/healthz'>Estado del servidor</a></p>"
-                "</body></html>",
-                500,
-            )
         chart_labels = [m.periodo_inicio.strftime("%b %Y") for m in r.meses]
         chart_ebitda = [float(m.ebitda_mes_mxn) for m in r.meses]
         chart_ahorro_elec = [float(m.ahorro_electricidad_mxn) for m in r.meses]
@@ -159,7 +133,7 @@ def create_app() -> Flask:
                 tmp_path.unlink(missing_ok=True)
 
         if ok_count > 0:
-            _refresh_resultado(app)
+            app.config["RESULTADO"] = _cargar_resultado()
 
         return jsonify({"procesados": ok_count, "errores": errors})
 
