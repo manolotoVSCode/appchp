@@ -108,7 +108,7 @@ def generar_analisis_cogen(conn: sqlite3.Connection, output_path: Path) -> Path:
     Returns:
         output_path (Path) del archivo generado.
     """
-    from storage.repository import list_cfe_invoices, load_cfe_invoice
+    from storage.repository import load_cfe_invoice
     from storage.repository import list_gas_invoices, load_gas_invoice
     from calc.cogen import calcular_cogen
     from models.cogen_result import CoGenParams
