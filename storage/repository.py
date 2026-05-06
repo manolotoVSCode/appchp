@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal
 
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
+from models.gas_invoice import GasInvoice
 
 
 def _upsert_cliente(conn: sqlite3.Connection, nombre: str, rfc: str) -> int:
@@ -253,7 +254,7 @@ def save_gas_invoice(conn: sqlite3.Connection, invoice) -> int:
     return factura_id
 
 
-def load_gas_invoice(conn: sqlite3.Connection, factura_id: int):
+def load_gas_invoice(conn: sqlite3.Connection, factura_id: int) -> GasInvoice:
     """Carga una GasInvoice completa desde SQLite. Lanza ValueError si no existe."""
     from models.gas_invoice import GasConcepto, GasInvoice as _GI
 
