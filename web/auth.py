@@ -72,8 +72,32 @@ def logout():
     return redirect(url_for("auth.login"))
 
 
+def _validar_config_auth() -> None:
+    """Falla al arranque si las variables de autenticación no están configuradas."""
+    faltantes = []
+    if not os.environ.get("APP_USER"):
+        faltantes.append(
+            "APP_USER no está configurada.\n"
+            "  Agrega la variable de entorno APP_USER con el nombre de usuario del operador."
+        )
+    if not os.environ.get("APP_PASSWORD_HASH"):
+        faltantes.append(
+            "APP_PASSWORD_HASH no está configurada.\n"
+            "  Genera el hash con:\n"
+            "    python3 -c \"from werkzeug.security import generate_password_hash; "
+            "print(generate_password_hash('tu_password', method='pbkdf2:sha256'))\"\n"
+            "  Y agrégala como variable de entorno en el servidor."
+        )
+    if faltantes:
+        raise RuntimeError(
+            "La aplicación no puede arrancar: configuración de autenticación incompleta.\n\n"
+            + "\n\n".join(faltantes)
+        )
+
+
 def init_auth(app):
     """Registra blueprint, LoginManager y configura cookies de sesión."""
+    _validar_config_auth()
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
     app.register_blueprint(auth_bp)

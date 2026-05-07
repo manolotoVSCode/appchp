@@ -91,6 +91,32 @@ def test_logout(client, monkeypatch):
     assert "/login" in resp_after.headers["Location"]
 
 
+# ── Tests de validación al arranque ──────────────────────────────────────────
+
+def test_arranque_sin_app_user(monkeypatch):
+    """Si APP_USER no está definida, create_app() lanza RuntimeError."""
+    monkeypatch.setenv("SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "fake_key")
+    monkeypatch.setenv("APP_PASSWORD_HASH", _HASH)
+    monkeypatch.delenv("APP_USER", raising=False)
+
+    from web.app import create_app
+    with pytest.raises(RuntimeError, match="APP_USER"):
+        create_app()
+
+
+def test_arranque_sin_app_password_hash(monkeypatch):
+    """Si APP_PASSWORD_HASH no está definida, create_app() lanza RuntimeError."""
+    monkeypatch.setenv("SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "fake_key")
+    monkeypatch.setenv("APP_USER", "operador")
+    monkeypatch.delenv("APP_PASSWORD_HASH", raising=False)
+
+    from web.app import create_app
+    with pytest.raises(RuntimeError, match="APP_PASSWORD_HASH"):
+        create_app()
+
+
 # ── Mock de datos para evitar llamadas a Supabase ────────────────────────────
 
 def _mock_datos():
