@@ -15,6 +15,16 @@
     .table-mes th { background: #1F4E79; color: #fff; white-space: nowrap; }
     .total-row td { background: #D9E1F2; font-weight: 600; }
     .ebitda-cell  { background: #E2EFDA; font-weight: 600; }
+    .section-header {
+      display: flex; align-items: center; gap: .75rem;
+      margin: 2rem 0 1rem;
+    }
+    .section-header h2 {
+      font-size: 1rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; color: #1F4E79; white-space: nowrap; margin: 0;
+    }
+    .section-header hr { flex: 1; border-color: #1F4E79; opacity: .3; margin: 0; }
+    .tabla-punta-total td { background: #D9E1F2; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -27,95 +37,6 @@
     <a href="/export/excel" class="btn btn-sm btn-success ms-auto">
       &#8681; Exportar Excel
     </a>
-  </div>
-
-  <!-- KPI cards -->
-  <div class="row g-3 mb-4">
-    <div class="col-md-3">
-      <div class="card kpi-card kpi-ebitda h-100 shadow-sm">
-        <div class="card-body">
-          <div class="text-muted small">EBITDA Anual</div>
-          <div class="fs-4 fw-bold text-success" id="kpi-ebitda-val">
-            ${{ "{:,.0f}".format(r.ebitda_anual_mxn|float) }}
-          </div>
-          <div class="text-muted small">MXN / año</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card kpi-card kpi-elec h-100 shadow-sm">
-        <div class="card-body">
-          <div class="text-muted small">Ahorro Electricidad</div>
-          <div class="fs-4 fw-bold text-primary" id="kpi-elec-val">
-            ${{ "{:,.0f}".format(r.ahorro_electricidad_anual_mxn|float) }}
-          </div>
-          <div class="text-muted small">MXN / año</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card kpi-card kpi-caldera h-100 shadow-sm">
-        <div class="card-body">
-          <div class="text-muted small">Ahorro Caldera</div>
-          <div class="fs-4 fw-bold text-warning" id="kpi-caldera-val">
-            ${{ "{:,.0f}".format(r.ahorro_caldera_anual_mxn|float) }}
-          </div>
-          <div class="text-muted small">MXN / año</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card kpi-card kpi-gas h-100 shadow-sm">
-        <div class="card-body">
-          <div class="text-muted small">Costo Gas Cogen</div>
-          <div class="fs-4 fw-bold text-danger" id="kpi-gas-val">
-            ${{ "{:,.0f}".format(r.costo_gas_cogen_anual_mxn|float) }}
-          </div>
-          <div class="text-muted small">MXN / año</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Sliders de sensibilidad -->
-  <div class="card shadow-sm mb-4">
-    <div class="card-body">
-      <h5 class="card-title">Análisis de sensibilidad</h5>
-      <div class="row g-3">
-        <div class="col-md-3">
-          <label class="form-label small">
-            Cobertura eléctrica: <strong id="val-cobertura">75</strong>%
-          </label>
-          <input type="range" class="form-range" id="cobertura"
-                 min="50" max="100" step="1" value="75">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">
-            Rendimiento eléctrico: <strong id="val-rendimiento-elec">40</strong>%
-          </label>
-          <input type="range" class="form-range" id="rendimiento-elec"
-                 min="20" max="60" step="1" value="40">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">
-            Rendimiento térmico: <strong id="val-rendimiento-term">25</strong>%
-          </label>
-          <input type="range" class="form-range" id="rendimiento-term"
-                 min="5" max="45" step="1" value="25">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small">
-            Eficiencia caldera: <strong id="val-caldera">85</strong>%
-          </label>
-          <input type="range" class="form-range" id="caldera"
-                 min="60" max="99" step="1" value="85">
-        </div>
-      </div>
-      <div class="mt-2 small text-muted">
-        EBITDA anual estimado:
-        <strong class="text-success fs-5" id="ebitda-sensibilidad">—</strong>
-      </div>
-    </div>
   </div>
 
   <!-- Upload de facturas -->
@@ -217,16 +138,172 @@
     </div>
   </div>
 
-  <!-- Gráfica -->
-  <div class="card shadow-sm mb-4">
-    <div class="card-body">
-      <h5 class="card-title">EBITDA Mensual vs Componentes</h5>
-      <canvas id="cogenChart" height="90"></canvas>
+  <!-- KPI cards (cogeneración) -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card kpi-card kpi-ebitda h-100 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">EBITDA Anual</div>
+          <div class="fs-4 fw-bold text-success" id="kpi-ebitda-val">
+            ${{ "{:,.0f}".format(r.ebitda_anual_mxn|float) }}
+          </div>
+          <div class="text-muted small">MXN / año</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card kpi-card kpi-elec h-100 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">Ahorro Electricidad</div>
+          <div class="fs-4 fw-bold text-primary" id="kpi-elec-val">
+            ${{ "{:,.0f}".format(r.ahorro_electricidad_anual_mxn|float) }}
+          </div>
+          <div class="text-muted small">MXN / año</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card kpi-card kpi-caldera h-100 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">Ahorro Caldera</div>
+          <div class="fs-4 fw-bold text-warning" id="kpi-caldera-val">
+            ${{ "{:,.0f}".format(r.ahorro_caldera_anual_mxn|float) }}
+          </div>
+          <div class="text-muted small">MXN / año</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card kpi-card kpi-gas h-100 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">Costo Gas Cogen</div>
+          <div class="fs-4 fw-bold text-danger" id="kpi-gas-val">
+            ${{ "{:,.0f}".format(r.costo_gas_cogen_anual_mxn|float) }}
+          </div>
+          <div class="text-muted small">MXN / año</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Tabla mensual -->
-  <div class="card shadow-sm">
+  <!-- ═══ SECCIÓN: COMPORTAMIENTO ENERGÉTICO HISTÓRICO ═══ -->
+  <div class="section-header">
+    <h2>Comportamiento energético histórico</h2>
+    <hr>
+  </div>
+
+  <!-- Viz 1: Demanda por horario vs costo unitario -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Demanda máxima por horario vs costo unitario CFE</h5>
+      <p class="text-muted small mb-2">Barras agrupadas: kW por horario (eje izq.) · Línea: $/kWh total (eje der.)</p>
+      <canvas id="chartDemanda" height="100"></canvas>
+    </div>
+  </div>
+
+  <!-- Viz 2: Consumo por horario vs costo unitario -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Consumo por horario vs costo unitario CFE</h5>
+      <p class="text-muted small mb-2">Barras apiladas: kWh por horario (eje izq.) · Línea: $/kWh total (eje der.)</p>
+      <canvas id="chartConsumo" height="100"></canvas>
+    </div>
+  </div>
+
+  <!-- Viz 3: Tabla análisis costos punta -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body p-0">
+      <div class="px-3 pt-3 pb-2">
+        <h5 class="card-title mb-0">Análisis de costos — horario punta</h5>
+        <p class="text-muted small mt-1 mb-0">Costo energético en horario punta, su participación en la factura total y costo unitario punta mensual.</p>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr style="background:#1F4E79;color:#fff">
+              <th class="ps-3">Mes</th>
+              <th class="text-end">Costo punta (MXN)</th>
+              <th class="text-end">% del total</th>
+              <th class="text-end pe-3">$/kWh punta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for fila in historico.tabla_punta %}
+            {% if loop.last %}
+            <tr class="tabla-punta-total">
+            {% else %}
+            <tr>
+            {% endif %}
+              <td class="ps-3 small {% if loop.last %}fw-bold{% endif %}">{{ fila.mes }}</td>
+              <td class="text-end small">${{ "{:,.0f}".format(fila.costo_punta) }}</td>
+              <td class="text-end small">{{ "{:.1f}".format(fila.pct) }}%</td>
+              <td class="text-end small pe-3">{{ "{:.4f}".format(fila.costo_unit_punta) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Viz 4: Costo unitario promedio por horario -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Costo unitario promedio por horario (promedio ponderado por consumo)</h5>
+      <p class="text-muted small mb-2">$/kWh — promedio ponderado sobre todo el periodo cargado</p>
+      <canvas id="chartCostoPromedio" height="80"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══ SECCIÓN: ANÁLISIS DE OPORTUNIDAD DE COGENERACIÓN ═══ -->
+  <div class="section-header">
+    <h2>Análisis de oportunidad de cogeneración</h2>
+    <hr>
+  </div>
+
+  <!-- Sliders de sensibilidad -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">Análisis de sensibilidad</h5>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label small">
+            Cobertura eléctrica: <strong id="val-cobertura">75</strong>%
+          </label>
+          <input type="range" class="form-range" id="cobertura"
+                 min="50" max="100" step="1" value="75">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">
+            Rendimiento eléctrico: <strong id="val-rendimiento-elec">40</strong>%
+          </label>
+          <input type="range" class="form-range" id="rendimiento-elec"
+                 min="20" max="60" step="1" value="40">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">
+            Rendimiento térmico: <strong id="val-rendimiento-term">25</strong>%
+          </label>
+          <input type="range" class="form-range" id="rendimiento-term"
+                 min="5" max="45" step="1" value="25">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small">
+            Eficiencia caldera: <strong id="val-caldera">85</strong>%
+          </label>
+          <input type="range" class="form-range" id="caldera"
+                 min="60" max="99" step="1" value="85">
+        </div>
+      </div>
+      <div class="mt-2 small text-muted">
+        EBITDA anual estimado:
+        <strong class="text-success fs-5" id="ebitda-sensibilidad">—</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla EBITDA mensual -->
+  <div class="card shadow-sm mb-4">
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-sm table-hover table-mes mb-0">
@@ -295,8 +372,16 @@
     </div>
   </div>
 
+  <!-- Gráfica EBITDA mensual (al final) -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="card-title">EBITDA Mensual vs Componentes</h5>
+      <canvas id="cogenChart" height="90"></canvas>
+    </div>
+  </div>
+
   <!-- Parámetros usados -->
-  <div class="mt-3 text-muted small">
+  <div class="mt-3 mb-4 text-muted small">
     Parámetros: cobertura eléctrica={{ (r.params.cobertura_electrica * 100)|int }}% &#183;
     rendimiento eléctrico={{ (r.params.rendimiento_electrico * 100)|int }}% &#183;
     rendimiento térmico={{ (r.params.rendimiento_termico * 100)|int }}% &#183;
@@ -308,41 +393,158 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
-const ctx = document.getElementById("cogenChart");
-new Chart(ctx, {
+// ── Plugin inline para etiquetas sobre puntos/barras ──────────────────────────
+const labelPlugin = {
+  id: "inlineLabels",
+  afterDatasetsDraw(chart) {
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((ds, i) => {
+      if (!ds._showLabels) return;
+      const meta = chart.getDatasetMeta(i);
+      meta.data.forEach((el, j) => {
+        const val = ds.data[j];
+        if (val == null) return;
+        ctx.save();
+        ctx.fillStyle = "#212529";
+        ctx.font = "bold 10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(typeof val === "number" ? val.toFixed(4) : val, el.x, el.y - 4);
+        ctx.restore();
+      });
+    });
+  }
+};
+Chart.register(labelPlugin);
+
+// ── Colores constantes punta / intermedio / base ──────────────────────────────
+const COLOR_PUNTA      = "rgba(220,53,69,0.75)";
+const COLOR_INTERMEDIO = "rgba(255,193,7,0.85)";
+const COLOR_BASE       = "rgba(25,135,84,0.7)";
+const COLOR_LINEA      = "#212529";
+
+// ── Datos históricos (inmutables, no dependen de sliders) ─────────────────────
+const hist = {{ historico | tojson }};
+
+// ── Opciones comunes para gráficas con doble eje ─────────────────────────────
+function opcionesDualEje(labelIzq, labelDer) {
+  return {
+    responsive: true,
+    plugins: {
+      legend: { position: "top" },
+      tooltip: {
+        callbacks: {
+          label: ctx => {
+            const v = ctx.raw;
+            return ctx.dataset.label + ": " + (typeof v === "number"
+              ? v.toLocaleString("es-MX", { maximumFractionDigits: 4 })
+              : v);
+          }
+        }
+      }
+    },
+    scales: {
+      x: { stacked: false },
+      y:  { position: "left",  title: { display: true, text: labelIzq }, beginAtZero: true },
+      y2: { position: "right", title: { display: true, text: labelDer }, grid: { drawOnChartArea: false }, beginAtZero: true }
+    }
+  };
+}
+
+// ── Viz 1: Demanda agrupada + costo unitario ──────────────────────────────────
+new Chart(document.getElementById("chartDemanda"), {
+  type: "bar",
+  data: {
+    labels: hist.labels,
+    datasets: [
+      { label: "Demanda Punta (kW)",      data: hist.demanda_punta,      backgroundColor: COLOR_PUNTA,      yAxisID: "y"  },
+      { label: "Demanda Intermedio (kW)", data: hist.demanda_intermedio, backgroundColor: COLOR_INTERMEDIO, yAxisID: "y"  },
+      { label: "Demanda Base (kW)",       data: hist.demanda_base,       backgroundColor: COLOR_BASE,       yAxisID: "y"  },
+      { type: "line", label: "$/kWh total", data: hist.costo_unit_mes,
+        borderColor: COLOR_LINEA, backgroundColor: "transparent",
+        borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2",
+        _showLabels: true }
+    ]
+  },
+  options: (() => {
+    const o = opcionesDualEje("kW", "$/kWh");
+    o.scales.x.stacked = false;
+    return o;
+  })()
+});
+
+// ── Viz 2: Consumo apilado + costo unitario ───────────────────────────────────
+new Chart(document.getElementById("chartConsumo"), {
+  type: "bar",
+  data: {
+    labels: hist.labels,
+    datasets: [
+      { label: "Base (kWh)",       data: hist.consumo_base,       backgroundColor: COLOR_BASE,       yAxisID: "y", stack: "kwh" },
+      { label: "Intermedio (kWh)", data: hist.consumo_intermedio, backgroundColor: COLOR_INTERMEDIO, yAxisID: "y", stack: "kwh" },
+      { label: "Punta (kWh)",      data: hist.consumo_punta,      backgroundColor: COLOR_PUNTA,      yAxisID: "y", stack: "kwh" },
+      { type: "line", label: "$/kWh total", data: hist.costo_unit_mes,
+        borderColor: COLOR_LINEA, backgroundColor: "transparent",
+        borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2",
+        _showLabels: true }
+    ]
+  },
+  options: (() => {
+    const o = opcionesDualEje("kWh", "$/kWh");
+    o.scales.x.stacked = true;
+    o.scales.y.stacked = true;
+    return o;
+  })()
+});
+
+// ── Viz 4: Costo unitario promedio por horario ────────────────────────────────
+new Chart(document.getElementById("chartCostoPromedio"), {
+  type: "bar",
+  data: {
+    labels: ["Base", "Intermedio", "Punta"],
+    datasets: [{
+      label: "$/kWh promedio ponderado",
+      data: [
+        hist.costo_unit_promedio.base,
+        hist.costo_unit_promedio.intermedio,
+        hist.costo_unit_promedio.punta
+      ],
+      backgroundColor: [COLOR_BASE, COLOR_INTERMEDIO, COLOR_PUNTA],
+      _showLabels: true
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => "$/kWh: " + ctx.raw.toFixed(4)
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: false,
+        title: { display: true, text: "$/kWh" },
+        ticks: { callback: v => "$" + v.toFixed(4) }
+      }
+    }
+  }
+});
+</script>
+<script>
+// ── Gráfica EBITDA mensual ────────────────────────────────────────────────────
+new Chart(document.getElementById("cogenChart"), {
   type: "bar",
   data: {
     labels: {{ chart_labels | tojson }},
     datasets: [
-      {
-        label: "Ahorro Electricidad",
-        data: {{ chart_ahorro_elec | tojson }},
-        backgroundColor: "rgba(13,110,253,0.6)",
-        stack: "componentes"
-      },
-      {
-        label: "Ahorro Caldera",
-        data: {{ chart_ahorro_caldera | tojson }},
-        backgroundColor: "rgba(253,126,20,0.6)",
-        stack: "componentes"
-      },
-      {
-        label: "Costo Gas Cogen",
-        data: {{ chart_costo_gas | tojson }}.map(v => -v),
-        backgroundColor: "rgba(220,53,69,0.6)",
-        stack: "componentes"
-      },
-      {
-        type: "line",
-        label: "EBITDA",
-        data: {{ chart_ebitda | tojson }},
-        borderColor: "#198754",
-        backgroundColor: "rgba(25,135,84,0.1)",
-        borderWidth: 2,
-        pointRadius: 4,
-        fill: false,
-        tension: 0.3
-      }
+      { label: "Ahorro Electricidad", data: {{ chart_ahorro_elec | tojson }},    backgroundColor: "rgba(13,110,253,0.6)",  stack: "componentes" },
+      { label: "Ahorro Caldera",      data: {{ chart_ahorro_caldera | tojson }}, backgroundColor: "rgba(253,126,20,0.6)",  stack: "componentes" },
+      { label: "Costo Gas Cogen",     data: {{ chart_costo_gas | tojson }}.map(v => -v), backgroundColor: "rgba(220,53,69,0.6)", stack: "componentes" },
+      { type: "line", label: "EBITDA", data: {{ chart_ebitda | tojson }},
+        borderColor: "#198754", backgroundColor: "rgba(25,135,84,0.1)",
+        borderWidth: 2, pointRadius: 4, fill: false, tension: 0.3 }
     ]
   },
   options: {
@@ -351,25 +553,18 @@ new Chart(ctx, {
       legend: { position: "top" },
       tooltip: {
         callbacks: {
-          label: function(ctx) {
-            const v = Math.abs(ctx.raw);
-            return ctx.dataset.label + ": $" + v.toLocaleString("es-MX", {maximumFractionDigits: 0});
-          }
+          label: ctx => ctx.dataset.label + ": $" + Math.abs(ctx.raw).toLocaleString("es-MX", { maximumFractionDigits: 0 })
         }
       }
     },
     scales: {
-      y: {
-        ticks: {
-          callback: v => "$" + Math.abs(v).toLocaleString("es-MX", {maximumFractionDigits: 0})
-        }
-      }
+      y: { ticks: { callback: v => "$" + Math.abs(v).toLocaleString("es-MX", { maximumFractionDigits: 0 }) } }
     }
   }
 });
 </script>
 <script>
-// ── Datos base (inmutables) ────────────────────────────────────────────────
+// ── Sensibilidad / sliders ────────────────────────────────────────────────────
 const meses_raw = {{ meses_raw | tojson }};
 
 function recalcularMes(m, p) {
@@ -426,10 +621,7 @@ const dropZone   = document.getElementById("drop-zone");
 const fileInput  = document.getElementById("file-input");
 const statusDiv  = document.getElementById("upload-status");
 
-dropZone.addEventListener("dragover", e => {
-  e.preventDefault();
-  dropZone.classList.add("bg-light");
-});
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("bg-light"); });
 dropZone.addEventListener("dragleave", () => dropZone.classList.remove("bg-light"));
 dropZone.addEventListener("drop", e => {
   e.preventDefault();
@@ -438,9 +630,7 @@ dropZone.addEventListener("drop", e => {
 });
 fileInput.addEventListener("change", () => subirArchivos(fileInput.files));
 dropZone.addEventListener("click", e => {
-  if (e.target !== document.querySelector("label[for='file-input']")) {
-    fileInput.click();
-  }
+  if (e.target !== document.querySelector("label[for='file-input']")) fileInput.click();
 });
 
 async function subirArchivos(files) {
@@ -468,17 +658,14 @@ async function subirArchivos(files) {
              : (procesados > 0) ? "warning"
              : "danger";
   let html = `<div class="alert alert-${tipo} mt-2 mb-0" role="alert">`;
-  if (procesados > 0) {
-    html += `<strong>✓ ${procesados} factura(s) procesada(s) correctamente.</strong>`;
-  }
+  if (procesados > 0) html += `<strong>✓ ${procesados} factura(s) procesada(s) correctamente.</strong>`;
   if (errores.length > 0) {
     html += `${procesados > 0 ? "<br>" : ""}<strong>✗ ${errores.length} error(es):</strong><ul class="mb-0 mt-1">`;
     errores.forEach(e => { html += `<li>${e.nombre || ""}: ${e.error || ""}</li>`; });
     html += "</ul>";
   }
   if (procesados > 0) {
-    html += `<hr class="my-2"><button class="btn btn-sm btn-outline-${tipo === "success" ? "success" : "secondary"}"
-      onclick="window.location.reload()">&#8635; Recargar dashboard</button>`;
+    html += `<hr class="my-2"><button class="btn btn-sm btn-outline-${tipo === "success" ? "success" : "secondary"}" onclick="window.location.reload()">&#8635; Recargar dashboard</button>`;
   }
   html += "</div>";
   statusDiv.innerHTML = html;

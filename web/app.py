@@ -9,6 +9,7 @@ from flask import Flask, render_template, send_file
 from storage.repository import get_all_cfe_invoices, get_all_gas_invoices
 from cli.main import procesar_factura_cfe, procesar_factura_gas
 from calc.cogen import calcular_cogen
+from calc.historico import calcular_historico_cfe
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
 from models.cogen_result import CoGenParams
 
@@ -18,6 +19,7 @@ def _cargar_datos():
     cfe_invoices = get_all_cfe_invoices()
     gas_invoices = get_all_gas_invoices()
     resultado = calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
+    historico = calcular_historico_cfe(cfe_invoices)
 
     facturas_cfe = [
         {
@@ -41,7 +43,7 @@ def _cargar_datos():
         for inv in sorted(gas_invoices, key=lambda x: x.periodo_inicio)
     ]
 
-    return resultado, facturas_cfe, facturas_gas
+    return resultado, facturas_cfe, facturas_gas, historico
 
 
 def _detect_tipo(pdf_path: Path) -> str:
@@ -65,15 +67,17 @@ def create_app() -> Flask:
     app.config["RESULTADO"] = None
     app.config["FACTURAS_CFE"] = []
     app.config["FACTURAS_GAS"] = []
+    app.config["HISTORICO"] = {}
 
     @app.route("/")
     def dashboard():
         if app.config["RESULTADO"] is None:
             try:
-                r, fcfe, fgas = _cargar_datos()
+                r, fcfe, fgas, hist = _cargar_datos()
                 app.config["RESULTADO"] = r
                 app.config["FACTURAS_CFE"] = fcfe
                 app.config["FACTURAS_GAS"] = fgas
+                app.config["HISTORICO"] = hist
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -114,6 +118,7 @@ def create_app() -> Flask:
             meses_raw=meses_raw,
             facturas_cfe=app.config["FACTURAS_CFE"],
             facturas_gas=app.config["FACTURAS_GAS"],
+            historico=app.config["HISTORICO"],
         )
 
     @app.route("/export/excel")
@@ -167,10 +172,11 @@ def create_app() -> Flask:
                 tmp_path.unlink(missing_ok=True)
 
         if ok_count > 0:
-            r, fcfe, fgas = _cargar_datos()
+            r, fcfe, fgas, hist = _cargar_datos()
             app.config["RESULTADO"] = r
             app.config["FACTURAS_CFE"] = fcfe
             app.config["FACTURAS_GAS"] = fgas
+            app.config["HISTORICO"] = hist
 
         return jsonify({"procesados": ok_count, "errores": errors})
 
