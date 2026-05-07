@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import date
 from decimal import Decimal
@@ -10,6 +11,8 @@ from supabase import create_client, Client
 
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice, GasConcepto
+
+logger = logging.getLogger(__name__)
 
 _supabase: Client = create_client(
     os.environ["SUPABASE_URL"],
@@ -65,7 +68,15 @@ def save_cfe_invoice(invoice: CFEInvoice) -> int:
         "pdf_path": invoice.pdf_path,
         "advertencias": json.dumps(invoice.advertencias, ensure_ascii=False),
     }
-    result = _supabase.table("cfe_facturas").insert(row).execute()
+    try:
+        result = _supabase.table("cfe_facturas").insert(row).execute()
+    except Exception as exc:
+        logger.error(
+            "Error insertando cfe_factura: folio=%s, rfc=%s, periodo=%s→%s — %s",
+            invoice.folio, invoice.rfc_cliente,
+            invoice.periodo_inicio, invoice.periodo_fin, exc,
+        )
+        raise
     factura_id = result.data[0]["id"]
 
     periodos = [
@@ -79,7 +90,13 @@ def save_cfe_invoice(invoice: CFEInvoice) -> int:
         for p in invoice.periodos
     ]
     if periodos:
-        _supabase.table("cfe_periodos").insert(periodos).execute()
+        try:
+            _supabase.table("cfe_periodos").insert(periodos).execute()
+        except Exception as exc:
+            logger.error(
+                "Error insertando cfe_periodos para factura_id=%d: %s", factura_id, exc,
+            )
+            raise
 
     componentes = [
         {
@@ -93,7 +110,13 @@ def save_cfe_invoice(invoice: CFEInvoice) -> int:
         for c in invoice.componentes_mem
     ]
     if componentes:
-        _supabase.table("cfe_mem_componentes").insert(componentes).execute()
+        try:
+            _supabase.table("cfe_mem_componentes").insert(componentes).execute()
+        except Exception as exc:
+            logger.error(
+                "Error insertando cfe_mem_componentes para factura_id=%d: %s", factura_id, exc,
+            )
+            raise
 
     return factura_id
 
@@ -196,7 +219,15 @@ def save_gas_invoice(invoice: GasInvoice) -> int:
         "pdf_path": invoice.pdf_path,
         "advertencias": json.dumps(invoice.advertencias, ensure_ascii=False),
     }
-    result = _supabase.table("gas_facturas").insert(row).execute()
+    try:
+        result = _supabase.table("gas_facturas").insert(row).execute()
+    except Exception as exc:
+        logger.error(
+            "Error insertando gas_factura: folio=%s, rfc=%s, periodo=%s→%s — %s",
+            invoice.folio, invoice.rfc_cliente,
+            invoice.periodo_inicio, invoice.periodo_fin, exc,
+        )
+        raise
     factura_id = result.data[0]["id"]
 
     conceptos = [
@@ -211,7 +242,13 @@ def save_gas_invoice(invoice: GasInvoice) -> int:
         for c in invoice.conceptos
     ]
     if conceptos:
-        _supabase.table("gas_conceptos").insert(conceptos).execute()
+        try:
+            _supabase.table("gas_conceptos").insert(conceptos).execute()
+        except Exception as exc:
+            logger.error(
+                "Error insertando gas_conceptos para factura_id=%d: %s", factura_id, exc,
+            )
+            raise
 
     return factura_id
 

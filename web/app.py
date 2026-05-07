@@ -1,7 +1,9 @@
 # web/app.py
 from __future__ import annotations
 
+import logging
 import os
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -16,6 +18,7 @@ from calc.historico import calcular_historico_cfe
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
 from models.cogen_result import CoGenParams
 
+logger = logging.getLogger(__name__)
 csrf = CSRFProtect()
 
 
@@ -68,6 +71,16 @@ def _detect_tipo(pdf_path: Path) -> str:
 
 def create_app() -> Flask:
     """Flask app factory. Data loads on first request."""
+
+    # Logging raíz: stdout, INFO, formato con timestamp y módulo.
+    # Render captura todo stdout y lo muestra en el panel de logs.
+    logging.basicConfig(
+        stream=sys.stdout,
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        force=True,  # override si gunicorn ya configuró el root logger
+    )
+
     app = Flask(__name__)
 
     # Clave secreta requerida por Flask-Login y Flask-WTF
@@ -184,23 +197,33 @@ def create_app() -> Flask:
         if not files:
             return jsonify({"procesados": 0, "errores": [{"nombre": "", "error": "No se enviaron archivos"}]}), 400
 
+        logger.info("Upload recibido: %d archivo(s)", len(files))
+
         ok_count = 0
         errors = []
 
         for f in files:
+            nombre = f.filename or "<sin nombre>"
             suffix = Path(f.filename).suffix.lower() if (f.filename and Path(f.filename).suffix) else ".pdf"
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                 f.save(tmp.name)
                 tmp_path = Path(tmp.name)
             try:
                 tipo = _detect_tipo(tmp_path)
+                logger.info("Procesando: '%s' (tipo=%s)", nombre, tipo)
                 if tipo == "cfe":
-                    procesar_factura_cfe(tmp_path)
+                    factura_id = procesar_factura_cfe(tmp_path)
                 else:
-                    procesar_factura_gas(tmp_path)
+                    factura_id = procesar_factura_gas(tmp_path)
+                logger.info("Factura guardada: '%s' → id=%d (tipo=%s)", nombre, factura_id, tipo)
                 ok_count += 1
             except Exception as e:
-                errors.append({"nombre": f.filename or "", "error": str(e)})
+                logger.error(
+                    "Error procesando '%s': %s: %s",
+                    nombre, type(e).__name__, e,
+                    exc_info=True,
+                )
+                errors.append({"nombre": nombre, "error": str(e)})
             finally:
                 tmp_path.unlink(missing_ok=True)
 

@@ -7,10 +7,13 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 
 from parsers.cfe import get_cfe_parser
 from storage.repository import save_cfe_invoice, get_all_cfe_invoices
+
+logger = logging.getLogger(__name__)
 
 
 def procesar_factura_cfe(
@@ -40,20 +43,22 @@ def procesar_factura_cfe(
     errores = parser.validate(invoice)
 
     if errores:
-        print(f"[ADVERTENCIA] Errores de validación ({len(errores)}):")
-        for e in errores:
-            print(f"  - {e}")
+        logger.warning(
+            "Factura CFE '%s': %d error(es) de validación: %s",
+            pdf_path.name, len(errores), "; ".join(errores),
+        )
 
     if invoice.advertencias:
-        print(f"[INFO] Campos con advertencias ({len(invoice.advertencias)}):")
-        for a in invoice.advertencias:
-            print(f"  - {a}")
+        logger.warning(
+            "Factura CFE '%s': %d advertencia(s): %s",
+            pdf_path.name, len(invoice.advertencias), "; ".join(invoice.advertencias),
+        )
 
     factura_id = save_cfe_invoice(invoice)
-    print(
-        f"[OK] Factura guardada: id={factura_id}, "
-        f"periodo={invoice.periodo_inicio}→{invoice.periodo_fin}, "
-        f"total_periodo=${invoice.facturacion_periodo_mxn:,.2f}"
+    logger.info(
+        "Factura CFE guardada: id=%d, periodo=%s→%s, total_periodo=$%s",
+        factura_id, invoice.periodo_inicio, invoice.periodo_fin,
+        f"{invoice.facturacion_periodo_mxn:,.2f}",
     )
     return factura_id
 
@@ -81,15 +86,22 @@ def procesar_factura_gas(pdf_path: Path) -> int:
     invoice = parser.parse(pdf_path)
     errores = parser.validate(invoice)
 
-    for adv in invoice.advertencias:
-        print(f"  [ADVERTENCIA] {adv}")
-    for err in errores:
-        print(f"  [ERROR] {err}")
+    if invoice.advertencias:
+        logger.warning(
+            "Factura gas '%s': %d advertencia(s): %s",
+            pdf_path.name, len(invoice.advertencias), "; ".join(invoice.advertencias),
+        )
+    if errores:
+        logger.warning(
+            "Factura gas '%s': %d error(es) de validación: %s",
+            pdf_path.name, len(errores), "; ".join(errores),
+        )
 
     factura_id = save_gas_invoice(invoice)
-    print(f"  [OK] {pdf_path.name} → gas_facturas.id={factura_id}  "
-          f"GJ={invoice.consumo_total_gj:,.4f}  "
-          f"total=${invoice.total_mxn:,.2f}")
+    logger.info(
+        "Factura gas guardada: id=%d, GJ=%s, total=$%s",
+        factura_id, f"{invoice.consumo_total_gj:,.4f}", f"{invoice.total_mxn:,.2f}",
+    )
     return factura_id
 
 
@@ -116,12 +128,16 @@ def generar_analisis_cogen(output_path: Path) -> Path:
     output_path = Path(output_path)
     generar_excel(resultado, output_path)
 
-    print(f"[OK] Análisis generado: {output_path}")
-    print(f"     Meses pareados:     {len(resultado.meses)}")
-    print(f"     EBITDA anual:       ${resultado.ebitda_anual_mxn:>16,.2f}")
-    print(f"     Ahorro electricidad:${resultado.ahorro_electricidad_anual_mxn:>16,.2f}")
-    print(f"     Ahorro caldera:     ${resultado.ahorro_caldera_anual_mxn:>16,.2f}")
-    print(f"     Costo gas cogen:    ${resultado.costo_gas_cogen_anual_mxn:>16,.2f}")
+    logger.info("Análisis generado: %s", output_path)
+    logger.info(
+        "Meses pareados: %d | EBITDA anual: $%s | Ahorro elec: $%s | "
+        "Ahorro caldera: $%s | Costo gas cogen: $%s",
+        len(resultado.meses),
+        f"{resultado.ebitda_anual_mxn:,.2f}",
+        f"{resultado.ahorro_electricidad_anual_mxn:,.2f}",
+        f"{resultado.ahorro_caldera_anual_mxn:,.2f}",
+        f"{resultado.costo_gas_cogen_anual_mxn:,.2f}",
+    )
     return output_path
 
 
