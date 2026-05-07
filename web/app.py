@@ -1,10 +1,13 @@
 # web/app.py
 from __future__ import annotations
 
-from datetime import date
+import os
+from datetime import date, timedelta
 from pathlib import Path
 
-from flask import Flask, render_template, send_file
+from flask import Flask, redirect, render_template, request, send_file, url_for
+from flask_login import current_user, login_required
+from flask_wtf.csrf import CSRFProtect
 
 from storage.repository import get_all_cfe_invoices, get_all_gas_invoices
 from cli.main import procesar_factura_cfe, procesar_factura_gas
@@ -12,6 +15,8 @@ from calc.cogen import calcular_cogen
 from calc.historico import calcular_historico_cfe
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
 from models.cogen_result import CoGenParams
+
+csrf = CSRFProtect()
 
 
 def _cargar_datos():
@@ -64,10 +69,38 @@ def _detect_tipo(pdf_path: Path) -> str:
 def create_app() -> Flask:
     """Flask app factory. Data loads on first request."""
     app = Flask(__name__)
+
+    # Clave secreta requerida por Flask-Login y Flask-WTF
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32))
+
+    # Cookies de sesión: 30 días, seguras
+    app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
+    app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+    app.config["REMEMBER_COOKIE_SECURE"] = not app.debug
+    app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SECURE"] = not app.debug
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
     app.config["RESULTADO"] = None
     app.config["FACTURAS_CFE"] = []
     app.config["FACTURAS_GAS"] = []
     app.config["HISTORICO"] = {}
+
+    # Autenticación y CSRF
+    from web.auth import init_auth
+    init_auth(app)
+    csrf.init_app(app)
+
+    # Rutas exentas de autenticación
+    _PUBLIC = {"/login", "/healthz"}
+
+    @app.before_request
+    def _require_login():
+        if request.path in _PUBLIC or request.path.startswith("/static"):
+            return None
+        if not current_user.is_authenticated:
+            return redirect(url_for("auth.login", next=request.path))
 
     @app.route("/")
     def dashboard():
@@ -145,7 +178,7 @@ def create_app() -> Flask:
     @app.route("/upload", methods=["POST"])
     def upload_facturas():
         import tempfile
-        from flask import jsonify, request
+        from flask import jsonify
 
         files = request.files.getlist("facturas")
         if not files:

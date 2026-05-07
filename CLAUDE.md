@@ -68,6 +68,11 @@ gas_conceptos: id, factura_id, descripcion, clave_producto, cantidad_gj, precio_
 
 SUPABASE_URL: URL del proyecto Supabase.
 SUPABASE_KEY: clave service_role del proyecto. Ver sección de seguridad y deuda técnica.
+SECRET_KEY: clave secreta de Flask para firmar cookies de sesión. Generar con `python3 -c "import secrets; print(secrets.token_hex(32))"`. Obligatoria en producción; si se omite, la app regenera una clave en cada reinicio invalidando todas las sesiones.
+APP_USER: nombre de usuario del operador (texto plano). Ejemplo: `operador`.
+APP_PASSWORD_HASH: hash de la contraseña generado con werkzeug. Generar así:
+  `python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('mi_password'))"`
+  El hash resultante (formato `pbkdf2:sha256:...`) se pega directamente como valor de la variable. Nunca guardar la contraseña en texto plano. Para cambiar la contraseña, regenerar el hash y actualizar la variable de entorno en Render; reiniciar el servicio.
 
 ## Seguridad y deuda técnica reconocida
 
