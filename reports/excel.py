@@ -62,6 +62,7 @@ _COLUMNAS = [
     ("Calor Recup. (GJ)",     "calor_recuperado_gj",        "numero"),
     ("Ahorro Caldera (MXN)",  "ahorro_caldera_mxn",         "moneda"),
     ("EBITDA Mes (MXN)",      "ebitda_mes_mxn",             "moneda"),
+    ("Prorrateo",             "nota_prorrateo",             "texto"),
 ]
 
 _TOTALES_COLS = {
@@ -117,7 +118,7 @@ def _escribir_hoja_analisis(wb: openpyxl.Workbook, resultado: CoGenResultado) ->
             cell.fill = totales_fill
 
     # Anchos de columna
-    anchos = [12, 14, 18, 12, 14, 10, 18, 14, 12, 18, 18, 14, 18, 18]
+    anchos = [12, 14, 18, 12, 14, 10, 18, 14, 12, 18, 18, 14, 18, 18, 28]
     for i, ancho in enumerate(anchos, 1):
         ws.column_dimensions[get_column_letter(i)].width = ancho
 

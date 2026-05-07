@@ -171,7 +171,13 @@
           <tbody>
             {% for m in r.meses %}
             <tr class="mes-row">
-              <td>{{ m.periodo_inicio.strftime("%b %Y") }}</td>
+              <td>
+                {{ m.periodo_inicio.strftime("%b %Y") }}
+                {% if m.prorrateado %}
+                <span class="badge bg-warning text-dark ms-1" style="font-size:.65em"
+                      title="{{ m.nota_prorrateo }}">★ prorrateado</span>
+                {% endif %}
+              </td>
               <td class="text-end">{{ "{:,.0f}".format(m.kwh_total|float) }}</td>
               <td class="text-end">{{ "${:,.0f}".format(m.costo_cfe_mxn|float) }}</td>
               <td class="text-end">{{ "{:.4f}".format(m.costo_promedio_kwh|float) }}</td>

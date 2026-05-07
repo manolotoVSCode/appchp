@@ -36,6 +36,9 @@ class CoGenMes:
     calor_recuperado_gj: Decimal
     ahorro_caldera_mxn: Decimal
     ebitda_mes_mxn: Decimal
+    # Prorrateo (campo informativo, vacío si no se aplicó)
+    prorrateado: bool = False
+    nota_prorrateo: str = ""
 
 
 @dataclass
