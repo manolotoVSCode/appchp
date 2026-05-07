@@ -1,6 +1,7 @@
 # web/app.py
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 from flask import Flask, render_template, send_file
@@ -8,13 +9,39 @@ from flask import Flask, render_template, send_file
 from storage.repository import get_all_cfe_invoices, get_all_gas_invoices
 from cli.main import procesar_factura_cfe, procesar_factura_gas
 from calc.cogen import calcular_cogen
+from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
 from models.cogen_result import CoGenParams
 
 
-def _cargar_resultado():
+def _cargar_datos():
+    """Carga facturas desde Supabase, calcula cogeneración y prepara listas para el template."""
     cfe_invoices = get_all_cfe_invoices()
     gas_invoices = get_all_gas_invoices()
-    return calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
+    resultado = calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
+
+    facturas_cfe = [
+        {
+            "periodo": f"{inv.periodo_inicio.strftime('%d %b %Y')} – {inv.periodo_fin.strftime('%d %b %Y')}",
+            "mes_asociado": date(*mes_asociado(inv.periodo_inicio, inv.periodo_fin), 1).strftime("%b %Y"),
+            "kwh_total": float(sum(p.consumo_kwh for p in inv.periodos)),
+            "costo_mxn": float(inv.facturacion_periodo_mxn),
+            "prorrateado": (inv.periodo_fin - inv.periodo_inicio).days < UMBRAL_PRORRATEO_DIAS,
+        }
+        for inv in sorted(cfe_invoices, key=lambda x: x.periodo_inicio)
+    ]
+
+    facturas_gas = [
+        {
+            "periodo": f"{inv.periodo_inicio.strftime('%d %b %Y')} – {inv.periodo_fin.strftime('%d %b %Y')}",
+            "mes_asociado": date(*mes_asociado(inv.periodo_inicio, inv.periodo_fin), 1).strftime("%b %Y"),
+            "gj_total": float(inv.consumo_total_gj),
+            "costo_mxn": float(inv.subtotal_mxn),
+            "prorrateado": (inv.periodo_fin - inv.periodo_inicio).days < UMBRAL_PRORRATEO_DIAS,
+        }
+        for inv in sorted(gas_invoices, key=lambda x: x.periodo_inicio)
+    ]
+
+    return resultado, facturas_cfe, facturas_gas
 
 
 def _detect_tipo(pdf_path: Path) -> str:
@@ -36,12 +63,17 @@ def create_app() -> Flask:
     """Flask app factory. Data loads on first request."""
     app = Flask(__name__)
     app.config["RESULTADO"] = None
+    app.config["FACTURAS_CFE"] = []
+    app.config["FACTURAS_GAS"] = []
 
     @app.route("/")
     def dashboard():
         if app.config["RESULTADO"] is None:
             try:
-                app.config["RESULTADO"] = _cargar_resultado()
+                r, fcfe, fgas = _cargar_datos()
+                app.config["RESULTADO"] = r
+                app.config["FACTURAS_CFE"] = fcfe
+                app.config["FACTURAS_GAS"] = fgas
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -80,6 +112,8 @@ def create_app() -> Flask:
             chart_ahorro_caldera=chart_ahorro_caldera,
             chart_costo_gas=chart_costo_gas,
             meses_raw=meses_raw,
+            facturas_cfe=app.config["FACTURAS_CFE"],
+            facturas_gas=app.config["FACTURAS_GAS"],
         )
 
     @app.route("/export/excel")
@@ -133,7 +167,10 @@ def create_app() -> Flask:
                 tmp_path.unlink(missing_ok=True)
 
         if ok_count > 0:
-            app.config["RESULTADO"] = _cargar_resultado()
+            r, fcfe, fgas = _cargar_datos()
+            app.config["RESULTADO"] = r
+            app.config["FACTURAS_CFE"] = fcfe
+            app.config["FACTURAS_GAS"] = fgas
 
         return jsonify({"procesados": ok_count, "errores": errors})
 
