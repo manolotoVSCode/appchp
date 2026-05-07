@@ -93,9 +93,8 @@ def test_ebitda_anual_en_totales(xlsx_path):
     import openpyxl
     wb = openpyxl.load_workbook(xlsx_path)
     ws = wb["Análisis Mensual"]
-    # Buscar celda con el EBITDA anual total en la última fila
+    # La última fila contiene fórmulas =SUM(...) en las columnas calculadas
     last_row = ws.max_row
-    # Verificar que la última fila tiene algún valor numérico > 0
     valores = [ws.cell(last_row, c).value for c in range(1, ws.max_column + 1)]
-    numericos = [v for v in valores if isinstance(v, (int, float)) and v > 0]
-    assert len(numericos) > 0
+    formulas_suma = [v for v in valores if isinstance(v, str) and v.startswith("=SUM(")]
+    assert len(formulas_suma) > 0
