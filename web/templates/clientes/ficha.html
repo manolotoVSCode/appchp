@@ -6,14 +6,14 @@
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-3">
   <a href="{{ url_for('clientes.listado') }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
-  <h4 class="fw-bold mb-0" style="color:#1F4E79">{{ cliente.nombre }}</h4>
+  <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">{{ cliente.nombre }}</h4>
 </div>
 
 <div class="row g-3">
   <!-- Datos del cliente -->
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">Datos del cliente</div>
+      <div class="card-header fw-semibold small text-muted" >Datos del cliente</div>
       <div class="card-body">
         <dl class="row mb-0">
           <dt class="col-sm-4 small text-muted">Nombre</dt>
@@ -41,17 +41,17 @@
   <!-- Facturas asociadas -->
   <div class="col-md-3">
     <div class="card shadow-sm h-100 text-center">
-      <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">Facturas CFE</div>
+      <div class="card-header fw-semibold small text-muted" >Facturas CFE</div>
       <div class="card-body d-flex align-items-center justify-content-center">
-        <span class="display-5 fw-bold" style="color:#1F4E79">{{ cliente.num_cfe }}</span>
+        <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ cliente.num_cfe }}</span>
       </div>
     </div>
   </div>
   <div class="col-md-3">
     <div class="card shadow-sm h-100 text-center">
-      <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">Facturas Gas</div>
+      <div class="card-header fw-semibold small text-muted" >Facturas Gas</div>
       <div class="card-body d-flex align-items-center justify-content-center">
-        <span class="display-5 fw-bold" style="color:#1F4E79">{{ cliente.num_gas }}</span>
+        <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ cliente.num_gas }}</span>
       </div>
     </div>
   </div>
@@ -68,7 +68,7 @@
 <!-- Sección contratos -->
 <div class="mt-5">
   <div class="d-flex align-items-center justify-content-between mb-2">
-    <h5 class="fw-semibold mb-0" style="color:#1F4E79">Contratos</h5>
+    <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Contratos</h5>
     <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}"
        class="btn btn-sm btn-primary">+ Nuevo contrato</a>
   </div>

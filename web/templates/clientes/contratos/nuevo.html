@@ -6,7 +6,7 @@
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-3">
   <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
-  <h4 class="fw-bold mb-0" style="color:#1F4E79">Nuevo contrato — {{ cliente.nombre }}</h4>
+  <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">Nuevo contrato — {{ cliente.nombre }}</h4>
 </div>
 
 {% if error %}

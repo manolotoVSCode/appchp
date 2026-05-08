@@ -8,7 +8,7 @@
   <div class="col-md-6 col-lg-5">
     <div class="d-flex align-items-center gap-2 mb-3">
       <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
-      <h4 class="fw-bold mb-0" style="color:#1F4E79">Editar cliente</h4>
+      <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">Editar cliente</h4>
     </div>
 
     <div class="card shadow-sm">
@@ -31,7 +31,7 @@
             <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
                    value="{{ rfc }}" disabled style="letter-spacing:.05em">
             <div class="form-text text-warning">
-              &#9888; El RFC no puede modificarse porque el cliente tiene facturas cargadas.
+              El RFC no puede modificarse porque el cliente tiene facturas cargadas.
               Para cambiar el RFC, borre primero las facturas o cree un cliente nuevo.
             </div>
             {% else %}

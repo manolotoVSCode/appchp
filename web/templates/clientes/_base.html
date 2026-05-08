@@ -6,11 +6,17 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}Clientes{% endblock %} — CHP México</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/theme.css') }}" rel="stylesheet">
   <style>
     /* ── Sidebar layout ─────────────────────────────────────────────────── */
-    :root { --sidebar-w: 220px; --sidebar-bg: #1a2b3c; --sidebar-text: rgba(255,255,255,.75); --sidebar-active: #fff; }
+    :root {
+      --sidebar-w: 240px;
+      --sidebar-bg: var(--color-bg-sidebar);
+      --sidebar-text: rgba(255,255,255,.75);
+      --sidebar-active: #fff;
+    }
 
-    body { background: #f8f9fa; margin: 0; }
+    body { background: var(--color-bg); margin: 0; }
 
     /* Sidebar */
     #sidebar {
@@ -19,8 +25,15 @@
       z-index: 100; overflow-y: auto;
     }
     .sidebar-brand {
-      padding: 1rem 1.25rem; font-weight: 700; font-size: .9rem; color: #fff;
-      border-bottom: 1px solid rgba(255,255,255,.1); white-space: nowrap;
+      padding: 1.1rem 1.25rem .9rem; border-bottom: 1px solid rgba(255,255,255,.1);
+    }
+    .sidebar-brand-title {
+      font-weight: 700; font-size: .95rem; color: #fff; line-height: 1.2;
+      letter-spacing: .01em;
+    }
+    .sidebar-brand-sub {
+      font-size: .7rem; color: var(--color-text-sidebar-muted); margin-top: .15rem;
+      text-transform: uppercase; letter-spacing: .06em;
     }
     .sidebar-section { padding: .75rem 1.25rem .25rem; font-size: .7rem; font-weight: 700;
       text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.4); }
@@ -31,8 +44,19 @@
     .sidebar-link:hover { color: var(--sidebar-active); background: rgba(255,255,255,.08); }
     .sidebar-link.active { color: var(--sidebar-active); background: rgba(255,255,255,.15); font-weight: 600; }
     .sidebar-divider { border-color: rgba(255,255,255,.1); margin: .5rem 0; }
-    .sidebar-bottom { margin-top: auto; padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,.1); }
-    .sidebar-bottom a { font-size: .8rem; }
+    .sidebar-bottom {
+      margin-top: auto; padding: 1rem 1.25rem;
+      border-top: 1px solid rgba(255,255,255,.1);
+    }
+    .sidebar-bottom a.btn { font-size: .8rem; }
+    .sidebar-footer-meta {
+      margin-top: .75rem; font-size: .7rem; color: var(--color-text-sidebar-muted);
+      line-height: 1.5;
+    }
+    .sidebar-footer-meta a {
+      color: var(--color-text-sidebar-muted); text-decoration: none;
+    }
+    .sidebar-footer-meta a:hover { color: #fff; text-decoration: underline; }
     .sidebar-contratos { max-height: 14rem; overflow-y: auto; }
     .sidebar-link-contrato {
       display: block; padding: .35rem 1.25rem .35rem 2rem; font-size: .8rem;
@@ -75,15 +99,18 @@
 <!-- Mobile topbar -->
 <div id="topbar">
   <button class="btn btn-sm btn-outline-light" id="sidebar-toggle" aria-label="Menú">
-    <span class="navbar-toggler-icon" style="filter:invert(1)">&#9776;</span>
+    <span style="font-size:1.1rem">&#9776;</span>
   </button>
-  <span class="brand">&#9889; CHP</span>
+  <span class="brand">CHP App</span>
 </div>
 <div id="sidebar-overlay"></div>
 
 <!-- Sidebar -->
 <nav id="sidebar">
-  <div class="sidebar-brand">&#9889; CHP — Análisis Energético</div>
+  <div class="sidebar-brand">
+    <div class="sidebar-brand-title">CHP App</div>
+    <div class="sidebar-brand-sub">Análisis Energético</div>
+  </div>
 
   <div class="sidebar-section">Clientes</div>
   <a href="{{ url_for('clientes.listado') }}"
@@ -117,6 +144,11 @@
 
   <div class="sidebar-bottom">
     <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-light w-100">Cerrar sesión</a>
+    <div class="sidebar-footer-meta">
+      {% if app_version %}<span>v{{ app_version }}</span> &middot; {% endif %}
+      <a href="{{ url_for('changelog') }}">Changelog</a><br>
+      <span>CHP México &copy; {{ 2025 }}</span>
+    </div>
   </div>
 </nav>
 

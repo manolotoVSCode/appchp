@@ -21,6 +21,11 @@ from models.cogen_result import CoGenParams
 logger = logging.getLogger(__name__)
 csrf = CSRFProtect()
 
+try:
+    _APP_VERSION = (Path(__file__).resolve().parent.parent / "VERSION").read_text(encoding="utf-8").strip()
+except FileNotFoundError:
+    _APP_VERSION = ""
+
 
 def _cargar_datos_cliente(cliente_id: int):
     """Carga facturas seleccionadas del cliente, calcula cogeneración y prepara listas para el template."""
@@ -97,13 +102,14 @@ def create_app() -> Flask:
             return redirect(url_for("auth.login", next=request.path))
 
     @app.context_processor
-    def _inject_cliente_activo():
+    def _inject_globals():
         id_ = session.get("cliente_activo_id")
         nombre = session.get("cliente_activo_nombre")
         if not id_:
-            return {"cliente_activo": None}
+            return {"cliente_activo": None, "app_version": _APP_VERSION}
         contratos = get_contratos_por_cliente(id_)
-        return {"cliente_activo": {"id": id_, "nombre": nombre, "contratos": contratos}}
+        return {"cliente_activo": {"id": id_, "nombre": nombre, "contratos": contratos},
+                "app_version": _APP_VERSION}
 
     @app.route("/")
     def dashboard():
@@ -222,6 +228,17 @@ def create_app() -> Flask:
             download_name="analisis_cogen.xlsx",
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+    @app.route("/changelog")
+    def changelog():
+        import markdown
+        changelog_path = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
+        try:
+            md_text = changelog_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            md_text = "_Sin changelog disponible._"
+        content = markdown.markdown(md_text, extensions=["nl2br"])
+        return render_template("changelog.html", content=content)
 
     @app.route("/healthz")
     def healthz():

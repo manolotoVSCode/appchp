@@ -6,7 +6,7 @@
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-3">
   <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
-  <h4 class="fw-bold mb-0" style="color:#1F4E79">{{ contrato.nombre }}</h4>
+  <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">{{ contrato.nombre }}</h4>
   {% if contrato.tipo == "electrico" %}
     <span class="badge text-bg-primary">Eléctrico</span>
   {% else %}
@@ -15,13 +15,13 @@
 </div>
 
 <div class="card shadow-sm" style="max-width:540px">
-  <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">Datos del contrato</div>
+  <div class="card-header fw-semibold small text-muted" >Datos del contrato</div>
   <div class="card-body">
     <dl class="row mb-0">
       <dt class="col-sm-4 small text-muted">Cliente</dt>
       <dd class="col-sm-8 mb-2">
         <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}"
-           class="text-decoration-none fw-semibold" style="color:#1F4E79">{{ cliente.nombre }}</a>
+           class="text-decoration-none fw-semibold" style="color:var(--color-primary-dark)">{{ cliente.nombre }}</a>
       </dd>
 
       <dt class="col-sm-4 small text-muted">Tipo</dt>
@@ -51,17 +51,17 @@
 <div class="row g-3 mt-1" style="max-width:540px">
   <div class="col-6">
     <div class="card shadow-sm h-100 text-center">
-      <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">Facturas CFE</div>
+      <div class="card-header fw-semibold small text-muted" >Facturas CFE</div>
       <div class="card-body d-flex align-items-center justify-content-center">
-        <span class="display-5 fw-bold" style="color:#1F4E79">{{ contrato.num_cfe }}</span>
+        <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ contrato.num_cfe }}</span>
       </div>
     </div>
   </div>
   <div class="col-6">
     <div class="card shadow-sm h-100 text-center">
-      <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">Facturas Gas</div>
+      <div class="card-header fw-semibold small text-muted" >Facturas Gas</div>
       <div class="card-body d-flex align-items-center justify-content-center">
-        <span class="display-5 fw-bold" style="color:#1F4E79">{{ contrato.num_gas }}</span>
+        <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ contrato.num_gas }}</span>
       </div>
     </div>
   </div>
@@ -83,7 +83,7 @@
          class="border border-2 border-dashed rounded p-4 text-center text-muted"
          style="cursor:pointer; border-color:#adb5bd !important;">
       <div id="drop-label">
-        &#128196; Arrastra los PDFs aquí o
+        Arrastra los PDFs aquí o
         <label for="file-input" class="text-primary" style="cursor:pointer;">
           selecciona archivos
         </label>
@@ -97,7 +97,7 @@
 <!-- Facturas CFE del contrato -->
 {% if facturas_cfe %}
 <div class="card shadow-sm mt-4">
-  <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">
+  <div class="card-header fw-semibold small text-muted" >
     Facturas CFE ({{ facturas_cfe|length }})
   </div>
   <div class="table-responsive">
@@ -143,7 +143,7 @@
 <!-- Facturas Gas del contrato -->
 {% if facturas_gas %}
 <div class="card shadow-sm mt-3">
-  <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">
+  <div class="card-header fw-semibold small text-muted" >
     Facturas Gas ({{ facturas_gas|length }})
   </div>
   <div class="table-responsive">
@@ -191,7 +191,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header border-warning">
-        <h5 class="modal-title text-warning">&#9888; Identificador diferente</h5>
+        <h5 class="modal-title text-warning">Identificador diferente</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
