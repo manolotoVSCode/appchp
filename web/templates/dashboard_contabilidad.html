@@ -4,6 +4,7 @@
 {% block title %}Contabilidad Energética — {{ cliente_nombre }}{% endblock %}
 
 {% block extra_styles %}
+<link href="{{ url_for('static', filename='css/panel-flotante.css') }}" rel="stylesheet">
 <style>
   .table-mes th { background: var(--color-primary); color: #fff; white-space: nowrap; }
   .total-row td { background: var(--color-primary-soft); font-weight: 600; }
@@ -19,12 +20,6 @@
   .tabla-punta-total td { background: var(--color-primary-soft); font-weight: 600; }
   .link-datos { font-size: .8rem; color: #6c757d; text-decoration: none; white-space: nowrap; }
   .link-datos:hover { color: var(--color-primary); }
-  .modal-resizable > .modal-content {
-    overflow: auto !important;
-    resize: both;
-    min-width: 380px;
-    min-height: 250px;
-  }
 </style>
 {% endblock %}
 
@@ -209,7 +204,7 @@
         <p class="text-muted small mt-1 mb-0">Barras agrupadas: kW por horario (eje izq.) · Línea: $/kWh total (eje der.)</p>
       </div>
       {% if tablas and tablas.consumos_demandas %}
-      <a href="#" class="link-datos ms-3 mt-1" data-bs-toggle="modal" data-bs-target="#modalConsumosDemandas">Ver datos</a>
+      <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelConsumosDemandas'); return false;">Ver datos</a>
       {% endif %}
     </div>
     <canvas id="chartDemanda" height="100" class="mt-2"></canvas>
@@ -225,7 +220,7 @@
         <p class="text-muted small mt-1 mb-0">Barras apiladas: kWh por horario (eje izq.) · Línea: $/kWh total (eje der.)</p>
       </div>
       {% if tablas and tablas.consumos_demandas %}
-      <a href="#" class="link-datos ms-3 mt-1" data-bs-toggle="modal" data-bs-target="#modalConsumosDemandas">Ver datos</a>
+      <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelConsumosDemandas'); return false;">Ver datos</a>
       {% endif %}
     </div>
     <canvas id="chartConsumo" height="100" class="mt-2"></canvas>
@@ -277,7 +272,7 @@
         <p class="text-muted small mt-1 mb-0">$/kWh — promedio ponderado sobre todo el periodo cargado</p>
       </div>
       {% if tablas and tablas.costos_detallados %}
-      <a href="#" class="link-datos ms-3 mt-1" data-bs-toggle="modal" data-bs-target="#modalCostosDetallados">Ver datos</a>
+      <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelCostosDetallados'); return false;">Ver datos</a>
       {% endif %}
     </div>
     <canvas id="chartCostoPromedio" height="80" class="mt-2"></canvas>
@@ -294,7 +289,7 @@
         <p class="text-muted small mt-1 mb-0">Distribución del subtotal sin IVA: Energía, Demanda y Otros cargos</p>
       </div>
       {% if tablas and tablas.indicadores %}
-      <a href="#" class="link-datos ms-3 mt-1" data-bs-toggle="modal" data-bs-target="#modalIndicadores">Ver datos</a>
+      <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanelIndicadores(); return false;">Ver datos</a>
       {% endif %}
     </div>
     <div class="mb-3" style="max-width:220px;">
@@ -312,160 +307,136 @@
 </div>
 {% endif %}
 
-<!-- ═══ MODALES ═══ -->
+<!-- ═══ PANELES FLOTANTES ═══ -->
 {% if tablas and tablas.consumos_demandas %}
-<div class="modal fade" id="modalConsumosDemandas" tabindex="-1" aria-labelledby="modalConsumosDemandasLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-resizable">
-    <div class="modal-content">
-      <div class="modal-header" style="background:var(--color-primary-soft)">
-        <h5 class="modal-title" id="modalConsumosDemandasLabel" style="color:var(--color-primary-dark)">Consumos y demandas por horario</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover mb-0">
-            <thead>
-              <tr class="table-primary-header">
-                <th class="ps-3">Mes</th>
-                <th class="text-end">Cons. Base (kWh)</th>
-                <th class="text-end">Cons. Interm. (kWh)</th>
-                <th class="text-end">Cons. Punta (kWh)</th>
-                <th class="text-end">Total (kWh)</th>
-                <th class="text-end">Dem. Base (kW)</th>
-                <th class="text-end">Dem. Interm. (kW)</th>
-                <th class="text-end pe-3">Dem. Punta (kW)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for f in tablas.consumos_demandas %}
-              {% set es_anual = (f.mes == "ANUAL") %}
-              <tr{% if es_anual %} class="total-row"{% endif %}>
-                <td class="ps-3 small">
-                  {{ f.mes }}
-                  {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
-                </td>
-                <td class="text-end small">{{ "{:,.0f}".format(f.kwh_base) }}</td>
-                <td class="text-end small">{{ "{:,.0f}".format(f.kwh_inter) }}</td>
-                <td class="text-end small">{{ "{:,.0f}".format(f.kwh_punta) }}</td>
-                <td class="text-end small">{{ "{:,.0f}".format(f.kwh_total) }}</td>
-                <td class="text-end small">{% if f.kw_base is not none %}{{ "{:,.0f}".format(f.kw_base) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if f.kw_inter is not none %}{{ "{:,.0f}".format(f.kw_inter) }}{% else %}—{% endif %}</td>
-                <td class="text-end small pe-3">{% if f.kw_punta is not none %}{{ "{:,.0f}".format(f.kw_punta) }}{% else %}—{% endif %}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-      </div>
-    </div>
+<div class="panel-flotante" id="panelConsumosDemandas">
+  <div class="panel-header">
+    <span class="panel-titulo">Consumos y demandas por horario</span>
+    <button class="panel-cerrar" title="Cerrar">×</button>
   </div>
+  <div class="panel-body">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr class="table-primary-header">
+          <th class="ps-3">Mes</th>
+          <th class="text-end">Cons. Base (kWh)</th>
+          <th class="text-end">Cons. Interm. (kWh)</th>
+          <th class="text-end">Cons. Punta (kWh)</th>
+          <th class="text-end">Total (kWh)</th>
+          <th class="text-end">Dem. Base (kW)</th>
+          <th class="text-end">Dem. Interm. (kW)</th>
+          <th class="text-end pe-3">Dem. Punta (kW)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in tablas.consumos_demandas %}
+        {% set es_anual = (f.mes == "ANUAL") %}
+        <tr{% if es_anual %} class="total-row"{% endif %}>
+          <td class="ps-3 small">
+            {{ f.mes }}
+            {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+          </td>
+          <td class="text-end small">{{ "{:,.0f}".format(f.kwh_base) }}</td>
+          <td class="text-end small">{{ "{:,.0f}".format(f.kwh_inter) }}</td>
+          <td class="text-end small">{{ "{:,.0f}".format(f.kwh_punta) }}</td>
+          <td class="text-end small">{{ "{:,.0f}".format(f.kwh_total) }}</td>
+          <td class="text-end small">{% if f.kw_base is not none %}{{ "{:,.0f}".format(f.kw_base) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.kw_inter is not none %}{{ "{:,.0f}".format(f.kw_inter) }}{% else %}—{% endif %}</td>
+          <td class="text-end small pe-3">{% if f.kw_punta is not none %}{{ "{:,.0f}".format(f.kw_punta) }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel-resize"></div>
 </div>
 {% endif %}
 
 {% if tablas and tablas.costos_detallados %}
-<div class="modal fade" id="modalCostosDetallados" tabindex="-1" aria-labelledby="modalCostosDetalladosLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-resizable">
-    <div class="modal-content">
-      <div class="modal-header" style="background:var(--color-primary-soft)">
-        <h5 class="modal-title" id="modalCostosDetalladosLabel" style="color:var(--color-primary-dark)">Costos detallados por componente</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover mb-0">
-            <thead>
-              <tr class="table-primary-header">
-                <th class="ps-3">Mes</th>
-                <th class="text-end">Energ. Base</th>
-                <th class="text-end">Energ. Interm.</th>
-                <th class="text-end">Energ. Punta</th>
-                <th class="text-end">Total Energía</th>
-                <th class="text-end">Distribución</th>
-                <th class="text-end">Capacidad</th>
-                <th class="text-end">Total Demanda</th>
-                <th class="text-end">Factor Potencia</th>
-                <th class="text-end pe-3">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for f in tablas.costos_detallados %}
-              {% set es_anual = (f.mes == "ANUAL") %}
-              <tr{% if es_anual %} class="total-row"{% endif %}>
-                <td class="ps-3 small">
-                  {{ f.mes }}
-                  {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
-                </td>
-                <td class="text-end small">${{ "{:,.0f}".format(f.ce_base) }}</td>
-                <td class="text-end small">${{ "{:,.0f}".format(f.ce_inter) }}</td>
-                <td class="text-end small">${{ "{:,.0f}".format(f.ce_punta) }}</td>
-                <td class="text-end small">${{ "{:,.0f}".format(f.ce_total) }}</td>
-                <td class="text-end small">${{ "{:,.0f}".format(f.costo_dist) }}</td>
-                <td class="text-end small">${{ "{:,.0f}".format(f.costo_cap) }}</td>
-                <td class="text-end small">${{ "{:,.0f}".format(f.costo_dem) }}</td>
-                <td class="text-end small">${{ "{:,.0f}".format(f.cargo_fp) }}</td>
-                <td class="text-end small pe-3">${{ "{:,.0f}".format(f.subtotal) }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-      </div>
-    </div>
+<div class="panel-flotante" id="panelCostosDetallados">
+  <div class="panel-header">
+    <span class="panel-titulo">Costos detallados por componente</span>
+    <button class="panel-cerrar" title="Cerrar">×</button>
   </div>
+  <div class="panel-body">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr class="table-primary-header">
+          <th class="ps-3">Mes</th>
+          <th class="text-end">Energ. Base</th>
+          <th class="text-end">Energ. Interm.</th>
+          <th class="text-end">Energ. Punta</th>
+          <th class="text-end">Total Energía</th>
+          <th class="text-end">Distribución</th>
+          <th class="text-end">Capacidad</th>
+          <th class="text-end">Total Demanda</th>
+          <th class="text-end">Factor Potencia</th>
+          <th class="text-end pe-3">Subtotal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in tablas.costos_detallados %}
+        {% set es_anual = (f.mes == "ANUAL") %}
+        <tr{% if es_anual %} class="total-row"{% endif %}>
+          <td class="ps-3 small">
+            {{ f.mes }}
+            {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+          </td>
+          <td class="text-end small">${{ "{:,.0f}".format(f.ce_base) }}</td>
+          <td class="text-end small">${{ "{:,.0f}".format(f.ce_inter) }}</td>
+          <td class="text-end small">${{ "{:,.0f}".format(f.ce_punta) }}</td>
+          <td class="text-end small">${{ "{:,.0f}".format(f.ce_total) }}</td>
+          <td class="text-end small">${{ "{:,.0f}".format(f.costo_dist) }}</td>
+          <td class="text-end small">${{ "{:,.0f}".format(f.costo_cap) }}</td>
+          <td class="text-end small">${{ "{:,.0f}".format(f.costo_dem) }}</td>
+          <td class="text-end small">${{ "{:,.0f}".format(f.cargo_fp) }}</td>
+          <td class="text-end small pe-3">${{ "{:,.0f}".format(f.subtotal) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel-resize"></div>
 </div>
 {% endif %}
 
 {% if tablas and tablas.indicadores %}
-<div class="modal fade" id="modalIndicadores" tabindex="-1" aria-labelledby="modalIndicadoresLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-resizable">
-    <div class="modal-content">
-      <div class="modal-header" style="background:var(--color-primary-soft)">
-        <h5 class="modal-title" id="modalIndicadoresLabel" style="color:var(--color-primary-dark)">Indicadores de eficiencia</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover mb-0">
-            <thead>
-              <tr class="table-primary-header">
-                <th class="ps-3">Mes</th>
-                <th class="text-end">$/kWh</th>
-                <th class="text-end">Energía (%)</th>
-                <th class="text-end">Demanda (%)</th>
-                <th class="text-end">Factor de Carga (%)</th>
-                <th class="text-end pe-3">Dem. Promedio (kW)</th>
-              </tr>
-            </thead>
-            <tbody id="tablaIndicadoresBody">
-              {% for f in tablas.indicadores %}
-              {% set es_anual = (f.mes == "ANUAL") %}
-              <tr data-mes="{{ f.mes }}"{% if es_anual %} class="total-row"{% endif %}>
-                <td class="ps-3 small">
-                  {{ f.mes }}
-                  {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
-                </td>
-                <td class="text-end small">{{ "{:.2f}".format(f.costo_unit) }}</td>
-                <td class="text-end small">{{ f.pct_energia }}%</td>
-                <td class="text-end small">{{ f.pct_demanda }}%</td>
-                <td class="text-end small">{{ f.factor_carga }}%</td>
-                <td class="text-end small pe-3">{{ "{:,.1f}".format(f.demanda_prom) }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-      </div>
-    </div>
+<div class="panel-flotante" id="panelIndicadores">
+  <div class="panel-header">
+    <span class="panel-titulo">Indicadores de eficiencia</span>
+    <button class="panel-cerrar" title="Cerrar">×</button>
   </div>
+  <div class="panel-body">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr class="table-primary-header">
+          <th class="ps-3">Mes</th>
+          <th class="text-end">$/kWh</th>
+          <th class="text-end">Energía (%)</th>
+          <th class="text-end">Demanda (%)</th>
+          <th class="text-end">Factor de Carga (%)</th>
+          <th class="text-end pe-3">Dem. Promedio (kW)</th>
+        </tr>
+      </thead>
+      <tbody id="tablaIndicadoresBody">
+        {% for f in tablas.indicadores %}
+        {% set es_anual = (f.mes == "ANUAL") %}
+        <tr data-mes="{{ f.mes }}"{% if es_anual %} class="total-row"{% endif %}>
+          <td class="ps-3 small">
+            {{ f.mes }}
+            {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+          </td>
+          <td class="text-end small">{{ "{:.2f}".format(f.costo_unit) }}</td>
+          <td class="text-end small">{{ f.pct_energia }}%</td>
+          <td class="text-end small">{{ f.pct_demanda }}%</td>
+          <td class="text-end small">{{ f.factor_carga }}%</td>
+          <td class="text-end small pe-3">{{ "{:,.1f}".format(f.demanda_prom) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel-resize"></div>
 </div>
 {% endif %}
 
@@ -484,7 +455,7 @@
         <h5 class="card-title mb-0">Consumos mensuales de gas (GJ) vs costo unitario ($/GJ)</h5>
         <p class="text-muted small mt-1 mb-0">Barras: GJ consumido (eje izq.) · Línea: $/GJ total (eje der.)</p>
       </div>
-      <a href="#" class="link-datos ms-3 mt-1" data-bs-toggle="modal" data-bs-target="#modalGasHistorico">Ver datos</a>
+      <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelGasHistorico'); return false;">Ver datos</a>
     </div>
     <canvas id="chartGasConsumo" height="100" class="mt-2"></canvas>
   </div>
@@ -498,80 +469,72 @@
         <h5 class="card-title mb-0">Costos mensuales de gas ($) vs costo unitario ($/GJ)</h5>
         <p class="text-muted small mt-1 mb-0">Barras apiladas: Molécula + Transporte (eje izq.) · Línea: $/GJ total (eje der.)</p>
       </div>
-      <a href="#" class="link-datos ms-3 mt-1" data-bs-toggle="modal" data-bs-target="#modalGasHistorico">Ver datos</a>
+      <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelGasHistorico'); return false;">Ver datos</a>
     </div>
     <canvas id="chartGasCostos" height="100" class="mt-2"></canvas>
   </div>
 </div>
 
-<!-- Modal: Histórico de consumos y costos de gas natural -->
-<div class="modal fade" id="modalGasHistorico" tabindex="-1" aria-labelledby="modalGasHistoricoLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-resizable">
-    <div class="modal-content">
-      <div class="modal-header" style="background:var(--color-primary-soft)">
-        <h5 class="modal-title" id="modalGasHistoricoLabel" style="color:var(--color-primary-dark)">Histórico de consumos y costos de gas natural</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover mb-0">
-            <thead>
-              <tr style="background:var(--color-primary-soft)">
-                <th class="ps-3" style="color:var(--color-primary-dark)">Mes</th>
-                <th class="text-end" style="color:var(--color-primary-dark)">Consumo (GJ)</th>
-                <th class="text-end" style="color:var(--color-primary-dark)">Molécula ($/GJ)</th>
-                <th class="text-end" style="color:var(--color-primary-dark)">Transporte ($/GJ)</th>
-                <th class="text-end" style="color:var(--color-primary-dark)">Costo Molécula ($)</th>
-                <th class="text-end" style="color:var(--color-primary-dark)">Costo Transporte ($)</th>
-                <th class="text-end" style="color:var(--color-primary-dark)">Costo Total ($)</th>
-                <th class="text-end" style="color:var(--color-primary-dark)">C.U. ($/GJ)</th>
-                <th class="text-end" style="color:var(--color-primary-dark)">C.U. ($/kWh)</th>
-                <th class="text-end" style="color:var(--color-primary-dark)">PCS (GJ/m³)</th>
-                <th class="text-end pe-3" style="color:var(--color-primary-dark)">PCS (kWh/m³)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for f in historico_gas.filas %}
-              <tr>
-                <td class="ps-3 small">
-                  {{ f.mes }}
-                  {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
-                </td>
-                <td class="text-end small">{{ "{:,.2f}".format(f.consumo_gj) }}</td>
-                <td class="text-end small">{% if f.molecula_precio_gj is not none %}{{ "{:,.4f}".format(f.molecula_precio_gj) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if f.transporte_precio_gj is not none %}{{ "{:,.4f}".format(f.transporte_precio_gj) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if f.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(f.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if f.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(f.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">${{ "{:,.2f}".format(f.costo_total_mxn) }}</td>
-                <td class="text-end small">{{ "{:,.4f}".format(f.costo_unit_gj) }}</td>
-                <td class="text-end small">{% if f.costo_unit_kwh is not none %}{{ "{:.6f}".format(f.costo_unit_kwh) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if f.pcs_gj_m3 is not none %}{{ "{:.5f}".format(f.pcs_gj_m3) }}{% else %}—{% endif %}</td>
-                <td class="text-end small pe-3">{% if f.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(f.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
-              </tr>
-              {% endfor %}
-              {% set t = historico_gas.total %}
-              <tr class="total-row">
-                <td class="ps-3 small fw-bold">TOTAL / PROM.</td>
-                <td class="text-end small">{{ "{:,.2f}".format(t.consumo_gj) }}</td>
-                <td class="text-end small">{% if t.molecula_precio_gj is not none %}{{ "{:,.4f}".format(t.molecula_precio_gj) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if t.transporte_precio_gj is not none %}{{ "{:,.4f}".format(t.transporte_precio_gj) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if t.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(t.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if t.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(t.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">${{ "{:,.2f}".format(t.costo_total_mxn) }}</td>
-                <td class="text-end small">{% if t.costo_unit_gj is not none %}{{ "{:,.4f}".format(t.costo_unit_gj) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if t.costo_unit_kwh is not none %}{{ "{:.6f}".format(t.costo_unit_kwh) }}{% else %}—{% endif %}</td>
-                <td class="text-end small">{% if t.pcs_gj_m3 is not none %}{{ "{:.5f}".format(t.pcs_gj_m3) }}{% else %}—{% endif %}</td>
-                <td class="text-end small pe-3">{% if t.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(t.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
-      </div>
-    </div>
+<!-- Panel flotante: Histórico de consumos y costos de gas natural -->
+<div class="panel-flotante" id="panelGasHistorico">
+  <div class="panel-header">
+    <span class="panel-titulo">Histórico de consumos y costos de gas natural</span>
+    <button class="panel-cerrar" title="Cerrar">×</button>
   </div>
+  <div class="panel-body">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr class="table-primary-header">
+          <th class="ps-3">Mes</th>
+          <th class="text-end">Consumo (GJ)</th>
+          <th class="text-end">Molécula ($/GJ)</th>
+          <th class="text-end">Transporte ($/GJ)</th>
+          <th class="text-end">Costo Molécula ($)</th>
+          <th class="text-end">Costo Transporte ($)</th>
+          <th class="text-end">Costo Total ($)</th>
+          <th class="text-end">C.U. ($/GJ)</th>
+          <th class="text-end">C.U. ($/kWh)</th>
+          <th class="text-end">PCS (GJ/m³)</th>
+          <th class="text-end pe-3">PCS (kWh/m³)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in historico_gas.filas %}
+        <tr>
+          <td class="ps-3 small">
+            {{ f.mes }}
+            {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+          </td>
+          <td class="text-end small">{{ "{:,.2f}".format(f.consumo_gj) }}</td>
+          <td class="text-end small">{% if f.molecula_precio_gj is not none %}{{ "{:,.4f}".format(f.molecula_precio_gj) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.transporte_precio_gj is not none %}{{ "{:,.4f}".format(f.transporte_precio_gj) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(f.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(f.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">${{ "{:,.2f}".format(f.costo_total_mxn) }}</td>
+          <td class="text-end small">{{ "{:,.4f}".format(f.costo_unit_gj) }}</td>
+          <td class="text-end small">{% if f.costo_unit_kwh is not none %}{{ "{:.6f}".format(f.costo_unit_kwh) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.pcs_gj_m3 is not none %}{{ "{:.5f}".format(f.pcs_gj_m3) }}{% else %}—{% endif %}</td>
+          <td class="text-end small pe-3">{% if f.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(f.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+        {% set t = historico_gas.total %}
+        <tr class="total-row">
+          <td class="ps-3 small fw-bold">TOTAL / PROM.</td>
+          <td class="text-end small">{{ "{:,.2f}".format(t.consumo_gj) }}</td>
+          <td class="text-end small">{% if t.molecula_precio_gj is not none %}{{ "{:,.4f}".format(t.molecula_precio_gj) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if t.transporte_precio_gj is not none %}{{ "{:,.4f}".format(t.transporte_precio_gj) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if t.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(t.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if t.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(t.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">${{ "{:,.2f}".format(t.costo_total_mxn) }}</td>
+          <td class="text-end small">{% if t.costo_unit_gj is not none %}{{ "{:,.4f}".format(t.costo_unit_gj) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if t.costo_unit_kwh is not none %}{{ "{:.6f}".format(t.costo_unit_kwh) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if t.pcs_gj_m3 is not none %}{{ "{:.5f}".format(t.pcs_gj_m3) }}{% else %}—{% endif %}</td>
+          <td class="text-end small pe-3">{% if t.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(t.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel-resize"></div>
 </div>
 {% endif %}
 
@@ -580,6 +543,7 @@
 
 {% block scripts %}
 {% if not (aviso_datos and aviso_datos.tipo in ("sin_seleccion", "sin_facturas")) %}
+<script src="{{ url_for('static', filename='js/panel-flotante.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
 const labelPlugin = {
@@ -815,9 +779,9 @@ function filtrarTablaIndicadores() {
   });
 }
 
-const _modalIndicadores = document.getElementById("modalIndicadores");
-if (_modalIndicadores) {
-  _modalIndicadores.addEventListener("show.bs.modal", filtrarTablaIndicadores);
+function abrirPanelIndicadores() {
+  filtrarTablaIndicadores();
+  abrirPanel('panelIndicadores');
 }
 {% endif %}
 
@@ -910,16 +874,6 @@ new Chart(document.getElementById("chartGasCostos"), {
 });
 {% endif %}
 
-// Resetear tamaño de modales redimensionables al cerrar
-document.querySelectorAll('.modal').forEach(modalEl => {
-  modalEl.addEventListener('hidden.bs.modal', () => {
-    const content = modalEl.querySelector('.modal-resizable > .modal-content');
-    if (content) {
-      content.style.width = '';
-      content.style.height = '';
-    }
-  });
-});
 </script>
 {% endif %}
 {% endblock %}

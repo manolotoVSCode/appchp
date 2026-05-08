@@ -859,9 +859,9 @@ def test_dashboard_contabilidad_tiene_modales(app, monkeypatch):
     resp = c.get("/clientes/1/dashboard/contabilidad")
     assert resp.status_code == 200
     html = resp.data.decode()
-    assert "modalConsumosDemandas" in html
-    assert "modalCostosDetallados" in html
-    assert "modalIndicadores" in html
+    assert "panelConsumosDemandas" in html
+    assert "panelCostosDetallados" in html
+    assert "panelIndicadores" in html
 
 
 # ── Test 27: Modal indicadores tiene data-mes en filas ───────────────────────
