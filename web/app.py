@@ -14,7 +14,7 @@ from flask_wtf.csrf import CSRFProtect
 from storage.repository import get_all_cfe_invoices, get_all_gas_invoices
 from cli.main import procesar_factura_cfe, procesar_factura_gas
 from calc.cogen import calcular_cogen
-from calc.historico import calcular_historico_cfe
+from calc.historico import calcular_historico_cfe, calcular_tablas_cfe
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
 from models.cogen_result import CoGenParams
 
@@ -28,6 +28,7 @@ def _cargar_datos():
     gas_invoices = get_all_gas_invoices()
     resultado = calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
     historico = calcular_historico_cfe(cfe_invoices)
+    tablas = calcular_tablas_cfe(cfe_invoices)
 
     facturas_cfe = [
         {
@@ -51,7 +52,7 @@ def _cargar_datos():
         for inv in sorted(gas_invoices, key=lambda x: x.periodo_inicio)
     ]
 
-    return resultado, facturas_cfe, facturas_gas, historico
+    return resultado, facturas_cfe, facturas_gas, historico, tablas
 
 
 def _detect_tipo(pdf_path: Path) -> str:
@@ -99,6 +100,7 @@ def create_app() -> Flask:
     app.config["FACTURAS_CFE"] = []
     app.config["FACTURAS_GAS"] = []
     app.config["HISTORICO"] = {}
+    app.config["TABLAS"] = {}
 
     # Autenticación y CSRF
     from web.auth import init_auth
@@ -119,11 +121,12 @@ def create_app() -> Flask:
     def dashboard():
         if app.config["RESULTADO"] is None:
             try:
-                r, fcfe, fgas, hist = _cargar_datos()
+                r, fcfe, fgas, hist, tablas = _cargar_datos()
                 app.config["RESULTADO"] = r
                 app.config["FACTURAS_CFE"] = fcfe
                 app.config["FACTURAS_GAS"] = fgas
                 app.config["HISTORICO"] = hist
+                app.config["TABLAS"] = tablas
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -165,6 +168,7 @@ def create_app() -> Flask:
             facturas_cfe=app.config["FACTURAS_CFE"],
             facturas_gas=app.config["FACTURAS_GAS"],
             historico=app.config["HISTORICO"],
+            tablas=app.config["TABLAS"],
         )
 
     @app.route("/export/excel")
@@ -228,11 +232,12 @@ def create_app() -> Flask:
                 tmp_path.unlink(missing_ok=True)
 
         if ok_count > 0:
-            r, fcfe, fgas, hist = _cargar_datos()
+            r, fcfe, fgas, hist, tablas = _cargar_datos()
             app.config["RESULTADO"] = r
             app.config["FACTURAS_CFE"] = fcfe
             app.config["FACTURAS_GAS"] = fgas
             app.config["HISTORICO"] = hist
+            app.config["TABLAS"] = tablas
 
         return jsonify({"procesados": ok_count, "errores": errors})
 

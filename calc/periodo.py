@@ -48,9 +48,22 @@ def prorratear_cfe(
         replace(p, consumo_kwh=(p.consumo_kwh * factor).quantize(_DOS_DEC, ROUND_HALF_UP))
         for p in invoice.periodos
     ]
+    nuevos_componentes = [
+        replace(
+            c,
+            cargo_fijo_mxn=(c.cargo_fijo_mxn * factor).quantize(_DOS_DEC, ROUND_HALF_UP),
+            cargo_demanda_mxn=(c.cargo_demanda_mxn * factor).quantize(_DOS_DEC, ROUND_HALF_UP),
+            cargo_energia_mxn=(c.cargo_energia_mxn * factor).quantize(_DOS_DEC, ROUND_HALF_UP),
+            importe_mxn=(c.importe_mxn * factor).quantize(_DOS_DEC, ROUND_HALF_UP),
+        )
+        for c in invoice.componentes_mem
+    ]
     return replace(
         invoice,
         periodos=nuevos_periodos,
+        componentes_mem=nuevos_componentes,
+        subtotal_mxn=(invoice.subtotal_mxn * factor).quantize(_DOS_DEC, ROUND_HALF_UP),
+        cargo_factor_potencia_mxn=(invoice.cargo_factor_potencia_mxn * factor).quantize(_DOS_DEC, ROUND_HALF_UP),
         facturacion_periodo_mxn=(invoice.facturacion_periodo_mxn * factor).quantize(_DOS_DEC, ROUND_HALF_UP),
     ), factor
 

@@ -142,4 +142,5 @@ def _mock_datos():
         "costo_unit_mes": [], "tabla_punta": [{"mes": "TOTAL ANUAL", "costo_punta": 0.0, "pct": 0.0, "costo_unit_punta": 0.0}],
         "costo_unit_promedio": {"base": 0.0, "intermedio": 0.0, "punta": 0.0},
     }
-    return resultado, [], [], historico
+    tablas = {"consumos_demandas": [], "costos_detallados": [], "indicadores": []}
+    return resultado, [], [], historico, tablas

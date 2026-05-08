@@ -259,6 +259,140 @@
     </div>
   </div>
 
+  <!-- ── Tabla 1: Consumos y Demandas ─────────────────────────────────────── -->
+  {% if tablas and tablas.consumos_demandas %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-body p-0">
+      <div class="px-3 pt-3 pb-2">
+        <h5 class="card-title mb-0">Consumos y Demandas por Horario</h5>
+        <p class="text-muted small mt-1 mb-0">kWh y kW por periodo horario (base / intermedia / punta). Fila ANUAL = suma de consumos; demandas máximas no se acumulan.</p>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr style="background:#1F4E79;color:#fff">
+              <th class="ps-3">Mes</th>
+              <th class="text-end">Cons. Base (kWh)</th>
+              <th class="text-end">Cons. Interm. (kWh)</th>
+              <th class="text-end">Cons. Punta (kWh)</th>
+              <th class="text-end">Total (kWh)</th>
+              <th class="text-end">Dem. Base (kW)</th>
+              <th class="text-end">Dem. Interm. (kW)</th>
+              <th class="text-end pe-3">Dem. Punta (kW)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in tablas.consumos_demandas %}
+            {% set es_anual = (f.mes == "ANUAL") %}
+            <tr{% if es_anual %} class="total-row"{% endif %}>
+              <td class="ps-3 small">
+                {{ f.mes }}
+                {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+              </td>
+              <td class="text-end small">{{ "{:,.0f}".format(f.kwh_base) }}</td>
+              <td class="text-end small">{{ "{:,.0f}".format(f.kwh_inter) }}</td>
+              <td class="text-end small">{{ "{:,.0f}".format(f.kwh_punta) }}</td>
+              <td class="text-end small">{{ "{:,.0f}".format(f.kwh_total) }}</td>
+              <td class="text-end small">{% if f.kw_base is not none %}{{ "{:,.0f}".format(f.kw_base) }}{% else %}—{% endif %}</td>
+              <td class="text-end small">{% if f.kw_inter is not none %}{{ "{:,.0f}".format(f.kw_inter) }}{% else %}—{% endif %}</td>
+              <td class="text-end small pe-3">{% if f.kw_punta is not none %}{{ "{:,.0f}".format(f.kw_punta) }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tabla 2: Costos Detallados ────────────────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body p-0">
+      <div class="px-3 pt-3 pb-2">
+        <h5 class="card-title mb-0">Costos Detallados por Componente</h5>
+        <p class="text-muted small mt-1 mb-0">Desglose del subtotal sin IVA: energía por horario, cargos por demanda (Distribución + Capacidad), factor de potencia.</p>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr style="background:#1F4E79;color:#fff">
+              <th class="ps-3">Mes</th>
+              <th class="text-end">Energ. Base</th>
+              <th class="text-end">Energ. Interm.</th>
+              <th class="text-end">Energ. Punta</th>
+              <th class="text-end">Total Energía</th>
+              <th class="text-end">Distribución</th>
+              <th class="text-end">Capacidad</th>
+              <th class="text-end">Total Demanda</th>
+              <th class="text-end">Factor Potencia</th>
+              <th class="text-end pe-3">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in tablas.costos_detallados %}
+            {% set es_anual = (f.mes == "ANUAL") %}
+            <tr{% if es_anual %} class="total-row"{% endif %}>
+              <td class="ps-3 small">
+                {{ f.mes }}
+                {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+              </td>
+              <td class="text-end small">${{ "{:,.0f}".format(f.ce_base) }}</td>
+              <td class="text-end small">${{ "{:,.0f}".format(f.ce_inter) }}</td>
+              <td class="text-end small">${{ "{:,.0f}".format(f.ce_punta) }}</td>
+              <td class="text-end small">${{ "{:,.0f}".format(f.ce_total) }}</td>
+              <td class="text-end small">${{ "{:,.0f}".format(f.costo_dist) }}</td>
+              <td class="text-end small">${{ "{:,.0f}".format(f.costo_cap) }}</td>
+              <td class="text-end small">${{ "{:,.0f}".format(f.costo_dem) }}</td>
+              <td class="text-end small">${{ "{:,.0f}".format(f.cargo_fp) }}</td>
+              <td class="text-end small pe-3">${{ "{:,.0f}".format(f.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tabla 3: Indicadores ───────────────────────────────────────────────── -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body p-0">
+      <div class="px-3 pt-3 pb-2">
+        <h5 class="card-title mb-0">Indicadores de Eficiencia</h5>
+        <p class="text-muted small mt-1 mb-0">Costo unitario pre-IVA, composición del subtotal y factor de carga. Demanda promedio calculada con horas reales del periodo.</p>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead>
+            <tr style="background:#1F4E79;color:#fff">
+              <th class="ps-3">Mes</th>
+              <th class="text-end">$/kWh</th>
+              <th class="text-end">Energía (%)</th>
+              <th class="text-end">Demanda (%)</th>
+              <th class="text-end">Factor de Carga (%)</th>
+              <th class="text-end pe-3">Dem. Promedio (kW)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in tablas.indicadores %}
+            {% set es_anual = (f.mes == "ANUAL") %}
+            <tr{% if es_anual %} class="total-row"{% endif %}>
+              <td class="ps-3 small">
+                {{ f.mes }}
+                {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+              </td>
+              <td class="text-end small">{{ "{:.2f}".format(f.costo_unit) }}</td>
+              <td class="text-end small">{{ f.pct_energia }}%</td>
+              <td class="text-end small">{{ f.pct_demanda }}%</td>
+              <td class="text-end small">{{ f.factor_carga }}%</td>
+              <td class="text-end small pe-3">{{ "{:,.1f}".format(f.demanda_prom) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- ═══ SECCIÓN: ANÁLISIS DE OPORTUNIDAD DE COGENERACIÓN ═══ -->
   <div class="section-header">
     <h2>Análisis de oportunidad de cogeneración</h2>
