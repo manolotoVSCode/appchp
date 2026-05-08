@@ -101,9 +101,12 @@
     Facturas CFE ({{ facturas_cfe|length }})
   </div>
   <div class="table-responsive">
-    <table class="table table-sm table-hover mb-0">
+    <table class="table table-sm table-hover mb-0" id="tabla-cfe">
       <thead class="table-light">
         <tr>
+          <th style="width:36px">
+            <input type="checkbox" class="form-check-input" id="maestro-cfe" title="Seleccionar todas">
+          </th>
           <th>Nombre</th>
           <th>Periodo</th>
           <th class="text-end">Subtotal</th>
@@ -113,6 +116,12 @@
       <tbody>
         {% for f in facturas_cfe %}
         <tr>
+          <td>
+            <input type="checkbox" class="form-check-input chk-factura"
+                   data-factura-id="{{ f.id }}"
+                   data-tipo="cfe"
+                   {% if f.seleccionada %}checked{% endif %}>
+          </td>
           <td class="font-monospace small">{{ f.nombre_canonico }}</td>
           <td class="small text-muted">{{ f.periodo_inicio }} – {{ f.periodo_fin }}</td>
           <td class="text-end small">${{ "{:,.2f}".format(f.subtotal_mxn|float) }}</td>
@@ -138,9 +147,12 @@
     Facturas Gas ({{ facturas_gas|length }})
   </div>
   <div class="table-responsive">
-    <table class="table table-sm table-hover mb-0">
+    <table class="table table-sm table-hover mb-0" id="tabla-gas">
       <thead class="table-light">
         <tr>
+          <th style="width:36px">
+            <input type="checkbox" class="form-check-input" id="maestro-gas" title="Seleccionar todas">
+          </th>
           <th>Nombre</th>
           <th>Periodo</th>
           <th class="text-end">Subtotal</th>
@@ -150,6 +162,12 @@
       <tbody>
         {% for f in facturas_gas %}
         <tr>
+          <td>
+            <input type="checkbox" class="form-check-input chk-factura"
+                   data-factura-id="{{ f.id }}"
+                   data-tipo="gas"
+                   {% if f.seleccionada %}checked{% endif %}>
+          </td>
           <td class="font-monospace small">{{ f.nombre_canonico }}</td>
           <td class="small text-muted">{{ f.periodo_inicio }} – {{ f.periodo_fin }}</td>
           <td class="text-end small">${{ "{:,.2f}".format(f.subtotal_mxn|float) }}</td>
@@ -348,6 +366,87 @@ function mostrarDiscrepancia(p) {
     }
   };
 }
+
+// ── Selección de facturas ─────────────────────────────────────────────────────
+const seleccionUrl = (facturaId) =>
+  "{{ url_for('clientes.contrato_factura_seleccion', cliente_id=cliente.id, contrato_id=contrato.id, factura_id=0) }}"
+    .replace("/0/seleccion", "/" + facturaId + "/seleccion");
+const masivUrl = "{{ url_for('clientes.contrato_facturas_seleccion_masiva', cliente_id=cliente.id, contrato_id=contrato.id) }}";
+
+function actualizarMaestro(maestro) {
+  if (!maestro) return;
+  const tabla = maestro.closest("table");
+  const checkboxes = Array.from(tabla.querySelectorAll("tbody .chk-factura"));
+  if (checkboxes.length === 0) return;
+  const numChecked = checkboxes.filter(c => c.checked).length;
+  if (numChecked === 0) {
+    maestro.checked = false;
+    maestro.indeterminate = false;
+  } else if (numChecked === checkboxes.length) {
+    maestro.checked = true;
+    maestro.indeterminate = false;
+  } else {
+    maestro.checked = false;
+    maestro.indeterminate = true;
+  }
+}
+
+// Inicializar estado de los maestros al cargar
+["maestro-cfe", "maestro-gas"].forEach(id => {
+  const maestro = document.getElementById(id);
+  if (maestro) actualizarMaestro(maestro);
+});
+
+// Checkbox individual
+document.querySelectorAll(".chk-factura").forEach(chk => {
+  chk.addEventListener("change", async function () {
+    const facturaId = this.dataset.facturaId;
+    const tipo = this.dataset.tipo;
+    const seleccionada = this.checked;
+    try {
+      const resp = await fetch(seleccionUrl(facturaId), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
+        body: JSON.stringify({ seleccionada, tipo }),
+      });
+      if (!resp.ok) {
+        this.checked = !seleccionada; // revertir
+        console.error("Error al actualizar selección");
+      }
+    } catch (e) {
+      this.checked = !seleccionada;
+      console.error("Error:", e);
+    }
+    const maestro = this.closest("table").querySelector("thead .form-check-input");
+    actualizarMaestro(maestro);
+  });
+});
+
+// Checkbox maestro
+["maestro-cfe", "maestro-gas"].forEach(id => {
+  const maestro = document.getElementById(id);
+  if (!maestro) return;
+  maestro.addEventListener("change", async function () {
+    const seleccionada = this.checked;
+    const tabla = this.closest("table");
+    const checkboxes = Array.from(tabla.querySelectorAll("tbody .chk-factura"));
+    try {
+      const resp = await fetch(masivUrl, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
+        body: JSON.stringify({ seleccionada }),
+      });
+      if (resp.ok) {
+        checkboxes.forEach(c => { c.checked = seleccionada; });
+        actualizarMaestro(this);
+      } else {
+        console.error("Error al actualizar selección masiva");
+      }
+    } catch (e) {
+      console.error("Error:", e);
+    }
+  });
+});
 
 // ── Borrar factura ─────────────────────────────────────────────────────────────
 let _borrarFacturaId = null, _borrarTipo = null;

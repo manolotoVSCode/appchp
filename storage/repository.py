@@ -504,19 +504,52 @@ def delete_contrato(contrato_id: int) -> None:
 # ── Facturas por contrato ──────────────────────────────────────────────────────
 
 def get_cfe_facturas_por_contrato(contrato_id: int) -> list[dict]:
-    """Devuelve las facturas CFE del contrato (campos básicos para la ficha)."""
+    """Devuelve las facturas CFE del contrato (campos básicos para la ficha, incluyendo seleccionada)."""
     result = _supabase.table("cfe_facturas").select(
-        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn"
+        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn, seleccionada"
     ).eq("contrato_id", contrato_id).order("periodo_inicio").execute()
     return result.data
 
 
 def get_gas_facturas_por_contrato(contrato_id: int) -> list[dict]:
-    """Devuelve las facturas de gas del contrato (campos básicos para la ficha)."""
+    """Devuelve las facturas de gas del contrato (campos básicos para la ficha, incluyendo seleccionada)."""
     result = _supabase.table("gas_facturas").select(
-        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn"
+        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn, seleccionada"
     ).eq("contrato_id", contrato_id).order("periodo_inicio").execute()
     return result.data
+
+
+def update_factura_seleccionada(factura_id: int, tipo: str, seleccionada: bool) -> None:
+    """Actualiza el campo seleccionada de una factura CFE o gas."""
+    tabla = "cfe_facturas" if tipo == "cfe" else "gas_facturas"
+    _supabase.table(tabla).update({"seleccionada": seleccionada}).eq("id", factura_id).execute()
+
+
+def update_facturas_seleccion_masiva(contrato_id: int, seleccionada: bool) -> int:
+    """Actualiza seleccionada en todas las facturas CFE y gas del contrato. Devuelve el número afectado."""
+    cfe = _supabase.table("cfe_facturas").update({"seleccionada": seleccionada}).eq(
+        "contrato_id", contrato_id
+    ).execute()
+    gas = _supabase.table("gas_facturas").update({"seleccionada": seleccionada}).eq(
+        "contrato_id", contrato_id
+    ).execute()
+    return len(cfe.data) + len(gas.data)
+
+
+def get_cfe_invoices_for_dashboard(cliente_id: int) -> list[CFEInvoice]:
+    """Carga facturas CFE del cliente con seleccionada=True, para el dashboard."""
+    result = _supabase.table("cfe_facturas").select(
+        "*, clientes(nombre, rfc), cfe_periodos(*), cfe_mem_componentes(*)"
+    ).eq("cliente_id", cliente_id).eq("seleccionada", True).order("periodo_inicio").execute()
+    return [_row_to_cfe_invoice(row) for row in result.data]
+
+
+def get_gas_invoices_for_dashboard(cliente_id: int) -> list[GasInvoice]:
+    """Carga facturas de gas del cliente con seleccionada=True, para el dashboard."""
+    result = _supabase.table("gas_facturas").select(
+        "*, clientes(nombre, rfc), gas_conceptos(*)"
+    ).eq("cliente_id", cliente_id).eq("seleccionada", True).order("periodo_inicio").execute()
+    return [_row_to_gas_invoice(row) for row in result.data]
 
 
 def delete_cfe_factura(factura_id: int) -> None:

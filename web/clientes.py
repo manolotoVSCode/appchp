@@ -6,7 +6,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from parsers.cfe import get_cfe_parser
 from parsers.gas import get_gas_parser
 from storage.repository import (
@@ -30,6 +30,8 @@ from storage.repository import (
     get_gas_facturas_por_contrato,
     delete_cfe_factura,
     delete_gas_factura,
+    update_factura_seleccionada,
+    update_facturas_seleccion_masiva,
 )
 
 logger = logging.getLogger(__name__)
@@ -117,6 +119,8 @@ def ficha(cliente_id: int):
     if cliente is None:
         flash("El cliente solicitado no existe.", "warning")
         return redirect(url_for("clientes.listado"))
+    session["cliente_activo_id"] = cliente_id
+    session["cliente_activo_nombre"] = cliente["nombre"]
     contratos = get_contratos_por_cliente(cliente_id)
     return render_template("clientes/ficha.html", cliente=cliente, contratos=contratos)
 
@@ -157,6 +161,8 @@ def editar(cliente_id: int):
         try:
             update_cliente(cliente_id, nombre=nombre, notas=notas, rfc=rfc_a_guardar)
             logger.info("Cliente actualizado: id=%d, nombre='%s'", cliente_id, nombre)
+            if session.get("cliente_activo_id") == cliente_id:
+                session["cliente_activo_nombre"] = nombre
             flash("Datos del cliente actualizados.", "success")
             return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
         except Exception as exc:
@@ -200,6 +206,9 @@ def borrar(cliente_id: int):
             "Cliente borrado: id=%d, nombre='%s' (%d CFE, %d gas)",
             cliente_id, nombre, cliente["num_cfe"], cliente["num_gas"],
         )
+        if session.get("cliente_activo_id") == cliente_id:
+            session.pop("cliente_activo_id", None)
+            session.pop("cliente_activo_nombre", None)
         flash(f"Cliente '{nombre}' y todas sus facturas han sido borrados.", "success")
     except Exception as exc:
         logger.error("Error borrando cliente id=%d: %s", cliente_id, exc)
@@ -432,7 +441,7 @@ def contrato_borrar(cliente_id: int, contrato_id: int):
 
 @clientes_bp.route("/<int:cliente_id>/contratos/<int:contrato_id>/upload", methods=["POST"])
 def contrato_upload(cliente_id: int, contrato_id: int):
-    from flask import Response, current_app, jsonify
+    from flask import Response, jsonify
 
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:
@@ -506,9 +515,6 @@ def contrato_upload(cliente_id: int, contrato_id: int):
         finally:
             tmp_path.unlink(missing_ok=True)
 
-    if ok_count > 0:
-        current_app.config["RESULTADO"] = None
-
     return jsonify({
         "procesados": ok_count,
         "exitosos": exitosos,
@@ -522,7 +528,7 @@ def contrato_upload(cliente_id: int, contrato_id: int):
     methods=["POST"],
 )
 def contrato_factura_borrar(cliente_id: int, contrato_id: int, factura_id: int):
-    from flask import Response, current_app, jsonify
+    from flask import Response, jsonify
 
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:
@@ -543,9 +549,75 @@ def contrato_factura_borrar(cliente_id: int, contrato_id: int, factura_id: int):
             delete_cfe_factura(factura_id)
         else:
             delete_gas_factura(factura_id)
-        current_app.config["RESULTADO"] = None
         logger.info("Factura borrada: id=%d, tipo=%s, contrato_id=%d", factura_id, tipo, contrato_id)
         return jsonify({"ok": True})
     except Exception as exc:
         logger.error("Error borrando factura id=%d, tipo=%s: %s", factura_id, tipo, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/facturas/<int:factura_id>/seleccion",
+    methods=["PATCH"],
+)
+def contrato_factura_seleccion(cliente_id: int, contrato_id: int, factura_id: int):
+    from flask import Response, jsonify
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        return jsonify({"error": "Cliente no encontrado"}), 404
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        return jsonify({"error": "Contrato no encontrado"}), 404
+    if isinstance(resultado, Response):
+        return jsonify({"error": "Acceso denegado"}), 403
+
+    data = request.get_json(silent=True) or {}
+    seleccionada = data.get("seleccionada")
+    tipo = data.get("tipo", "").strip()
+    if not isinstance(seleccionada, bool):
+        return jsonify({"error": "'seleccionada' debe ser true o false"}), 400
+    if tipo not in ("cfe", "gas"):
+        return jsonify({"error": "Tipo inválido. Debe ser 'cfe' o 'gas'."}), 400
+
+    try:
+        update_factura_seleccionada(factura_id, tipo, seleccionada)
+        return jsonify({"ok": True, "seleccionada": seleccionada})
+    except Exception as exc:
+        logger.error(
+            "Error actualizando selección factura id=%d, tipo=%s: %s", factura_id, tipo, exc
+        )
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/facturas/seleccion-masiva",
+    methods=["PATCH"],
+)
+def contrato_facturas_seleccion_masiva(cliente_id: int, contrato_id: int):
+    from flask import Response, jsonify
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        return jsonify({"error": "Cliente no encontrado"}), 404
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        return jsonify({"error": "Contrato no encontrado"}), 404
+    if isinstance(resultado, Response):
+        return jsonify({"error": "Acceso denegado"}), 403
+
+    data = request.get_json(silent=True) or {}
+    seleccionada = data.get("seleccionada")
+    if not isinstance(seleccionada, bool):
+        return jsonify({"error": "'seleccionada' debe ser true o false"}), 400
+
+    try:
+        actualizadas = update_facturas_seleccion_masiva(contrato_id, seleccionada)
+        return jsonify({"ok": True, "actualizadas": actualizadas, "seleccionada": seleccionada})
+    except Exception as exc:
+        logger.error(
+            "Error en selección masiva contrato_id=%d: %s", contrato_id, exc
+        )
         return jsonify({"error": str(exc)}), 500

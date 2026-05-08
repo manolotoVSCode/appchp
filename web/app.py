@@ -7,11 +7,11 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-from flask import Flask, redirect, render_template, request, send_file, url_for
-from flask_login import current_user, login_required
+from flask import Flask, redirect, render_template, request, send_file, session, url_for
+from flask_login import current_user
 from flask_wtf.csrf import CSRFProtect
 
-from storage.repository import get_all_cfe_invoices, get_all_gas_invoices
+from storage.repository import get_cfe_invoices_for_dashboard, get_gas_invoices_for_dashboard
 from calc.cogen import calcular_cogen
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe
 from calc.nombre_canonico import generar_nombre_canonico
@@ -22,10 +22,10 @@ logger = logging.getLogger(__name__)
 csrf = CSRFProtect()
 
 
-def _cargar_datos():
-    """Carga facturas desde Supabase, calcula cogeneración y prepara listas para el template."""
-    cfe_invoices = get_all_cfe_invoices()
-    gas_invoices = get_all_gas_invoices()
+def _cargar_datos_cliente(cliente_id: int):
+    """Carga facturas seleccionadas del cliente, calcula cogeneración y prepara listas para el template."""
+    cfe_invoices = get_cfe_invoices_for_dashboard(cliente_id)
+    gas_invoices = get_gas_invoices_for_dashboard(cliente_id)
     resultado = calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
     historico = calcular_historico_cfe(cfe_invoices)
     tablas = calcular_tablas_cfe(cfe_invoices)
@@ -57,7 +57,6 @@ def _cargar_datos():
     return resultado, facturas_cfe, facturas_gas, historico, tablas
 
 
-
 def create_app() -> Flask:
     """Flask app factory."""
 
@@ -80,12 +79,6 @@ def create_app() -> Flask:
     app.config["SESSION_COOKIE_SECURE"] = not app.debug
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-    app.config["RESULTADO"] = None
-    app.config["FACTURAS_CFE"] = []
-    app.config["FACTURAS_GAS"] = []
-    app.config["HISTORICO"] = {}
-    app.config["TABLAS"] = {}
-
     # Autenticación, CSRF y blueprint de clientes
     from web.auth import init_auth
     from web.clientes import clientes_bp
@@ -103,52 +96,67 @@ def create_app() -> Flask:
         if not current_user.is_authenticated:
             return redirect(url_for("auth.login", next=request.path))
 
+    @app.context_processor
+    def _inject_cliente_activo():
+        id_ = session.get("cliente_activo_id")
+        nombre = session.get("cliente_activo_nombre")
+        return {"cliente_activo": {"id": id_, "nombre": nombre} if id_ else None}
+
     @app.route("/")
     def dashboard():
-        """Redirige al listado de clientes. '/' ya no es el dashboard."""
+        """Redirige al listado de clientes."""
         return redirect(url_for("clientes.listado"))
 
     @app.route("/clientes/<int:cliente_id>/dashboard")
     def cliente_dashboard(cliente_id: int):
-        """Dashboard de cogeneración. En esta fase carga todos los datos del sistema."""
+        """Dashboard de cogeneración filtrado por cliente activo en sesión."""
         from storage.repository import get_cliente_con_conteos
         from flask import flash
 
-        # Validar que el cliente existe
-        cliente = get_cliente_con_conteos(cliente_id)
-        if cliente is None:
-            flash("El cliente solicitado no existe.", "warning")
+        # Verificar que el cliente_id coincide con el cliente activo en sesión
+        activo_id = session.get("cliente_activo_id")
+        if activo_id != cliente_id:
+            flash(
+                "El dashboard solicitado no corresponde al cliente activo. "
+                "Selecciona el cliente desde el listado.",
+                "warning",
+            )
             return redirect(url_for("clientes.listado"))
 
-        if app.config["RESULTADO"] is None:
-            try:
-                r, fcfe, fgas, hist, tablas = _cargar_datos()
-                app.config["RESULTADO"] = r
-                app.config["FACTURAS_CFE"] = fcfe
-                app.config["FACTURAS_GAS"] = fgas
-                app.config["HISTORICO"] = hist
-                app.config["TABLAS"] = tablas
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                return (
-                    "<html><head><title>Error</title></head>"
-                    "<body style='font-family:sans-serif;padding:2rem'>"
-                    f"<h2>&#9888; Error al cargar datos</h2>"
-                    f"<pre>{e}</pre>"
-                    "</body></html>",
-                    500,
-                )
+        cliente = get_cliente_con_conteos(cliente_id)
+        if cliente is None:
+            session.pop("cliente_activo_id", None)
+            session.pop("cliente_activo_nombre", None)
+            flash("El cliente ya no existe.", "warning")
+            return redirect(url_for("clientes.listado"))
 
-        r = app.config["RESULTADO"]
-        num_cfe = cliente["num_cfe"]
-        num_gas = cliente["num_gas"]
-        if num_cfe == 0 and num_gas == 0:
-            aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
-        elif num_cfe == 0 or num_gas == 0:
-            aviso_datos = {"tipo": "sin_par", "num_cfe": num_cfe, "num_gas": num_gas}
+        try:
+            r, facturas_cfe, facturas_gas, historico, tablas = _cargar_datos_cliente(cliente_id)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return (
+                "<html><head><title>Error</title></head>"
+                "<body style='font-family:sans-serif;padding:2rem'>"
+                f"<h2>&#9888; Error al cargar datos</h2>"
+                f"<pre>{e}</pre>"
+                "</body></html>",
+                500,
+            )
+
+        num_cfe_total = cliente["num_cfe"]
+        num_gas_total = cliente["num_gas"]
+        num_cfe_sel = len(facturas_cfe)
+        num_gas_sel = len(facturas_gas)
+
+        if num_cfe_total == 0 and num_gas_total == 0:
+            aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0, "cliente_id": cliente_id}
+        elif num_cfe_sel == 0 and num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_seleccion", "cliente_id": cliente_id}
+        elif num_cfe_sel == 0 or num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_par", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
         elif not r.meses:
-            aviso_datos = {"tipo": "sin_pares_mes", "num_cfe": num_cfe, "num_gas": num_gas}
+            aviso_datos = {"tipo": "sin_pares_mes", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
         else:
             aviso_datos = None
 
@@ -181,19 +189,27 @@ def create_app() -> Flask:
             chart_ahorro_caldera=chart_ahorro_caldera,
             chart_costo_gas=chart_costo_gas,
             meses_raw=meses_raw,
-            facturas_cfe=app.config["FACTURAS_CFE"],
-            facturas_gas=app.config["FACTURAS_GAS"],
-            historico=app.config["HISTORICO"],
-            tablas=app.config["TABLAS"],
+            facturas_cfe=facturas_cfe,
+            facturas_gas=facturas_gas,
+            historico=historico,
+            tablas=tablas,
         )
 
     @app.route("/export/excel")
     def export_excel():
         import tempfile
+        from flask import flash
         from reports.excel import generar_excel
-        r = app.config["RESULTADO"]
-        if r is None:
-            return "Datos no listos aún", 503
+
+        activo_id = session.get("cliente_activo_id")
+        if activo_id is None:
+            flash("Sin cliente activo. Selecciona un cliente primero.", "warning")
+            return redirect(url_for("clientes.listado"))
+
+        r, _, _, _, _ = _cargar_datos_cliente(activo_id)
+        if not r.meses:
+            return "Sin datos para exportar (sin meses pareados).", 503
+
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as f:
             tmp_path = Path(f.name)
         generar_excel(r, tmp_path)

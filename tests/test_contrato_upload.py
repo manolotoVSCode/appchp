@@ -260,11 +260,10 @@ def test_upload_tipo_gas_a_contrato_electrico_es_error(auth_client, monkeypatch)
 # ── Test 8: Borrar factura CFE ────────────────────────────────────────────────
 
 def test_contrato_factura_borrar_exitoso(auth_client, monkeypatch, app):
-    """POST a /facturas/42/borrar con tipo=cfe → ok=True, RESULTADO invalidado."""
+    """POST a /facturas/42/borrar con tipo=cfe → ok=True, factura eliminada."""
     _setup_electrico(monkeypatch)
     borrado = []
     monkeypatch.setattr("web.clientes.delete_cfe_factura", lambda id: borrado.append(id))
-    app.config["RESULTADO"] = "cache_anterior"
 
     resp = auth_client.post(
         "/clientes/1/contratos/10/facturas/42/borrar",
@@ -273,7 +272,6 @@ def test_contrato_factura_borrar_exitoso(auth_client, monkeypatch, app):
     data = resp.get_json()
     assert data["ok"] is True
     assert 42 in borrado
-    assert app.config["RESULTADO"] is None
 
 
 # ── Test 9: Upload sin archivos → 400 ────────────────────────────────────────
