@@ -137,6 +137,55 @@
   </div>
 </div>
 
+{% if historico_gas %}
+<!-- Accordion: facturas de gas -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header d-flex align-items-center" style="cursor:pointer"
+       data-bs-toggle="collapse" data-bs-target="#facturas-gas-panel">
+    <span>Facturas de gas seleccionadas</span>
+    <span class="badge bg-secondary ms-2">{{ facturas_gas|length }} Gas</span>
+    <span class="ms-auto text-muted small">&#9660;</span>
+  </div>
+  <div id="facturas-gas-panel" class="collapse">
+    <div class="card-body p-0">
+      <div class="px-3 pt-3 pb-1 fw-semibold small text-muted">Gas Natural (ENGIE)</div>
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr class="table-primary-header">
+            <th class="ps-3">Factura</th>
+            <th>Periodo facturado</th>
+            <th>Mes asociado</th>
+            <th class="text-end">GJ</th>
+            <th class="text-end pe-3">Costo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in facturas_gas %}
+          <tr>
+            <td class="ps-3 small fw-semibold">{{ f.nombre_canonico }}</td>
+            <td class="small">
+              {{ f.periodo }}
+              {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+            </td>
+            <td class="small">{{ f.mes_asociado }}</td>
+            <td class="text-end small">{{ "{:,.2f}".format(f.gj_total) }}</td>
+            <td class="text-end small pe-3">${{ "{:,.0f}".format(f.costo_mxn) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted small ps-3 py-2">Sin facturas de gas seleccionadas</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if facturas_gas|selectattr("prorrateado")|list %}
+      <div class="px-3 py-2 text-muted small border-top">
+        ★ Factura con periodo corto prorrateada a 30 días equivalentes.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- ═══ SECCIÓN: COMPORTAMIENTO ENERGÉTICO HISTÓRICO ═══ -->
 <div class="section-header">
   <h2>Comportamiento energético histórico</h2>
@@ -340,6 +389,92 @@
 </div>
 {% endif %}
 
+{% if historico_gas %}
+<!-- ═══ SECCIÓN: GAS NATURAL ═══ -->
+<div class="section-header">
+  <h2>Histórico de consumos y costos de gas natural</h2>
+  <hr>
+</div>
+
+<!-- Tabla histórica gas -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr style="background:var(--color-primary-soft)">
+            <th class="ps-3" style="color:var(--color-primary-dark)">Mes</th>
+            <th class="text-end" style="color:var(--color-primary-dark)">Consumo (GJ)</th>
+            <th class="text-end" style="color:var(--color-primary-dark)">Molécula ($/GJ)</th>
+            <th class="text-end" style="color:var(--color-primary-dark)">Transporte ($/GJ)</th>
+            <th class="text-end" style="color:var(--color-primary-dark)">Costo Molécula ($)</th>
+            <th class="text-end" style="color:var(--color-primary-dark)">Costo Transporte ($)</th>
+            <th class="text-end" style="color:var(--color-primary-dark)">Costo Total ($)</th>
+            <th class="text-end" style="color:var(--color-primary-dark)">C.U. ($/GJ)</th>
+            <th class="text-end" style="color:var(--color-primary-dark)">C.U. ($/kWh)</th>
+            <th class="text-end" style="color:var(--color-primary-dark)">PCS (GJ/m³)</th>
+            <th class="text-end pe-3" style="color:var(--color-primary-dark)">PCS (kWh/m³)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in historico_gas.filas %}
+          <tr>
+            <td class="ps-3 small">
+              {{ f.mes }}
+              {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+            </td>
+            <td class="text-end small">{{ "{:,.2f}".format(f.consumo_gj) }}</td>
+            <td class="text-end small">{% if f.molecula_precio_gj is not none %}{{ "{:,.4f}".format(f.molecula_precio_gj) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">{% if f.transporte_precio_gj is not none %}{{ "{:,.4f}".format(f.transporte_precio_gj) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">{% if f.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(f.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">{% if f.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(f.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">${{ "{:,.2f}".format(f.costo_total_mxn) }}</td>
+            <td class="text-end small">{{ "{:,.4f}".format(f.costo_unit_gj) }}</td>
+            <td class="text-end small">{% if f.costo_unit_kwh is not none %}{{ "{:.6f}".format(f.costo_unit_kwh) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">{% if f.pcs_gj_m3 is not none %}{{ "{:.5f}".format(f.pcs_gj_m3) }}{% else %}—{% endif %}</td>
+            <td class="text-end small pe-3">{% if f.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(f.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
+          </tr>
+          {% endfor %}
+          {# Fila TOTAL #}
+          {% set t = historico_gas.total %}
+          <tr class="total-row">
+            <td class="ps-3 small fw-bold">TOTAL / PROM.</td>
+            <td class="text-end small">{{ "{:,.2f}".format(t.consumo_gj) }}</td>
+            <td class="text-end small">{% if t.molecula_precio_gj is not none %}{{ "{:,.4f}".format(t.molecula_precio_gj) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">{% if t.transporte_precio_gj is not none %}{{ "{:,.4f}".format(t.transporte_precio_gj) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">{% if t.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(t.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">{% if t.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(t.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">${{ "{:,.2f}".format(t.costo_total_mxn) }}</td>
+            <td class="text-end small">{% if t.costo_unit_gj is not none %}{{ "{:,.4f}".format(t.costo_unit_gj) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">{% if t.costo_unit_kwh is not none %}{{ "{:.6f}".format(t.costo_unit_kwh) }}{% else %}—{% endif %}</td>
+            <td class="text-end small">{% if t.pcs_gj_m3 is not none %}{{ "{:.5f}".format(t.pcs_gj_m3) }}{% else %}—{% endif %}</td>
+            <td class="text-end small pe-3">{% if t.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(t.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Gráfica gas 1: Consumo vs Costo Unitario -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Consumos mensuales de gas (GJ) vs costo unitario ($/GJ)</h5>
+    <p class="text-muted small mb-2">Barras: GJ consumido (eje izq.) · Línea: $/GJ total (eje der.)</p>
+    <canvas id="chartGasConsumo" height="100"></canvas>
+  </div>
+</div>
+
+<!-- Gráfica gas 2: Costos apilados vs Costo Unitario -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Costos mensuales de gas ($) vs costo unitario ($/GJ)</h5>
+    <p class="text-muted small mb-2">Barras apiladas: Molécula + Transporte (eje izq.) · Línea: $/GJ total (eje der.)</p>
+    <canvas id="chartGasCostos" height="100"></canvas>
+  </div>
+</div>
+{% endif %}
+
 {% endif %}{# fin bloque sin datos #}
 {% endblock %}
 
@@ -478,6 +613,93 @@ new Chart(document.getElementById("chartCostoPromedio"), {
     }
   }
 });
+
+{% if historico_gas %}
+const gasHist = {{ historico_gas | tojson }};
+const COLOR_GAS_CONSUMO = "rgba(232,181,71,0.80)";   // amarillo corporativo
+const COLOR_GAS_LINEA   = "#1F7A4C";                  // verde corporativo
+const COLOR_GAS_MOL     = "rgba(200,148,111,0.85)";   // crema/terracota
+const COLOR_GAS_TRA     = "rgba(232,196,160,0.85)";   // crema claro
+
+const gasLabelPlugin = {
+  id: "gasInlineLabels",
+  afterDatasetsDraw(chart) {
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((ds, i) => {
+      if (!ds._showLabels) return;
+      const meta = chart.getDatasetMeta(i);
+      meta.data.forEach((el, j) => {
+        const val = ds.data[j];
+        if (val == null) return;
+        ctx.save();
+        ctx.fillStyle = "#212529";
+        ctx.font = "bold 10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(typeof val === "number" ? val.toFixed(2) : val, el.x, el.y - 4);
+        ctx.restore();
+      });
+    });
+  }
+};
+Chart.register(gasLabelPlugin);
+
+// Gráfica 1: Consumo GJ vs $/GJ
+new Chart(document.getElementById("chartGasConsumo"), {
+  type: "bar",
+  data: {
+    labels: gasHist.labels,
+    datasets: [
+      { label: "CONSUMO (GJ)", data: gasHist.consumos_gj,
+        backgroundColor: COLOR_GAS_CONSUMO, yAxisID: "y" },
+      { type: "line", label: "COSTO UNITARIO ($/GJ)", data: gasHist.costos_unit_gj,
+        borderColor: COLOR_GAS_LINEA, backgroundColor: "transparent",
+        borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2",
+        _showLabels: true }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: "top" },
+      tooltip: { callbacks: { label: ctx => ctx.dataset.label + ": " + ctx.raw.toLocaleString("es-MX", { maximumFractionDigits: 2 }) } }
+    },
+    scales: {
+      y:  { position: "left",  title: { display: true, text: "GJ" },    beginAtZero: true },
+      y2: { position: "right", title: { display: true, text: "$/GJ" }, grid: { drawOnChartArea: false }, beginAtZero: true }
+    }
+  }
+});
+
+// Gráfica 2: Costos apilados ($) vs $/GJ
+new Chart(document.getElementById("chartGasCostos"), {
+  type: "bar",
+  data: {
+    labels: gasHist.labels,
+    datasets: [
+      { label: "COSTO MOLÉCULA ($)", data: gasHist.costos_molecula_mxn,
+        backgroundColor: COLOR_GAS_MOL, yAxisID: "y", stack: "costos" },
+      { label: "COSTO TRANSPORTE ($)", data: gasHist.costos_transporte_mxn,
+        backgroundColor: COLOR_GAS_TRA, yAxisID: "y", stack: "costos" },
+      { type: "line", label: "COSTO UNITARIO ($/GJ)", data: gasHist.costos_unit_gj,
+        borderColor: COLOR_GAS_LINEA, backgroundColor: "transparent",
+        borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2",
+        _showLabels: true }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: "top" },
+      tooltip: { callbacks: { label: ctx => ctx.dataset.label + ": " + (ctx.dataset.yAxisID === "y2" ? ctx.raw.toFixed(2) : "$" + Math.round(ctx.raw).toLocaleString("es-MX")) } }
+    },
+    scales: {
+      y:  { position: "left",  title: { display: true, text: "MXN" },  beginAtZero: true, stacked: true },
+      y2: { position: "right", title: { display: true, text: "$/GJ" }, grid: { drawOnChartArea: false }, beginAtZero: true }
+    }
+  }
+});
+{% endif %}
 </script>
 {% endif %}
 {% endblock %}

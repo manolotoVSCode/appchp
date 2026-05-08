@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import pytest
+from decimal import Decimal
+from datetime import date
 from unittest.mock import MagicMock
 from werkzeug.security import generate_password_hash
 
 from models.contrato import Contrato
+from models.gas_invoice import GasInvoice, GasConcepto
 
 _HASH = generate_password_hash("test_pass", method="pbkdf2:sha256")
 
@@ -486,3 +489,219 @@ def test_cogeneracion_muestra_kpis_no_historico(app, monkeypatch):
     assert resp.status_code == 200
     assert b"EBITDA Anual" in resp.data
     assert b"Demanda m" not in resp.data  # "Demanda máxima" solo en contabilidad
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Sub-entregable C: visualizaciones de gas en Contabilidad Energética
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _make_gas_invoice(periodo_inicio, periodo_fin, consumo_gj, costo_unit_gj,
+                      subtotal, pcs, conceptos):
+    """Crea un GasInvoice mínimo para tests."""
+    return GasInvoice(
+        uuid_cfdi="test-uuid",
+        folio="001",
+        fecha_emision=periodo_inicio,
+        periodo_inicio=periodo_inicio,
+        periodo_fin=periodo_fin,
+        fecha_limite_pago=periodo_fin,
+        nombre_proveedor="ENGIE",
+        rfc_proveedor="ENG123",
+        nombre_cliente="IBERICA",
+        rfc_cliente="ITI123",
+        numero_cliente="12345",
+        cuenta_contrato="C001",
+        punto_suministro="P001",
+        numero_caseta="N001",
+        tipo_lectura="NORMAL",
+        consumo_m3_corregidos=Decimal("100"),
+        consumo_sin_corregir_m3=Decimal("100"),
+        poder_calorifico_gj_m3=Decimal(str(pcs)) if pcs else Decimal("0"),
+        consumo_total_gj=Decimal(str(consumo_gj)),
+        conceptos=conceptos,
+        costo_unitario_total_gj=Decimal(str(costo_unit_gj)),
+        subtotal_mxn=Decimal(str(subtotal)),
+        iva_mxn=Decimal("0"),
+        total_mxn=Decimal(str(subtotal)),
+        pdf_path="test.pdf",
+    )
+
+
+def _conceptos_completos(mol_precio, mol_importe, tra_precio, tra_importe):
+    return [
+        GasConcepto(
+            descripcion="Compraventa de Gas Natural",
+            clave_producto="CP01",
+            cantidad_gj=Decimal("100"),
+            precio_unitario_gj=Decimal(str(mol_precio)),
+            importe_mxn=Decimal(str(mol_importe)),
+        ),
+        GasConcepto(
+            descripcion="Transporte por Ducto Gas Natural",
+            clave_producto="CP02",
+            cantidad_gj=Decimal("100"),
+            precio_unitario_gj=Decimal(str(tra_precio)),
+            importe_mxn=Decimal(str(tra_importe)),
+        ),
+    ]
+
+
+# ── Test 15: Contabilidad sin gas no muestra sección gas ─────────────────────
+
+def test_contabilidad_sin_gas_no_muestra_seccion(app, monkeypatch):
+    """Sin facturas de gas seleccionadas, la sección de gas no aparece."""
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], _facturas_cfe_mock(), []),
+    )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas())
+    monkeypatch.setattr("web.app.calcular_historico_gas", lambda invoices: None)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    resp = c.get("/clientes/1/dashboard/contabilidad")
+    assert resp.status_code == 200
+    assert b"gas natural" not in resp.data.lower() or b"Hist\xc3\xb3rico de consumos y costos de gas" not in resp.data
+
+
+# ── Test 16: Contabilidad con una factura de gas muestra sección ──────────────
+
+def test_contabilidad_con_gas_muestra_seccion(app, monkeypatch):
+    """Con facturas de gas, la sección de gas aparece con tabla y acordeón."""
+    inv = _make_gas_invoice(
+        date(2024, 1, 1), date(2024, 1, 31),
+        consumo_gj=100, costo_unit_gj=97.5, subtotal=9750,
+        pcs=0.03717,
+        conceptos=_conceptos_completos(80, 8000, 17.5, 1750),
+    )
+    from calc.historico import calcular_historico_gas
+    hg = calcular_historico_gas([inv])
+
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [inv], _facturas_cfe_mock(), _facturas_gas_mock()),
+    )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas())
+    monkeypatch.setattr("web.app.calcular_historico_gas", lambda invoices: hg)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    resp = c.get("/clientes/1/dashboard/contabilidad")
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    assert "gas natural" in html.lower()
+    assert "chartGasConsumo" in html
+
+
+# ── Tests 17-21: calcular_historico_gas (unitarios) ──────────────────────────
+
+def test_calcular_historico_gas_lista_vacia():
+    """calcular_historico_gas([]) devuelve None."""
+    from calc.historico import calcular_historico_gas
+    assert calcular_historico_gas([]) is None
+
+
+def test_calcular_historico_gas_una_factura():
+    """Una sola factura: fila tiene datos correctos y total == fila."""
+    from calc.historico import calcular_historico_gas
+    inv = _make_gas_invoice(
+        date(2024, 1, 1), date(2024, 1, 31),
+        consumo_gj=100, costo_unit_gj=97.5, subtotal=9750,
+        pcs=0.03717,
+        conceptos=_conceptos_completos(80, 8000, 17.5, 1750),
+    )
+    result = calcular_historico_gas([inv])
+
+    assert result is not None
+    assert len(result["filas"]) == 1
+    fila = result["filas"][0]
+    assert fila["consumo_gj"] == 100.0
+    assert fila["molecula_precio_gj"] == 80.0
+    assert fila["transporte_precio_gj"] == 17.5
+    assert fila["costo_molecula_mxn"] == 8000.0
+    assert fila["costo_transporte_mxn"] == 1750.0
+    assert fila["costo_total_mxn"] == 9750.0
+
+    total = result["total"]
+    assert total["consumo_gj"] == 100.0
+    assert total["costo_total_mxn"] == 9750.0
+
+
+def test_calcular_historico_gas_promedio_ponderado():
+    """Fila TOTAL usa promedio ponderado por consumo para precio de molécula."""
+    from calc.historico import calcular_historico_gas
+    inv1 = _make_gas_invoice(
+        date(2024, 1, 1), date(2024, 1, 31),
+        consumo_gj=100, costo_unit_gj=80, subtotal=8000,
+        pcs=0.03717,
+        conceptos=_conceptos_completos(70, 7000, 10, 1000),
+    )
+    inv2 = _make_gas_invoice(
+        date(2024, 2, 1), date(2024, 2, 29),
+        consumo_gj=200, costo_unit_gj=90, subtotal=18000,
+        pcs=0.03717,
+        conceptos=_conceptos_completos(80, 16000, 10, 2000),
+    )
+    result = calcular_historico_gas([inv1, inv2])
+    total = result["total"]
+
+    # Promedio ponderado molécula: (70*100 + 80*200) / 300 = 23000/300 = 76.6667
+    assert total["molecula_precio_gj"] == pytest.approx(23000 / 300, rel=1e-3)
+    assert total["consumo_gj"] == 300.0
+    assert total["costo_total_mxn"] == 26000.0
+    assert len(result["filas"]) == 2
+
+
+def test_calcular_historico_gas_concepto_faltante():
+    """Factura con solo Compraventa (sin Transporte): transporte=None, no bloquea render."""
+    from calc.historico import calcular_historico_gas
+    conceptos_parciales = [
+        GasConcepto(
+            descripcion="Compraventa de Gas Natural",
+            clave_producto="CP01",
+            cantidad_gj=Decimal("100"),
+            precio_unitario_gj=Decimal("80"),
+            importe_mxn=Decimal("8000"),
+        )
+    ]
+    inv = _make_gas_invoice(
+        date(2024, 1, 1), date(2024, 1, 31),
+        consumo_gj=100, costo_unit_gj=80, subtotal=8000,
+        pcs=0.03717,
+        conceptos=conceptos_parciales,
+    )
+    result = calcular_historico_gas([inv])
+
+    assert result is not None
+    fila = result["filas"][0]
+    assert fila["molecula_precio_gj"] == 80.0
+    assert fila["transporte_precio_gj"] is None
+    assert fila["costo_transporte_mxn"] is None
+    total = result["total"]
+    assert total["transporte_precio_gj"] is None
+    assert total["costo_transporte_mxn"] is None
+
+
+def test_calcular_historico_gas_pcs_cero():
+    """Factura con poder_calorifico_gj_m3=0 → pcs_gj_m3 y pcs_kwh_m3 son None."""
+    from calc.historico import calcular_historico_gas
+    inv = _make_gas_invoice(
+        date(2024, 1, 1), date(2024, 1, 31),
+        consumo_gj=100, costo_unit_gj=80, subtotal=8000,
+        pcs=0,  # sin PCS
+        conceptos=_conceptos_completos(70, 7000, 10, 1000),
+    )
+    result = calcular_historico_gas([inv])
+
+    fila = result["filas"][0]
+    assert fila["pcs_gj_m3"] is None
+    assert fila["pcs_kwh_m3"] is None
+    assert result["total"]["pcs_gj_m3"] is None

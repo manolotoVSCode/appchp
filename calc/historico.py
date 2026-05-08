@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import date
 
 from models.cfe_invoice import CFEInvoice
-from calc.periodo import mes_asociado, prorratear_cfe
+from models.gas_invoice import GasInvoice
+from calc.periodo import mes_asociado, prorratear_cfe, UMBRAL_PRORRATEO_DIAS
 
 _MESES_CORTO = {
     1: "ene", 2: "feb", 3: "mar", 4: "abr", 5: "may", 6: "jun",
@@ -258,4 +259,140 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
         "consumos_demandas": consumos_demandas,
         "costos_detallados": costos_detallados,
         "indicadores": indicadores,
+    }
+
+
+_GJ_A_KWH = 277.778
+
+
+def calcular_historico_gas(gas_invoices: list[GasInvoice]) -> dict | None:
+    """Agrega datos históricos de gas natural para tabla y gráficas en el dashboard.
+
+    Devuelve None si la lista está vacía (el template omite la sección de gas).
+    Cada fila usa Decimal | None: None se renderiza como '—' en el template.
+    Promedios de precio ($/GJ) son ponderados por consumo (GJ).
+    """
+    if not gas_invoices:
+        return None
+
+    facturas_ordenadas = sorted(
+        gas_invoices,
+        key=lambda inv: mes_asociado(inv.periodo_inicio, inv.periodo_fin),
+    )
+
+    filas: list[dict] = []
+
+    sum_consumo = 0.0
+    sum_costo_total = 0.0
+    sum_mol_x_consumo = 0.0
+    sum_tra_x_consumo = 0.0
+    sum_costo_mol = 0.0
+    sum_costo_tra = 0.0
+    has_molecula = False
+    has_transporte = False
+    sum_pcs_x_consumo = 0.0
+    sum_consumo_con_pcs = 0.0
+
+    labels: list[str] = []
+    consumos_gj: list[float] = []
+    costos_unit_gj: list[float] = []
+    costos_molecula_mxn: list[float] = []
+    costos_transporte_mxn: list[float] = []
+
+    for inv in facturas_ordenadas:
+        ma = mes_asociado(inv.periodo_inicio, inv.periodo_fin)
+        label = date(ma[0], ma[1], 1).strftime("%b %Y")
+        labels.append(label)
+        prorrateado = (inv.periodo_fin - inv.periodo_inicio).days < UMBRAL_PRORRATEO_DIAS
+
+        consumo_gj = float(inv.consumo_total_gj) if float(inv.consumo_total_gj) > 0 else 0.0
+        costo_unit_gj = float(inv.costo_unitario_total_gj)
+        costo_total_mxn = float(inv.subtotal_mxn)
+        costo_unit_kwh = round(costo_unit_gj / _GJ_A_KWH, 6) if costo_unit_gj > 0 else None
+
+        # PCS: tratar 0 o negativo como sin dato
+        try:
+            pcs_val = float(inv.poder_calorifico_gj_m3)
+            pcs_gj_m3 = pcs_val if pcs_val > 0 else None
+        except (TypeError, ValueError):
+            pcs_gj_m3 = None
+        pcs_kwh_m3 = round(pcs_gj_m3 * _GJ_A_KWH, 5) if pcs_gj_m3 is not None else None
+
+        # Conceptos por contenido de descripción (orden-independiente)
+        molecula = next(
+            (c for c in inv.conceptos if "Compraventa" in c.descripcion), None
+        )
+        transporte = next(
+            (c for c in inv.conceptos if "Transporte" in c.descripcion), None
+        )
+
+        mol_precio_gj = float(molecula.precio_unitario_gj) if molecula else None
+        tra_precio_gj = float(transporte.precio_unitario_gj) if transporte else None
+        costo_mol_mxn = float(molecula.importe_mxn) if molecula else None
+        costo_tra_mxn = float(transporte.importe_mxn) if transporte else None
+
+        filas.append({
+            "mes": label,
+            "consumo_gj": consumo_gj,
+            "molecula_precio_gj": mol_precio_gj,
+            "transporte_precio_gj": tra_precio_gj,
+            "costo_molecula_mxn": costo_mol_mxn,
+            "costo_transporte_mxn": costo_tra_mxn,
+            "costo_total_mxn": costo_total_mxn,
+            "costo_unit_gj": costo_unit_gj,
+            "costo_unit_kwh": costo_unit_kwh,
+            "pcs_gj_m3": pcs_gj_m3,
+            "pcs_kwh_m3": pcs_kwh_m3,
+            "prorrateado": prorrateado,
+        })
+
+        # Acumuladores
+        sum_consumo += consumo_gj
+        sum_costo_total += costo_total_mxn
+        if mol_precio_gj is not None:
+            sum_mol_x_consumo += mol_precio_gj * consumo_gj
+            sum_costo_mol += costo_mol_mxn
+            has_molecula = True
+        if tra_precio_gj is not None:
+            sum_tra_x_consumo += tra_precio_gj * consumo_gj
+            sum_costo_tra += costo_tra_mxn
+            has_transporte = True
+        if pcs_gj_m3 is not None:
+            sum_pcs_x_consumo += pcs_gj_m3 * consumo_gj
+            sum_consumo_con_pcs += consumo_gj
+
+        consumos_gj.append(consumo_gj)
+        costos_unit_gj.append(costo_unit_gj)
+        costos_molecula_mxn.append(costo_mol_mxn or 0.0)
+        costos_transporte_mxn.append(costo_tra_mxn or 0.0)
+
+    # Fila TOTAL con promedios ponderados por consumo
+    total_unit_gj = round(sum_costo_total / sum_consumo, 4) if sum_consumo > 0 else None
+    total_unit_kwh = round(total_unit_gj / _GJ_A_KWH, 6) if total_unit_gj is not None else None
+    total_mol_precio = round(sum_mol_x_consumo / sum_consumo, 4) if has_molecula and sum_consumo > 0 else None
+    total_tra_precio = round(sum_tra_x_consumo / sum_consumo, 4) if has_transporte and sum_consumo > 0 else None
+    total_pcs_gj = round(sum_pcs_x_consumo / sum_consumo_con_pcs, 5) if sum_consumo_con_pcs > 0 else None
+    total_pcs_kwh = round(total_pcs_gj * _GJ_A_KWH, 5) if total_pcs_gj is not None else None
+
+    total = {
+        "consumo_gj": sum_consumo,
+        "molecula_precio_gj": total_mol_precio,
+        "transporte_precio_gj": total_tra_precio,
+        "costo_molecula_mxn": sum_costo_mol if has_molecula else None,
+        "costo_transporte_mxn": sum_costo_tra if has_transporte else None,
+        "costo_total_mxn": sum_costo_total,
+        "costo_unit_gj": total_unit_gj,
+        "costo_unit_kwh": total_unit_kwh,
+        "pcs_gj_m3": total_pcs_gj,
+        "pcs_kwh_m3": total_pcs_kwh,
+    }
+
+    return {
+        "filas": filas,
+        "total": total,
+        "labels": labels,
+        "consumos_gj": consumos_gj,
+        "costos_unit_gj": costos_unit_gj,
+        "costos_molecula_mxn": costos_molecula_mxn,
+        "costos_transporte_mxn": costos_transporte_mxn,
     }

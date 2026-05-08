@@ -13,7 +13,7 @@ from flask_wtf.csrf import CSRFProtect
 
 from storage.repository import get_cfe_invoices_for_dashboard, get_gas_invoices_for_dashboard, get_contratos_por_cliente
 from calc.cogen import calcular_cogen
-from calc.historico import calcular_historico_cfe, calcular_tablas_cfe
+from calc.historico import calcular_historico_cfe, calcular_tablas_cfe, calcular_historico_gas
 from calc.nombre_canonico import generar_nombre_canonico
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
 from models.cogen_result import CoGenParams
@@ -174,6 +174,7 @@ def create_app() -> Flask:
             cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
             historico = calcular_historico_cfe(cfe_invoices)
             tablas = calcular_tablas_cfe(cfe_invoices)
+            historico_gas = calcular_historico_gas(gas_invoices)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -211,8 +212,10 @@ def create_app() -> Flask:
             cliente_nombre=cliente["nombre"],
             logo_url=cliente.get("logo_url"),
             facturas_cfe=facturas_cfe,
+            facturas_gas=facturas_gas,
             historico=historico,
             tablas=tablas,
+            historico_gas=historico_gas,
             num_meses_analizados=len(facturas_cfe),
             kwh_total_periodo=kwh_total_periodo,
             costo_total_periodo=costo_total_periodo,
