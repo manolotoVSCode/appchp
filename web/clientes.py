@@ -15,6 +15,7 @@ from storage.repository import (
     cliente_tiene_facturas,
     get_contratos_por_cliente,
     get_contrato,
+    get_contrato_con_conteos,
     create_contrato,
     update_contrato,
     delete_contrato,
@@ -281,10 +282,12 @@ def contrato_ficha(cliente_id: int, contrato_id: int):
     if isinstance(resultado, Response):
         return resultado
 
+    contrato = get_contrato_con_conteos(contrato_id)
+
     return render_template(
         "clientes/contratos/ficha.html",
         cliente=cliente,
-        contrato=resultado,
+        contrato=contrato,
     )
 
 

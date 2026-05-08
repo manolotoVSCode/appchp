@@ -28,6 +28,18 @@ _CONTRATO_BASE = Contrato(
     created_at="2024-01-15T10:00:00+00:00",
 )
 
+_CONTRATO_BASE_DICT = {
+    "id": 10,
+    "cliente_id": 1,
+    "nombre": "CFE Planta 1",
+    "tipo": "electrico",
+    "identificador_real": "812990300016",
+    "notas": "Contrato principal",
+    "created_at": "2024-01-15T10:00:00+00:00",
+    "num_cfe": 9,
+    "num_gas": 0,
+}
+
 
 @pytest.fixture()
 def app(monkeypatch):
@@ -278,13 +290,16 @@ def test_contrato_nuevo_identificador_duplicado(auth_client, monkeypatch):
 
 
 def test_contrato_ficha(auth_client, monkeypatch):
-    """GET /clientes/1/contratos/10 → 200 con datos del contrato."""
+    """GET /clientes/1/contratos/10 → 200 con datos del contrato y conteos de facturas."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_BASE)
+    monkeypatch.setattr("web.clientes.get_contrato_con_conteos", lambda id: _CONTRATO_BASE_DICT)
     resp = auth_client.get("/clientes/1/contratos/10")
     assert resp.status_code == 200
     assert b"CFE Planta 1" in resp.data
     assert b"812990300016" in resp.data
+    assert b"Facturas CFE" in resp.data
+    assert b"Facturas Gas" in resp.data
 
 
 def test_contrato_ficha_acceso_cruzado(auth_client, monkeypatch):

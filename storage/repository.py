@@ -409,6 +409,27 @@ def _row_to_contrato(row: dict) -> Contrato:
     )
 
 
+def get_contrato_con_conteos(contrato_id: int) -> dict | None:
+    """Devuelve un contrato con conteo de facturas CFE y gas asociadas, o None si no existe."""
+    result = _supabase.table("contratos").select("*").eq("id", contrato_id).execute()
+    if not result.data:
+        return None
+    row = result.data[0]
+    cfe = _supabase.table("cfe_facturas").select("id").eq("contrato_id", contrato_id).execute()
+    gas = _supabase.table("gas_facturas").select("id").eq("contrato_id", contrato_id).execute()
+    return {
+        "id": row["id"],
+        "cliente_id": row["cliente_id"],
+        "nombre": row["nombre"],
+        "tipo": row["tipo"],
+        "identificador_real": row["identificador_real"],
+        "notas": row.get("notas"),
+        "created_at": row.get("created_at"),
+        "num_cfe": len(cfe.data),
+        "num_gas": len(gas.data),
+    }
+
+
 def get_contratos_por_cliente(cliente_id: int) -> list[Contrato]:
     """Devuelve todos los contratos del cliente, ordenados por nombre."""
     result = _supabase.table("contratos").select("*").eq(

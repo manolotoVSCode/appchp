@@ -156,7 +156,16 @@ def create_app() -> Flask:
                 )
 
         r = app.config["RESULTADO"]
-        sin_datos = not r.meses
+        num_cfe = cliente["num_cfe"]
+        num_gas = cliente["num_gas"]
+        if num_cfe == 0 and num_gas == 0:
+            aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
+        elif num_cfe == 0 or num_gas == 0:
+            aviso_datos = {"tipo": "sin_par", "num_cfe": num_cfe, "num_gas": num_gas}
+        elif not r.meses:
+            aviso_datos = {"tipo": "sin_pares_mes", "num_cfe": num_cfe, "num_gas": num_gas}
+        else:
+            aviso_datos = None
 
         chart_labels = [m.periodo_inicio.strftime("%b %Y") for m in r.meses]
         chart_ebitda = [float(m.ebitda_mes_mxn) for m in r.meses]
@@ -178,7 +187,7 @@ def create_app() -> Flask:
         return render_template(
             "dashboard.html",
             r=r,
-            sin_datos=sin_datos,
+            aviso_datos=aviso_datos,
             cliente_id=cliente_id,
             cliente_nombre=cliente["nombre"],
             chart_labels=chart_labels,
