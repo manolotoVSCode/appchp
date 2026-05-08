@@ -1,0 +1,56 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "clientes" %}
+{% set cliente_id = cliente.id %}
+{% block title %}Editar contrato — {{ contrato.nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+     class="btn btn-sm btn-outline-secondary">← Volver</a>
+  <h4 class="fw-bold mb-0" style="color:#1F4E79">Editar contrato — {{ contrato.nombre }}</h4>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="card shadow-sm" style="max-width:540px">
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="mb-3">
+        <label for="nombre" class="form-label fw-semibold">Nombre del contrato <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="nombre" name="nombre"
+               value="{{ nombre }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label for="tipo" class="form-label fw-semibold">Tipo <span class="text-danger">*</span></label>
+        <select class="form-select" id="tipo" name="tipo" required>
+          <option value="electrico" {% if tipo == "electrico" %}selected{% endif %}>Eléctrico (CFE)</option>
+          <option value="gas" {% if tipo == "gas" %}selected{% endif %}>Gas natural (ENGIE)</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label for="identificador_real" class="form-label fw-semibold">Identificador real <span class="text-danger">*</span></label>
+        <input type="text" class="form-control font-monospace" id="identificador_real" name="identificador_real"
+               value="{{ identificador_real }}" required>
+        <div class="form-text">Número de servicio CFE o número de cliente ENGIE tal como aparece en la factura.</div>
+      </div>
+
+      <div class="mb-4">
+        <label for="notas" class="form-label fw-semibold">Notas</label>
+        <textarea class="form-control" id="notas" name="notas" rows="2">{{ notas }}</textarea>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+           class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -11,6 +11,7 @@ from supabase import create_client, Client
 
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice, GasConcepto
+from models.contrato import Contrato
 from calc.nombre_canonico import generar_nombre_canonico
 
 logger = logging.getLogger(__name__)
@@ -388,3 +389,90 @@ def cliente_tiene_facturas(cliente_id: int) -> bool:
         return True
     gas = _supabase.table("gas_facturas").select("id").eq("cliente_id", cliente_id).limit(1).execute()
     return bool(gas.data)
+
+
+# ── Contratos ─────────────────────────────────────────────────────────────────
+
+class ContratoIdentificadorDuplicado(Exception):
+    """El par (cliente_id, identificador_real) ya existe en contratos."""
+
+
+def _row_to_contrato(row: dict) -> Contrato:
+    return Contrato(
+        id=row["id"],
+        cliente_id=row["cliente_id"],
+        nombre=row["nombre"],
+        tipo=row["tipo"],
+        identificador_real=row["identificador_real"],
+        notas=row.get("notas"),
+        created_at=row.get("created_at"),
+    )
+
+
+def get_contratos_por_cliente(cliente_id: int) -> list[Contrato]:
+    """Devuelve todos los contratos del cliente, ordenados por nombre."""
+    result = _supabase.table("contratos").select("*").eq(
+        "cliente_id", cliente_id
+    ).order("nombre").execute()
+    return [_row_to_contrato(r) for r in result.data]
+
+
+def get_contrato(contrato_id: int) -> Contrato | None:
+    """Devuelve un contrato por id, o None si no existe."""
+    result = _supabase.table("contratos").select("*").eq("id", contrato_id).execute()
+    if not result.data:
+        return None
+    return _row_to_contrato(result.data[0])
+
+
+def create_contrato(
+    cliente_id: int,
+    nombre: str,
+    tipo: str,
+    identificador_real: str,
+    notas: str | None,
+) -> int:
+    """Crea un contrato. Devuelve el id asignado.
+    Lanza ContratoIdentificadorDuplicado si (cliente_id, identificador_real) ya existe."""
+    try:
+        result = _supabase.table("contratos").insert({
+            "cliente_id": cliente_id,
+            "nombre": nombre,
+            "tipo": tipo,
+            "identificador_real": identificador_real,
+            "notas": notas if notas else None,
+        }).execute()
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "unique" in msg or "duplicate" in msg or "contratos_cliente_id_identificador_real" in msg:
+            raise ContratoIdentificadorDuplicado(identificador_real) from exc
+        raise
+    return result.data[0]["id"]
+
+
+def update_contrato(
+    contrato_id: int,
+    nombre: str,
+    tipo: str,
+    identificador_real: str,
+    notas: str | None,
+) -> None:
+    """Actualiza los campos del contrato.
+    Lanza ContratoIdentificadorDuplicado si el nuevo identificador_real ya existe para el cliente."""
+    try:
+        _supabase.table("contratos").update({
+            "nombre": nombre,
+            "tipo": tipo,
+            "identificador_real": identificador_real,
+            "notas": notas if notas else None,
+        }).eq("id", contrato_id).execute()
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "unique" in msg or "duplicate" in msg or "contratos_cliente_id_identificador_real" in msg:
+            raise ContratoIdentificadorDuplicado(identificador_real) from exc
+        raise
+
+
+def delete_contrato(contrato_id: int) -> None:
+    """Borra el contrato. ON DELETE SET NULL en facturas desvincula las facturas asociadas."""
+    _supabase.table("contratos").delete().eq("id", contrato_id).execute()

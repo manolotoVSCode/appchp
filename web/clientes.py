@@ -13,6 +13,12 @@ from storage.repository import (
     delete_cliente,
     rfc_existe,
     cliente_tiene_facturas,
+    get_contratos_por_cliente,
+    get_contrato,
+    create_contrato,
+    update_contrato,
+    delete_contrato,
+    ContratoIdentificadorDuplicado,
 )
 
 logger = logging.getLogger(__name__)
@@ -85,7 +91,8 @@ def ficha(cliente_id: int):
     if cliente is None:
         flash("El cliente solicitado no existe.", "warning")
         return redirect(url_for("clientes.listado"))
-    return render_template("clientes/ficha.html", cliente=cliente)
+    contratos = get_contratos_por_cliente(cliente_id)
+    return render_template("clientes/ficha.html", cliente=cliente, contratos=contratos)
 
 
 @clientes_bp.route("/<int:cliente_id>/editar", methods=["GET", "POST"])
@@ -174,3 +181,218 @@ def borrar(cliente_id: int):
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
     return redirect(url_for("clientes.listado"))
+
+
+# ── Contratos ─────────────────────────────────────────────────────────────────
+
+def _verificar_acceso_contrato(contrato_id: int, cliente_id: int):
+    """Carga el contrato y verifica que pertenezca al cliente dado.
+
+    Devuelve el objeto Contrato si el acceso es válido.
+    Si el contrato no existe, devuelve None.
+    Si pertenece a otro cliente, hace flash + redirect y devuelve una Response.
+    """
+    contrato = get_contrato(contrato_id)
+    if contrato is None:
+        return None
+    if contrato.cliente_id != cliente_id:
+        otro_cliente = get_cliente_con_conteos(contrato.cliente_id)
+        nombre_otro = otro_cliente["nombre"] if otro_cliente else f"id={contrato.cliente_id}"
+        flash(
+            f"El contrato '{contrato.nombre}' pertenece al cliente '{nombre_otro}', "
+            f"no a este cliente. Has sido redirigido a la ficha del cliente actual.",
+            "warning",
+        )
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    return contrato
+
+
+@clientes_bp.route("/<int:cliente_id>/contratos/nuevo", methods=["GET", "POST"])
+def contrato_nuevo(cliente_id: int):
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    if request.method == "POST":
+        nombre = request.form.get("nombre", "").strip()
+        tipo = request.form.get("tipo", "").strip()
+        identificador_real = request.form.get("identificador_real", "").strip()
+        notas = request.form.get("notas", "").strip() or None
+
+        error = None
+        if not nombre:
+            error = "El nombre del contrato es obligatorio."
+        elif tipo not in ("electrico", "gas"):
+            error = "El tipo debe ser 'electrico' o 'gas'."
+        elif not identificador_real:
+            error = "El identificador real es obligatorio."
+
+        if error is None:
+            try:
+                contrato_id = create_contrato(cliente_id, nombre, tipo, identificador_real, notas)
+                logger.info(
+                    "Contrato creado: id=%d, cliente_id=%d, nombre='%s'",
+                    contrato_id, cliente_id, nombre,
+                )
+                flash(f"Contrato '{nombre}' creado correctamente.", "success")
+                return redirect(url_for(
+                    "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
+                ))
+            except ContratoIdentificadorDuplicado:
+                error = f"Ya existe un contrato con el identificador '{identificador_real}' para este cliente."
+            except Exception as exc:
+                logger.error("Error creando contrato cliente_id=%d: %s", cliente_id, exc)
+                error = f"Error al crear el contrato: {exc}"
+
+        return render_template(
+            "clientes/contratos/nuevo.html",
+            cliente=cliente,
+            error=error,
+            nombre=nombre,
+            tipo=tipo,
+            identificador_real=identificador_real,
+            notas=notas or "",
+        )
+
+    return render_template(
+        "clientes/contratos/nuevo.html",
+        cliente=cliente,
+        error=None,
+        nombre="",
+        tipo="electrico",
+        identificador_real="",
+        notas="",
+    )
+
+
+@clientes_bp.route("/<int:cliente_id>/contratos/<int:contrato_id>")
+def contrato_ficha(cliente_id: int, contrato_id: int):
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    from flask import Response
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    if isinstance(resultado, Response):
+        return resultado
+
+    return render_template(
+        "clientes/contratos/ficha.html",
+        cliente=cliente,
+        contrato=resultado,
+    )
+
+
+@clientes_bp.route("/<int:cliente_id>/contratos/<int:contrato_id>/editar", methods=["GET", "POST"])
+def contrato_editar(cliente_id: int, contrato_id: int):
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    from flask import Response
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    if isinstance(resultado, Response):
+        return resultado
+    contrato = resultado
+
+    if request.method == "POST":
+        nombre = request.form.get("nombre", "").strip()
+        tipo = request.form.get("tipo", "").strip()
+        identificador_real = request.form.get("identificador_real", "").strip()
+        notas = request.form.get("notas", "").strip() or None
+
+        error = None
+        if not nombre:
+            error = "El nombre del contrato es obligatorio."
+        elif tipo not in ("electrico", "gas"):
+            error = "El tipo debe ser 'electrico' o 'gas'."
+        elif not identificador_real:
+            error = "El identificador real es obligatorio."
+
+        if error is None:
+            try:
+                update_contrato(contrato_id, nombre, tipo, identificador_real, notas)
+                logger.info("Contrato actualizado: id=%d, nombre='%s'", contrato_id, nombre)
+                flash("Contrato actualizado correctamente.", "success")
+                return redirect(url_for(
+                    "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
+                ))
+            except ContratoIdentificadorDuplicado:
+                error = f"Ya existe un contrato con el identificador '{identificador_real}' para este cliente."
+            except Exception as exc:
+                logger.error("Error actualizando contrato id=%d: %s", contrato_id, exc)
+                error = f"Error al guardar: {exc}"
+
+        return render_template(
+            "clientes/contratos/editar.html",
+            cliente=cliente,
+            contrato=contrato,
+            error=error,
+            nombre=nombre,
+            tipo=tipo,
+            identificador_real=identificador_real,
+            notas=notas or "",
+        )
+
+    return render_template(
+        "clientes/contratos/editar.html",
+        cliente=cliente,
+        contrato=contrato,
+        error=None,
+        nombre=contrato.nombre,
+        tipo=contrato.tipo,
+        identificador_real=contrato.identificador_real,
+        notas=contrato.notas or "",
+    )
+
+
+@clientes_bp.route("/<int:cliente_id>/contratos/<int:contrato_id>/borrar", methods=["POST"])
+def contrato_borrar(cliente_id: int, contrato_id: int):
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    from flask import Response
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    if isinstance(resultado, Response):
+        return resultado
+    contrato = resultado
+
+    nombre = contrato.nombre
+    confirmacion = request.form.get("confirmacion", "").strip()
+    if confirmacion != nombre:
+        flash(
+            "La confirmación no coincide con el nombre del contrato. No se realizó ningún cambio.",
+            "danger",
+        )
+        return redirect(url_for(
+            "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
+        ))
+
+    try:
+        delete_contrato(contrato_id)
+        logger.info(
+            "Contrato borrado: id=%d, nombre='%s', cliente_id=%d", contrato_id, nombre, cliente_id
+        )
+        flash(f"Contrato '{nombre}' borrado correctamente.", "success")
+    except Exception as exc:
+        logger.error("Error borrando contrato id=%d: %s", contrato_id, exc)
+        flash(f"Error al borrar el contrato: {exc}", "danger")
+        return redirect(url_for(
+            "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
+        ))
+
+    return redirect(url_for("clientes.ficha", cliente_id=cliente_id))

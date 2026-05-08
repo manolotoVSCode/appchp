@@ -1,0 +1,101 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "clientes" %}
+{% set cliente_id = cliente.id %}
+{% block title %}{{ contrato.nombre }} — {{ cliente.nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
+  <h4 class="fw-bold mb-0" style="color:#1F4E79">{{ contrato.nombre }}</h4>
+  {% if contrato.tipo == "electrico" %}
+    <span class="badge text-bg-primary">Eléctrico</span>
+  {% else %}
+    <span class="badge text-bg-warning text-dark">Gas</span>
+  {% endif %}
+</div>
+
+<div class="card shadow-sm" style="max-width:540px">
+  <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">Datos del contrato</div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-4 small text-muted">Cliente</dt>
+      <dd class="col-sm-8 mb-2">
+        <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}"
+           class="text-decoration-none fw-semibold" style="color:#1F4E79">{{ cliente.nombre }}</a>
+      </dd>
+
+      <dt class="col-sm-4 small text-muted">Tipo</dt>
+      <dd class="col-sm-8 mb-2">
+        {% if contrato.tipo == "electrico" %}Eléctrico (CFE){% else %}Gas natural (ENGIE){% endif %}
+      </dd>
+
+      <dt class="col-sm-4 small text-muted">Identificador</dt>
+      <dd class="col-sm-8 font-monospace mb-2">{{ contrato.identificador_real }}</dd>
+
+      <dt class="col-sm-4 small text-muted">Notas</dt>
+      <dd class="col-sm-8 mb-2">
+        {% if contrato.notas %}
+          {{ contrato.notas }}
+        {% else %}
+          <span class="text-muted small">—</span>
+        {% endif %}
+      </dd>
+
+      <dt class="col-sm-4 small text-muted">Alta</dt>
+      <dd class="col-sm-8 small mb-0">{{ contrato.created_at[:10] if contrato.created_at else "—" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<!-- Acciones -->
+<div class="d-flex gap-2 mt-4">
+  <a href="{{ url_for('clientes.contrato_editar', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+     class="btn btn-outline-primary btn-sm">Editar</a>
+  <button class="btn btn-outline-danger btn-sm ms-auto"
+          data-bs-toggle="modal" data-bs-target="#modalBorrarContrato">Borrar contrato</button>
+</div>
+
+<!-- Modal borrar contrato -->
+<div class="modal fade" id="modalBorrarContrato" tabindex="-1" aria-labelledby="modalBorrarContratoTitulo" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger" id="modalBorrarContratoTitulo">Borrar contrato: {{ contrato.nombre }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Las facturas vinculadas a este contrato quedarán sin contrato asignado.
+          <strong>Esta acción NO se puede deshacer.</strong>
+        </p>
+        <label class="form-label fw-semibold">Para confirmar, escriba el nombre exacto del contrato:</label>
+        <input type="text" id="inputConfirmacion" class="form-control"
+               placeholder="{{ contrato.nombre }}">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="POST"
+              action="{{ url_for('clientes.contrato_borrar', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+              style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="confirmacion" id="hiddenConfirmacion">
+          <button type="submit" id="btnBorrar" class="btn btn-danger" disabled>Borrar permanentemente</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const esperado = {{ contrato.nombre | tojson }};
+  document.getElementById("inputConfirmacion").addEventListener("input", function () {
+    const coincide = this.value === esperado;
+    document.getElementById("hiddenConfirmacion").value = this.value;
+    document.getElementById("btnBorrar").disabled = !coincide;
+  });
+})();
+</script>
+{% endblock %}

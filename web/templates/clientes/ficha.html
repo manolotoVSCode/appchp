@@ -57,20 +57,79 @@
   </div>
 </div>
 
-<!-- Acciones -->
+<!-- Acciones cliente -->
 <div class="d-flex gap-2 mt-4">
   <a href="{{ url_for('clientes.editar', cliente_id=cliente.id) }}" class="btn btn-outline-primary btn-sm">Editar ficha</a>
   <a href="{{ url_for('cliente_dashboard', cliente_id=cliente.id) }}" class="btn btn-outline-secondary btn-sm">Ver dashboard</a>
   <button class="btn btn-outline-danger btn-sm ms-auto"
-          data-bs-toggle="modal" data-bs-target="#modalBorrar">Borrar cliente</button>
+          data-bs-toggle="modal" data-bs-target="#modalBorrarCliente">Borrar cliente</button>
 </div>
 
-<!-- Modal de confirmación de borrado -->
-<div class="modal fade" id="modalBorrar" tabindex="-1" aria-labelledby="modalBorrarTitulo" aria-hidden="true">
+<!-- Sección contratos -->
+<div class="mt-5">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="fw-semibold mb-0" style="color:#1F4E79">Contratos</h5>
+    <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}"
+       class="btn btn-sm btn-primary">+ Nuevo contrato</a>
+  </div>
+
+  {% if contratos %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th>Identificador</th>
+          <th>Notas</th>
+          <th class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in contratos %}
+        <tr>
+          <td class="fw-semibold">
+            <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=c.id) }}"
+               class="text-decoration-none" style="color:#1F4E79">{{ c.nombre }}</a>
+          </td>
+          <td>
+            {% if c.tipo == "electrico" %}
+              <span class="badge text-bg-primary">Eléctrico</span>
+            {% else %}
+              <span class="badge text-bg-warning text-dark">Gas</span>
+            {% endif %}
+          </td>
+          <td class="font-monospace">{{ c.identificador_real }}</td>
+          <td class="text-muted">{{ c.notas or "—" }}</td>
+          <td class="text-end">
+            <a href="{{ url_for('clientes.contrato_editar', cliente_id=cliente.id, contrato_id=c.id) }}"
+               class="btn btn-outline-secondary btn-sm">Editar</a>
+            <button class="btn btn-outline-danger btn-sm ms-1"
+                    data-bs-toggle="modal" data-bs-target="#modalBorrarContrato"
+                    data-contrato-id="{{ c.id }}"
+                    data-contrato-nombre="{{ c.nombre }}">Borrar</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card shadow-sm">
+    <div class="card-body text-center text-muted py-4">
+      Sin contratos registrados.
+      <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}">Crear primer contrato</a>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal borrar cliente -->
+<div class="modal fade" id="modalBorrarCliente" tabindex="-1" aria-labelledby="modalBorrarClienteTitulo" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header border-danger">
-        <h5 class="modal-title text-danger" id="modalBorrarTitulo">Borrar cliente: {{ cliente.nombre }}</h5>
+        <h5 class="modal-title text-danger" id="modalBorrarClienteTitulo">Borrar cliente: {{ cliente.nombre }}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -81,15 +140,45 @@
           <strong>Esta acción NO se puede deshacer.</strong>
         </p>
         <label class="form-label fw-semibold">Para confirmar, escriba el nombre exacto del cliente:</label>
-        <input type="text" id="inputConfirmacion" class="form-control"
+        <input type="text" id="inputConfirmacionCliente" class="form-control"
                placeholder="{{ cliente.nombre }}">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <form method="POST" action="{{ url_for('clientes.borrar', cliente_id=cliente.id) }}" style="display:inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="hidden" name="confirmacion" id="hiddenConfirmacion">
-          <button type="submit" id="btnBorrar" class="btn btn-danger" disabled>Borrar permanentemente</button>
+          <input type="hidden" name="confirmacion" id="hiddenConfirmacionCliente">
+          <button type="submit" id="btnBorrarCliente" class="btn btn-danger" disabled>Borrar permanentemente</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal borrar contrato -->
+<div class="modal fade" id="modalBorrarContrato" tabindex="-1" aria-labelledby="modalBorrarContratoTitulo" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger" id="modalBorrarContratoTitulo">Borrar contrato</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Esta acción borrará permanentemente el contrato
+          <strong id="nombreContratoModal"></strong>.
+          Las facturas vinculadas a este contrato quedarán sin contrato asignado.
+          <strong>Esta acción NO se puede deshacer.</strong>
+        </p>
+        <label class="form-label fw-semibold">Para confirmar, escriba el nombre exacto del contrato:</label>
+        <input type="text" id="inputConfirmacionContrato" class="form-control" placeholder="">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="POST" id="formBorrarContrato" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="confirmacion" id="hiddenConfirmacionContrato">
+          <button type="submit" id="btnBorrarContrato" class="btn btn-danger" disabled>Borrar permanentemente</button>
         </form>
       </div>
     </div>
@@ -100,11 +189,33 @@
 {% block scripts %}
 <script>
 (function () {
-  const esperado = {{ cliente.nombre | tojson }};
-  document.getElementById("inputConfirmacion").addEventListener("input", function () {
-    const coincide = this.value === esperado;
-    document.getElementById("hiddenConfirmacion").value = this.value;
-    document.getElementById("btnBorrar").disabled = !coincide;
+  // Modal borrar cliente
+  const esperadoCliente = {{ cliente.nombre | tojson }};
+  document.getElementById("inputConfirmacionCliente").addEventListener("input", function () {
+    const coincide = this.value === esperadoCliente;
+    document.getElementById("hiddenConfirmacionCliente").value = this.value;
+    document.getElementById("btnBorrarCliente").disabled = !coincide;
+  });
+
+  // Modal borrar contrato
+  const modalBorrarContrato = document.getElementById("modalBorrarContrato");
+  let esperadoContrato = "";
+  modalBorrarContrato.addEventListener("show.bs.modal", function (event) {
+    const btn = event.relatedTarget;
+    const contratoId = btn.getAttribute("data-contrato-id");
+    esperadoContrato = btn.getAttribute("data-contrato-nombre");
+    document.getElementById("nombreContratoModal").textContent = esperadoContrato;
+    document.getElementById("inputConfirmacionContrato").value = "";
+    document.getElementById("inputConfirmacionContrato").placeholder = esperadoContrato;
+    document.getElementById("hiddenConfirmacionContrato").value = "";
+    document.getElementById("btnBorrarContrato").disabled = true;
+    document.getElementById("formBorrarContrato").action =
+      "/clientes/{{ cliente.id }}/contratos/" + contratoId + "/borrar";
+  });
+  document.getElementById("inputConfirmacionContrato").addEventListener("input", function () {
+    const coincide = this.value === esperadoContrato;
+    document.getElementById("hiddenConfirmacionContrato").value = this.value;
+    document.getElementById("btnBorrarContrato").disabled = !coincide;
   });
 })();
 </script>
