@@ -183,9 +183,7 @@
       <tbody>
         {% for c in contratos %}
         <tr>
-          <td class="fw-semibold">
-            <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=c.id) }}">{{ c.nombre }}</a>
-          </td>
+          <td class="fw-semibold">{{ c.nombre }}</td>
           <td>
             {% if c.tipo == "electrico" %}
               <span class="badge text-bg-primary">Eléctrico</span>
@@ -196,8 +194,10 @@
           <td class="font-monospace">{{ c.identificador_real }}</td>
           <td class="text-muted">{{ c.notas or "—" }}</td>
           <td class="text-end">
+            <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=c.id) }}"
+               class="btn btn-outline-secondary btn-sm">Detalles</a>
             <a href="{{ url_for('clientes.contrato_editar', cliente_id=cliente.id, contrato_id=c.id) }}"
-               class="btn btn-outline-secondary btn-sm">Editar</a>
+               class="btn btn-outline-secondary btn-sm ms-1">Editar</a>
             <button class="btn btn-outline-danger btn-sm ms-1"
                     data-bs-toggle="modal" data-bs-target="#modalBorrarContrato"
                     data-contrato-id="{{ c.id }}"
