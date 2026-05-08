@@ -277,12 +277,12 @@ def _facturas_gas_mock():
 
 
 def test_dashboard_con_datos_muestra_kpis(app, monkeypatch):
-    """Dashboard con facturas seleccionadas → renderiza KPIs sin aviso."""
+    """Dashboard cogeneración con facturas seleccionadas → renderiza KPIs sin aviso."""
     monkeypatch.setattr(
-        "web.app._cargar_datos_cliente",
-        lambda cliente_id: (_mock_resultado_con_meses(), _facturas_cfe_mock(), _facturas_gas_mock(),
-                            _mock_historico(), _mock_tablas()),
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], _facturas_cfe_mock(), _facturas_gas_mock()),
     )
+    monkeypatch.setattr("web.app.calcular_cogen", lambda *a, **kw: _mock_resultado_con_meses())
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
     c = _login(app, monkeypatch)
 
@@ -290,7 +290,7 @@ def test_dashboard_con_datos_muestra_kpis(app, monkeypatch):
         sess["cliente_activo_id"] = 1
         sess["cliente_activo_nombre"] = "IBERICA TILES"
 
-    resp = c.get("/clientes/1/dashboard")
+    resp = c.get("/clientes/1/dashboard/cogeneracion")
     assert resp.status_code == 200
     assert b"EBITDA Anual" in resp.data
     assert b"Sin facturas seleccionadas" not in resp.data
@@ -299,11 +299,13 @@ def test_dashboard_con_datos_muestra_kpis(app, monkeypatch):
 # ── Test 6: Dashboard sin selección → aviso sin KPIs ─────────────────────────
 
 def test_dashboard_sin_seleccion_muestra_aviso(app, monkeypatch):
-    """Dashboard con cero facturas seleccionadas → aviso sin_seleccion, sin KPIs."""
+    """Dashboard contabilidad con cero facturas seleccionadas → aviso sin_seleccion, sin gráficas."""
     monkeypatch.setattr(
-        "web.app._cargar_datos_cliente",
-        lambda cliente_id: (MagicMock(meses=[]), [], [], _mock_historico(), _mock_tablas()),
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], [], []),
     )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas())
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
     c = _login(app, monkeypatch)
 
@@ -311,7 +313,7 @@ def test_dashboard_sin_seleccion_muestra_aviso(app, monkeypatch):
         sess["cliente_activo_id"] = 1
         sess["cliente_activo_nombre"] = "IBERICA TILES"
 
-    resp = c.get("/clientes/1/dashboard")
+    resp = c.get("/clientes/1/dashboard/contabilidad")
     assert resp.status_code == 200
     assert "Sin facturas seleccionadas".encode() in resp.data
     assert b"EBITDA Anual" not in resp.data
@@ -320,11 +322,13 @@ def test_dashboard_sin_seleccion_muestra_aviso(app, monkeypatch):
 # ── Test 7: Dashboard sin facturas en DB → aviso sin_facturas ────────────────
 
 def test_dashboard_sin_facturas_en_bd(app, monkeypatch):
-    """Dashboard con cliente sin facturas en BD → aviso sin_facturas."""
+    """Dashboard contabilidad con cliente sin facturas en BD → aviso sin_facturas."""
     monkeypatch.setattr(
-        "web.app._cargar_datos_cliente",
-        lambda cliente_id: (MagicMock(meses=[]), [], [], _mock_historico(), _mock_tablas()),
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], [], []),
     )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas())
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_VACIO)
     c = _login(app, monkeypatch)
 
@@ -332,7 +336,7 @@ def test_dashboard_sin_facturas_en_bd(app, monkeypatch):
         sess["cliente_activo_id"] = 1
         sess["cliente_activo_nombre"] = "IBERICA TILES"
 
-    resp = c.get("/clientes/1/dashboard")
+    resp = c.get("/clientes/1/dashboard/contabilidad")
     assert resp.status_code == 200
     assert "Sin facturas cargadas".encode() in resp.data
 
@@ -386,12 +390,14 @@ def test_sidebar_no_muestra_seccion_sin_cliente_activo(app, monkeypatch):
 # ── Test 10-11: Dashboard header con/sin logo ─────────────────────────────────
 
 def test_dashboard_con_logo_muestra_imagen(app, monkeypatch):
-    """Dashboard con cliente que tiene logo → header muestra la imagen."""
+    """Dashboard contabilidad con cliente que tiene logo → header muestra la imagen."""
     cliente_con_logo = {**_CLIENTE, "logo_url": "https://storage.example.com/cliente_1.png"}
     monkeypatch.setattr(
-        "web.app._cargar_datos_cliente",
-        lambda cliente_id: (MagicMock(meses=[]), [], [], _mock_historico(), _mock_tablas()),
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], [], []),
     )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas())
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: cliente_con_logo)
     c = _login(app, monkeypatch)
 
@@ -399,17 +405,19 @@ def test_dashboard_con_logo_muestra_imagen(app, monkeypatch):
         sess["cliente_activo_id"] = 1
         sess["cliente_activo_nombre"] = "IBERICA TILES"
 
-    resp = c.get("/clientes/1/dashboard")
+    resp = c.get("/clientes/1/dashboard/contabilidad")
     assert resp.status_code == 200
     assert b"storage.example.com/cliente_1.png" in resp.data
 
 
 def test_dashboard_sin_logo_muestra_nombre(app, monkeypatch):
-    """Dashboard con cliente sin logo → header muestra el nombre como texto."""
+    """Dashboard contabilidad con cliente sin logo → header muestra el nombre como texto."""
     monkeypatch.setattr(
-        "web.app._cargar_datos_cliente",
-        lambda cliente_id: (MagicMock(meses=[]), [], [], _mock_historico(), _mock_tablas()),
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], [], []),
     )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas())
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_VACIO)
     c = _login(app, monkeypatch)
 
@@ -417,8 +425,64 @@ def test_dashboard_sin_logo_muestra_nombre(app, monkeypatch):
         sess["cliente_activo_id"] = 1
         sess["cliente_activo_nombre"] = "IBERICA TILES"
 
-    resp = c.get("/clientes/1/dashboard")
+    resp = c.get("/clientes/1/dashboard/contabilidad")
     assert resp.status_code == 200
     assert b"IBERICA TILES" in resp.data
-    # sin logo no debe aparecer un <img> de Storage
     assert b"storage.example.com" not in resp.data
+
+
+# ── Test 12: /dashboard redirige a /dashboard/contabilidad ────────────────────
+
+def test_dashboard_redirige_a_contabilidad(app, monkeypatch):
+    """GET /clientes/<id>/dashboard → 302 a /clientes/<id>/dashboard/contabilidad."""
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    resp = c.get("/clientes/1/dashboard", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes/1/dashboard/contabilidad" in resp.headers["Location"]
+
+
+# ── Test 13: contabilidad muestra histórico, no EBITDA ────────────────────────
+
+def test_contabilidad_muestra_historico_no_ebitda(app, monkeypatch):
+    """GET /dashboard/contabilidad → muestra gráficas históricas, no KPIs de EBITDA."""
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], _facturas_cfe_mock(), []),
+    )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas())
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    resp = c.get("/clientes/1/dashboard/contabilidad")
+    assert resp.status_code == 200
+    assert b"Contabilidad" in resp.data
+    assert b"EBITDA Anual" not in resp.data
+
+
+# ── Test 14: cogeneración muestra KPIs, no gráficas históricas ───────────────
+
+def test_cogeneracion_muestra_kpis_no_historico(app, monkeypatch):
+    """GET /dashboard/cogeneracion → muestra KPIs de EBITDA, no gráficas históricas de demanda."""
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], _facturas_cfe_mock(), _facturas_gas_mock()),
+    )
+    monkeypatch.setattr("web.app.calcular_cogen", lambda *a, **kw: _mock_resultado_con_meses())
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    resp = c.get("/clientes/1/dashboard/cogeneracion")
+    assert resp.status_code == 200
+    assert b"EBITDA Anual" in resp.data
+    assert b"Demanda m" not in resp.data  # "Demanda máxima" solo en contabilidad

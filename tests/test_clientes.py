@@ -660,8 +660,8 @@ def test_sidebar_con_cliente_activo_muestra_estructura(app, monkeypatch):
     assert "sidebar-sub-header" in html
 
 
-def test_rutas_placeholder_redirigen_a_dashboard(app, monkeypatch):
-    """GET /clientes/1/dashboard/contabilidad y /cogeneracion → redirect a /clientes/1/dashboard."""
+def test_dashboard_redirige_a_contabilidad(app, monkeypatch):
+    """GET /clientes/1/dashboard → 302 a /clientes/1/dashboard/contabilidad."""
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
     c = app.test_client()
     c.post("/login", data={"username": "operador", "password": "test_pass"})
@@ -669,7 +669,6 @@ def test_rutas_placeholder_redirigen_a_dashboard(app, monkeypatch):
     with c.session_transaction() as sess:
         sess["cliente_activo_id"] = 1
 
-    for path in ["/clientes/1/dashboard/contabilidad", "/clientes/1/dashboard/cogeneracion"]:
-        resp = c.get(path, follow_redirects=False)
-        assert resp.status_code == 302
-        assert "/clientes/1/dashboard" in resp.headers["Location"]
+    resp = c.get("/clientes/1/dashboard", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes/1/dashboard/contabilidad" in resp.headers["Location"]
