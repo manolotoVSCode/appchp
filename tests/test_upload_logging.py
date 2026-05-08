@@ -97,7 +97,7 @@ def test_respuesta_json_incluye_mensaje_descriptivo(auth_client, monkeypatch):
 def test_exito_queda_en_log_con_id(auth_client, monkeypatch, caplog):
     """Cuando el procesamiento es exitoso, el log registra INFO con el id de la factura."""
     monkeypatch.setattr("web.app._detect_tipo", lambda _: "cfe")
-    monkeypatch.setattr("web.app.procesar_factura_cfe", lambda *a, **kw: 42)
+    monkeypatch.setattr("web.app.procesar_factura_cfe", lambda *a, **kw: (42, "2024 ENERO CFE 812990300016"))
     monkeypatch.setattr("web.app._cargar_datos", lambda: _mock_datos())
 
     with caplog.at_level(logging.INFO, logger="web.app"):
@@ -110,6 +110,7 @@ def test_exito_queda_en_log_con_id(auth_client, monkeypatch, caplog):
     data = resp.get_json()
     assert data["procesados"] == 1
     assert data["errores"] == []
+    assert data["exitosos"][0]["nombre_canonico"] == "2024 ENERO CFE 812990300016"
 
     info_records = [r for r in caplog.records if r.levelno == logging.INFO]
     exito_records = [r for r in info_records if "id=42" in r.message]

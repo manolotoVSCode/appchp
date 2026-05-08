@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def procesar_factura_cfe(
     pdf_path: Path,
     tarifa: str = "GDMTH",
-) -> int:
+) -> tuple[int, str]:
     """
     Parsea una factura CFE, valida coherencia y persiste en Supabase.
 
@@ -28,7 +28,7 @@ def procesar_factura_cfe(
         tarifa: Código de tarifa CFE. Default "GDMTH".
 
     Returns:
-        ID de la factura insertada en cfe_facturas.
+        Tupla (id de la factura en cfe_facturas, nombre_canonico).
 
     Raises:
         FileNotFoundError: Si el PDF no existe.
@@ -54,23 +54,23 @@ def procesar_factura_cfe(
             pdf_path.name, len(invoice.advertencias), "; ".join(invoice.advertencias),
         )
 
-    factura_id = save_cfe_invoice(invoice)
+    factura_id, nombre_canonico = save_cfe_invoice(invoice)
     logger.info(
-        "Factura CFE guardada: id=%d, periodo=%s→%s, total_periodo=$%s",
-        factura_id, invoice.periodo_inicio, invoice.periodo_fin,
+        "Factura CFE guardada: id=%d, nombre='%s', periodo=%s→%s, total_periodo=$%s",
+        factura_id, nombre_canonico, invoice.periodo_inicio, invoice.periodo_fin,
         f"{invoice.facturacion_periodo_mxn:,.2f}",
     )
-    return factura_id
+    return factura_id, nombre_canonico
 
 
-def procesar_factura_gas(pdf_path: Path) -> int:
+def procesar_factura_gas(pdf_path: Path) -> tuple[int, str]:
     """Parsea y persiste una factura de gas ENGIE.
 
     Args:
         pdf_path: ruta al PDF.
 
     Returns:
-        id de la fila en gas_facturas.
+        Tupla (id de la fila en gas_facturas, nombre_canonico).
 
     Raises:
         FileNotFoundError: si el PDF no existe.
@@ -97,12 +97,12 @@ def procesar_factura_gas(pdf_path: Path) -> int:
             pdf_path.name, len(errores), "; ".join(errores),
         )
 
-    factura_id = save_gas_invoice(invoice)
+    factura_id, nombre_canonico = save_gas_invoice(invoice)
     logger.info(
-        "Factura gas guardada: id=%d, GJ=%s, total=$%s",
-        factura_id, f"{invoice.consumo_total_gj:,.4f}", f"{invoice.total_mxn:,.2f}",
+        "Factura gas guardada: id=%d, nombre='%s', GJ=%s, total=$%s",
+        factura_id, nombre_canonico, f"{invoice.consumo_total_gj:,.4f}", f"{invoice.total_mxn:,.2f}",
     )
-    return factura_id
+    return factura_id, nombre_canonico
 
 
 def generar_analisis_cogen(output_path: Path) -> Path:

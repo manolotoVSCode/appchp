@@ -11,6 +11,7 @@ from supabase import create_client, Client
 
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice, GasConcepto
+from calc.nombre_canonico import generar_nombre_canonico
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,10 @@ def _upsert_cliente(nombre: str, rfc: str) -> int:
 
 # ── CFE invoices ──────────────────────────────────────────────────────────────
 
-def save_cfe_invoice(invoice: CFEInvoice) -> int:
-    """Persiste un CFEInvoice completo. Devuelve el id de cfe_facturas."""
+def save_cfe_invoice(invoice: CFEInvoice) -> tuple[int, str]:
+    """Persiste un CFEInvoice completo. Devuelve (id de cfe_facturas, nombre_canonico)."""
     cliente_id = _upsert_cliente(invoice.nombre_cliente, invoice.rfc_cliente)
+    nombre_canonico = generar_nombre_canonico(invoice)
 
     row = {
         "cliente_id": cliente_id,
@@ -66,6 +68,7 @@ def save_cfe_invoice(invoice: CFEInvoice) -> int:
         "credito_aplicado_mxn": str(invoice.credito_aplicado_mxn),
         "total_mxn": str(invoice.total_mxn),
         "pdf_path": invoice.pdf_path,
+        "nombre_canonico": nombre_canonico,
         "advertencias": json.dumps(invoice.advertencias, ensure_ascii=False),
     }
     try:
@@ -118,7 +121,7 @@ def save_cfe_invoice(invoice: CFEInvoice) -> int:
             )
             raise
 
-    return factura_id
+    return factura_id, nombre_canonico
 
 
 def get_all_cfe_invoices() -> list[CFEInvoice]:
@@ -189,9 +192,10 @@ def _row_to_cfe_invoice(row: dict) -> CFEInvoice:
 
 # ── Gas invoices ──────────────────────────────────────────────────────────────
 
-def save_gas_invoice(invoice: GasInvoice) -> int:
-    """Persiste una GasInvoice completa. Devuelve el id de gas_facturas."""
+def save_gas_invoice(invoice: GasInvoice) -> tuple[int, str]:
+    """Persiste una GasInvoice completa. Devuelve (id de gas_facturas, nombre_canonico)."""
     cliente_id = _upsert_cliente(invoice.nombre_cliente, invoice.rfc_cliente)
+    nombre_canonico = generar_nombre_canonico(invoice)
 
     row = {
         "cliente_id": cliente_id,
@@ -217,6 +221,7 @@ def save_gas_invoice(invoice: GasInvoice) -> int:
         "iva_mxn": str(invoice.iva_mxn),
         "total_mxn": str(invoice.total_mxn),
         "pdf_path": invoice.pdf_path,
+        "nombre_canonico": nombre_canonico,
         "advertencias": json.dumps(invoice.advertencias, ensure_ascii=False),
     }
     try:
@@ -250,7 +255,7 @@ def save_gas_invoice(invoice: GasInvoice) -> int:
             )
             raise
 
-    return factura_id
+    return factura_id, nombre_canonico
 
 
 def get_all_gas_invoices() -> list[GasInvoice]:

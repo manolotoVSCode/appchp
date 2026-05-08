@@ -15,6 +15,7 @@ from storage.repository import get_all_cfe_invoices, get_all_gas_invoices
 from cli.main import procesar_factura_cfe, procesar_factura_gas
 from calc.cogen import calcular_cogen
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe
+from calc.nombre_canonico import generar_nombre_canonico
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
 from models.cogen_result import CoGenParams
 
@@ -32,6 +33,7 @@ def _cargar_datos():
 
     facturas_cfe = [
         {
+            "nombre_canonico": generar_nombre_canonico(inv),
             "periodo": f"{inv.periodo_inicio.strftime('%d %b %Y')} – {inv.periodo_fin.strftime('%d %b %Y')}",
             "mes_asociado": date(*mes_asociado(inv.periodo_inicio, inv.periodo_fin), 1).strftime("%b %Y"),
             "kwh_total": float(sum(p.consumo_kwh for p in inv.periodos)),
@@ -43,6 +45,7 @@ def _cargar_datos():
 
     facturas_gas = [
         {
+            "nombre_canonico": generar_nombre_canonico(inv),
             "periodo": f"{inv.periodo_inicio.strftime('%d %b %Y')} – {inv.periodo_fin.strftime('%d %b %Y')}",
             "mes_asociado": date(*mes_asociado(inv.periodo_inicio, inv.periodo_fin), 1).strftime("%b %Y"),
             "gj_total": float(inv.consumo_total_gj),
@@ -204,6 +207,7 @@ def create_app() -> Flask:
         logger.info("Upload recibido: %d archivo(s)", len(files))
 
         ok_count = 0
+        exitosos = []
         errors = []
 
         for f in files:
@@ -216,11 +220,12 @@ def create_app() -> Flask:
                 tipo = _detect_tipo(tmp_path)
                 logger.info("Procesando: '%s' (tipo=%s)", nombre, tipo)
                 if tipo == "cfe":
-                    factura_id = procesar_factura_cfe(tmp_path)
+                    factura_id, nombre_canonico = procesar_factura_cfe(tmp_path)
                 else:
-                    factura_id = procesar_factura_gas(tmp_path)
+                    factura_id, nombre_canonico = procesar_factura_gas(tmp_path)
                 logger.info("Factura guardada: '%s' → id=%d (tipo=%s)", nombre, factura_id, tipo)
                 ok_count += 1
+                exitosos.append({"nombre_original": nombre, "nombre_canonico": nombre_canonico})
             except Exception as e:
                 logger.error(
                     "Error procesando '%s': %s: %s",
@@ -239,6 +244,6 @@ def create_app() -> Flask:
             app.config["HISTORICO"] = hist
             app.config["TABLAS"] = tablas
 
-        return jsonify({"procesados": ok_count, "errores": errors})
+        return jsonify({"procesados": ok_count, "exitosos": exitosos, "errores": errors})
 
     return app

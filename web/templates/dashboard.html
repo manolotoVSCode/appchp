@@ -80,7 +80,8 @@
             <table class="table table-sm table-hover mb-0">
               <thead>
                 <tr style="background:#1F4E79;color:#fff">
-                  <th class="ps-3">Periodo facturado</th>
+                  <th class="ps-3">Factura</th>
+                  <th>Periodo facturado</th>
                   <th>Mes asociado</th>
                   <th class="text-end">kWh</th>
                   <th class="text-end pe-3">Costo</th>
@@ -89,7 +90,8 @@
               <tbody>
                 {% for f in facturas_cfe %}
                 <tr>
-                  <td class="ps-3 small">
+                  <td class="ps-3 small fw-semibold">{{ f.nombre_canonico }}</td>
+                  <td class="small">
                     {{ f.periodo }}
                     {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
                   </td>
@@ -98,7 +100,7 @@
                   <td class="text-end small pe-3">${{ "{:,.0f}".format(f.costo_mxn) }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="4" class="text-muted small ps-3 py-2">Sin facturas CFE</td></tr>
+                <tr><td colspan="5" class="text-muted small ps-3 py-2">Sin facturas CFE</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -109,7 +111,8 @@
             <table class="table table-sm table-hover mb-0">
               <thead>
                 <tr style="background:#1F4E79;color:#fff">
-                  <th class="ps-3">Periodo facturado</th>
+                  <th class="ps-3">Factura</th>
+                  <th>Periodo facturado</th>
                   <th>Mes asociado</th>
                   <th class="text-end">GJ</th>
                   <th class="text-end pe-3">Costo</th>
@@ -118,7 +121,8 @@
               <tbody>
                 {% for f in facturas_gas %}
                 <tr>
-                  <td class="ps-3 small">
+                  <td class="ps-3 small fw-semibold">{{ f.nombre_canonico }}</td>
+                  <td class="small">
                     {{ f.periodo }}
                     {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
                   </td>
@@ -127,7 +131,7 @@
                   <td class="text-end small pe-3">${{ "{:,.0f}".format(f.costo_mxn) }}</td>
                 </tr>
                 {% else %}
-                <tr><td colspan="4" class="text-muted small ps-3 py-2">Sin facturas de gas</td></tr>
+                <tr><td colspan="5" class="text-muted small ps-3 py-2">Sin facturas de gas</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -774,7 +778,7 @@ dropZone.addEventListener("click", e => {
 async function subirArchivos(files) {
   if (!files || files.length === 0) return;
   const total = files.length;
-  let procesados = 0, errores = [];
+  let procesados = 0, exitosos = [], errores = [];
 
   for (let i = 0; i < total; i++) {
     const f = files[i];
@@ -787,6 +791,7 @@ async function subirArchivos(files) {
       if (!resp.ok) { errores.push({ nombre: f.name, error: "HTTP " + resp.status }); continue; }
       const data = await resp.json();
       procesados += data.procesados || 0;
+      if (data.exitosos) exitosos = exitosos.concat(data.exitosos);
       if (data.errores) errores = errores.concat(data.errores);
     } catch (e) {
       errores.push({ nombre: f.name, error: e.message });
@@ -797,7 +802,14 @@ async function subirArchivos(files) {
              : (procesados > 0) ? "warning"
              : "danger";
   let html = `<div class="alert alert-${tipo} mt-2 mb-0" role="alert">`;
-  if (procesados > 0) html += `<strong>✓ ${procesados} factura(s) procesada(s) correctamente.</strong>`;
+  if (procesados > 0) {
+    html += `<strong>✓ ${procesados} factura(s) procesada(s) correctamente.</strong>`;
+    if (exitosos.length > 0) {
+      html += `<ul class="mb-0 mt-1">`;
+      exitosos.forEach(e => { html += `<li class="small">${e.nombre_canonico} <span class="text-muted">(${e.nombre_original})</span></li>`; });
+      html += `</ul>`;
+    }
+  }
   if (errores.length > 0) {
     html += `${procesados > 0 ? "<br>" : ""}<strong>✗ ${errores.length} error(es):</strong><ul class="mb-0 mt-1">`;
     errores.forEach(e => { html += `<li>${e.nombre || ""}: ${e.error || ""}</li>`; });
