@@ -157,6 +157,7 @@ def test_ficha_cliente_existente(auth_client, monkeypatch):
     """GET /clientes/1 → 200 con datos del cliente."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
+    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [])
     resp = auth_client.get("/clientes/1")
     assert resp.status_code == 200
     assert b"IBERICA TILES" in resp.data

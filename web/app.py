@@ -11,7 +11,7 @@ from flask import Flask, redirect, render_template, request, send_file, session,
 from flask_login import current_user
 from flask_wtf.csrf import CSRFProtect
 
-from storage.repository import get_cfe_invoices_for_dashboard, get_gas_invoices_for_dashboard
+from storage.repository import get_cfe_invoices_for_dashboard, get_gas_invoices_for_dashboard, get_contratos_por_cliente
 from calc.cogen import calcular_cogen
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe
 from calc.nombre_canonico import generar_nombre_canonico
@@ -100,7 +100,10 @@ def create_app() -> Flask:
     def _inject_cliente_activo():
         id_ = session.get("cliente_activo_id")
         nombre = session.get("cliente_activo_nombre")
-        return {"cliente_activo": {"id": id_, "nombre": nombre} if id_ else None}
+        if not id_:
+            return {"cliente_activo": None}
+        contratos = get_contratos_por_cliente(id_)
+        return {"cliente_activo": {"id": id_, "nombre": nombre, "contratos": contratos}}
 
     @app.route("/")
     def dashboard():

@@ -33,6 +33,14 @@
     .sidebar-divider { border-color: rgba(255,255,255,.1); margin: .5rem 0; }
     .sidebar-bottom { margin-top: auto; padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,.1); }
     .sidebar-bottom a { font-size: .8rem; }
+    .sidebar-contratos { max-height: 14rem; overflow-y: auto; }
+    .sidebar-link-contrato {
+      display: block; padding: .35rem 1.25rem .35rem 2rem; font-size: .8rem;
+      color: rgba(255,255,255,.6); text-decoration: none;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sidebar-link-contrato:hover { color: var(--sidebar-active); background: rgba(255,255,255,.08); }
+    .sidebar-link-contrato.active { color: var(--sidebar-active); background: rgba(255,255,255,.15); font-weight: 600; }
 
     /* Main content */
     #main-content {
@@ -90,6 +98,17 @@
      class="sidebar-link{% if nav_active == 'ficha' %} active{% endif %}">
     Ficha
   </a>
+  {% if cliente_activo.contratos %}
+  <div class="sidebar-contratos">
+    {% for contrato in cliente_activo.contratos %}
+    <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente_activo.id, contrato_id=contrato.id) }}"
+       class="sidebar-link-contrato{% if nav_active == 'contrato' and contrato_activo_id == contrato.id %} active{% endif %}"
+       title="{{ contrato.nombre }}">
+      {{ contrato.nombre }}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
   <a href="{{ url_for('cliente_dashboard', cliente_id=cliente_activo.id) }}"
      class="sidebar-link{% if nav_active == 'dashboard' %} active{% endif %}">
     Dashboard

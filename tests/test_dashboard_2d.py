@@ -49,6 +49,7 @@ def app(monkeypatch):
 
 def _login(app, monkeypatch):
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE])
+    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [_CONTRATO_ELECTRICO])
     c = app.test_client()
     c.post("/login", data={"username": "operador", "password": "test_pass"})
     return c
