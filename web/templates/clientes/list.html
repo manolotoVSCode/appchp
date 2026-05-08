@@ -13,7 +13,8 @@
   <table class="table table-sm table-hover mb-0">
     <thead>
       <tr class="table-primary-header">
-        <th class="ps-3">Nombre</th>
+        <th class="ps-3" style="width:2.5rem"></th>
+        <th>Nombre</th>
         <th>RFC</th>
         <th class="text-center">Facturas CFE</th>
         <th class="text-center">Facturas Gas</th>
@@ -24,7 +25,12 @@
     <tbody>
       {% for c in clientes %}
       <tr>
-        <td class="ps-3 fw-semibold">{{ c.nombre }}</td>
+        <td class="ps-3">
+          <input type="checkbox" class="form-check-input cliente-checkbox"
+                 data-id="{{ c.id }}"
+                 {% if cliente_activo and cliente_activo.id == c.id %}checked{% endif %}>
+        </td>
+        <td class="fw-semibold">{{ c.nombre }}</td>
         <td class="small font-monospace">{{ c.rfc }}</td>
         <td class="text-center small">{{ c.num_cfe }}</td>
         <td class="text-center small">{{ c.num_gas }}</td>
@@ -80,6 +86,19 @@
 
 {% block scripts %}
 <script>
+(function () {
+  // Checkbox activación de cliente
+  const _csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  document.querySelectorAll('.cliente-checkbox').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      const id = this.dataset.id;
+      const url = this.checked ? '/clientes/' + id + '/activar' : '/clientes/desactivar';
+      fetch(url, { method: 'POST', headers: { 'X-CSRFToken': _csrf } })
+        .finally(function () { window.location.reload(); });
+    });
+  });
+})();
+
 (function () {
   let _esperado = "";
 

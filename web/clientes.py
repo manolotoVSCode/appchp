@@ -231,11 +231,29 @@ def ficha(cliente_id: int):
     if cliente is None:
         flash("El cliente solicitado no existe.", "warning")
         return redirect(url_for("clientes.listado"))
+    contratos = get_contratos_por_cliente(cliente_id)
+    return render_template("clientes/ficha.html", cliente=cliente, contratos=contratos)
+
+
+@clientes_bp.route("/<int:cliente_id>/activar", methods=["POST"])
+def cliente_activar(cliente_id: int):
+    from flask import jsonify
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        return jsonify({"error": "Cliente no encontrado"}), 404
     session["cliente_activo_id"] = cliente_id
     session["cliente_activo_nombre"] = cliente["nombre"]
     session["cliente_activo_logo_url"] = cliente.get("logo_url")
-    contratos = get_contratos_por_cliente(cliente_id)
-    return render_template("clientes/ficha.html", cliente=cliente, contratos=contratos)
+    return jsonify({"ok": True})
+
+
+@clientes_bp.route("/desactivar", methods=["POST"])
+def cliente_desactivar():
+    from flask import jsonify
+    session.pop("cliente_activo_id", None)
+    session.pop("cliente_activo_nombre", None)
+    session.pop("cliente_activo_logo_url", None)
+    return jsonify({"ok": True})
 
 
 @clientes_bp.route("/<int:cliente_id>/editar", methods=["GET", "POST"])

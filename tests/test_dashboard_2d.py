@@ -70,10 +70,10 @@ def _login(app, monkeypatch):
     return c
 
 
-# ── Test 1: GET ficha activa cliente en sesión ────────────────────────────────
+# ── Test 1: GET ficha NO activa cliente en sesión ─────────────────────────────
 
 def test_ficha_activa_cliente_en_sesion(app, monkeypatch):
-    """GET /clientes/1 → cliente_activo_id=1 queda en la sesión Flask."""
+    """GET /clientes/1 → ya NO activa cliente en sesión (activación es por checkbox AJAX)."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
     monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
     c = _login(app, monkeypatch)
@@ -82,8 +82,7 @@ def test_ficha_activa_cliente_en_sesion(app, monkeypatch):
     assert resp.status_code == 200
 
     with c.session_transaction() as sess:
-        assert sess.get("cliente_activo_id") == 1
-        assert sess.get("cliente_activo_nombre") == "IBERICA TILES"
+        assert sess.get("cliente_activo_id") is None
 
 
 # ── Test 2: Borrar cliente limpia la sesión ───────────────────────────────────
@@ -93,13 +92,13 @@ def test_borrar_cliente_activo_limpia_sesion(app, monkeypatch):
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
     monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
     monkeypatch.setattr("web.clientes.delete_cliente", lambda id: None)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
     c = _login(app, monkeypatch)
 
-    # Activar cliente
-    c.get("/clientes/1")
-
+    # Establecer cliente activo directamente en sesión
     with c.session_transaction() as sess:
-        assert sess.get("cliente_activo_id") == 1
+        sess["cliente_activo_id"] = 1
+        sess["cliente_activo_nombre"] = "IBERICA TILES"
 
     # Borrar cliente
     resp = c.post("/clientes/1/borrar",
@@ -358,6 +357,7 @@ def test_dashboard_cliente_id_no_coincide_con_sesion(app, monkeypatch):
 def test_sidebar_muestra_seccion_cliente_activo(app, monkeypatch):
     """Cualquier página renderizada con cliente_activo en sesión muestra nombre en sidebar."""
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE])
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
     c = _login(app, monkeypatch)
 
     with c.session_transaction() as sess:

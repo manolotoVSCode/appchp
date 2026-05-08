@@ -103,14 +103,25 @@ def create_app() -> Flask:
 
     @app.context_processor
     def _inject_globals():
+        from storage.repository import get_cliente_con_conteos as _get_cliente
         id_ = session.get("cliente_activo_id")
-        nombre = session.get("cliente_activo_nombre")
         if not id_:
             return {"cliente_activo": None, "app_version": _APP_VERSION}
+        # Verifica que el cliente sigue existiendo en BD; limpia sesión si fue borrado
+        cliente = _get_cliente(id_)
+        if cliente is None:
+            session.pop("cliente_activo_id", None)
+            session.pop("cliente_activo_nombre", None)
+            session.pop("cliente_activo_logo_url", None)
+            return {"cliente_activo": None, "app_version": _APP_VERSION}
         contratos = get_contratos_por_cliente(id_)
-        logo_url = session.get("cliente_activo_logo_url")
         return {
-            "cliente_activo": {"id": id_, "nombre": nombre, "contratos": contratos, "logo_url": logo_url},
+            "cliente_activo": {
+                "id": id_,
+                "nombre": cliente["nombre"],
+                "contratos": contratos,
+                "logo_url": cliente.get("logo_url"),
+            },
             "app_version": _APP_VERSION,
         }
 
@@ -243,6 +254,16 @@ def create_app() -> Flask:
             md_text = "_Sin changelog disponible._"
         content = markdown.markdown(md_text, extensions=["nl2br"])
         return render_template("changelog.html", content=content)
+
+    @app.route("/clientes/<int:cliente_id>/dashboard/contabilidad")
+    def cliente_dashboard_contabilidad(cliente_id: int):
+        """Placeholder → redirige al dashboard principal (fase 2)."""
+        return redirect(url_for("cliente_dashboard", cliente_id=cliente_id))
+
+    @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion")
+    def cliente_dashboard_cogeneracion(cliente_id: int):
+        """Placeholder → redirige al dashboard principal (fase 2)."""
+        return redirect(url_for("cliente_dashboard", cliente_id=cliente_id))
 
     @app.route("/healthz")
     def healthz():

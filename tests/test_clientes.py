@@ -548,3 +548,128 @@ def test_logo_eliminacion(auth_client, monkeypatch):
     data = resp.get_json()
     assert data.get("ok") is True
     assert llamadas == [1]
+
+
+# ── Activación de cliente activo ──────────────────────────────────────────────
+
+def test_activar_cliente_establece_sesion(app, monkeypatch):
+    """POST /clientes/1/activar → establece cliente_activo_id en sesión."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    c = app.test_client()
+    c.post("/login", data={"username": "operador", "password": "test_pass"})
+
+    resp = c.post("/clientes/1/activar")
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+
+    with c.session_transaction() as sess:
+        assert sess.get("cliente_activo_id") == 1
+        assert sess.get("cliente_activo_nombre") == "IBERICA TILES"
+
+
+def test_activar_otro_cliente_reemplaza_activo(app, monkeypatch):
+    """POST /clientes/2/activar cuando cliente 1 estaba activo → sesión actualizada al 2."""
+    cliente2 = {**_CLIENTE_BASE, "id": 2, "nombre": "SEGUNDO CLIENTE"}
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE, cliente2])
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: cliente2 if id == 2 else _CLIENTE_BASE)
+    c = app.test_client()
+    c.post("/login", data={"username": "operador", "password": "test_pass"})
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+        sess["cliente_activo_nombre"] = "IBERICA TILES"
+
+    resp = c.post("/clientes/2/activar")
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+
+    with c.session_transaction() as sess:
+        assert sess.get("cliente_activo_id") == 2
+        assert sess.get("cliente_activo_nombre") == "SEGUNDO CLIENTE"
+
+
+def test_desactivar_cliente_limpia_sesion(app, monkeypatch):
+    """POST /clientes/desactivar → elimina cliente activo de sesión."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
+    c = app.test_client()
+    c.post("/login", data={"username": "operador", "password": "test_pass"})
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+        sess["cliente_activo_nombre"] = "IBERICA TILES"
+
+    resp = c.post("/clientes/desactivar")
+    assert resp.status_code == 200
+    assert resp.get_json()["ok"] is True
+
+    with c.session_transaction() as sess:
+        assert sess.get("cliente_activo_id") is None
+        assert sess.get("cliente_activo_nombre") is None
+
+
+def test_ficha_get_no_activa_cliente(app, monkeypatch):
+    """GET /clientes/1 → la sesión NO queda con cliente_activo_id (activación es por AJAX)."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
+    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [])
+    c = app.test_client()
+    c.post("/login", data={"username": "operador", "password": "test_pass"})
+
+    resp = c.get("/clientes/1", follow_redirects=False)
+    assert resp.status_code == 200
+
+    with c.session_transaction() as sess:
+        assert sess.get("cliente_activo_id") is None
+
+
+def test_sidebar_sin_cliente_activo_solo_listado(app, monkeypatch):
+    """Sin cliente activo en sesión, el sidebar muestra solo Listado clientes bajo CLIENTES."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
+    c = app.test_client()
+    c.post("/login", data={"username": "operador", "password": "test_pass"})
+
+    resp = c.get("/clientes/", follow_redirects=False)
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    # Los sub-items del dashboard no deben aparecer sin cliente activo
+    assert "Contabilidad Energ" not in html
+    assert "Proyecto Cogenera" not in html
+
+
+def test_sidebar_con_cliente_activo_muestra_estructura(app, monkeypatch):
+    """Con cliente activo en sesión, el sidebar muestra nombre, sub-headers Dashboard y Contratos."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [_CONTRATO_BASE])
+    c = app.test_client()
+    c.post("/login", data={"username": "operador", "password": "test_pass"})
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+        sess["cliente_activo_nombre"] = "IBERICA TILES"
+
+    resp = c.get("/clientes/", follow_redirects=False)
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    assert "IBERICA TILES" in html
+    assert "Contabilidad Energ" in html
+    assert "Proyecto Cogenera" in html
+    assert "Ficha cliente" in html
+    assert "sidebar-sub-header" in html
+
+
+def test_rutas_placeholder_redirigen_a_dashboard(app, monkeypatch):
+    """GET /clientes/1/dashboard/contabilidad y /cogeneracion → redirect a /clientes/1/dashboard."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
+    c = app.test_client()
+    c.post("/login", data={"username": "operador", "password": "test_pass"})
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    for path in ["/clientes/1/dashboard/contabilidad", "/clientes/1/dashboard/cogeneracion"]:
+        resp = c.get(path, follow_redirects=False)
+        assert resp.status_code == 302
+        assert "/clientes/1/dashboard" in resp.headers["Location"]

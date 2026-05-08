@@ -65,6 +65,13 @@
     /* Divider */
     .sidebar-divider { border-color: var(--color-border-sidebar); margin: .5rem 0; }
 
+    /* Sub-section headers (Dashboard, Contratos dentro de cliente activo) */
+    .sidebar-sub-header {
+      padding: .5rem 1.25rem .2rem 1.5rem; font-size: .65rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .07em;
+      color: var(--color-text-sidebar-muted);
+    }
+
     /* Contract sub-items */
     .sidebar-contratos { max-height: 14rem; overflow-y: auto; }
     .sidebar-link-contrato {
@@ -152,17 +159,27 @@
   <div class="sidebar-section">Clientes</div>
   <a href="{{ url_for('clientes.listado') }}"
      class="sidebar-link{% if nav_active == 'clientes' %} active{% endif %}">
-    Todos los clientes
+    Listado clientes
   </a>
 
   {% if cliente_activo %}
   <hr class="sidebar-divider mx-3">
   <div class="sidebar-section">{{ cliente_activo.nombre }}</div>
+  <div class="sidebar-sub-header">Dashboard</div>
+  <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id) }}"
+     class="sidebar-link-contrato{% if nav_active == 'contabilidad' %} active{% endif %}">
+    Contabilidad Energética
+  </a>
+  <a href="{{ url_for('cliente_dashboard_cogeneracion', cliente_id=cliente_activo.id) }}"
+     class="sidebar-link-contrato{% if nav_active == 'cogeneracion' %} active{% endif %}">
+    Proyecto Cogeneración
+  </a>
   <a href="{{ url_for('clientes.ficha', cliente_id=cliente_activo.id) }}"
      class="sidebar-link{% if nav_active == 'ficha' %} active{% endif %}">
-    Ficha
+    Ficha cliente
   </a>
   {% if cliente_activo.contratos %}
+  <div class="sidebar-sub-header">Contratos</div>
   <div class="sidebar-contratos">
     {% for contrato in cliente_activo.contratos %}
     <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente_activo.id, contrato_id=contrato.id) }}"
@@ -173,10 +190,6 @@
     {% endfor %}
   </div>
   {% endif %}
-  <a href="{{ url_for('cliente_dashboard', cliente_id=cliente_activo.id) }}"
-     class="sidebar-link{% if nav_active == 'dashboard' %} active{% endif %}">
-    Dashboard
-  </a>
   {% endif %}
 
   <div class="sidebar-bottom">
