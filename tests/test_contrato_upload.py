@@ -70,16 +70,18 @@ def _fake_pdf(nombre="factura.pdf"):
     return (io.BytesIO(b"%PDF-1.4 fake"), nombre)
 
 
-def _mock_cfe_invoice(numero_servicio="812990300016"):
+def _mock_cfe_invoice(numero_servicio="812990300016", rfc_cliente="ITI930101AAA"):
     inv = MagicMock()
     inv.numero_servicio = numero_servicio
+    inv.rfc_cliente = rfc_cliente
     inv.advertencias = []
     return inv
 
 
-def _mock_gas_invoice(cuenta_contrato="CUENTA-001"):
+def _mock_gas_invoice(cuenta_contrato="CUENTA-001", rfc_cliente="ITI930101AAA"):
     inv = MagicMock()
     inv.cuenta_contrato = cuenta_contrato
+    inv.rfc_cliente = rfc_cliente
     inv.advertencias = []
     return inv
 
@@ -105,7 +107,7 @@ def test_upload_cfe_exitoso(auth_client, monkeypatch):
     monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
     monkeypatch.setattr(
         "web.clientes.save_cfe_invoice",
-        lambda inv, contrato_id=None: (1, "2024 ENE CFE 812990300016"),
+        lambda inv, cliente_id=None, contrato_id=None: (1, "2024 ENE CFE 812990300016"),
     )
 
     resp = auth_client.post(
@@ -131,7 +133,7 @@ def test_upload_gas_exitoso(auth_client, monkeypatch):
     monkeypatch.setattr("web.clientes.get_gas_parser", lambda: parser)
     monkeypatch.setattr(
         "web.clientes.save_gas_invoice",
-        lambda inv, contrato_id=None: (2, "2024 ENE GAS CUENTA-001"),
+        lambda inv, cliente_id=None, contrato_id=None: (2, "2024 ENE GAS CUENTA-001"),
     )
 
     resp = auth_client.post(
@@ -198,7 +200,7 @@ def test_upload_identificador_discrepante_queda_pendiente(auth_client, monkeypat
     parser.parse.return_value = _mock_cfe_invoice(numero_servicio="OTRO-NUMERO")
     monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
     guardado = []
-    monkeypatch.setattr("web.clientes.save_cfe_invoice", lambda *a, **kw: guardado.append(1) or (1, "x"))
+    monkeypatch.setattr("web.clientes.save_cfe_invoice", lambda inv, cliente_id=None, contrato_id=None: guardado.append(1) or (1, "x"))
 
     resp = auth_client.post(
         "/clientes/1/contratos/10/upload",
@@ -223,9 +225,10 @@ def test_upload_confirmado_pese_a_discrepancia_guarda(auth_client, monkeypatch):
     parser.parse.return_value = _mock_cfe_invoice(numero_servicio="OTRO-NUMERO")
     monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
     guardado_con = []
+    guardado_con_contrato = []
     monkeypatch.setattr(
         "web.clientes.save_cfe_invoice",
-        lambda inv, contrato_id=None: guardado_con.append(contrato_id) or (1, "nombre"),
+        lambda inv, cliente_id=None, contrato_id=None: guardado_con_contrato.append(contrato_id) or (1, "nombre"),
     )
 
     resp = auth_client.post(
@@ -235,8 +238,8 @@ def test_upload_confirmado_pese_a_discrepancia_guarda(auth_client, monkeypatch):
     )
     data = resp.get_json()
     assert data["procesados"] == 1
-    assert len(guardado_con) == 1
-    assert guardado_con[0] == 10  # contrato_id correcto
+    assert len(guardado_con_contrato) == 1
+    assert guardado_con_contrato[0] == 10  # contrato_id correcto
 
 
 # ── Test 7: Gas a contrato eléctrico → error bloqueante ──────────────────────
@@ -289,3 +292,207 @@ def test_upload_sin_archivos(auth_client, monkeypatch):
     data = resp.get_json()
     assert data["procesados"] == 0
     assert data["errores"][0]["error"] == "No se enviaron archivos"
+
+
+# ── Test 10: RFC coincide → sin alerta, guarda con cliente_id del contrato ────
+
+def test_upload_rfc_coincidente_guarda_sin_pendiente(auth_client, monkeypatch):
+    """RFC del PDF coincide con el del cliente → guarda directamente, sin pendientes."""
+    _setup_electrico(monkeypatch)
+    monkeypatch.setattr("web.clientes._detect_tipo", lambda _: "cfe")
+    parser = MagicMock()
+    parser.parse.return_value = _mock_cfe_invoice(
+        numero_servicio="812990300016", rfc_cliente="ITI930101AAA"
+    )
+    monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
+    guardado_cliente_id = []
+    monkeypatch.setattr(
+        "web.clientes.save_cfe_invoice",
+        lambda inv, cliente_id=None, contrato_id=None: guardado_cliente_id.append(cliente_id) or (1, "nombre"),
+    )
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload",
+        data={"facturas": _fake_pdf()},
+        content_type="multipart/form-data",
+    )
+    data = resp.get_json()
+    assert data["procesados"] == 1
+    assert data["pendientes_confirmacion"] == []
+    assert guardado_cliente_id == [1]  # cliente_id del contrato, no del RFC
+
+
+# ── Test 11: RFC discrepante → queda pendiente, no se guarda ─────────────────
+
+def test_upload_rfc_discrepante_queda_pendiente(auth_client, monkeypatch):
+    """RFC del PDF distinto al del cliente → pendientes_confirmacion con rfc_factura/rfc_cliente."""
+    _setup_electrico(monkeypatch)
+    monkeypatch.setattr("web.clientes._detect_tipo", lambda _: "cfe")
+    parser = MagicMock()
+    parser.parse.return_value = _mock_cfe_invoice(
+        numero_servicio="812990300016",  # identificador coincide
+        rfc_cliente="OTR930101XYZ",      # RFC distinto
+    )
+    monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
+    guardado = []
+    monkeypatch.setattr(
+        "web.clientes.save_cfe_invoice",
+        lambda inv, cliente_id=None, contrato_id=None: guardado.append(1) or (1, "x"),
+    )
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload",
+        data={"facturas": _fake_pdf()},
+        content_type="multipart/form-data",
+    )
+    data = resp.get_json()
+    assert data["procesados"] == 0
+    assert len(data["pendientes_confirmacion"]) == 1
+    p = data["pendientes_confirmacion"][0]
+    assert p["rfc_factura"] == "OTR930101XYZ"
+    assert p["rfc_cliente"] == "ITI930101AAA"
+    assert "identificador_factura" not in p  # solo RFC discrepante, no identificador
+    assert len(guardado) == 0
+
+
+# ── Test 12: Confirmar RFC discrepante → guarda con cliente_id del contrato ───
+
+def test_upload_rfc_discrepante_confirmado_guarda(auth_client, monkeypatch):
+    """Con confirmado_pese_a_discrepancia → guarda factura con RFC distinto al cliente."""
+    _setup_electrico(monkeypatch)
+    monkeypatch.setattr("web.clientes._detect_tipo", lambda _: "cfe")
+    parser = MagicMock()
+    parser.parse.return_value = _mock_cfe_invoice(
+        numero_servicio="812990300016",
+        rfc_cliente="OTR930101XYZ",
+    )
+    monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
+    guardado_cliente_id = []
+    monkeypatch.setattr(
+        "web.clientes.save_cfe_invoice",
+        lambda inv, cliente_id=None, contrato_id=None: guardado_cliente_id.append(cliente_id) or (1, "nombre"),
+    )
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload",
+        data={"facturas": _fake_pdf(), "confirmado_pese_a_discrepancia": "factura.pdf"},
+        content_type="multipart/form-data",
+    )
+    data = resp.get_json()
+    assert data["procesados"] == 1
+    assert guardado_cliente_id == [1]  # cliente_id del contrato
+
+
+# ── Test 13: Cancelar RFC discrepante → no se guarda ─────────────────────────
+
+def test_upload_rfc_discrepante_sin_confirmacion_no_guarda(auth_client, monkeypatch):
+    """Sin confirmado_pese_a_discrepancia → factura con RFC distinto no se inserta."""
+    _setup_electrico(monkeypatch)
+    monkeypatch.setattr("web.clientes._detect_tipo", lambda _: "cfe")
+    parser = MagicMock()
+    parser.parse.return_value = _mock_cfe_invoice(
+        numero_servicio="812990300016",
+        rfc_cliente="OTR930101XYZ",
+    )
+    monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
+    guardado = []
+    monkeypatch.setattr(
+        "web.clientes.save_cfe_invoice",
+        lambda inv, cliente_id=None, contrato_id=None: guardado.append(1) or (1, "x"),
+    )
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload",
+        data={"facturas": _fake_pdf()},
+        content_type="multipart/form-data",
+    )
+    assert resp.get_json()["procesados"] == 0
+    assert len(guardado) == 0
+
+
+# ── Test 14: Upload nunca crea cliente nuevo ───────────────────────────────────
+
+def test_upload_nunca_crea_cliente(auth_client, monkeypatch):
+    """El endpoint de upload no llama a create_cliente ni a _upsert_cliente."""
+    _setup_electrico(monkeypatch)
+    monkeypatch.setattr("web.clientes._detect_tipo", lambda _: "cfe")
+    parser = MagicMock()
+    parser.parse.return_value = _mock_cfe_invoice()
+    monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
+    monkeypatch.setattr(
+        "web.clientes.save_cfe_invoice",
+        lambda inv, cliente_id=None, contrato_id=None: (1, "nombre"),
+    )
+
+    clientes_creados = []
+    monkeypatch.setattr("web.clientes.create_cliente", lambda *a, **kw: clientes_creados.append(1) or 999)
+
+    auth_client.post(
+        "/clientes/1/contratos/10/upload",
+        data={"facturas": _fake_pdf()},
+        content_type="multipart/form-data",
+    )
+    assert clientes_creados == [], "El upload no debe crear clientes"
+
+
+# ── Test 15: RFC vacío en PDF → guarda sin pendiente, logguea warning ─────────
+
+def test_upload_rfc_vacio_en_pdf_guarda_sin_pendiente(auth_client, monkeypatch, caplog):
+    """RFC vacío en el PDF → se omite verificación, factura se guarda, se emite warning."""
+    import logging
+    _setup_electrico(monkeypatch)
+    monkeypatch.setattr("web.clientes._detect_tipo", lambda _: "cfe")
+    parser = MagicMock()
+    parser.parse.return_value = _mock_cfe_invoice(
+        numero_servicio="812990300016",
+        rfc_cliente="",  # vacío
+    )
+    monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
+    monkeypatch.setattr(
+        "web.clientes.save_cfe_invoice",
+        lambda inv, cliente_id=None, contrato_id=None: (1, "nombre"),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="web.clientes"):
+        resp = auth_client.post(
+            "/clientes/1/contratos/10/upload",
+            data={"facturas": _fake_pdf()},
+            content_type="multipart/form-data",
+        )
+
+    data = resp.get_json()
+    assert data["procesados"] == 1
+    assert data["pendientes_confirmacion"] == []
+    warn_records = [r for r in caplog.records if r.levelno == logging.WARNING and "RFC vacío" in r.message]
+    assert warn_records, "Se esperaba un warning por RFC vacío"
+
+
+# ── Test 16: Crear cliente RFC con espacios/invisibles → sanitizar y aceptar ──
+
+def test_nuevo_cliente_rfc_con_espacios_sanitiza(auth_client, monkeypatch):
+    """RFC con espacios y caracteres invisibles → sanitizado y aceptado si formato válido."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    monkeypatch.setattr("web.clientes.create_cliente", lambda nombre, rfc, notas: 42)
+
+    # U+202D (left-to-right override) antes del RFC, espacio al final
+    rfc_con_invisible = "\u202Diti930101aaa "
+    resp = auth_client.post(
+        "/clientes/nuevo",
+        data={"nombre": "Test SA", "rfc": rfc_con_invisible, "notas": ""},
+    )
+    # Debe redirigir (éxito), no mostrar error de RFC
+    assert resp.status_code == 302
+
+
+# ── Test 17: Crear cliente RFC en minúsculas → sanitizar a mayúsculas y aceptar
+
+def test_nuevo_cliente_rfc_minusculas_sanitiza(auth_client, monkeypatch):
+    """RFC en minúsculas → sanitizado a mayúsculas y aceptado."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    monkeypatch.setattr("web.clientes.create_cliente", lambda nombre, rfc, notas: 42)
+
+    resp = auth_client.post(
+        "/clientes/nuevo",
+        data={"nombre": "Test SA", "rfc": "iti930101aaa", "notas": ""},
+    )
+    assert resp.status_code == 302

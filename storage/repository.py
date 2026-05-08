@@ -24,20 +24,10 @@ _supabase: Client = create_client(
 
 # ── Clientes ──────────────────────────────────────────────────────────────────
 
-def _upsert_cliente(nombre: str, rfc: str) -> int:
-    """Inserta o reutiliza el cliente por RFC. Devuelve su id."""
-    result = _supabase.table("clientes").upsert(
-        {"nombre": nombre, "rfc": rfc},
-        on_conflict="rfc",
-    ).execute()
-    return result.data[0]["id"]
-
-
 # ── CFE invoices ──────────────────────────────────────────────────────────────
 
-def save_cfe_invoice(invoice: CFEInvoice, contrato_id: int | None = None) -> tuple[int, str]:
+def save_cfe_invoice(invoice: CFEInvoice, cliente_id: int, contrato_id: int | None = None) -> tuple[int, str]:
     """Persiste un CFEInvoice completo. Devuelve (id de cfe_facturas, nombre_canonico)."""
-    cliente_id = _upsert_cliente(invoice.nombre_cliente, invoice.rfc_cliente)
     nombre_canonico = generar_nombre_canonico(invoice)
 
     row = {
@@ -194,9 +184,8 @@ def _row_to_cfe_invoice(row: dict) -> CFEInvoice:
 
 # ── Gas invoices ──────────────────────────────────────────────────────────────
 
-def save_gas_invoice(invoice: GasInvoice, contrato_id: int | None = None) -> tuple[int, str]:
+def save_gas_invoice(invoice: GasInvoice, cliente_id: int, contrato_id: int | None = None) -> tuple[int, str]:
     """Persiste una GasInvoice completa. Devuelve (id de gas_facturas, nombre_canonico)."""
-    cliente_id = _upsert_cliente(invoice.nombre_cliente, invoice.rfc_cliente)
     nombre_canonico = generar_nombre_canonico(invoice)
 
     row = {

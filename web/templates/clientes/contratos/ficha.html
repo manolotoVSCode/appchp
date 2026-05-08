@@ -191,12 +191,12 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header border-warning">
-        <h5 class="modal-title text-warning">Identificador diferente</h5>
+        <h5 class="modal-title text-warning">Advertencia: datos discrepantes</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <p id="discrepancia-mensaje"></p>
-        <p class="text-muted small mb-0">Puedes confirmar igualmente si estás seguro de que la factura pertenece a este contrato.</p>
+        <div id="discrepancia-mensaje"></div>
+        <p class="text-muted small mb-0 mt-2">Puedes confirmar igualmente si estás seguro de que la factura pertenece a este contrato.</p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -352,9 +352,15 @@ function mostrarResultado(procesados, exitosos, errores) {
 }
 
 function mostrarDiscrepancia(p) {
-  document.getElementById("discrepancia-mensaje").innerHTML =
-    `La factura <strong>${p.nombre}</strong> tiene identificador <code>${p.identificador_factura}</code>, ` +
-    `pero este contrato tiene identificador <code>${p.identificador_contrato}</code>.`;
+  let html = `<p class="mb-2">La factura <strong>${p.nombre}</strong> presenta las siguientes discrepancias:</p><ul class="mb-0">`;
+  if (p.identificador_factura !== undefined) {
+    html += `<li>Identificador de la factura: <code>${p.identificador_factura}</code> — contrato: <code>${p.identificador_contrato}</code></li>`;
+  }
+  if (p.rfc_factura !== undefined) {
+    html += `<li>RFC de la factura: <code>${p.rfc_factura}</code> — cliente: <code>${p.rfc_cliente}</code></li>`;
+  }
+  html += "</ul>";
+  document.getElementById("discrepancia-mensaje").innerHTML = html;
   const modal = new bootstrap.Modal(document.getElementById("modalDiscrepancia"));
   modal.show();
   document.getElementById("btnConfirmarDiscrepancia").onclick = async function () {

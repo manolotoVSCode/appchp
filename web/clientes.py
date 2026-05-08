@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import re
 import tempfile
+import unicodedata
 from pathlib import Path
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
@@ -37,6 +38,13 @@ from storage.repository import (
 logger = logging.getLogger(__name__)
 
 _RFC_RE = re.compile(r'^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$')
+
+
+def _sanitizar(valor: str) -> str:
+    """Normaliza Unicode y elimina caracteres de control/formato (Cc/Cf, p.ej. U+202D, U+202C)."""
+    normalizado = unicodedata.normalize("NFKC", valor)
+    limpio = "".join(c for c in normalizado if unicodedata.category(c) not in ("Cc", "Cf"))
+    return limpio.strip().upper()
 
 
 def _detect_tipo(pdf_path: Path) -> str:
@@ -84,7 +92,7 @@ def listado():
 def nuevo():
     if request.method == "POST":
         nombre = request.form.get("nombre", "").strip()
-        rfc = request.form.get("rfc", "").strip().upper()
+        rfc = _sanitizar(request.form.get("rfc", ""))
         notas = request.form.get("notas", "").strip() or None
 
         error = _validar_campos(nombre, rfc)
@@ -252,7 +260,7 @@ def contrato_nuevo(cliente_id: int):
     if request.method == "POST":
         nombre = request.form.get("nombre", "").strip()
         tipo = request.form.get("tipo", "").strip()
-        identificador_real = request.form.get("identificador_real", "").strip()
+        identificador_real = _sanitizar(request.form.get("identificador_real", ""))
         notas = request.form.get("notas", "").strip() or None
 
         error = None
@@ -348,7 +356,7 @@ def contrato_editar(cliente_id: int, contrato_id: int):
     if request.method == "POST":
         nombre = request.form.get("nombre", "").strip()
         tipo = request.form.get("tipo", "").strip()
-        identificador_real = request.form.get("identificador_real", "").strip()
+        identificador_real = _sanitizar(request.form.get("identificador_real", ""))
         notas = request.form.get("notas", "").strip() or None
 
         error = None
@@ -493,18 +501,39 @@ def contrato_upload(cliente_id: int, contrato_id: int):
                 invoice = parser.parse(tmp_path)
                 identificador_factura = invoice.cuenta_contrato
 
-            if identificador_factura != contrato.identificador_real and nombre not in confirmados:
-                pendientes_confirmacion.append({
-                    "nombre": nombre,
-                    "identificador_factura": identificador_factura,
-                    "identificador_contrato": contrato.identificador_real,
-                })
+            rfc_factura = (invoice.rfc_cliente or "").strip()
+            rfc_cliente_real = (cliente.get("rfc") or "").strip()
+
+            id_discrepante = identificador_factura != contrato.identificador_real
+            if rfc_factura:
+                rfc_discrepante = rfc_factura != rfc_cliente_real
+            else:
+                logger.warning(
+                    "RFC vacío en factura '%s' (contrato_id=%d, cliente_id=%d) — "
+                    "no se puede verificar RFC; se asocia al cliente del contrato.",
+                    nombre, contrato_id, cliente_id,
+                )
+                rfc_discrepante = False
+
+            if (id_discrepante or rfc_discrepante) and nombre not in confirmados:
+                pendiente: dict = {"nombre": nombre}
+                if id_discrepante:
+                    pendiente["identificador_factura"] = identificador_factura
+                    pendiente["identificador_contrato"] = contrato.identificador_real
+                if rfc_discrepante:
+                    pendiente["rfc_factura"] = rfc_factura
+                    pendiente["rfc_cliente"] = rfc_cliente_real
+                pendientes_confirmacion.append(pendiente)
                 continue
 
             if tipo == "cfe":
-                factura_id, nombre_canonico = save_cfe_invoice(invoice, contrato_id=contrato_id)
+                factura_id, nombre_canonico = save_cfe_invoice(
+                    invoice, cliente_id=cliente_id, contrato_id=contrato_id
+                )
             else:
-                factura_id, nombre_canonico = save_gas_invoice(invoice, contrato_id=contrato_id)
+                factura_id, nombre_canonico = save_gas_invoice(
+                    invoice, cliente_id=cliente_id, contrato_id=contrato_id
+                )
 
             logger.info("Factura guardada: '%s' → id=%d (tipo=%s, contrato=%d)", nombre, factura_id, tipo, contrato_id)
             ok_count += 1
