@@ -73,25 +73,6 @@
     {% endif %}
   {% endif %}
 
-  <!-- Upload de facturas -->
-  <div class="card shadow-sm mb-4" id="upload-card">
-    <div class="card-body">
-      <h5 class="card-title">Subir Facturas</h5>
-      <div id="drop-zone"
-           class="border border-2 border-dashed rounded p-4 text-center text-muted"
-           style="cursor:pointer; border-color:#adb5bd !important;">
-        <div id="drop-label">
-          &#128196; Arrastra los PDFs aquí o
-          <label for="file-input" class="text-primary" style="cursor:pointer;">
-            selecciona archivos
-          </label>
-        </div>
-        <input type="file" id="file-input" multiple accept=".pdf" class="d-none">
-      </div>
-      <div id="upload-status" class="mt-2 small"></div>
-    </div>
-  </div>
-
   <!-- Listado de facturas cargadas -->
   <div class="card shadow-sm mb-4">
     <div class="card-header d-flex align-items-center" style="cursor:pointer"
@@ -786,71 +767,6 @@ function actualizarSensibilidad() {
   document.getElementById(id).addEventListener("input", actualizarSensibilidad);
 });
 actualizarSensibilidad();
-</script>
-<script>
-// ── Upload drag & drop ────────────────────────────────────────────────────────
-const dropZone   = document.getElementById("drop-zone");
-const fileInput  = document.getElementById("file-input");
-const statusDiv  = document.getElementById("upload-status");
-
-dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("bg-light"); });
-dropZone.addEventListener("dragleave", () => dropZone.classList.remove("bg-light"));
-dropZone.addEventListener("drop", e => {
-  e.preventDefault();
-  dropZone.classList.remove("bg-light");
-  subirArchivos(e.dataTransfer.files);
-});
-fileInput.addEventListener("change", () => subirArchivos(fileInput.files));
-dropZone.addEventListener("click", e => {
-  if (e.target !== document.querySelector("label[for='file-input']")) fileInput.click();
-});
-
-async function subirArchivos(files) {
-  if (!files || files.length === 0) return;
-  const total = files.length;
-  let procesados = 0, exitosos = [], errores = [];
-
-  for (let i = 0; i < total; i++) {
-    const f = files[i];
-    statusDiv.innerHTML = '<span class="text-info">&#9203; Subiendo ' + (i + 1) + ' / ' + total + ': ' + f.name + '</span>';
-    try {
-      const fd = new FormData();
-      fd.append("facturas", f);
-      const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
-      const resp = await fetch("/upload", { method: "POST", body: fd, headers: { "X-CSRFToken": csrfToken } });
-      if (!resp.ok) { errores.push({ nombre: f.name, error: "HTTP " + resp.status }); continue; }
-      const data = await resp.json();
-      procesados += data.procesados || 0;
-      if (data.exitosos) exitosos = exitosos.concat(data.exitosos);
-      if (data.errores) errores = errores.concat(data.errores);
-    } catch (e) {
-      errores.push({ nombre: f.name, error: e.message });
-    }
-  }
-
-  const tipo = (procesados > 0 && errores.length === 0) ? "success"
-             : (procesados > 0) ? "warning"
-             : "danger";
-  let html = `<div class="alert alert-${tipo} mt-2 mb-0" role="alert">`;
-  if (procesados > 0) {
-    html += `<strong>✓ ${procesados} factura(s) procesada(s) correctamente.</strong>`;
-    if (exitosos.length > 0) {
-      html += `<ul class="mb-0 mt-1">`;
-      exitosos.forEach(e => { html += `<li class="small">${e.nombre_canonico} <span class="text-muted">(${e.nombre_original})</span></li>`; });
-      html += `</ul>`;
-    }
-  }
-  if (errores.length > 0) {
-    html += `${procesados > 0 ? "<br>" : ""}<strong>✗ ${errores.length} error(es):</strong><ul class="mb-0 mt-1">`;
-    errores.forEach(e => { html += `<li>${e.nombre || ""}: ${e.error || ""}</li>`; });
-    html += "</ul>";
-  }
-  if (procesados > 0) {
-    html += `<hr class="my-2"><button class="btn btn-sm btn-outline-${tipo === "success" ? "success" : "secondary"}" onclick="window.location.reload()">&#8635; Recargar dashboard</button>`;
-  }
-  html += "</div>";
-  statusDiv.innerHTML = html;
-}
 </script>
 </body>
 </html>

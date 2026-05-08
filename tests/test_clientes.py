@@ -294,12 +294,34 @@ def test_contrato_ficha(auth_client, monkeypatch):
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_BASE)
     monkeypatch.setattr("web.clientes.get_contrato_con_conteos", lambda id: _CONTRATO_BASE_DICT)
+    monkeypatch.setattr("web.clientes.get_cfe_facturas_por_contrato", lambda id: [])
+    monkeypatch.setattr("web.clientes.get_gas_facturas_por_contrato", lambda id: [])
     resp = auth_client.get("/clientes/1/contratos/10")
     assert resp.status_code == 200
     assert b"CFE Planta 1" in resp.data
     assert b"812990300016" in resp.data
     assert b"Facturas CFE" in resp.data
     assert b"Facturas Gas" in resp.data
+
+
+def test_contrato_ficha_con_facturas_cfe(auth_client, monkeypatch):
+    """GET /clientes/1/contratos/10 con facturas CFE → tabla de facturas visible."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_BASE)
+    monkeypatch.setattr("web.clientes.get_contrato_con_conteos", lambda id: _CONTRATO_BASE_DICT)
+    monkeypatch.setattr("web.clientes.get_cfe_facturas_por_contrato", lambda id: [
+        {
+            "id": 1,
+            "nombre_canonico": "2024 ENE CFE 812990300016",
+            "periodo_inicio": "2024-01-01",
+            "periodo_fin": "2024-01-31",
+            "subtotal_mxn": "45000.00",
+        }
+    ])
+    monkeypatch.setattr("web.clientes.get_gas_facturas_por_contrato", lambda id: [])
+    resp = auth_client.get("/clientes/1/contratos/10")
+    assert resp.status_code == 200
+    assert b"2024 ENE CFE 812990300016" in resp.data
 
 
 def test_contrato_ficha_acceso_cruzado(auth_client, monkeypatch):

@@ -35,13 +35,14 @@ def _upsert_cliente(nombre: str, rfc: str) -> int:
 
 # ── CFE invoices ──────────────────────────────────────────────────────────────
 
-def save_cfe_invoice(invoice: CFEInvoice) -> tuple[int, str]:
+def save_cfe_invoice(invoice: CFEInvoice, contrato_id: int | None = None) -> tuple[int, str]:
     """Persiste un CFEInvoice completo. Devuelve (id de cfe_facturas, nombre_canonico)."""
     cliente_id = _upsert_cliente(invoice.nombre_cliente, invoice.rfc_cliente)
     nombre_canonico = generar_nombre_canonico(invoice)
 
     row = {
         "cliente_id": cliente_id,
+        "contrato_id": contrato_id,
         "uuid_cfdi": invoice.uuid_cfdi,
         "folio": invoice.folio,
         "serie": invoice.serie,
@@ -193,13 +194,14 @@ def _row_to_cfe_invoice(row: dict) -> CFEInvoice:
 
 # ── Gas invoices ──────────────────────────────────────────────────────────────
 
-def save_gas_invoice(invoice: GasInvoice) -> tuple[int, str]:
+def save_gas_invoice(invoice: GasInvoice, contrato_id: int | None = None) -> tuple[int, str]:
     """Persiste una GasInvoice completa. Devuelve (id de gas_facturas, nombre_canonico)."""
     cliente_id = _upsert_cliente(invoice.nombre_cliente, invoice.rfc_cliente)
     nombre_canonico = generar_nombre_canonico(invoice)
 
     row = {
         "cliente_id": cliente_id,
+        "contrato_id": contrato_id,
         "uuid_cfdi": invoice.uuid_cfdi,
         "folio": invoice.folio,
         "fecha_emision": invoice.fecha_emision.isoformat(),
@@ -497,3 +499,31 @@ def update_contrato(
 def delete_contrato(contrato_id: int) -> None:
     """Borra el contrato. ON DELETE SET NULL en facturas desvincula las facturas asociadas."""
     _supabase.table("contratos").delete().eq("id", contrato_id).execute()
+
+
+# ── Facturas por contrato ──────────────────────────────────────────────────────
+
+def get_cfe_facturas_por_contrato(contrato_id: int) -> list[dict]:
+    """Devuelve las facturas CFE del contrato (campos básicos para la ficha)."""
+    result = _supabase.table("cfe_facturas").select(
+        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn"
+    ).eq("contrato_id", contrato_id).order("periodo_inicio").execute()
+    return result.data
+
+
+def get_gas_facturas_por_contrato(contrato_id: int) -> list[dict]:
+    """Devuelve las facturas de gas del contrato (campos básicos para la ficha)."""
+    result = _supabase.table("gas_facturas").select(
+        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn"
+    ).eq("contrato_id", contrato_id).order("periodo_inicio").execute()
+    return result.data
+
+
+def delete_cfe_factura(factura_id: int) -> None:
+    """Borra una factura CFE (ON DELETE CASCADE elimina periodos y componentes)."""
+    _supabase.table("cfe_facturas").delete().eq("id", factura_id).execute()
+
+
+def delete_gas_factura(factura_id: int) -> None:
+    """Borra una factura de gas (ON DELETE CASCADE elimina conceptos)."""
+    _supabase.table("gas_facturas").delete().eq("id", factura_id).execute()

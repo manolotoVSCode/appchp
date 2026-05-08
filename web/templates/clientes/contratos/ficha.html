@@ -75,6 +75,138 @@
           data-bs-toggle="modal" data-bs-target="#modalBorrarContrato">Borrar contrato</button>
 </div>
 
+<!-- Upload de facturas -->
+<div class="card shadow-sm mt-4">
+  <div class="card-body">
+    <h6 class="card-title fw-semibold">Subir facturas a este contrato</h6>
+    <div id="drop-zone"
+         class="border border-2 border-dashed rounded p-4 text-center text-muted"
+         style="cursor:pointer; border-color:#adb5bd !important;">
+      <div id="drop-label">
+        &#128196; Arrastra los PDFs aquí o
+        <label for="file-input" class="text-primary" style="cursor:pointer;">
+          selecciona archivos
+        </label>
+      </div>
+      <input type="file" id="file-input" multiple accept=".pdf" class="d-none">
+    </div>
+    <div id="upload-status" class="mt-2 small"></div>
+  </div>
+</div>
+
+<!-- Facturas CFE del contrato -->
+{% if facturas_cfe %}
+<div class="card shadow-sm mt-4">
+  <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">
+    Facturas CFE ({{ facturas_cfe|length }})
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nombre</th>
+          <th>Periodo</th>
+          <th class="text-end">Subtotal</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in facturas_cfe %}
+        <tr>
+          <td class="font-monospace small">{{ f.nombre_canonico }}</td>
+          <td class="small text-muted">{{ f.periodo_inicio }} – {{ f.periodo_fin }}</td>
+          <td class="text-end small">${{ "{:,.2f}".format(f.subtotal_mxn|float) }}</td>
+          <td class="text-end">
+            <button class="btn btn-outline-danger btn-sm py-0 px-2"
+                    data-factura-id="{{ f.id }}"
+                    data-factura-nombre="{{ f.nombre_canonico }}"
+                    data-tipo="cfe"
+                    onclick="confirmarBorrarFactura(this)">&#128465;</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Facturas Gas del contrato -->
+{% if facturas_gas %}
+<div class="card shadow-sm mt-3">
+  <div class="card-header fw-semibold small text-muted" style="background:#f1f4f8">
+    Facturas Gas ({{ facturas_gas|length }})
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nombre</th>
+          <th>Periodo</th>
+          <th class="text-end">Subtotal</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in facturas_gas %}
+        <tr>
+          <td class="font-monospace small">{{ f.nombre_canonico }}</td>
+          <td class="small text-muted">{{ f.periodo_inicio }} – {{ f.periodo_fin }}</td>
+          <td class="text-end small">${{ "{:,.2f}".format(f.subtotal_mxn|float) }}</td>
+          <td class="text-end">
+            <button class="btn btn-outline-danger btn-sm py-0 px-2"
+                    data-factura-id="{{ f.id }}"
+                    data-factura-nombre="{{ f.nombre_canonico }}"
+                    data-tipo="gas"
+                    onclick="confirmarBorrarFactura(this)">&#128465;</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal confirmación discrepancia de identificador -->
+<div class="modal fade" id="modalDiscrepancia" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-warning">
+        <h5 class="modal-title text-warning">&#9888; Identificador diferente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="discrepancia-mensaje"></p>
+        <p class="text-muted small mb-0">Puedes confirmar igualmente si estás seguro de que la factura pertenece a este contrato.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-warning" id="btnConfirmarDiscrepancia">Guardar de todas formas</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmación borrar factura -->
+<div class="modal fade" id="modalBorrarFactura" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger">Borrar factura</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>¿Borrar la factura <strong id="borrar-factura-nombre"></strong>? <strong>Esta acción no se puede deshacer.</strong></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="btnBorrarFactura">Borrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal borrar contrato -->
 <div class="modal fade" id="modalBorrarContrato" tabindex="-1" aria-labelledby="modalBorrarContratoTitulo" aria-hidden="true">
   <div class="modal-dialog">
@@ -117,5 +249,132 @@
     document.getElementById("btnBorrar").disabled = !coincide;
   });
 })();
+
+// ── Upload drag & drop ────────────────────────────────────────────────────────
+const uploadUrl  = "{{ url_for('clientes.contrato_upload', cliente_id=cliente.id, contrato_id=contrato.id) }}";
+const csrfToken  = document.querySelector('meta[name="csrf-token"]').content;
+const dropZone   = document.getElementById("drop-zone");
+const fileInput  = document.getElementById("file-input");
+const statusDiv  = document.getElementById("upload-status");
+
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("bg-light"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("bg-light"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("bg-light");
+  subirArchivos(e.dataTransfer.files);
+});
+fileInput.addEventListener("change", () => subirArchivos(fileInput.files));
+dropZone.addEventListener("click", e => {
+  if (e.target !== document.querySelector("label[for='file-input']")) fileInput.click();
+});
+
+// Queue of files pending identifier confirmation
+let _pendingFiles = {};
+
+async function subirArchivos(files, confirmados = []) {
+  if (!files || files.length === 0) return;
+  const total = files.length;
+  let procesados = 0, exitosos = [], errores = [], pendientes = [];
+
+  for (let i = 0; i < total; i++) {
+    const f = files[i];
+    statusDiv.innerHTML = '<span class="text-info">&#9203; Subiendo ' + (i + 1) + ' / ' + total + ': ' + f.name + '</span>';
+    try {
+      const fd = new FormData();
+      fd.append("facturas", f);
+      confirmados.forEach(nombre => fd.append("confirmado_pese_a_discrepancia", nombre));
+      const resp = await fetch(uploadUrl, { method: "POST", body: fd, headers: { "X-CSRFToken": csrfToken } });
+      if (!resp.ok) { errores.push({ nombre: f.name, error: "HTTP " + resp.status }); continue; }
+      const data = await resp.json();
+      procesados += data.procesados || 0;
+      if (data.exitosos) exitosos = exitosos.concat(data.exitosos);
+      if (data.errores) errores = errores.concat(data.errores);
+      if (data.pendientes_confirmacion) {
+        data.pendientes_confirmacion.forEach(p => { _pendingFiles[p.nombre] = { file: f, info: p }; });
+        pendientes = pendientes.concat(data.pendientes_confirmacion);
+      }
+    } catch (e) {
+      errores.push({ nombre: f.name, error: e.message });
+    }
+  }
+
+  mostrarResultado(procesados, exitosos, errores);
+
+  // Show confirmation modal for first pending file
+  if (pendientes.length > 0) {
+    mostrarDiscrepancia(pendientes[0]);
+  }
+}
+
+function mostrarResultado(procesados, exitosos, errores) {
+  if (procesados === 0 && errores.length === 0) return;
+  const tipo = (procesados > 0 && errores.length === 0) ? "success"
+             : (procesados > 0) ? "warning"
+             : "danger";
+  let html = `<div class="alert alert-${tipo} mt-2 mb-0" role="alert">`;
+  if (procesados > 0) {
+    html += `<strong>&#10003; ${procesados} factura(s) procesada(s).</strong>`;
+    if (exitosos.length > 0) {
+      html += `<ul class="mb-0 mt-1">`;
+      exitosos.forEach(e => { html += `<li class="small">${e.nombre_canonico} <span class="text-muted">(${e.nombre_original})</span></li>`; });
+      html += `</ul>`;
+    }
+  }
+  if (errores.length > 0) {
+    html += `${procesados > 0 ? "<br>" : ""}<strong>&#10007; ${errores.length} error(es):</strong><ul class="mb-0 mt-1">`;
+    errores.forEach(e => { html += `<li>${e.nombre || ""}: ${e.error || ""}</li>`; });
+    html += "</ul>";
+  }
+  if (procesados > 0) {
+    html += `<hr class="my-2"><button class="btn btn-sm btn-outline-${tipo === "success" ? "success" : "secondary"}" onclick="window.location.reload()">&#8635; Recargar</button>`;
+  }
+  html += "</div>";
+  statusDiv.innerHTML = html;
+}
+
+function mostrarDiscrepancia(p) {
+  document.getElementById("discrepancia-mensaje").innerHTML =
+    `La factura <strong>${p.nombre}</strong> tiene identificador <code>${p.identificador_factura}</code>, ` +
+    `pero este contrato tiene identificador <code>${p.identificador_contrato}</code>.`;
+  const modal = new bootstrap.Modal(document.getElementById("modalDiscrepancia"));
+  modal.show();
+  document.getElementById("btnConfirmarDiscrepancia").onclick = async function () {
+    modal.hide();
+    const pending = _pendingFiles[p.nombre];
+    if (pending) {
+      delete _pendingFiles[p.nombre];
+      await subirArchivos([pending.file], [p.nombre]);
+    }
+  };
+}
+
+// ── Borrar factura ─────────────────────────────────────────────────────────────
+let _borrarFacturaId = null, _borrarTipo = null;
+
+function confirmarBorrarFactura(btn) {
+  _borrarFacturaId = btn.dataset.facturaId;
+  _borrarTipo = btn.dataset.tipo;
+  document.getElementById("borrar-factura-nombre").textContent = btn.dataset.facturaId + " – " + btn.dataset.facturaNombre;
+  new bootstrap.Modal(document.getElementById("modalBorrarFactura")).show();
+}
+
+document.getElementById("btnBorrarFactura").addEventListener("click", async function () {
+  if (!_borrarFacturaId) return;
+  const borrarUrl = "{{ url_for('clientes.contrato_factura_borrar', cliente_id=cliente.id, contrato_id=contrato.id, factura_id=0) }}".replace("/0/borrar", "/" + _borrarFacturaId + "/borrar");
+  const fd = new FormData();
+  fd.append("tipo", _borrarTipo);
+  try {
+    const resp = await fetch(borrarUrl, { method: "POST", body: fd, headers: { "X-CSRFToken": csrfToken } });
+    const data = await resp.json();
+    if (data.ok) {
+      window.location.reload();
+    } else {
+      alert("Error al borrar: " + (data.error || "desconocido"));
+    }
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+});
 </script>
 {% endblock %}

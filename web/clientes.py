@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import logging
 import re
+import tempfile
+from pathlib import Path
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
+from parsers.cfe import get_cfe_parser
+from parsers.gas import get_gas_parser
 from storage.repository import (
     get_all_clientes_con_conteos,
     get_cliente_con_conteos,
@@ -20,11 +24,32 @@ from storage.repository import (
     update_contrato,
     delete_contrato,
     ContratoIdentificadorDuplicado,
+    save_cfe_invoice,
+    save_gas_invoice,
+    get_cfe_facturas_por_contrato,
+    get_gas_facturas_por_contrato,
+    delete_cfe_factura,
+    delete_gas_factura,
 )
 
 logger = logging.getLogger(__name__)
 
 _RFC_RE = re.compile(r'^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$')
+
+
+def _detect_tipo(pdf_path: Path) -> str:
+    """Devuelve 'cfe' o 'gas' inspeccionando el texto de la primera página del PDF."""
+    import pdfplumber
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            text = (pdf.pages[0].extract_text() or "").upper()
+    except Exception as e:
+        raise ValueError(f"No se pudo leer el PDF: {e}") from e
+    if "COMISIÓN FEDERAL" in text or "C.F.E." in text or "CFE" in text:
+        return "cfe"
+    if "ENGIE" in text or "GAS NATURAL" in text:
+        return "gas"
+    raise ValueError("No se pudo determinar el tipo de factura (CFE o Gas)")
 
 clientes_bp = Blueprint("clientes", __name__, url_prefix="/clientes")
 
@@ -283,11 +308,15 @@ def contrato_ficha(cliente_id: int, contrato_id: int):
         return resultado
 
     contrato = get_contrato_con_conteos(contrato_id)
+    facturas_cfe = get_cfe_facturas_por_contrato(contrato_id)
+    facturas_gas = get_gas_facturas_por_contrato(contrato_id)
 
     return render_template(
         "clientes/contratos/ficha.html",
         cliente=cliente,
         contrato=contrato,
+        facturas_cfe=facturas_cfe,
+        facturas_gas=facturas_gas,
     )
 
 
@@ -399,3 +428,124 @@ def contrato_borrar(cliente_id: int, contrato_id: int):
         ))
 
     return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+
+@clientes_bp.route("/<int:cliente_id>/contratos/<int:contrato_id>/upload", methods=["POST"])
+def contrato_upload(cliente_id: int, contrato_id: int):
+    from flask import Response, current_app, jsonify
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        return jsonify({"error": "Cliente no encontrado"}), 404
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        return jsonify({"error": "Contrato no encontrado"}), 404
+    if isinstance(resultado, Response):
+        return jsonify({"error": "Acceso denegado"}), 403
+    contrato = resultado
+
+    files = request.files.getlist("facturas")
+    confirmados = set(request.form.getlist("confirmado_pese_a_discrepancia"))
+
+    if not files or all(not f.filename for f in files):
+        return jsonify({"procesados": 0, "errores": [{"nombre": "", "error": "No se enviaron archivos"}]}), 400
+
+    ok_count = 0
+    exitosos = []
+    errors = []
+    pendientes_confirmacion = []
+
+    for f in files:
+        nombre = f.filename or "<sin nombre>"
+        suffix = Path(f.filename).suffix.lower() if (f.filename and Path(f.filename).suffix) else ".pdf"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            f.save(tmp.name)
+            tmp_path = Path(tmp.name)
+        try:
+            tipo = _detect_tipo(tmp_path)
+            tipo_contrato = "electrico" if tipo == "cfe" else "gas"
+            if tipo_contrato != contrato.tipo:
+                errors.append({
+                    "nombre": nombre,
+                    "error": (
+                        f"Tipo de factura ({tipo.upper()}) no coincide con el tipo del contrato "
+                        f"({contrato.tipo}). Verifica que estás subiendo al contrato correcto."
+                    ),
+                })
+                continue
+
+            if tipo == "cfe":
+                parser = get_cfe_parser("GDMTH")
+                invoice = parser.parse(tmp_path)
+                identificador_factura = invoice.numero_servicio
+            else:
+                parser = get_gas_parser()
+                invoice = parser.parse(tmp_path)
+                identificador_factura = invoice.cuenta_contrato
+
+            if identificador_factura != contrato.identificador_real and nombre not in confirmados:
+                pendientes_confirmacion.append({
+                    "nombre": nombre,
+                    "identificador_factura": identificador_factura,
+                    "identificador_contrato": contrato.identificador_real,
+                })
+                continue
+
+            if tipo == "cfe":
+                factura_id, nombre_canonico = save_cfe_invoice(invoice, contrato_id=contrato_id)
+            else:
+                factura_id, nombre_canonico = save_gas_invoice(invoice, contrato_id=contrato_id)
+
+            logger.info("Factura guardada: '%s' → id=%d (tipo=%s, contrato=%d)", nombre, factura_id, tipo, contrato_id)
+            ok_count += 1
+            exitosos.append({"nombre_original": nombre, "nombre_canonico": nombre_canonico})
+        except Exception as e:
+            logger.error("Error procesando '%s': %s: %s", nombre, type(e).__name__, e, exc_info=True)
+            errors.append({"nombre": nombre, "error": str(e)})
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+    if ok_count > 0:
+        current_app.config["RESULTADO"] = None
+
+    return jsonify({
+        "procesados": ok_count,
+        "exitosos": exitosos,
+        "errores": errors,
+        "pendientes_confirmacion": pendientes_confirmacion,
+    })
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/facturas/<int:factura_id>/borrar",
+    methods=["POST"],
+)
+def contrato_factura_borrar(cliente_id: int, contrato_id: int, factura_id: int):
+    from flask import Response, current_app, jsonify
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        return jsonify({"error": "Cliente no encontrado"}), 404
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        return jsonify({"error": "Contrato no encontrado"}), 404
+    if isinstance(resultado, Response):
+        return jsonify({"error": "Acceso denegado"}), 403
+
+    tipo = request.form.get("tipo", "").strip()
+    if tipo not in ("cfe", "gas"):
+        return jsonify({"error": "Tipo inválido. Debe ser 'cfe' o 'gas'."}), 400
+
+    try:
+        if tipo == "cfe":
+            delete_cfe_factura(factura_id)
+        else:
+            delete_gas_factura(factura_id)
+        current_app.config["RESULTADO"] = None
+        logger.info("Factura borrada: id=%d, tipo=%s, contrato_id=%d", factura_id, tipo, contrato_id)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        logger.error("Error borrando factura id=%d, tipo=%s: %s", factura_id, tipo, exc)
+        return jsonify({"error": str(exc)}), 500

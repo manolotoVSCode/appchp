@@ -12,7 +12,6 @@ from flask_login import current_user, login_required
 from flask_wtf.csrf import CSRFProtect
 
 from storage.repository import get_all_cfe_invoices, get_all_gas_invoices
-from cli.main import procesar_factura_cfe, procesar_factura_gas
 from calc.cogen import calcular_cogen
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe
 from calc.nombre_canonico import generar_nombre_canonico
@@ -57,20 +56,6 @@ def _cargar_datos():
 
     return resultado, facturas_cfe, facturas_gas, historico, tablas
 
-
-def _detect_tipo(pdf_path: Path) -> str:
-    """Return 'cfe' or 'gas' by scanning the first page text."""
-    import pdfplumber
-    try:
-        with pdfplumber.open(pdf_path) as pdf:
-            text = (pdf.pages[0].extract_text() or "").upper()
-    except Exception as e:
-        raise ValueError(f"No se pudo leer el PDF: {e}") from e
-    if "COMISIÓN FEDERAL" in text or "C.F.E." in text or "CFE" in text:
-        return "cfe"
-    if "ENGIE" in text or "GAS NATURAL" in text:
-        return "gas"
-    raise ValueError("No se pudo determinar el tipo de factura (CFE o Gas)")
 
 
 def create_app() -> Flask:
@@ -225,53 +210,9 @@ def create_app() -> Flask:
 
     @app.route("/upload", methods=["POST"])
     def upload_facturas():
-        import tempfile
         from flask import jsonify
-
-        files = request.files.getlist("facturas")
-        if not files:
-            return jsonify({"procesados": 0, "errores": [{"nombre": "", "error": "No se enviaron archivos"}]}), 400
-
-        logger.info("Upload recibido: %d archivo(s)", len(files))
-
-        ok_count = 0
-        exitosos = []
-        errors = []
-
-        for f in files:
-            nombre = f.filename or "<sin nombre>"
-            suffix = Path(f.filename).suffix.lower() if (f.filename and Path(f.filename).suffix) else ".pdf"
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                f.save(tmp.name)
-                tmp_path = Path(tmp.name)
-            try:
-                tipo = _detect_tipo(tmp_path)
-                logger.info("Procesando: '%s' (tipo=%s)", nombre, tipo)
-                if tipo == "cfe":
-                    factura_id, nombre_canonico = procesar_factura_cfe(tmp_path)
-                else:
-                    factura_id, nombre_canonico = procesar_factura_gas(tmp_path)
-                logger.info("Factura guardada: '%s' → id=%d (tipo=%s)", nombre, factura_id, tipo)
-                ok_count += 1
-                exitosos.append({"nombre_original": nombre, "nombre_canonico": nombre_canonico})
-            except Exception as e:
-                logger.error(
-                    "Error procesando '%s': %s: %s",
-                    nombre, type(e).__name__, e,
-                    exc_info=True,
-                )
-                errors.append({"nombre": nombre, "error": str(e)})
-            finally:
-                tmp_path.unlink(missing_ok=True)
-
-        if ok_count > 0:
-            r, fcfe, fgas, hist, tablas = _cargar_datos()
-            app.config["RESULTADO"] = r
-            app.config["FACTURAS_CFE"] = fcfe
-            app.config["FACTURAS_GAS"] = fgas
-            app.config["HISTORICO"] = hist
-            app.config["TABLAS"] = tablas
-
-        return jsonify({"procesados": ok_count, "exitosos": exitosos, "errores": errors})
+        return jsonify({
+            "error": "Este endpoint fue eliminado. Usa /clientes/<id>/contratos/<id>/upload."
+        }), 410
 
     return app
