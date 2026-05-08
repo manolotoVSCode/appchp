@@ -74,23 +74,19 @@ def _detect_tipo(pdf_path: Path) -> str:
 
 
 def create_app() -> Flask:
-    """Flask app factory. Data loads on first request."""
+    """Flask app factory."""
 
-    # Logging raíz: stdout, INFO, formato con timestamp y módulo.
-    # Render captura todo stdout y lo muestra en el panel de logs.
     logging.basicConfig(
         stream=sys.stdout,
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        force=True,  # override si gunicorn ya configuró el root logger
+        force=True,
     )
 
     app = Flask(__name__)
 
-    # Clave secreta requerida por Flask-Login y Flask-WTF
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32))
 
-    # Cookies de sesión: 30 días, seguras
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
     app.config["REMEMBER_COOKIE_HTTPONLY"] = True
     app.config["REMEMBER_COOKIE_SECURE"] = not app.debug
@@ -105,10 +101,12 @@ def create_app() -> Flask:
     app.config["HISTORICO"] = {}
     app.config["TABLAS"] = {}
 
-    # Autenticación y CSRF
+    # Autenticación, CSRF y blueprint de clientes
     from web.auth import init_auth
+    from web.clientes import clientes_bp
     init_auth(app)
     csrf.init_app(app)
+    app.register_blueprint(clientes_bp)
 
     # Rutas exentas de autenticación
     _PUBLIC = {"/login", "/healthz"}
@@ -122,6 +120,21 @@ def create_app() -> Flask:
 
     @app.route("/")
     def dashboard():
+        """Redirige al listado de clientes. '/' ya no es el dashboard."""
+        return redirect(url_for("clientes.listado"))
+
+    @app.route("/clientes/<int:cliente_id>/dashboard")
+    def cliente_dashboard(cliente_id: int):
+        """Dashboard de cogeneración. En esta fase carga todos los datos del sistema."""
+        from storage.repository import get_cliente_con_conteos
+        from flask import flash
+
+        # Validar que el cliente existe
+        cliente = get_cliente_con_conteos(cliente_id)
+        if cliente is None:
+            flash("El cliente solicitado no existe.", "warning")
+            return redirect(url_for("clientes.listado"))
+
         if app.config["RESULTADO"] is None:
             try:
                 r, fcfe, fgas, hist, tablas = _cargar_datos()
@@ -141,7 +154,10 @@ def create_app() -> Flask:
                     "</body></html>",
                     500,
                 )
+
         r = app.config["RESULTADO"]
+        sin_datos = not r.meses
+
         chart_labels = [m.periodo_inicio.strftime("%b %Y") for m in r.meses]
         chart_ebitda = [float(m.ebitda_mes_mxn) for m in r.meses]
         chart_ahorro_elec = [float(m.ahorro_electricidad_mxn) for m in r.meses]
@@ -162,6 +178,9 @@ def create_app() -> Flask:
         return render_template(
             "dashboard.html",
             r=r,
+            sin_datos=sin_datos,
+            cliente_id=cliente_id,
+            cliente_nombre=cliente["nombre"],
             chart_labels=chart_labels,
             chart_ebitda=chart_ebitda,
             chart_ahorro_elec=chart_ahorro_elec,

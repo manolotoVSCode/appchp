@@ -31,17 +31,32 @@
 <body>
 <div class="container-fluid py-4">
 
+  <!-- Barra de navegación -->
+  <div style="background:#1F4E79;color:#fff;padding:.6rem 1rem;margin:-1.5rem -12px 1.5rem;display:flex;align-items:center;gap:1rem;border-radius:.375rem .375rem 0 0">
+    <span style="font-weight:700;font-size:.95rem;white-space:nowrap">&#9889; CHP — Análisis Energético</span>
+    <nav style="display:flex;gap:.25rem;margin-left:.75rem">
+      <a href="{{ url_for('clientes.listado') }}" style="color:rgba(255,255,255,.8);text-decoration:none;font-size:.85rem;padding:.2rem .55rem;border-radius:.25rem" onmouseover="this.style.background='rgba(255,255,255,.15)'" onmouseout="this.style.background='transparent'">Clientes</a>
+      <a href="{{ url_for('cliente_dashboard', cliente_id=cliente_id) }}" style="color:#fff;background:rgba(255,255,255,.2);text-decoration:none;font-size:.85rem;font-weight:600;padding:.2rem .55rem;border-radius:.25rem">Dashboard</a>
+    </nav>
+    <span class="badge bg-secondary ms-2">{{ r.meses|length }} meses pareados</span>
+    <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center">
+      <a href="/export/excel" class="btn btn-sm btn-success">&#8681; Excel</a>
+      <a href="/logout" class="btn btn-sm btn-outline-light">Cerrar sesión</a>
+    </div>
+  </div>
+
   <!-- Título -->
   <div class="d-flex align-items-center mb-4">
-    <h1 class="h3 mb-0 me-3">&#9889; Análisis de Cogeneración</h1>
-    <span class="badge bg-secondary me-2">{{ r.meses|length }} meses pareados</span>
-    <a href="/export/excel" class="btn btn-sm btn-success ms-auto">
-      &#8681; Exportar Excel
-    </a>
-    <a href="/logout" class="btn btn-sm btn-outline-secondary ms-2">
-      Cerrar sesión
-    </a>
+    <h1 class="h3 mb-0 me-2">Análisis de Cogeneración</h1>
+    <span class="text-muted small">{{ cliente_nombre }}</span>
   </div>
+
+  {% if sin_datos %}
+  <div class="alert alert-info mb-4" role="alert">
+    <strong>&#128203; Sin facturas cargadas.</strong>
+    Este cliente aún no tiene facturas registradas. Usa el widget <em>Subir Facturas</em> de abajo para cargar los PDFs de CFE y gas.
+  </div>
+  {% endif %}
 
   <!-- Upload de facturas -->
   <div class="card shadow-sm mb-4" id="upload-card">

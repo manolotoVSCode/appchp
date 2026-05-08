@@ -1,0 +1,61 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "clientes" %}
+{% block title %}Nuevo cliente{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <a href="{{ url_for('clientes.listado') }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
+      <h4 class="fw-bold mb-0" style="color:#1F4E79">Nuevo cliente</h4>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        {% if error %}
+        <div class="alert alert-danger py-2 small">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre <span class="text-danger">*</span></label>
+            <input type="text" name="nombre" class="form-control" value="{{ nombre }}" required autofocus
+                   placeholder="Razón social o nombre del cliente">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">RFC <span class="text-danger">*</span></label>
+            <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
+                   value="{{ rfc }}" required maxlength="13" placeholder="RFC123456ABC"
+                   style="letter-spacing:.05em">
+            <div class="form-text">12 o 13 caracteres. Se convierte a mayúsculas automáticamente.</div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Notas</label>
+            <textarea name="notas" class="form-control" rows="3"
+                      placeholder="Observaciones, dirección, contacto, etc.">{{ notas }}</textarea>
+          </div>
+
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary">Crear cliente</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Forzar mayúsculas en RFC mientras se escribe
+  document.querySelector('input[name="rfc"]').addEventListener('input', function () {
+    const pos = this.selectionStart;
+    this.value = this.value.toUpperCase();
+    this.setSelectionRange(pos, pos);
+  });
+</script>
+{% endblock %}

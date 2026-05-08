@@ -1,0 +1,71 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "clientes" %}
+{% set cliente_id = cliente.id %}
+{% block title %}Editar — {{ cliente.nombre }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
+      <h4 class="fw-bold mb-0" style="color:#1F4E79">Editar cliente</h4>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        {% if error %}
+        <div class="alert alert-danger py-2 small">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre <span class="text-danger">*</span></label>
+            <input type="text" name="nombre" class="form-control" value="{{ nombre }}" required autofocus>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">RFC <span class="text-danger">*</span></label>
+            {% if tiene_facturas %}
+            <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
+                   value="{{ rfc }}" disabled style="letter-spacing:.05em">
+            <div class="form-text text-warning">
+              &#9888; El RFC no puede modificarse porque el cliente tiene facturas cargadas.
+              Para cambiar el RFC, borre primero las facturas o cree un cliente nuevo.
+            </div>
+            {% else %}
+            <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
+                   value="{{ rfc }}" required maxlength="13" style="letter-spacing:.05em">
+            <div class="form-text">12 o 13 caracteres. Se convierte a mayúsculas automáticamente.</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Notas</label>
+            <textarea name="notas" class="form-control" rows="3">{{ notas }}</textarea>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-grow-1">Guardar cambios</button>
+            <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}"
+               class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if not tiene_facturas %}
+<script>
+  document.querySelector('input[name="rfc"]').addEventListener('input', function () {
+    const pos = this.selectionStart;
+    this.value = this.value.toUpperCase();
+    this.setSelectionRange(pos, pos);
+  });
+</script>
+{% endif %}
+{% endblock %}

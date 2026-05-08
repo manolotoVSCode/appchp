@@ -1,0 +1,210 @@
+# tests/test_clientes.py
+"""Tests de regresión y humo para el blueprint de gestión de clientes."""
+from __future__ import annotations
+
+import pytest
+from werkzeug.security import generate_password_hash
+
+_HASH = generate_password_hash("test_pass", method="pbkdf2:sha256")
+
+_CLIENTE_BASE = {
+    "id": 1,
+    "nombre": "IBERICA TILES",
+    "rfc": "ITI930101AAA",
+    "notas": "Cliente industrial",
+    "created_at": "2024-01-15T10:00:00+00:00",
+    "num_cfe": 12,
+    "num_gas": 12,
+}
+
+
+@pytest.fixture()
+def app(monkeypatch):
+    monkeypatch.setenv("APP_USER", "operador")
+    monkeypatch.setenv("APP_PASSWORD_HASH", _HASH)
+    monkeypatch.setenv("SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "fake_key")
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+
+    from web.app import create_app
+    flask_app = create_app()
+    flask_app.config["TESTING"] = True
+    flask_app.config["WTF_CSRF_ENABLED"] = False
+    return flask_app
+
+
+@pytest.fixture()
+def client(app):
+    return app.test_client()
+
+
+@pytest.fixture()
+def auth_client(app, monkeypatch):
+    """Cliente autenticado con repositorio de clientes mockeado."""
+    monkeypatch.setattr(
+        "web.clientes.get_all_clientes_con_conteos",
+        lambda: [_CLIENTE_BASE],
+    )
+    c = app.test_client()
+    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    return c
+
+
+# ── Ruta raíz ─────────────────────────────────────────────────────────────────
+
+def test_raiz_redirige_a_clientes(auth_client):
+    """GET / → 302 a /clientes."""
+    resp = auth_client.get("/", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes" in resp.headers["Location"]
+
+
+# ── Listado de clientes ───────────────────────────────────────────────────────
+
+def test_listado_requiere_autenticacion(client):
+    """GET /clientes sin sesión → redirige a /login."""
+    resp = client.get("/clientes/", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/login" in resp.headers["Location"]
+
+
+def test_listado_muestra_clientes(auth_client, monkeypatch):
+    """GET /clientes/ con sesión → 200 con nombre del cliente."""
+    monkeypatch.setattr(
+        "web.clientes.get_all_clientes_con_conteos",
+        lambda: [_CLIENTE_BASE],
+    )
+    resp = auth_client.get("/clientes/", follow_redirects=False)
+    assert resp.status_code == 200
+    assert b"IBERICA TILES" in resp.data
+    assert b"ITI930101AAA" in resp.data
+
+
+def test_listado_vacio_muestra_call_to_action(auth_client, monkeypatch):
+    """GET /clientes/ sin clientes → mensaje de estado vacío."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [])
+    resp = auth_client.get("/clientes/", follow_redirects=False)
+    assert resp.status_code == 200
+    assert b"Crear primer cliente" in resp.data
+
+
+# ── Crear cliente ─────────────────────────────────────────────────────────────
+
+def test_nuevo_cliente_get(auth_client):
+    """GET /clientes/nuevo → 200 con formulario."""
+    resp = auth_client.get("/clientes/nuevo")
+    assert resp.status_code == 200
+    assert b"Nuevo cliente" in resp.data
+
+
+def test_nuevo_cliente_rfc_invalido(auth_client, monkeypatch):
+    """POST /clientes/nuevo con RFC inválido → 200 con error."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    resp = auth_client.post("/clientes/nuevo", data={
+        "nombre": "Test SA", "rfc": "CORTO", "notas": "",
+    })
+    assert resp.status_code == 200
+    assert b"RFC inv" in resp.data
+
+
+def test_nuevo_cliente_rfc_duplicado(auth_client, monkeypatch):
+    """POST /clientes/nuevo con RFC ya existente → error de duplicado."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: True)
+    resp = auth_client.post("/clientes/nuevo", data={
+        "nombre": "Otro SA", "rfc": "ITI930101AAA", "notas": "",
+    })
+    assert resp.status_code == 200
+    assert b"Ya existe" in resp.data
+
+
+def test_nuevo_cliente_exitoso(auth_client, monkeypatch):
+    """POST /clientes/nuevo válido → redirige a ficha del cliente."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    monkeypatch.setattr("web.clientes.create_cliente", lambda *a, **kw: 99)
+    resp = auth_client.post("/clientes/nuevo", data={
+        "nombre": "Nueva SA", "rfc": "NUE930101ABC", "notas": "notas",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes/99" in resp.headers["Location"]
+
+
+# ── Ficha de cliente ──────────────────────────────────────────────────────────
+
+def test_ficha_cliente_existente(auth_client, monkeypatch):
+    """GET /clientes/1 → 200 con datos del cliente."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    resp = auth_client.get("/clientes/1")
+    assert resp.status_code == 200
+    assert b"IBERICA TILES" in resp.data
+    assert b"ITI930101AAA" in resp.data
+
+
+def test_ficha_cliente_inexistente(auth_client, monkeypatch):
+    """GET /clientes/999 con cliente inexistente → redirige a /clientes."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: None)
+    resp = auth_client.get("/clientes/999", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes" in resp.headers["Location"]
+
+
+# ── Editar cliente ────────────────────────────────────────────────────────────
+
+def test_editar_get_sin_facturas(auth_client, monkeypatch):
+    """GET /clientes/1/editar sin facturas → RFC editable."""
+    cliente_sin_facturas = {**_CLIENTE_BASE, "num_cfe": 0, "num_gas": 0}
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: cliente_sin_facturas)
+    monkeypatch.setattr("web.clientes.cliente_tiene_facturas", lambda id: False)
+    resp = auth_client.get("/clientes/1/editar")
+    assert resp.status_code == 200
+    # Campo RFC no debe estar deshabilitado
+    assert b'disabled' not in resp.data or b'name="rfc"' in resp.data
+
+
+def test_editar_get_con_facturas_rfc_deshabilitado(auth_client, monkeypatch):
+    """GET /clientes/1/editar con facturas → RFC deshabilitado con leyenda."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("web.clientes.cliente_tiene_facturas", lambda id: True)
+    resp = auth_client.get("/clientes/1/editar")
+    assert resp.status_code == 200
+    assert b"disabled" in resp.data
+    assert b"facturas cargadas" in resp.data
+
+
+def test_editar_post_exitoso(auth_client, monkeypatch):
+    """POST /clientes/1/editar válido → redirige a ficha."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("web.clientes.cliente_tiene_facturas", lambda id: False)
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    monkeypatch.setattr("web.clientes.update_cliente", lambda *a, **kw: None)
+    resp = auth_client.post("/clientes/1/editar", data={
+        "nombre": "IBERICA TILES SA", "rfc": "ITI930101AAA", "notas": "actualizado",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes/1" in resp.headers["Location"]
+
+
+# ── Borrar cliente ────────────────────────────────────────────────────────────
+
+def test_borrar_confirmacion_incorrecta(auth_client, monkeypatch):
+    """POST /clientes/1/borrar con nombre incorrecto → no borra, flash de error."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    borrado = []
+    monkeypatch.setattr("web.clientes.delete_cliente", lambda id: borrado.append(id))
+    resp = auth_client.post("/clientes/1/borrar", data={
+        "confirmacion": "nombre incorrecto",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert len(borrado) == 0  # no se llamó delete_cliente
+
+
+def test_borrar_confirmacion_correcta(auth_client, monkeypatch):
+    """POST /clientes/1/borrar con nombre exacto → borra y redirige a listado."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    borrado = []
+    monkeypatch.setattr("web.clientes.delete_cliente", lambda id: borrado.append(id))
+    resp = auth_client.post("/clientes/1/borrar", data={
+        "confirmacion": "IBERICA TILES",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes" in resp.headers["Location"]
+    assert 1 in borrado

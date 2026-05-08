@@ -307,3 +307,84 @@ def _row_to_gas_invoice(row: dict) -> GasInvoice:
         pdf_path=row.get("pdf_path", ""),
         advertencias=json.loads(row["advertencias"]) if row.get("advertencias") else [],
     )
+
+
+# ── Gestión de clientes ───────────────────────────────────────────────────────
+
+def get_all_clientes_con_conteos() -> list[dict]:
+    """Devuelve todos los clientes con conteo de facturas CFE y gas. Ordenados por nombre."""
+    result = _supabase.table("clientes").select(
+        "id, nombre, rfc, notas, created_at, cfe_facturas(id), gas_facturas(id)"
+    ).order("nombre").execute()
+    return [
+        {
+            "id": row["id"],
+            "nombre": row["nombre"],
+            "rfc": row["rfc"],
+            "notas": row.get("notas"),
+            "created_at": row.get("created_at"),
+            "num_cfe": len(row.get("cfe_facturas") or []),
+            "num_gas": len(row.get("gas_facturas") or []),
+        }
+        for row in result.data
+    ]
+
+
+def get_cliente_con_conteos(cliente_id: int) -> dict | None:
+    """Devuelve un cliente con conteo de facturas, o None si no existe."""
+    result = _supabase.table("clientes").select(
+        "id, nombre, rfc, notas, created_at, cfe_facturas(id), gas_facturas(id)"
+    ).eq("id", cliente_id).execute()
+    if not result.data:
+        return None
+    row = result.data[0]
+    return {
+        "id": row["id"],
+        "nombre": row["nombre"],
+        "rfc": row["rfc"],
+        "notas": row.get("notas"),
+        "created_at": row.get("created_at"),
+        "num_cfe": len(row.get("cfe_facturas") or []),
+        "num_gas": len(row.get("gas_facturas") or []),
+    }
+
+
+def create_cliente(nombre: str, rfc: str, notas: str | None) -> int:
+    """Crea un nuevo cliente. Devuelve el id asignado."""
+    result = _supabase.table("clientes").insert({
+        "nombre": nombre,
+        "rfc": rfc,
+        "notas": notas if notas else None,
+    }).execute()
+    return result.data[0]["id"]
+
+
+def update_cliente(cliente_id: int, nombre: str, notas: str | None, rfc: str | None = None) -> None:
+    """Actualiza los campos del cliente. rfc=None preserva el RFC actual sin tocarlo."""
+    data: dict = {"nombre": nombre, "notas": notas if notas else None}
+    if rfc is not None:
+        data["rfc"] = rfc
+    _supabase.table("clientes").update(data).eq("id", cliente_id).execute()
+
+
+def delete_cliente(cliente_id: int) -> None:
+    """Borra el cliente. ON DELETE CASCADE en el schema elimina todas sus facturas y relaciones."""
+    _supabase.table("clientes").delete().eq("id", cliente_id).execute()
+
+
+def rfc_existe(rfc: str, exclude_id: int | None = None) -> bool:
+    """True si ya existe un cliente con ese RFC (opcionalmente excluyendo un id)."""
+    query = _supabase.table("clientes").select("id").eq("rfc", rfc)
+    if exclude_id is not None:
+        query = query.neq("id", exclude_id)
+    result = query.execute()
+    return len(result.data) > 0
+
+
+def cliente_tiene_facturas(cliente_id: int) -> bool:
+    """True si el cliente tiene al menos una factura CFE o gas."""
+    cfe = _supabase.table("cfe_facturas").select("id").eq("cliente_id", cliente_id).limit(1).execute()
+    if cfe.data:
+        return True
+    gas = _supabase.table("gas_facturas").select("id").eq("cliente_id", cliente_id).limit(1).execute()
+    return bool(gas.data)

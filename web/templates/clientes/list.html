@@ -1,0 +1,112 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "clientes" %}
+{% block title %}Clientes{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0" style="color:#1F4E79">Clientes</h4>
+  <a href="{{ url_for('clientes.nuevo') }}" class="btn btn-primary btn-sm">+ Crear nuevo cliente</a>
+</div>
+
+{% if clientes %}
+<div class="card shadow-sm">
+  <table class="table table-sm table-hover mb-0">
+    <thead>
+      <tr style="background:#1F4E79;color:#fff">
+        <th class="ps-3">Nombre</th>
+        <th>RFC</th>
+        <th class="text-center">Facturas CFE</th>
+        <th class="text-center">Facturas Gas</th>
+        <th>Alta</th>
+        <th class="pe-3 text-end">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clientes %}
+      <tr>
+        <td class="ps-3 fw-semibold">{{ c.nombre }}</td>
+        <td class="small font-monospace">{{ c.rfc }}</td>
+        <td class="text-center small">{{ c.num_cfe }}</td>
+        <td class="text-center small">{{ c.num_gas }}</td>
+        <td class="small text-muted">{{ c.created_at[:10] if c.created_at else "—" }}</td>
+        <td class="pe-3 text-end">
+          <a href="{{ url_for('clientes.ficha', cliente_id=c.id) }}" class="btn btn-sm btn-outline-primary">Ver ficha</a>
+          <button class="btn btn-sm btn-outline-danger"
+                  data-bs-toggle="modal" data-bs-target="#modalBorrar"
+                  data-id="{{ c.id }}"
+                  data-nombre="{{ c.nombre }}"
+                  data-num-cfe="{{ c.num_cfe }}"
+                  data-num-gas="{{ c.num_gas }}">Borrar</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body text-center py-5">
+    <p class="text-muted mb-3">Aún no hay clientes registrados.</p>
+    <a href="{{ url_for('clientes.nuevo') }}" class="btn btn-primary">Crear primer cliente</a>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal de confirmación de borrado -->
+<div class="modal fade" id="modalBorrar" tabindex="-1" aria-labelledby="modalBorrarTitulo" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger" id="modalBorrarTitulo">Borrar cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="modalBorrarMsg" class="mb-3"></p>
+        <label class="form-label fw-semibold">Para confirmar, escriba el nombre exacto del cliente:</label>
+        <input type="text" id="inputConfirmacion" class="form-control" placeholder="">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form id="formBorrar" method="POST" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="confirmacion" id="hiddenConfirmacion">
+          <button type="submit" id="btnBorrar" class="btn btn-danger" disabled>Borrar permanentemente</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  let _esperado = "";
+
+  document.getElementById("modalBorrar").addEventListener("show.bs.modal", function (ev) {
+    const btn = ev.relatedTarget;
+    const id = btn.dataset.id;
+    const nombre = btn.dataset.nombre;
+    const numCfe = btn.dataset.numCfe;
+    const numGas = btn.dataset.numGas;
+    _esperado = nombre;
+
+    document.getElementById("modalBorrarTitulo").textContent = "Borrar cliente: " + nombre;
+    document.getElementById("modalBorrarMsg").innerHTML =
+      "Esta acción borrará permanentemente al cliente y <strong>TODAS sus facturas asociadas " +
+      "(" + numCfe + " facturas CFE y " + numGas + " facturas de gas)</strong>. " +
+      "<strong>Esta acción NO se puede deshacer.</strong>";
+    document.getElementById("formBorrar").action = "/clientes/" + id + "/borrar";
+    document.getElementById("inputConfirmacion").value = "";
+    document.getElementById("hiddenConfirmacion").value = "";
+    document.getElementById("btnBorrar").disabled = true;
+  });
+
+  document.getElementById("inputConfirmacion").addEventListener("input", function () {
+    const coincide = this.value === _esperado;
+    document.getElementById("hiddenConfirmacion").value = this.value;
+    document.getElementById("btnBorrar").disabled = !coincide;
+  });
+})();
+</script>
+{% endblock %}

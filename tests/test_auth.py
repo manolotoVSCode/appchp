@@ -70,12 +70,12 @@ def test_ruta_protegida_sin_autenticacion(client):
     assert "/login" in resp.headers["Location"]
 
 
-def test_ruta_protegida_con_autenticacion(client, monkeypatch):
-    """GET / con sesión activa → 200."""
-    monkeypatch.setattr("web.app._cargar_datos", lambda: _mock_datos())
-    _login(client)  # establece sesión
+def test_ruta_raiz_redirige_a_clientes(client):
+    """GET / con sesión activa → 302 a /clientes (ya no es el dashboard)."""
+    _login(client)
     resp = client.get("/", follow_redirects=False)
-    assert resp.status_code == 200
+    assert resp.status_code == 302
+    assert "/clientes" in resp.headers["Location"]
 
 
 def test_logout(client, monkeypatch):
