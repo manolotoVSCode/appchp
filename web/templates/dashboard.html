@@ -160,7 +160,7 @@
     <div class="card kpi-card kpi-elec h-100 shadow-sm">
       <div class="card-body">
         <div class="text-muted small">Ahorro Electricidad</div>
-        <div class="fs-4 fw-bold text-primary" id="kpi-elec-val">
+        <div class="fs-4 fw-bold" style="color:var(--color-info)" id="kpi-elec-val">
           ${{ "{:,.0f}".format(r.ahorro_electricidad_anual_mxn|float) }}
         </div>
         <div class="text-muted small">MXN / año</div>
@@ -672,7 +672,7 @@ new Chart(document.getElementById("cogenChart"), {
   data: {
     labels: {{ chart_labels | tojson }},
     datasets: [
-      { label: "Ahorro Electricidad", data: {{ chart_ahorro_elec | tojson }},    backgroundColor: "rgba(74,144,194,0.6)",  stack: "componentes" },
+      { label: "Ahorro Electricidad", data: {{ chart_ahorro_elec | tojson }},    backgroundColor: "rgba(106,138,154,0.65)", stack: "componentes" },
       { label: "Ahorro Caldera",      data: {{ chart_ahorro_caldera | tojson }}, backgroundColor: "rgba(232,181,71,0.65)", stack: "componentes" },
       { label: "Costo Gas Cogen",     data: {{ chart_costo_gas | tojson }}.map(v => -v), backgroundColor: "rgba(216,90,90,0.65)", stack: "componentes" },
       { type: "line", label: "EBITDA", data: {{ chart_ebitda | tojson }},

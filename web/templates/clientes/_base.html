@@ -9,62 +9,97 @@
   <link href="{{ url_for('static', filename='css/theme.css') }}" rel="stylesheet">
   <style>
     /* ── Sidebar layout ─────────────────────────────────────────────────── */
-    :root {
-      --sidebar-w: 240px;
-      --sidebar-bg: var(--color-bg-sidebar);
-      --sidebar-text: rgba(255,255,255,.75);
-      --sidebar-active: #fff;
-    }
+    :root { --sidebar-w: 240px; }
 
     body { background: var(--color-bg); margin: 0; }
 
     /* Sidebar */
     #sidebar {
       position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
-      background: var(--sidebar-bg); display: flex; flex-direction: column;
+      background: var(--color-bg-sidebar);
+      border-right: 1px solid var(--color-border-sidebar);
+      display: flex; flex-direction: column;
       z-index: 100; overflow-y: auto;
     }
+
+    /* Brand */
     .sidebar-brand {
-      padding: 1.1rem 1.25rem .9rem; border-bottom: 1px solid rgba(255,255,255,.1);
+      padding: 1.1rem 1.25rem .9rem;
+      border-bottom: 1px solid var(--color-border-sidebar);
     }
     .sidebar-brand-title {
-      font-weight: 700; font-size: .95rem; color: #fff; line-height: 1.2;
-      letter-spacing: .01em;
+      font-weight: 700; font-size: .95rem;
+      color: var(--color-text-primary); line-height: 1.2; letter-spacing: .01em;
     }
     .sidebar-brand-sub {
       font-size: .7rem; color: var(--color-text-sidebar-muted); margin-top: .15rem;
       text-transform: uppercase; letter-spacing: .06em;
     }
-    .sidebar-section { padding: .75rem 1.25rem .25rem; font-size: .7rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.4); }
+
+    /* Section labels */
+    .sidebar-section {
+      padding: .75rem 1.25rem .25rem; font-size: .68rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .07em;
+      color: var(--color-text-sidebar-muted);
+    }
+
+    /* Links */
     .sidebar-link {
       display: block; padding: .45rem 1.25rem; font-size: .875rem;
-      color: var(--sidebar-text); text-decoration: none; border-radius: 0;
+      color: #6A6A6A; text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: background .1s, color .1s;
     }
-    .sidebar-link:hover { color: var(--sidebar-active); background: rgba(255,255,255,.08); }
-    .sidebar-link.active { color: var(--sidebar-active); background: rgba(255,255,255,.15); font-weight: 600; }
-    .sidebar-divider { border-color: rgba(255,255,255,.1); margin: .5rem 0; }
+    .sidebar-link:hover {
+      color: var(--color-text-primary);
+      background: #F0F0F2;
+      border-left-color: transparent;
+    }
+    .sidebar-link.active {
+      color: var(--color-sidebar-active-text);
+      background: var(--color-sidebar-active-bg);
+      border-left-color: var(--color-primary);
+      font-weight: 600;
+    }
+
+    /* Divider */
+    .sidebar-divider { border-color: var(--color-border-sidebar); margin: .5rem 0; }
+
+    /* Contract sub-items */
+    .sidebar-contratos { max-height: 14rem; overflow-y: auto; }
+    .sidebar-link-contrato {
+      display: block; padding: .35rem 1.25rem .35rem 2rem; font-size: .8rem;
+      color: #8A8A8A; text-decoration: none;
+      border-left: 3px solid transparent;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: background .1s, color .1s;
+    }
+    .sidebar-link-contrato:hover {
+      color: var(--color-text-primary); background: #F0F0F2;
+    }
+    .sidebar-link-contrato.active {
+      color: var(--color-sidebar-active-text);
+      background: var(--color-sidebar-active-bg);
+      border-left-color: var(--color-primary);
+      font-weight: 600;
+    }
+
+    /* Bottom */
     .sidebar-bottom {
       margin-top: auto; padding: 1rem 1.25rem;
-      border-top: 1px solid rgba(255,255,255,.1);
+      border-top: 1px solid var(--color-border-sidebar);
     }
     .sidebar-bottom a.btn { font-size: .8rem; }
     .sidebar-footer-meta {
-      margin-top: .75rem; font-size: .7rem; color: var(--color-text-sidebar-muted);
-      line-height: 1.5;
+      margin-top: .75rem; font-size: .7rem;
+      color: var(--color-text-sidebar-muted); line-height: 1.5;
     }
     .sidebar-footer-meta a {
       color: var(--color-text-sidebar-muted); text-decoration: none;
     }
-    .sidebar-footer-meta a:hover { color: #fff; text-decoration: underline; }
-    .sidebar-contratos { max-height: 14rem; overflow-y: auto; }
-    .sidebar-link-contrato {
-      display: block; padding: .35rem 1.25rem .35rem 2rem; font-size: .8rem;
-      color: rgba(255,255,255,.6); text-decoration: none;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    .sidebar-footer-meta a:hover {
+      color: var(--color-text-primary); text-decoration: underline;
     }
-    .sidebar-link-contrato:hover { color: var(--sidebar-active); background: rgba(255,255,255,.08); }
-    .sidebar-link-contrato.active { color: var(--sidebar-active); background: rgba(255,255,255,.15); font-weight: 600; }
 
     /* Main content */
     #main-content {
@@ -74,9 +109,11 @@
     /* Mobile: hamburger topbar */
     #topbar {
       display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-      background: var(--sidebar-bg); padding: .5rem 1rem; align-items: center;
+      background: var(--color-bg-sidebar);
+      border-bottom: 1px solid var(--color-border-sidebar);
+      padding: .5rem 1rem; align-items: center;
     }
-    #topbar .brand { color: #fff; font-weight: 700; font-size: .9rem; }
+    #topbar .brand { color: var(--color-text-primary); font-weight: 700; font-size: .9rem; }
 
     @media (max-width: 767.98px) {
       #sidebar { left: calc(-1 * var(--sidebar-w)); transition: left .25s ease; }
@@ -98,7 +135,7 @@
 
 <!-- Mobile topbar -->
 <div id="topbar">
-  <button class="btn btn-sm btn-outline-light" id="sidebar-toggle" aria-label="Menú">
+  <button class="btn btn-sm btn-outline-secondary" id="sidebar-toggle" aria-label="Menú">
     <span style="font-size:1.1rem">&#9776;</span>
   </button>
   <span class="brand">CHP App</span>
@@ -143,7 +180,7 @@
   {% endif %}
 
   <div class="sidebar-bottom">
-    <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-light w-100">Cerrar sesión</a>
+    <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-secondary w-100">Cerrar sesión</a>
     <div class="sidebar-footer-meta">
       {% if app_version %}<span>v{{ app_version }}</span> &middot; {% endif %}
       <a href="{{ url_for('changelog') }}">Changelog</a><br>

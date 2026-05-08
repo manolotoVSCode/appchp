@@ -10,7 +10,7 @@
   --color-success:           #1F7A4C;
   --color-warning:           #E8B547;
   --color-danger:            #D85A5A;
-  --color-info:              #4A90C2;
+  --color-info:              #6A8A9A;   /* gris azulado neutro, no azul */
 
   --color-text-primary:      #1A1A1A;
   --color-text-secondary:    #5A5A5A;
@@ -20,9 +20,15 @@
   --color-bg:                #F8F9FA;
   --color-bg-card:           #FFFFFF;
 
-  --color-bg-sidebar:        #1A2D3F;
-  --color-text-sidebar:      #FFFFFF;
-  --color-text-sidebar-muted: #8A9CAF;
+  /* ── Sidebar claro ── */
+  --color-bg-sidebar:        #F5F6F7;
+  --color-border-sidebar:    #E0E0E0;
+  --color-text-sidebar:      #2A2A2A;
+  --color-text-sidebar-muted: #9A9A9A;
+
+  /* Item activo */
+  --color-sidebar-active-text: var(--color-primary);
+  --color-sidebar-active-bg:   var(--color-primary-soft);
 
   /* ── Espaciado ── */
   --space-xs:  .25rem;
@@ -88,6 +94,12 @@
   --bs-alert-border-color:    var(--color-primary-light);
 }
 
+.alert-info {
+  --bs-alert-color:           #3A5A6A;
+  --bs-alert-bg:              #EEF3F6;
+  --bs-alert-border-color:    #B8CDD6;
+}
+
 /* ── Bootstrap overrides — formularios ────────────────────────────────────── */
 .form-control:focus,
 .form-select:focus {
@@ -105,13 +117,18 @@
 }
 
 /* ── Bootstrap overrides — badges ─────────────────────────────────────────── */
-.badge.bg-primary  { background-color: var(--color-primary) !important; }
-.badge.bg-success  { background-color: var(--color-success) !important; }
-.badge.bg-danger   { background-color: var(--color-danger)  !important; }
-.badge.bg-warning  { background-color: var(--color-warning) !important; color: #fff !important; }
+.badge.bg-primary      { background-color: var(--color-primary) !important; }
+.badge.bg-success      { background-color: var(--color-success) !important; }
+.badge.bg-danger       { background-color: var(--color-danger)  !important; }
+.badge.bg-warning      { background-color: var(--color-warning) !important; color: #fff !important; }
+.badge.text-bg-primary { background-color: var(--color-primary) !important; color: #fff !important; }
 
 /* ── Bootstrap overrides — progress ───────────────────────────────────────── */
 .progress-bar { background-color: var(--color-primary); }
+
+/* ── Bootstrap overrides — links ──────────────────────────────────────────── */
+a { color: var(--color-primary); }
+a:hover { color: var(--color-primary-dark); }
 
 /* ── Tablas — encabezados ──────────────────────────────────────────────────── */
 .table-primary-header th {

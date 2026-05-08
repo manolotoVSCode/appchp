@@ -84,7 +84,7 @@
          style="cursor:pointer; border-color:#adb5bd !important;">
       <div id="drop-label">
         Arrastra los PDFs aquí o
-        <label for="file-input" class="text-primary" style="cursor:pointer;">
+        <label for="file-input" class="text-primary-brand" style="cursor:pointer;">
           selecciona archivos
         </label>
       </div>
@@ -297,7 +297,7 @@ async function subirArchivos(files, confirmados = []) {
 
   for (let i = 0; i < total; i++) {
     const f = files[i];
-    statusDiv.innerHTML = '<span class="text-info">&#9203; Subiendo ' + (i + 1) + ' / ' + total + ': ' + f.name + '</span>';
+    statusDiv.innerHTML = '<span class="text-muted">Subiendo ' + (i + 1) + ' / ' + total + ': ' + f.name + '</span>';
     try {
       const fd = new FormData();
       fd.append("facturas", f);
