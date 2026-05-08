@@ -626,7 +626,7 @@ const gasLabelPlugin = {
   afterDatasetsDraw(chart) {
     const ctx = chart.ctx;
     chart.data.datasets.forEach((ds, i) => {
-      if (!ds._showLabels) return;
+      if (!ds._gasLabels) return;
       const meta = chart.getDatasetMeta(i);
       meta.data.forEach((el, j) => {
         const val = ds.data[j];
@@ -655,7 +655,7 @@ new Chart(document.getElementById("chartGasConsumo"), {
       { type: "line", label: "COSTO UNITARIO ($/GJ)", data: gasHist.costos_unit_gj,
         borderColor: COLOR_GAS_LINEA, backgroundColor: "transparent",
         borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2",
-        _showLabels: true }
+        _gasLabels: true }
     ]
   },
   options: {
@@ -665,7 +665,8 @@ new Chart(document.getElementById("chartGasConsumo"), {
       tooltip: { callbacks: { label: ctx => ctx.dataset.label + ": " + ctx.raw.toLocaleString("es-MX", { maximumFractionDigits: 2 }) } }
     },
     scales: {
-      y:  { position: "left",  title: { display: true, text: "GJ" },    beginAtZero: true },
+      y:  { position: "left",  title: { display: true, text: "GJ" },    beginAtZero: true,
+            ticks: { callback: v => v.toLocaleString('en-US') } },
       y2: { position: "right", title: { display: true, text: "$/GJ" }, grid: { drawOnChartArea: false }, beginAtZero: true }
     }
   }
@@ -684,7 +685,7 @@ new Chart(document.getElementById("chartGasCostos"), {
       { type: "line", label: "COSTO UNITARIO ($/GJ)", data: gasHist.costos_unit_gj,
         borderColor: COLOR_GAS_LINEA, backgroundColor: "transparent",
         borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2",
-        _showLabels: true }
+        _gasLabels: true }
     ]
   },
   options: {
@@ -694,7 +695,8 @@ new Chart(document.getElementById("chartGasCostos"), {
       tooltip: { callbacks: { label: ctx => ctx.dataset.label + ": " + (ctx.dataset.yAxisID === "y2" ? ctx.raw.toFixed(2) : "$" + Math.round(ctx.raw).toLocaleString("es-MX")) } }
     },
     scales: {
-      y:  { position: "left",  title: { display: true, text: "MXN" },  beginAtZero: true, stacked: true },
+      y:  { position: "left",  title: { display: true, text: "MXN" },  beginAtZero: true, stacked: true,
+            ticks: { callback: v => "$" + Math.round(v).toLocaleString('en-US') } },
       y2: { position: "right", title: { display: true, text: "$/GJ" }, grid: { drawOnChartArea: false }, beginAtZero: true }
     }
   }
