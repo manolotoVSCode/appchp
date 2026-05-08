@@ -262,11 +262,7 @@ def _mock_historico():
 
 
 def _mock_tablas():
-    class _Tablas:
-        consumos_demandas = []
-        costos_detallados = []
-        indicadores = []
-    return _Tablas()
+    return {"consumos_demandas": [], "costos_detallados": [], "indicadores": []}
 
 
 def _facturas_cfe_mock():
@@ -705,3 +701,209 @@ def test_calcular_historico_gas_pcs_cero():
     assert fila["pcs_gj_m3"] is None
     assert fila["pcs_kwh_m3"] is None
     assert result["total"]["pcs_gj_m3"] is None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Sub-entregable D: gráfica de queso y modales en Contabilidad Energética
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _mock_tablas_con_datos():
+    """Tablas con un mes de datos para alimentar la gráfica de queso."""
+    return {
+        "consumos_demandas": [
+            {"mes": "Ene 2024", "prorrateado": False,
+             "kwh_base": 10000.0, "kwh_inter": 20000.0, "kwh_punta": 5000.0, "kwh_total": 35000.0,
+             "kw_base": 100.0, "kw_inter": 150.0, "kw_punta": 80.0},
+            {"mes": "ANUAL", "prorrateado": False,
+             "kwh_base": 10000.0, "kwh_inter": 20000.0, "kwh_punta": 5000.0, "kwh_total": 35000.0,
+             "kw_base": None, "kw_inter": None, "kw_punta": None},
+        ],
+        "costos_detallados": [
+            {"mes": "Ene 2024", "prorrateado": False,
+             "ce_base": 50000.0, "ce_inter": 100000.0, "ce_punta": 30000.0, "ce_total": 180000.0,
+             "costo_dist": 40000.0, "costo_cap": 20000.0, "costo_dem": 60000.0,
+             "cargo_fp": 5000.0, "subtotal": 245000.0},
+            {"mes": "ANUAL", "prorrateado": False,
+             "ce_base": 50000.0, "ce_inter": 100000.0, "ce_punta": 30000.0, "ce_total": 180000.0,
+             "costo_dist": 40000.0, "costo_cap": 20000.0, "costo_dem": 60000.0,
+             "cargo_fp": 5000.0, "subtotal": 245000.0},
+        ],
+        "indicadores": [
+            {"mes": "Ene 2024", "prorrateado": False,
+             "costo_unit": 7.0, "pct_energia": 73, "pct_demanda": 24,
+             "factor_carga": 45, "demanda_prom": 47.5},
+            {"mes": "ANUAL", "prorrateado": False,
+             "costo_unit": 7.0, "pct_energia": 73, "pct_demanda": 24,
+             "factor_carga": 45, "demanda_prom": 47.5},
+        ],
+    }
+
+
+# ── Test 22: Queso — tres segmentos suman total ───────────────────────────────
+
+def test_queso_tres_segmentos_suman_total():
+    """Los tres segmentos energia+demanda+otros deben sumar el subtotal total."""
+    tablas = _mock_tablas_con_datos()
+    filas_mes = [f for f in tablas["costos_detallados"] if f.get("mes") != "ANUAL"]
+    tot_e = sum(f["ce_total"] for f in filas_mes)
+    tot_d = sum(f["costo_dem"] for f in filas_mes)
+    tot_s = sum(f["subtotal"] for f in filas_mes)
+    tot_o = max(0.0, tot_s - tot_e - tot_d)
+
+    assert tot_e + tot_d + tot_o == pytest.approx(tot_s, rel=1e-9)
+    assert tot_e == 180000.0
+    assert tot_d == 60000.0
+    assert tot_o == 5000.0   # cargo_fp residual
+
+
+# ── Test 23: Queso — datos por mes coinciden con fila individual ──────────────
+
+def test_queso_por_mes_coincide_con_fila():
+    """queso.por_mes[0] debe contener los mismos valores que la fila del mes."""
+    tablas = _mock_tablas_con_datos()
+    filas_mes = [f for f in tablas["costos_detallados"] if f.get("mes") != "ANUAL"]
+    por_mes = [
+        {
+            "label": f["mes"],
+            "energia": f["ce_total"],
+            "demanda": f["costo_dem"],
+            "otros": max(0.0, f["subtotal"] - f["ce_total"] - f["costo_dem"]),
+            "total": f["subtotal"],
+        }
+        for f in filas_mes
+    ]
+    assert len(por_mes) == 1
+    m = por_mes[0]
+    assert m["label"] == "Ene 2024"
+    assert m["energia"] == 180000.0
+    assert m["demanda"] == 60000.0
+    assert m["otros"] == 5000.0
+    assert m["total"] == 245000.0
+
+
+# ── Test 24: Queso — agregado suma los meses ─────────────────────────────────
+
+def test_queso_agregado_suma_meses():
+    """Con dos meses, el agregado debe ser la suma de los dos."""
+    tablas_dos_meses = {
+        "costos_detallados": [
+            {"mes": "Ene 2024", "prorrateado": False,
+             "ce_total": 100000.0, "costo_dem": 50000.0, "subtotal": 160000.0,
+             "ce_base": 0.0, "ce_inter": 0.0, "ce_punta": 0.0,
+             "costo_dist": 0.0, "costo_cap": 0.0, "cargo_fp": 10000.0},
+            {"mes": "Feb 2024", "prorrateado": False,
+             "ce_total": 120000.0, "costo_dem": 55000.0, "subtotal": 185000.0,
+             "ce_base": 0.0, "ce_inter": 0.0, "ce_punta": 0.0,
+             "costo_dist": 0.0, "costo_cap": 0.0, "cargo_fp": 10000.0},
+            {"mes": "ANUAL", "prorrateado": False,
+             "ce_total": 220000.0, "costo_dem": 105000.0, "subtotal": 345000.0,
+             "ce_base": 0.0, "ce_inter": 0.0, "ce_punta": 0.0,
+             "costo_dist": 0.0, "costo_cap": 0.0, "cargo_fp": 20000.0},
+        ],
+        "consumos_demandas": [], "indicadores": [],
+    }
+    filas_mes = [f for f in tablas_dos_meses["costos_detallados"] if f.get("mes") != "ANUAL"]
+    tot_e = sum(f["ce_total"] for f in filas_mes)
+    tot_d = sum(f["costo_dem"] for f in filas_mes)
+    tot_s = sum(f["subtotal"] for f in filas_mes)
+    tot_o = max(0.0, tot_s - tot_e - tot_d)
+
+    assert tot_e == 220000.0
+    assert tot_d == 105000.0
+    assert tot_s == 345000.0
+    assert tot_o == pytest.approx(20000.0, rel=1e-9)
+
+
+# ── Test 25: Dashboard con datos muestra gráfica de queso ────────────────────
+
+def test_dashboard_contabilidad_muestra_queso(app, monkeypatch):
+    """Dashboard contabilidad con datos → HTML contiene chartQueso y filtroMesQueso."""
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], _facturas_cfe_mock(), []),
+    )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas_con_datos())
+    monkeypatch.setattr("web.app.calcular_historico_gas", lambda invoices: None)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    resp = c.get("/clientes/1/dashboard/contabilidad")
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    assert "chartQueso" in html
+    assert "filtroMesQueso" in html
+    assert "Composici" in html  # "Composición del costo eléctrico"
+
+
+# ── Test 26: Dashboard con datos muestra modales ─────────────────────────────
+
+def test_dashboard_contabilidad_tiene_modales(app, monkeypatch):
+    """Dashboard contabilidad con datos → HTML contiene los tres modales."""
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], _facturas_cfe_mock(), []),
+    )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas_con_datos())
+    monkeypatch.setattr("web.app.calcular_historico_gas", lambda invoices: None)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    resp = c.get("/clientes/1/dashboard/contabilidad")
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    assert "modalConsumosDemandas" in html
+    assert "modalCostosDetallados" in html
+    assert "modalIndicadores" in html
+
+
+# ── Test 27: Modal indicadores tiene data-mes en filas ───────────────────────
+
+def test_modal_indicadores_tiene_data_mes(app, monkeypatch):
+    """El modal de indicadores debe tener data-mes en cada fila."""
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], _facturas_cfe_mock(), []),
+    )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas_con_datos())
+    monkeypatch.setattr("web.app.calcular_historico_gas", lambda invoices: None)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    resp = c.get("/clientes/1/dashboard/contabilidad")
+    html = resp.data.decode()
+    assert 'data-mes="Ene 2024"' in html
+    assert 'data-mes="ANUAL"' in html
+
+
+# ── Test 28: Sin datos, queso no aparece ─────────────────────────────────────
+
+def test_dashboard_sin_datos_no_muestra_queso(app, monkeypatch):
+    """Con tablas vacías no se renderiza la sección del queso."""
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], _facturas_cfe_mock(), []),
+    )
+    monkeypatch.setattr("web.app.calcular_historico_cfe", lambda invoices: _mock_historico())
+    monkeypatch.setattr("web.app.calcular_tablas_cfe", lambda invoices: _mock_tablas())
+    monkeypatch.setattr("web.app.calcular_historico_gas", lambda invoices: None)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+
+    resp = c.get("/clientes/1/dashboard/contabilidad")
+    assert resp.status_code == 200
+    assert b"chartQueso" not in resp.data

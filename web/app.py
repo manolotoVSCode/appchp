@@ -174,6 +174,31 @@ def create_app() -> Flask:
             cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
             historico = calcular_historico_cfe(cfe_invoices)
             tablas = calcular_tablas_cfe(cfe_invoices)
+            # Datos para gráfica de composición del costo (pie chart)
+            queso = None
+            filas_mes = [f for f in tablas.get("costos_detallados", []) if f.get("mes") != "ANUAL"]
+            if filas_mes:
+                tot_e = sum(f["ce_total"] for f in filas_mes)
+                tot_d = sum(f["costo_dem"] for f in filas_mes)
+                tot_s = sum(f["subtotal"] for f in filas_mes)
+                queso = {
+                    "agregado": {
+                        "energia": tot_e,
+                        "demanda": tot_d,
+                        "otros": max(0.0, tot_s - tot_e - tot_d),
+                        "total": tot_s,
+                    },
+                    "por_mes": [
+                        {
+                            "label": f["mes"],
+                            "energia": f["ce_total"],
+                            "demanda": f["costo_dem"],
+                            "otros": max(0.0, f["subtotal"] - f["ce_total"] - f["costo_dem"]),
+                            "total": f["subtotal"],
+                        }
+                        for f in filas_mes
+                    ],
+                }
             historico_gas = calcular_historico_gas(gas_invoices)
         except Exception as e:
             import traceback
@@ -216,6 +241,7 @@ def create_app() -> Flask:
             historico=historico,
             tablas=tablas,
             historico_gas=historico_gas,
+            queso=queso,
             num_meses_analizados=len(facturas_cfe),
             kwh_total_periodo=kwh_total_periodo,
             costo_total_periodo=costo_total_periodo,
