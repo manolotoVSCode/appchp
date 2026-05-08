@@ -16,6 +16,8 @@ from storage.repository import (
     create_cliente,
     update_cliente,
     delete_cliente,
+    upload_logo,
+    delete_logo,
     rfc_existe,
     cliente_tiene_facturas,
     get_contratos_por_cliente,
@@ -38,6 +40,20 @@ from storage.repository import (
 logger = logging.getLogger(__name__)
 
 _RFC_RE = re.compile(r'^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$')
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+_SECTORES = ["Hotelero", "Manufactura", "Alimentos y bebidas", "Químico", "Textil", "Otro"]
+_ESTADOS = [
+    "Aguascalientes", "Baja California", "Baja California Sur", "Campeche",
+    "Chiapas", "Chihuahua", "Ciudad de México", "Coahuila", "Colima",
+    "Durango", "Estado de México", "Guanajuato", "Guerrero", "Hidalgo",
+    "Jalisco", "Michoacán", "Morelos", "Nayarit", "Nuevo León", "Oaxaca",
+    "Puebla", "Querétaro", "Quintana Roo", "San Luis Potosí", "Sinaloa",
+    "Sonora", "Tabasco", "Tamaulipas", "Tlaxcala", "Veracruz", "Yucatán",
+    "Zacatecas",
+]
+_TARIFAS_CFE = ["GDMTH", "GDMTO", "PDBT", "DAC", "DIST", "DIT"]
+_REGIMENES = ["24/7 continuo", "Dos turnos", "Un turno", "Estacional"]
 
 
 def _sanitizar(valor: str) -> str:
@@ -45,6 +61,87 @@ def _sanitizar(valor: str) -> str:
     normalizado = unicodedata.normalize("NFKC", valor)
     limpio = "".join(c for c in normalizado if unicodedata.category(c) not in ("Cc", "Cf"))
     return limpio.strip().upper()
+
+
+def _sanitizar_texto(valor: str) -> str | None:
+    """Normaliza Unicode y elimina caracteres de control/formato. Preserva mayúsculas/minúsculas."""
+    if not valor:
+        return None
+    normalizado = unicodedata.normalize("NFKC", valor)
+    limpio = "".join(c for c in normalizado if unicodedata.category(c) not in ("Cc", "Cf"))
+    resultado = limpio.strip()
+    return resultado or None
+
+
+def _validar_campos_extendidos(form) -> str | None:
+    """Valida los campos opcionales del formulario de cliente. Devuelve mensaje de error o None."""
+    from datetime import date as _date
+    email = form.get("contacto_email", "").strip()
+    if email and not _EMAIL_RE.match(email):
+        return "El email de contacto no tiene un formato válido."
+    cp = form.get("codigo_postal", "").strip()
+    if cp and not re.fullmatch(r'\d{5}', cp):
+        return "El código postal debe tener exactamente 5 dígitos."
+    for campo in ("capacidad_instalada_kw", "demanda_contratada_kw", "consumo_anual_estimado_mwh"):
+        val = form.get(campo, "").strip()
+        if val:
+            try:
+                if float(val) <= 0:
+                    return f"El valor de '{campo.replace('_', ' ')}' debe ser un número positivo."
+            except ValueError:
+                return f"El valor de '{campo.replace('_', ' ')}' debe ser un número."
+    anio = form.get("anio_inicio_operacion", "").strip()
+    if anio:
+        try:
+            anio_int = int(anio)
+            current_year = _date.today().year
+            if not (1900 <= anio_int <= current_year + 1):
+                return f"El año de inicio debe estar entre 1900 y {current_year + 1}."
+        except ValueError:
+            return "El año de inicio de operación debe ser un número entero."
+    return None
+
+
+def _extraer_campos_extendidos(form) -> dict:
+    """Extrae y sanitiza los campos opcionales del formulario. Devuelve dict listo para repository."""
+    def _opt_float(key: str) -> float | None:
+        v = form.get(key, "").strip()
+        try:
+            return float(v) if v else None
+        except ValueError:
+            return None
+
+    def _opt_int(key: str) -> int | None:
+        v = form.get(key, "").strip()
+        try:
+            return int(v) if v else None
+        except ValueError:
+            return None
+
+    return {
+        "sector_industrial": form.get("sector_industrial", "").strip() or None,
+        "contacto_nombre": _sanitizar_texto(form.get("contacto_nombre", "")),
+        "contacto_cargo": _sanitizar_texto(form.get("contacto_cargo", "")),
+        "contacto_email": form.get("contacto_email", "").strip() or None,
+        "contacto_telefono": form.get("contacto_telefono", "").strip() or None,
+        "direccion": _sanitizar_texto(form.get("direccion", "")),
+        "estado": form.get("estado", "").strip() or None,
+        "codigo_postal": form.get("codigo_postal", "").strip() or None,
+        "tarifa_cfe": form.get("tarifa_cfe", "").strip() or None,
+        "capacidad_instalada_kw": _opt_float("capacidad_instalada_kw"),
+        "demanda_contratada_kw": _opt_float("demanda_contratada_kw"),
+        "anio_inicio_operacion": _opt_int("anio_inicio_operacion"),
+        "regimen_operacion": form.get("regimen_operacion", "").strip() or None,
+        "consumo_anual_estimado_mwh": _opt_float("consumo_anual_estimado_mwh"),
+    }
+
+
+_FORM_SELECTS = {
+    "sectores": _SECTORES,
+    "estados": _ESTADOS,
+    "tarifas_cfe": _TARIFAS_CFE,
+    "regimenes": _REGIMENES,
+}
 
 
 def _detect_tipo(pdf_path: Path) -> str:
@@ -94,8 +191,9 @@ def nuevo():
         nombre = request.form.get("nombre", "").strip()
         rfc = _sanitizar(request.form.get("rfc", ""))
         notas = request.form.get("notas", "").strip() or None
+        campos = _extraer_campos_extendidos(request.form)
 
-        error = _validar_campos(nombre, rfc)
+        error = _validar_campos(nombre, rfc) or _validar_campos_extendidos(request.form)
         if error is None and rfc_existe(rfc):
             error = f"Ya existe un cliente con RFC {rfc}."
 
@@ -103,10 +201,11 @@ def nuevo():
             return render_template(
                 "clientes/nuevo.html",
                 error=error, nombre=nombre, rfc=rfc, notas=notas or "",
+                **_FORM_SELECTS, **campos,
             )
 
         try:
-            cliente_id = create_cliente(nombre, rfc, notas)
+            cliente_id = create_cliente(nombre, rfc, notas, **campos)
             logger.info("Cliente creado: id=%d, nombre='%s', rfc=%s", cliente_id, nombre, rfc)
             flash(f"Cliente '{nombre}' creado correctamente.", "success")
             return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
@@ -116,9 +215,14 @@ def nuevo():
                 "clientes/nuevo.html",
                 error=f"Error al crear el cliente: {exc}",
                 nombre=nombre, rfc=rfc, notas=notas or "",
+                **_FORM_SELECTS, **campos,
             )
 
-    return render_template("clientes/nuevo.html", error=None, nombre="", rfc="", notas="")
+    return render_template(
+        "clientes/nuevo.html",
+        error=None, nombre="", rfc="", notas="",
+        **_FORM_SELECTS,
+    )
 
 
 @clientes_bp.route("/<int:cliente_id>")
@@ -129,6 +233,7 @@ def ficha(cliente_id: int):
         return redirect(url_for("clientes.listado"))
     session["cliente_activo_id"] = cliente_id
     session["cliente_activo_nombre"] = cliente["nombre"]
+    session["cliente_activo_logo_url"] = cliente.get("logo_url")
     contratos = get_contratos_por_cliente(cliente_id)
     return render_template("clientes/ficha.html", cliente=cliente, contratos=contratos)
 
@@ -146,6 +251,7 @@ def editar(cliente_id: int):
         nombre = request.form.get("nombre", "").strip()
         rfc_form = request.form.get("rfc", "").strip().upper()
         notas = request.form.get("notas", "").strip() or None
+        campos = _extraer_campos_extendidos(request.form)
 
         error = None
         if not nombre:
@@ -154,6 +260,8 @@ def editar(cliente_id: int):
             error = _validar_rfc(rfc_form)
             if error is None and rfc_form != cliente["rfc"] and rfc_existe(rfc_form, exclude_id=cliente_id):
                 error = f"Ya existe un cliente con RFC {rfc_form}."
+        if error is None:
+            error = _validar_campos_extendidos(request.form)
 
         rfc_a_guardar = None if tiene_facturas else rfc_form
 
@@ -164,10 +272,11 @@ def editar(cliente_id: int):
                 error=error, nombre=nombre,
                 rfc=cliente["rfc"] if tiene_facturas else rfc_form,
                 notas=notas or "",
+                **_FORM_SELECTS, **campos,
             )
 
         try:
-            update_cliente(cliente_id, nombre=nombre, notas=notas, rfc=rfc_a_guardar)
+            update_cliente(cliente_id, nombre=nombre, notas=notas, rfc=rfc_a_guardar, **campos)
             logger.info("Cliente actualizado: id=%d, nombre='%s'", cliente_id, nombre)
             if session.get("cliente_activo_id") == cliente_id:
                 session["cliente_activo_nombre"] = nombre
@@ -181,6 +290,7 @@ def editar(cliente_id: int):
                 error=f"Error al guardar: {exc}", nombre=nombre,
                 rfc=cliente["rfc"] if tiene_facturas else rfc_form,
                 notas=notas or "",
+                **_FORM_SELECTS, **campos,
             )
 
     return render_template(
@@ -188,6 +298,21 @@ def editar(cliente_id: int):
         cliente=cliente, tiene_facturas=tiene_facturas,
         error=None, nombre=cliente["nombre"],
         rfc=cliente["rfc"], notas=cliente.get("notas") or "",
+        sector_industrial=cliente.get("sector_industrial"),
+        contacto_nombre=cliente.get("contacto_nombre") or "",
+        contacto_cargo=cliente.get("contacto_cargo") or "",
+        contacto_email=cliente.get("contacto_email") or "",
+        contacto_telefono=cliente.get("contacto_telefono") or "",
+        direccion=cliente.get("direccion") or "",
+        estado=cliente.get("estado"),
+        codigo_postal=cliente.get("codigo_postal") or "",
+        tarifa_cfe=cliente.get("tarifa_cfe"),
+        capacidad_instalada_kw=cliente.get("capacidad_instalada_kw"),
+        demanda_contratada_kw=cliente.get("demanda_contratada_kw"),
+        anio_inicio_operacion=cliente.get("anio_inicio_operacion"),
+        regimen_operacion=cliente.get("regimen_operacion"),
+        consumo_anual_estimado_mwh=cliente.get("consumo_anual_estimado_mwh"),
+        **_FORM_SELECTS,
     )
 
 
@@ -217,6 +342,7 @@ def borrar(cliente_id: int):
         if session.get("cliente_activo_id") == cliente_id:
             session.pop("cliente_activo_id", None)
             session.pop("cliente_activo_nombre", None)
+            session.pop("cliente_activo_logo_url", None)
         flash(f"Cliente '{nombre}' y todas sus facturas han sido borrados.", "success")
     except Exception as exc:
         logger.error("Error borrando cliente id=%d: %s", cliente_id, exc)
@@ -224,6 +350,56 @@ def borrar(cliente_id: int):
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
     return redirect(url_for("clientes.listado"))
+
+
+@clientes_bp.route("/<int:cliente_id>/logo", methods=["POST"])
+def cliente_logo_subir(cliente_id: int):
+    from flask import jsonify
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        return jsonify({"error": "Cliente no encontrado"}), 404
+
+    f = request.files.get("logo")
+    if not f or not f.filename:
+        return jsonify({"error": "No se envió ningún archivo"}), 400
+
+    if not f.filename.lower().endswith(".png"):
+        return jsonify({"error": "Solo se aceptan archivos PNG con fondo transparente."}), 400
+
+    file_bytes = f.read()
+    if len(file_bytes) > 2 * 1024 * 1024:
+        return jsonify({"error": "El logo no puede superar 2 MB."}), 400
+
+    if not file_bytes.startswith(b'\x89PNG'):
+        return jsonify({"error": "El archivo no es un PNG válido."}), 400
+
+    try:
+        logo_url = upload_logo(cliente_id, file_bytes, "image/png")
+        if session.get("cliente_activo_id") == cliente_id:
+            session["cliente_activo_logo_url"] = logo_url
+        return jsonify({"logo_url": logo_url})
+    except Exception as exc:
+        logger.error("Error subiendo logo cliente_id=%d: %s", cliente_id, exc)
+        return jsonify({"error": "No se pudo subir el logo. Los demás datos fueron guardados."}), 502
+
+
+@clientes_bp.route("/<int:cliente_id>/logo/eliminar", methods=["POST"])
+def cliente_logo_eliminar(cliente_id: int):
+    from flask import jsonify
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        return jsonify({"error": "Cliente no encontrado"}), 404
+
+    try:
+        delete_logo(cliente_id)
+        if session.get("cliente_activo_id") == cliente_id:
+            session["cliente_activo_logo_url"] = None
+        return jsonify({"ok": True})
+    except Exception as exc:
+        logger.error("Error eliminando logo cliente_id=%d: %s", cliente_id, exc)
+        return jsonify({"error": str(exc)}), 500
 
 
 # ── Contratos ─────────────────────────────────────────────────────────────────

@@ -3,10 +3,27 @@
 -- Ejecutar manualmente en el SQL Editor de Supabase si se necesita recrear el schema.
 
 CREATE TABLE IF NOT EXISTS clientes (
-    id         SERIAL PRIMARY KEY,
-    nombre     TEXT    NOT NULL,
-    rfc        TEXT    NOT NULL UNIQUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                          SERIAL PRIMARY KEY,
+    nombre                      TEXT    NOT NULL,
+    rfc                         TEXT    NOT NULL UNIQUE,
+    notas                       TEXT,
+    created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- Campos extendidos (todos nullable)
+    sector_industrial           TEXT,
+    contacto_nombre             TEXT,
+    contacto_cargo              TEXT,
+    contacto_email              TEXT,
+    contacto_telefono           TEXT,
+    direccion                   TEXT,
+    estado                      TEXT,
+    codigo_postal               TEXT,
+    tarifa_cfe                  TEXT,
+    capacidad_instalada_kw      NUMERIC,
+    demanda_contratada_kw       NUMERIC,
+    anio_inicio_operacion       INTEGER,
+    regimen_operacion           TEXT,
+    consumo_anual_estimado_mwh  NUMERIC,
+    logo_url                    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS cfe_facturas (

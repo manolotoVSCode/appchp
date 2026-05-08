@@ -24,9 +24,18 @@
 {% block content %}
 
 <!-- Título -->
-<div class="d-flex align-items-center mb-4">
-  <h1 class="h3 mb-0 me-2">Análisis de Cogeneración</h1>
-  <span class="text-muted small">{{ cliente_nombre }}</span>
+<div class="d-flex align-items-center mb-4 gap-3">
+  {% if logo_url %}
+  <img src="{{ logo_url }}" alt="{{ cliente_nombre }}"
+       style="height:64px; max-height:80px; width:auto; max-width:180px; object-fit:contain;">
+  <div>
+    <div class="fw-bold fs-5" style="color:var(--color-primary-dark)">{{ cliente_nombre }}</div>
+    <div class="text-muted small">Análisis de Cogeneración</div>
+  </div>
+  {% else %}
+  <h1 class="h3 mb-0">{{ cliente_nombre }}</h1>
+  <span class="text-muted small">Análisis de Cogeneración</span>
+  {% endif %}
   <a href="/export/excel" class="btn btn-sm btn-success ms-auto">Excel</a>
 </div>
 

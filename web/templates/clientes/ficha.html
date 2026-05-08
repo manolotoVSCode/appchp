@@ -10,29 +10,32 @@
 </div>
 
 <div class="row g-3">
-  <!-- Datos del cliente -->
+  <!-- Datos generales -->
   <div class="col-md-6">
     <div class="card shadow-sm h-100">
-      <div class="card-header fw-semibold small text-muted" >Datos del cliente</div>
+      <div class="card-header fw-semibold small text-muted">Datos generales</div>
       <div class="card-body">
-        <dl class="row mb-0">
-          <dt class="col-sm-4 small text-muted">Nombre</dt>
+        {% if cliente.logo_url %}
+        <div class="mb-3 pb-3 border-bottom">
+          <img src="{{ cliente.logo_url }}" alt="{{ cliente.nombre }}"
+               style="max-height:64px; max-width:180px; object-fit:contain;">
+        </div>
+        {% endif %}
+        <dl class="row mb-0 small">
+          <dt class="col-sm-4 text-muted">Nombre</dt>
           <dd class="col-sm-8 fw-semibold mb-2">{{ cliente.nombre }}</dd>
 
-          <dt class="col-sm-4 small text-muted">RFC</dt>
+          <dt class="col-sm-4 text-muted">RFC</dt>
           <dd class="col-sm-8 font-monospace mb-2">{{ cliente.rfc }}</dd>
 
-          <dt class="col-sm-4 small text-muted">Notas</dt>
-          <dd class="col-sm-8 mb-2">
-            {% if cliente.notas %}
-              {{ cliente.notas }}
-            {% else %}
-              <span class="text-muted small">—</span>
-            {% endif %}
-          </dd>
+          <dt class="col-sm-4 text-muted">Sector</dt>
+          <dd class="col-sm-8 mb-2">{{ cliente.sector_industrial or "—" }}</dd>
 
-          <dt class="col-sm-4 small text-muted">Alta</dt>
-          <dd class="col-sm-8 small mb-0">{{ cliente.created_at[:10] if cliente.created_at else "—" }}</dd>
+          <dt class="col-sm-4 text-muted">Notas</dt>
+          <dd class="col-sm-8 mb-2">{{ cliente.notas or "—" }}</dd>
+
+          <dt class="col-sm-4 text-muted">Alta</dt>
+          <dd class="col-sm-8 mb-0">{{ cliente.created_at[:10] if cliente.created_at else "—" }}</dd>
         </dl>
       </div>
     </div>
@@ -41,7 +44,7 @@
   <!-- Facturas asociadas -->
   <div class="col-md-3">
     <div class="card shadow-sm h-100 text-center">
-      <div class="card-header fw-semibold small text-muted" >Facturas CFE</div>
+      <div class="card-header fw-semibold small text-muted">Facturas CFE</div>
       <div class="card-body d-flex align-items-center justify-content-center">
         <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ cliente.num_cfe }}</span>
       </div>
@@ -49,9 +52,101 @@
   </div>
   <div class="col-md-3">
     <div class="card shadow-sm h-100 text-center">
-      <div class="card-header fw-semibold small text-muted" >Facturas Gas</div>
+      <div class="card-header fw-semibold small text-muted">Facturas Gas</div>
       <div class="card-body d-flex align-items-center justify-content-center">
         <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ cliente.num_gas }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contacto -->
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold small text-muted">Contacto</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-sm-4 text-muted">Nombre</dt>
+          <dd class="col-sm-8 mb-2">{{ cliente.contacto_nombre or "—" }}</dd>
+
+          <dt class="col-sm-4 text-muted">Cargo</dt>
+          <dd class="col-sm-8 mb-2">{{ cliente.contacto_cargo or "—" }}</dd>
+
+          <dt class="col-sm-4 text-muted">Email</dt>
+          <dd class="col-sm-8 mb-2">
+            {% if cliente.contacto_email %}
+            <a href="mailto:{{ cliente.contacto_email }}">{{ cliente.contacto_email }}</a>
+            {% else %}—{% endif %}
+          </dd>
+
+          <dt class="col-sm-4 text-muted">Teléfono</dt>
+          <dd class="col-sm-8 mb-0">{{ cliente.contacto_telefono or "—" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ubicación -->
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold small text-muted">Ubicación</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-sm-4 text-muted">Dirección</dt>
+          <dd class="col-sm-8 mb-2">{{ cliente.direccion or "—" }}</dd>
+
+          <dt class="col-sm-4 text-muted">Estado</dt>
+          <dd class="col-sm-8 mb-2">{{ cliente.estado or "—" }}</dd>
+
+          <dt class="col-sm-4 text-muted">C.P.</dt>
+          <dd class="col-sm-8 mb-0 font-monospace">{{ cliente.codigo_postal or "—" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Datos técnicos -->
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold small text-muted">Datos técnicos</div>
+      <div class="card-body">
+        <div class="row g-3 small">
+          <div class="col-md-2">
+            <div class="text-muted mb-1">Tarifa CFE</div>
+            <div class="fw-semibold">{{ cliente.tarifa_cfe or "—" }}</div>
+          </div>
+          <div class="col-md-2">
+            <div class="text-muted mb-1">Cap. instalada</div>
+            <div class="fw-semibold">
+              {% if cliente.capacidad_instalada_kw is not none %}
+                {{ cliente.capacidad_instalada_kw }} kW
+              {% else %}—{% endif %}
+            </div>
+          </div>
+          <div class="col-md-2">
+            <div class="text-muted mb-1">Demanda contratada</div>
+            <div class="fw-semibold">
+              {% if cliente.demanda_contratada_kw is not none %}
+                {{ cliente.demanda_contratada_kw }} kW
+              {% else %}—{% endif %}
+            </div>
+          </div>
+          <div class="col-md-2">
+            <div class="text-muted mb-1">Año inicio op.</div>
+            <div class="fw-semibold">{{ cliente.anio_inicio_operacion or "—" }}</div>
+          </div>
+          <div class="col-md-2">
+            <div class="text-muted mb-1">Régimen</div>
+            <div class="fw-semibold">{{ cliente.regimen_operacion or "—" }}</div>
+          </div>
+          <div class="col-md-2">
+            <div class="text-muted mb-1">Consumo anual est.</div>
+            <div class="fw-semibold">
+              {% if cliente.consumo_anual_estimado_mwh is not none %}
+                {{ cliente.consumo_anual_estimado_mwh }} MWh
+              {% else %}—{% endif %}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

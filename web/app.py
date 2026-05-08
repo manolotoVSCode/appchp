@@ -108,8 +108,11 @@ def create_app() -> Flask:
         if not id_:
             return {"cliente_activo": None, "app_version": _APP_VERSION}
         contratos = get_contratos_por_cliente(id_)
-        return {"cliente_activo": {"id": id_, "nombre": nombre, "contratos": contratos},
-                "app_version": _APP_VERSION}
+        logo_url = session.get("cliente_activo_logo_url")
+        return {
+            "cliente_activo": {"id": id_, "nombre": nombre, "contratos": contratos, "logo_url": logo_url},
+            "app_version": _APP_VERSION,
+        }
 
     @app.route("/")
     def dashboard():
@@ -192,6 +195,7 @@ def create_app() -> Flask:
             aviso_datos=aviso_datos,
             cliente_id=cliente_id,
             cliente_nombre=cliente["nombre"],
+            logo_url=cliente.get("logo_url"),
             chart_labels=chart_labels,
             chart_ebitda=chart_ebitda,
             chart_ahorro_elec=chart_ahorro_elec,

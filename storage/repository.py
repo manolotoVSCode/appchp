@@ -303,60 +303,168 @@ def _row_to_gas_invoice(row: dict) -> GasInvoice:
 
 # ── Gestión de clientes ───────────────────────────────────────────────────────
 
-def get_all_clientes_con_conteos() -> list[dict]:
-    """Devuelve todos los clientes con conteo de facturas CFE y gas. Ordenados por nombre."""
-    result = _supabase.table("clientes").select(
-        "id, nombre, rfc, notas, created_at, cfe_facturas(id), gas_facturas(id)"
-    ).order("nombre").execute()
-    return [
-        {
-            "id": row["id"],
-            "nombre": row["nombre"],
-            "rfc": row["rfc"],
-            "notas": row.get("notas"),
-            "created_at": row.get("created_at"),
-            "num_cfe": len(row.get("cfe_facturas") or []),
-            "num_gas": len(row.get("gas_facturas") or []),
-        }
-        for row in result.data
-    ]
+_CLIENTE_CAMPOS_EXTENDIDOS = (
+    "sector_industrial, contacto_nombre, contacto_cargo, contacto_email, contacto_telefono, "
+    "direccion, estado, codigo_postal, tarifa_cfe, "
+    "capacidad_instalada_kw, demanda_contratada_kw, anio_inicio_operacion, "
+    "regimen_operacion, consumo_anual_estimado_mwh, logo_url"
+)
 
 
-def get_cliente_con_conteos(cliente_id: int) -> dict | None:
-    """Devuelve un cliente con conteo de facturas, o None si no existe."""
-    result = _supabase.table("clientes").select(
-        "id, nombre, rfc, notas, created_at, cfe_facturas(id), gas_facturas(id)"
-    ).eq("id", cliente_id).execute()
-    if not result.data:
-        return None
-    row = result.data[0]
+def _row_to_cliente_dict(row: dict) -> dict:
     return {
         "id": row["id"],
         "nombre": row["nombre"],
         "rfc": row["rfc"],
         "notas": row.get("notas"),
         "created_at": row.get("created_at"),
+        "logo_url": row.get("logo_url"),
+        "sector_industrial": row.get("sector_industrial"),
+        "contacto_nombre": row.get("contacto_nombre"),
+        "contacto_cargo": row.get("contacto_cargo"),
+        "contacto_email": row.get("contacto_email"),
+        "contacto_telefono": row.get("contacto_telefono"),
+        "direccion": row.get("direccion"),
+        "estado": row.get("estado"),
+        "codigo_postal": row.get("codigo_postal"),
+        "tarifa_cfe": row.get("tarifa_cfe"),
+        "capacidad_instalada_kw": row.get("capacidad_instalada_kw"),
+        "demanda_contratada_kw": row.get("demanda_contratada_kw"),
+        "anio_inicio_operacion": row.get("anio_inicio_operacion"),
+        "regimen_operacion": row.get("regimen_operacion"),
+        "consumo_anual_estimado_mwh": row.get("consumo_anual_estimado_mwh"),
         "num_cfe": len(row.get("cfe_facturas") or []),
         "num_gas": len(row.get("gas_facturas") or []),
     }
 
 
-def create_cliente(nombre: str, rfc: str, notas: str | None) -> int:
+def get_all_clientes_con_conteos() -> list[dict]:
+    """Devuelve todos los clientes con conteo de facturas CFE y gas. Ordenados por nombre."""
+    result = _supabase.table("clientes").select(
+        f"id, nombre, rfc, notas, created_at, logo_url, cfe_facturas(id), gas_facturas(id)"
+    ).order("nombre").execute()
+    return [_row_to_cliente_dict(row) for row in result.data]
+
+
+def get_cliente_con_conteos(cliente_id: int) -> dict | None:
+    """Devuelve un cliente con todos sus campos y conteo de facturas, o None si no existe."""
+    result = _supabase.table("clientes").select(
+        f"id, nombre, rfc, notas, created_at, {_CLIENTE_CAMPOS_EXTENDIDOS}, "
+        "cfe_facturas(id), gas_facturas(id)"
+    ).eq("id", cliente_id).execute()
+    if not result.data:
+        return None
+    return _row_to_cliente_dict(result.data[0])
+
+
+def create_cliente(
+    nombre: str,
+    rfc: str,
+    notas: str | None,
+    sector_industrial: str | None = None,
+    contacto_nombre: str | None = None,
+    contacto_cargo: str | None = None,
+    contacto_email: str | None = None,
+    contacto_telefono: str | None = None,
+    direccion: str | None = None,
+    estado: str | None = None,
+    codigo_postal: str | None = None,
+    tarifa_cfe: str | None = None,
+    capacidad_instalada_kw: float | None = None,
+    demanda_contratada_kw: float | None = None,
+    anio_inicio_operacion: int | None = None,
+    regimen_operacion: str | None = None,
+    consumo_anual_estimado_mwh: float | None = None,
+) -> int:
     """Crea un nuevo cliente. Devuelve el id asignado."""
-    result = _supabase.table("clientes").insert({
+    data: dict = {
         "nombre": nombre,
         "rfc": rfc,
-        "notas": notas if notas else None,
-    }).execute()
+        "notas": notas or None,
+        "sector_industrial": sector_industrial,
+        "contacto_nombre": contacto_nombre,
+        "contacto_cargo": contacto_cargo,
+        "contacto_email": contacto_email,
+        "contacto_telefono": contacto_telefono,
+        "direccion": direccion,
+        "estado": estado,
+        "codigo_postal": codigo_postal,
+        "tarifa_cfe": tarifa_cfe,
+        "capacidad_instalada_kw": capacidad_instalada_kw,
+        "demanda_contratada_kw": demanda_contratada_kw,
+        "anio_inicio_operacion": anio_inicio_operacion,
+        "regimen_operacion": regimen_operacion,
+        "consumo_anual_estimado_mwh": consumo_anual_estimado_mwh,
+    }
+    result = _supabase.table("clientes").insert(data).execute()
     return result.data[0]["id"]
 
 
-def update_cliente(cliente_id: int, nombre: str, notas: str | None, rfc: str | None = None) -> None:
+def update_cliente(
+    cliente_id: int,
+    nombre: str,
+    notas: str | None,
+    rfc: str | None = None,
+    sector_industrial: str | None = None,
+    contacto_nombre: str | None = None,
+    contacto_cargo: str | None = None,
+    contacto_email: str | None = None,
+    contacto_telefono: str | None = None,
+    direccion: str | None = None,
+    estado: str | None = None,
+    codigo_postal: str | None = None,
+    tarifa_cfe: str | None = None,
+    capacidad_instalada_kw: float | None = None,
+    demanda_contratada_kw: float | None = None,
+    anio_inicio_operacion: int | None = None,
+    regimen_operacion: str | None = None,
+    consumo_anual_estimado_mwh: float | None = None,
+) -> None:
     """Actualiza los campos del cliente. rfc=None preserva el RFC actual sin tocarlo."""
-    data: dict = {"nombre": nombre, "notas": notas if notas else None}
+    data: dict = {
+        "nombre": nombre,
+        "notas": notas or None,
+        "sector_industrial": sector_industrial,
+        "contacto_nombre": contacto_nombre,
+        "contacto_cargo": contacto_cargo,
+        "contacto_email": contacto_email,
+        "contacto_telefono": contacto_telefono,
+        "direccion": direccion,
+        "estado": estado,
+        "codigo_postal": codigo_postal,
+        "tarifa_cfe": tarifa_cfe,
+        "capacidad_instalada_kw": capacidad_instalada_kw,
+        "demanda_contratada_kw": demanda_contratada_kw,
+        "anio_inicio_operacion": anio_inicio_operacion,
+        "regimen_operacion": regimen_operacion,
+        "consumo_anual_estimado_mwh": consumo_anual_estimado_mwh,
+    }
     if rfc is not None:
         data["rfc"] = rfc
     _supabase.table("clientes").update(data).eq("id", cliente_id).execute()
+
+
+def upload_logo(cliente_id: int, file_bytes: bytes, content_type: str) -> str:
+    """Sube el logo al bucket client-logos y actualiza logo_url en clientes. Devuelve la URL pública."""
+    path = f"cliente_{cliente_id}.png"
+    _supabase.storage.from_("client-logos").upload(
+        path=path,
+        file=file_bytes,
+        file_options={"content-type": content_type, "upsert": "true"},
+    )
+    url = _supabase.storage.from_("client-logos").get_public_url(path)
+    _supabase.table("clientes").update({"logo_url": url}).eq("id", cliente_id).execute()
+    return url
+
+
+def delete_logo(cliente_id: int) -> None:
+    """Elimina el logo del bucket y limpia logo_url en clientes."""
+    path = f"cliente_{cliente_id}.png"
+    try:
+        _supabase.storage.from_("client-logos").remove([path])
+    except Exception as exc:
+        logger.warning("No se pudo eliminar logo del Storage (cliente_id=%d): %s", cliente_id, exc)
+    _supabase.table("clientes").update({"logo_url": None}).eq("id", cliente_id).execute()
 
 
 def delete_cliente(cliente_id: int) -> None:

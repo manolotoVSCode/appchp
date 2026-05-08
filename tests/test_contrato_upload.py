@@ -21,6 +21,21 @@ _CLIENTE = {
     "created_at": "2024-01-15T10:00:00+00:00",
     "num_cfe": 9,
     "num_gas": 0,
+    "logo_url": None,
+    "sector_industrial": None,
+    "contacto_nombre": None,
+    "contacto_cargo": None,
+    "contacto_email": None,
+    "contacto_telefono": None,
+    "direccion": None,
+    "estado": None,
+    "codigo_postal": None,
+    "tarifa_cfe": None,
+    "capacidad_instalada_kw": None,
+    "demanda_contratada_kw": None,
+    "anio_inicio_operacion": None,
+    "regimen_operacion": None,
+    "consumo_anual_estimado_mwh": None,
 }
 
 _CONTRATO_ELECTRICO = Contrato(
@@ -472,7 +487,7 @@ def test_upload_rfc_vacio_en_pdf_guarda_sin_pendiente(auth_client, monkeypatch, 
 def test_nuevo_cliente_rfc_con_espacios_sanitiza(auth_client, monkeypatch):
     """RFC con espacios y caracteres invisibles → sanitizado y aceptado si formato válido."""
     monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
-    monkeypatch.setattr("web.clientes.create_cliente", lambda nombre, rfc, notas: 42)
+    monkeypatch.setattr("web.clientes.create_cliente", lambda nombre, rfc, notas, **kw: 42)
 
     # U+202D (left-to-right override) antes del RFC, espacio al final
     rfc_con_invisible = "\u202Diti930101aaa "
@@ -489,7 +504,7 @@ def test_nuevo_cliente_rfc_con_espacios_sanitiza(auth_client, monkeypatch):
 def test_nuevo_cliente_rfc_minusculas_sanitiza(auth_client, monkeypatch):
     """RFC en minúsculas → sanitizado a mayúsculas y aceptado."""
     monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
-    monkeypatch.setattr("web.clientes.create_cliente", lambda nombre, rfc, notas: 42)
+    monkeypatch.setattr("web.clientes.create_cliente", lambda nombre, rfc, notas, **kw: 42)
 
     resp = auth_client.post(
         "/clientes/nuevo",

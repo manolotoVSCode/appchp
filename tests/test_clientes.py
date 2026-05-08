@@ -2,6 +2,7 @@
 """Tests de regresión y humo para el blueprint de gestión de clientes."""
 from __future__ import annotations
 
+import io
 import pytest
 from werkzeug.security import generate_password_hash
 from models.contrato import Contrato
@@ -16,6 +17,21 @@ _CLIENTE_BASE = {
     "created_at": "2024-01-15T10:00:00+00:00",
     "num_cfe": 12,
     "num_gas": 12,
+    "logo_url": None,
+    "sector_industrial": None,
+    "contacto_nombre": None,
+    "contacto_cargo": None,
+    "contacto_email": None,
+    "contacto_telefono": None,
+    "direccion": None,
+    "estado": None,
+    "codigo_postal": None,
+    "tarifa_cfe": None,
+    "capacidad_instalada_kw": None,
+    "demanda_contratada_kw": None,
+    "anio_inicio_operacion": None,
+    "regimen_operacion": None,
+    "consumo_anual_estimado_mwh": None,
 }
 
 _CONTRATO_BASE = Contrato(
@@ -387,3 +403,148 @@ def test_contrato_borrar_confirmacion_correcta(auth_client, monkeypatch):
     assert resp.status_code == 302
     assert "/clientes/1" in resp.headers["Location"]
     assert 10 in borrado
+
+
+# ── Campos extendidos — crear cliente ────────────────────────────────────────
+
+def test_nuevo_cliente_con_campos_extendidos(auth_client, monkeypatch):
+    """POST /clientes/nuevo con todos los campos nuevos → create_cliente recibe los campos."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    llamadas = []
+    def _create(nombre, rfc, notas, **kwargs):
+        llamadas.append(kwargs)
+        return 99
+    monkeypatch.setattr("web.clientes.create_cliente", _create)
+    resp = auth_client.post("/clientes/nuevo", data={
+        "nombre": "IBERICA TILES", "rfc": "ITI930101AAA", "notas": "",
+        "sector_industrial": "Manufactura",
+        "contacto_nombre": "Juan Pérez",
+        "contacto_email": "juan@iberica.com",
+        "contacto_telefono": "81 1234 5678",
+        "estado": "Nuevo León",
+        "codigo_postal": "64000",
+        "tarifa_cfe": "GDMTH",
+        "capacidad_instalada_kw": "500",
+        "anio_inicio_operacion": "2010",
+        "regimen_operacion": "24/7 continuo",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert len(llamadas) == 1
+    assert llamadas[0]["sector_industrial"] == "Manufactura"
+    assert llamadas[0]["contacto_email"] == "juan@iberica.com"
+    assert llamadas[0]["estado"] == "Nuevo León"
+    assert llamadas[0]["capacidad_instalada_kw"] == 500.0
+    assert llamadas[0]["anio_inicio_operacion"] == 2010
+
+
+def test_nuevo_cliente_solo_campos_requeridos(auth_client, monkeypatch):
+    """POST /clientes/nuevo solo nombre + RFC → campos extendidos en None."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    llamadas = []
+    def _create(nombre, rfc, notas, **kwargs):
+        llamadas.append(kwargs)
+        return 99
+    monkeypatch.setattr("web.clientes.create_cliente", _create)
+    resp = auth_client.post("/clientes/nuevo", data={
+        "nombre": "Mínimo SA", "rfc": "MIN930101ABC", "notas": "",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert llamadas[0]["sector_industrial"] is None
+    assert llamadas[0]["contacto_email"] is None
+    assert llamadas[0]["capacidad_instalada_kw"] is None
+
+
+def test_nuevo_cliente_email_invalido(auth_client, monkeypatch):
+    """POST /clientes/nuevo con email mal formado → 200 con error de validación."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    resp = auth_client.post("/clientes/nuevo", data={
+        "nombre": "Test SA", "rfc": "TST930101ABC", "notas": "",
+        "contacto_email": "no-es-un-email",
+    })
+    assert resp.status_code == 200
+    assert b"email" in resp.data.lower()
+
+
+def test_nuevo_cliente_codigo_postal_invalido(auth_client, monkeypatch):
+    """POST /clientes/nuevo con CP de 4 dígitos → 200 con error de validación."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    resp = auth_client.post("/clientes/nuevo", data={
+        "nombre": "Test SA", "rfc": "TST930101ABC", "notas": "",
+        "codigo_postal": "6400",
+    })
+    assert resp.status_code == 200
+    assert b"postal" in resp.data.lower()
+
+
+def test_nuevo_cliente_capacidad_negativa(auth_client, monkeypatch):
+    """POST /clientes/nuevo con capacidad instalada negativa → 200 con error de validación."""
+    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    resp = auth_client.post("/clientes/nuevo", data={
+        "nombre": "Test SA", "rfc": "TST930101ABC", "notas": "",
+        "capacidad_instalada_kw": "-100",
+    })
+    assert resp.status_code == 200
+    assert b"positivo" in resp.data.lower()
+
+
+# ── Logo del cliente ──────────────────────────────────────────────────────────
+
+_PNG_HEADER = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+
+
+def test_logo_subida_valida(auth_client, monkeypatch):
+    """POST /clientes/1/logo con PNG válido y < 2MB → 200 con logo_url."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    llamadas = []
+    monkeypatch.setattr(
+        "web.clientes.upload_logo",
+        lambda cliente_id, file_bytes, content_type: llamadas.append(cliente_id) or "https://storage.example.com/logo.png",
+    )
+    resp = auth_client.post(
+        "/clientes/1/logo",
+        data={"logo": (io.BytesIO(_PNG_HEADER), "logo.png")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data.get("logo_url") == "https://storage.example.com/logo.png"
+    assert llamadas == [1]
+
+
+def test_logo_formato_invalido(auth_client, monkeypatch):
+    """POST /clientes/1/logo con archivo JPG → 400 con mensaje de error."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    resp = auth_client.post(
+        "/clientes/1/logo",
+        data={"logo": (io.BytesIO(b'\xff\xd8\xff' + b'\x00' * 50), "foto.jpg")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert "PNG" in data.get("error", "")
+
+
+def test_logo_demasiado_grande(auth_client, monkeypatch):
+    """POST /clientes/1/logo con PNG de 3MB → 400 con mensaje de tamaño."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    tres_mb = _PNG_HEADER + b'\x00' * (3 * 1024 * 1024)
+    resp = auth_client.post(
+        "/clientes/1/logo",
+        data={"logo": (io.BytesIO(tres_mb), "grande.png")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert "2 MB" in data.get("error", "")
+
+
+def test_logo_eliminacion(auth_client, monkeypatch):
+    """POST /clientes/1/logo/eliminar → llama a delete_logo y devuelve ok."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    llamadas = []
+    monkeypatch.setattr("web.clientes.delete_logo", lambda id: llamadas.append(id))
+    resp = auth_client.post("/clientes/1/logo/eliminar")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data.get("ok") is True
+    assert llamadas == [1]

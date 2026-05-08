@@ -5,53 +5,194 @@
 
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-md-6 col-lg-5">
+  <div class="col-lg-8 col-xl-7">
     <div class="d-flex align-items-center gap-2 mb-3">
       <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
       <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">Editar cliente</h4>
     </div>
 
-    <div class="card shadow-sm">
-      <div class="card-body p-4">
-        {% if error %}
-        <div class="alert alert-danger py-2 small">{{ error }}</div>
-        {% endif %}
+    {% if error %}
+    <div class="alert alert-danger py-2 small">{{ error }}</div>
+    {% endif %}
 
-        <form method="POST">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Nombre <span class="text-danger">*</span></label>
-            <input type="text" name="nombre" class="form-control" value="{{ nombre }}" required autofocus>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">RFC <span class="text-danger">*</span></label>
-            {% if tiene_facturas %}
-            <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
-                   value="{{ rfc }}" disabled style="letter-spacing:.05em">
-            <div class="form-text text-warning">
-              El RFC no puede modificarse porque el cliente tiene facturas cargadas.
-              Para cambiar el RFC, borre primero las facturas o cree un cliente nuevo.
+      <!-- Datos generales -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header small fw-semibold text-muted">Datos generales</div>
+        <div class="card-body p-4">
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label class="form-label fw-semibold">Nombre <span class="text-danger">*</span></label>
+              <input type="text" name="nombre" class="form-control" value="{{ nombre }}" required autofocus>
             </div>
-            {% else %}
-            <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
-                   value="{{ rfc }}" required maxlength="13" style="letter-spacing:.05em">
-            <div class="form-text">12 o 13 caracteres. Se convierte a mayúsculas automáticamente.</div>
-            {% endif %}
+            <div class="col-md-5">
+              <label class="form-label fw-semibold">RFC <span class="text-danger">*</span></label>
+              {% if tiene_facturas %}
+              <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
+                     value="{{ rfc }}" disabled style="letter-spacing:.05em">
+              <div class="form-text text-warning">
+                El RFC no puede modificarse porque el cliente tiene facturas cargadas.
+              </div>
+              {% else %}
+              <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
+                     value="{{ rfc }}" required maxlength="13" style="letter-spacing:.05em">
+              <div class="form-text">12 o 13 caracteres.</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Sector industrial</label>
+              <select name="sector_industrial" class="form-select">
+                <option value="">— Sin especificar —</option>
+                {% for s in sectores %}
+                <option value="{{ s }}"{% if sector_industrial == s %} selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Notas</label>
+              <textarea name="notas" class="form-control" rows="2">{{ notas }}</textarea>
+            </div>
           </div>
+        </div>
+      </div>
 
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Notas</label>
-            <textarea name="notas" class="form-control" rows="3">{{ notas }}</textarea>
+      <!-- Contacto -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header small fw-semibold text-muted">Contacto</div>
+        <div class="card-body p-4">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Nombre del contacto</label>
+              <input type="text" name="contacto_nombre" class="form-control"
+                     value="{{ contacto_nombre | default('') }}" placeholder="Nombre completo">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Cargo</label>
+              <input type="text" name="contacto_cargo" class="form-control"
+                     value="{{ contacto_cargo | default('') }}" placeholder="Gerente de Energía">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Email</label>
+              <input type="email" name="contacto_email" class="form-control"
+                     value="{{ contacto_email | default('') }}" placeholder="contacto@empresa.com">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Teléfono</label>
+              <input type="text" name="contacto_telefono" class="form-control"
+                     value="{{ contacto_telefono | default('') }}" placeholder="81 1234 5678">
+            </div>
           </div>
+        </div>
+      </div>
 
-          <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary flex-grow-1">Guardar cambios</button>
-            <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}"
-               class="btn btn-outline-secondary">Cancelar</a>
+      <!-- Ubicación -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header small fw-semibold text-muted">Ubicación</div>
+        <div class="card-body p-4">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold">Dirección</label>
+              <input type="text" name="direccion" class="form-control"
+                     value="{{ direccion | default('') }}" placeholder="Calle, número, colonia">
+            </div>
+            <div class="col-md-8">
+              <label class="form-label fw-semibold">Estado</label>
+              <select name="estado" class="form-select">
+                <option value="">— Sin especificar —</option>
+                {% for e in estados %}
+                <option value="{{ e }}"{% if estado == e %} selected{% endif %}>{{ e }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Código postal</label>
+              <input type="text" name="codigo_postal" class="form-control font-monospace"
+                     value="{{ codigo_postal | default('') }}" placeholder="64000" maxlength="5">
+            </div>
           </div>
-        </form>
+        </div>
+      </div>
+
+      <!-- Datos técnicos -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header small fw-semibold text-muted">Datos técnicos</div>
+        <div class="card-body p-4">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Tarifa CFE</label>
+              <select name="tarifa_cfe" class="form-select">
+                <option value="">— Sin especificar —</option>
+                {% for t in tarifas_cfe %}
+                <option value="{{ t }}"{% if tarifa_cfe == t %} selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Capacidad instalada (kW)</label>
+              <input type="number" step="0.01" min="0.01" name="capacidad_instalada_kw" class="form-control"
+                     value="{{ capacidad_instalada_kw | default('') }}" placeholder="500">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Demanda contratada (kW)</label>
+              <input type="number" step="0.01" min="0.01" name="demanda_contratada_kw" class="form-control"
+                     value="{{ demanda_contratada_kw | default('') }}" placeholder="450">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Año de inicio de operación</label>
+              <input type="number" name="anio_inicio_operacion" class="form-control"
+                     value="{{ anio_inicio_operacion | default('') }}" placeholder="2010" min="1900" max="2027">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Régimen de operación</label>
+              <select name="regimen_operacion" class="form-select">
+                <option value="">— Sin especificar —</option>
+                {% for r in regimenes %}
+                <option value="{{ r }}"{% if regimen_operacion == r %} selected{% endif %}>{{ r }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Consumo anual estimado (MWh)</label>
+              <input type="number" step="0.1" min="0.1" name="consumo_anual_estimado_mwh" class="form-control"
+                     value="{{ consumo_anual_estimado_mwh | default('') }}" placeholder="3600">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mb-4">
+        <button type="submit" class="btn btn-primary flex-grow-1">Guardar cambios</button>
+        <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}"
+           class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+
+    <!-- Logo del cliente (AJAX, fuera del form principal) -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header small fw-semibold text-muted">Logo del cliente</div>
+      <div class="card-body p-4">
+        <p class="text-muted small mb-3">Solo PNG con fondo transparente, máximo 2 MB. El logo se muestra en el header del dashboard.</p>
+        <div class="d-flex align-items-start gap-4 flex-wrap">
+          <div id="logo-preview-container"{% if not cliente.logo_url %} style="display:none"{% endif %}>
+            <img id="logo-preview" src="{{ cliente.logo_url or '' }}" alt="Logo actual"
+                 style="max-height:80px; max-width:200px; object-fit:contain;
+                        border:1px solid var(--color-border); border-radius:var(--radius-sm); padding:4px;">
+          </div>
+          <div class="flex-grow-1">
+            <div class="mb-2">
+              <label class="form-label fw-semibold">Subir nuevo logo</label>
+              <input type="file" id="logo-file-input" class="form-control form-control-sm" accept=".png,image/png">
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" id="btn-subir-logo" class="btn btn-outline-primary btn-sm">Subir logo</button>
+              <button type="button" id="btn-eliminar-logo" class="btn btn-outline-danger btn-sm"
+                      {% if not cliente.logo_url %}style="display:none"{% endif %}>Eliminar logo</button>
+            </div>
+            <div id="logo-status" class="mt-2 small"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -68,4 +209,71 @@
   });
 </script>
 {% endif %}
+<script>
+(function () {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+  const clienteId = {{ cliente.id }};
+  const btnSubir = document.getElementById('btn-subir-logo');
+  const btnEliminar = document.getElementById('btn-eliminar-logo');
+  const fileInput = document.getElementById('logo-file-input');
+  const previewImg = document.getElementById('logo-preview');
+  const previewContainer = document.getElementById('logo-preview-container');
+  const statusEl = document.getElementById('logo-status');
+
+  function showStatus(msg, ok) {
+    statusEl.textContent = msg;
+    statusEl.className = 'mt-2 small ' + (ok ? 'text-success' : 'text-danger');
+  }
+
+  btnSubir.addEventListener('click', function () {
+    const file = fileInput.files[0];
+    if (!file) { showStatus('Selecciona un archivo PNG primero.', false); return; }
+    const fd = new FormData();
+    fd.append('logo', file);
+    btnSubir.disabled = true;
+    btnSubir.textContent = 'Subiendo...';
+    fetch('/clientes/' + clienteId + '/logo', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+      body: fd,
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.logo_url) {
+        previewImg.src = data.logo_url;
+        previewContainer.style.display = '';
+        btnEliminar.style.display = '';
+        fileInput.value = '';
+        showStatus('Logo subido correctamente.', true);
+      } else {
+        showStatus(data.error || 'Error al subir el logo.', false);
+      }
+    })
+    .catch(() => showStatus('Error de red al subir el logo.', false))
+    .finally(() => { btnSubir.disabled = false; btnSubir.textContent = 'Subir logo'; });
+  });
+
+  btnEliminar.addEventListener('click', function () {
+    if (!confirm('¿Eliminar el logo del cliente?')) return;
+    btnEliminar.disabled = true;
+    fetch('/clientes/' + clienteId + '/logo/eliminar', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        previewImg.src = '';
+        previewContainer.style.display = 'none';
+        btnEliminar.style.display = 'none';
+        showStatus('Logo eliminado.', true);
+      } else {
+        showStatus(data.error || 'Error al eliminar el logo.', false);
+      }
+    })
+    .catch(() => showStatus('Error de red al eliminar el logo.', false))
+    .finally(() => { btnEliminar.disabled = false; });
+  });
+})();
+</script>
 {% endblock %}

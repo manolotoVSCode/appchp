@@ -18,6 +18,21 @@ _CLIENTE = {
     "created_at": "2024-01-15T10:00:00+00:00",
     "num_cfe": 3,
     "num_gas": 2,
+    "logo_url": None,
+    "sector_industrial": None,
+    "contacto_nombre": None,
+    "contacto_cargo": None,
+    "contacto_email": None,
+    "contacto_telefono": None,
+    "direccion": None,
+    "estado": None,
+    "codigo_postal": None,
+    "tarifa_cfe": None,
+    "capacidad_instalada_kw": None,
+    "demanda_contratada_kw": None,
+    "anio_inicio_operacion": None,
+    "regimen_operacion": None,
+    "consumo_anual_estimado_mwh": None,
 }
 
 _CLIENTE_VACIO = {**_CLIENTE, "num_cfe": 0, "num_gas": 0}
@@ -366,3 +381,44 @@ def test_sidebar_no_muestra_seccion_sin_cliente_activo(app, monkeypatch):
     # (el listado sí muestra "IBERICA TILES" como nombre de cliente, pero no el enlace de sidebar)
     html = resp.data.decode()
     assert 'sidebar-section' not in html or 'IBERICA TILES' not in html.split('sidebar-section')[1].split('sidebar-bottom')[0] if 'sidebar-section' in html and 'sidebar-bottom' in html else True
+
+
+# ── Test 10-11: Dashboard header con/sin logo ─────────────────────────────────
+
+def test_dashboard_con_logo_muestra_imagen(app, monkeypatch):
+    """Dashboard con cliente que tiene logo → header muestra la imagen."""
+    cliente_con_logo = {**_CLIENTE, "logo_url": "https://storage.example.com/cliente_1.png"}
+    monkeypatch.setattr(
+        "web.app._cargar_datos_cliente",
+        lambda cliente_id: (MagicMock(meses=[]), [], [], _mock_historico(), _mock_tablas()),
+    )
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: cliente_con_logo)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+        sess["cliente_activo_nombre"] = "IBERICA TILES"
+
+    resp = c.get("/clientes/1/dashboard")
+    assert resp.status_code == 200
+    assert b"storage.example.com/cliente_1.png" in resp.data
+
+
+def test_dashboard_sin_logo_muestra_nombre(app, monkeypatch):
+    """Dashboard con cliente sin logo → header muestra el nombre como texto."""
+    monkeypatch.setattr(
+        "web.app._cargar_datos_cliente",
+        lambda cliente_id: (MagicMock(meses=[]), [], [], _mock_historico(), _mock_tablas()),
+    )
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_VACIO)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+        sess["cliente_activo_nombre"] = "IBERICA TILES"
+
+    resp = c.get("/clientes/1/dashboard")
+    assert resp.status_code == 200
+    assert b"IBERICA TILES" in resp.data
+    # sin logo no debe aparecer un <img> de Storage
+    assert b"storage.example.com" not in resp.data
