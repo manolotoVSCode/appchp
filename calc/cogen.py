@@ -51,7 +51,7 @@ def calcular_cogen(
         if kwh_total == 0:
             continue
 
-        costo_cfe = cfe.facturacion_periodo_mxn
+        costo_cfe = cfe.subtotal_mxn
         costo_prom_kwh = (costo_cfe / kwh_total).quantize(_CENTAVO, ROUND_HALF_UP)
         costo_unit_gj = gas.costo_unitario_total_gj
 

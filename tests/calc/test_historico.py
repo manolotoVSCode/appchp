@@ -140,7 +140,7 @@ def test_consumo_por_horario(dos_meses):
 # ── Tests de costo unitario mensual ──────────────────────────────────────────
 
 def test_costo_unitario_mes(dos_meses):
-    """costo_unit_mes = facturacion / kwh_total."""
+    """costo_unit_mes = subtotal_mxn (pre-IVA) / kwh_total."""
     h = calcular_historico_cfe(dos_meses)
     kwh_total_ene = 100 + 300 + 600  # 1000
     esperado = round(2500 / kwh_total_ene, 4)

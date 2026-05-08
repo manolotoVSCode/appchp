@@ -58,9 +58,9 @@ def calcular_historico_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
         consumo_intermedio.append(kwh_i)
         consumo_base.append(kwh_b)
 
-        # Costo unitario total del mes = facturación_periodo / kWh_total
+        # Costo unitario total del mes = subtotal (pre-IVA) / kWh_total
         kwh_total = kwh_p + kwh_i + kwh_b
-        facturacion = float(inv.facturacion_periodo_mxn)
+        facturacion = float(inv.subtotal_mxn)
         costo_unit_mes.append(round(facturacion / kwh_total, 4) if kwh_total > 0 else 0.0)
 
         # Tabla punta: costo energético punta, % sobre total facturado, costo unitario punta

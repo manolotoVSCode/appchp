@@ -34,7 +34,7 @@ def _cargar_datos():
             "periodo": f"{inv.periodo_inicio.strftime('%d %b %Y')} – {inv.periodo_fin.strftime('%d %b %Y')}",
             "mes_asociado": date(*mes_asociado(inv.periodo_inicio, inv.periodo_fin), 1).strftime("%b %Y"),
             "kwh_total": float(sum(p.consumo_kwh for p in inv.periodos)),
-            "costo_mxn": float(inv.facturacion_periodo_mxn),
+            "costo_mxn": float(inv.subtotal_mxn),
             "prorrateado": (inv.periodo_fin - inv.periodo_inicio).days < UMBRAL_PRORRATEO_DIAS,
         }
         for inv in sorted(cfe_invoices, key=lambda x: x.periodo_inicio)

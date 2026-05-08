@@ -63,7 +63,7 @@ class CFEInvoice:
     cargo_factor_potencia_mxn: Decimal
     subtotal_mxn: Decimal
     iva_mxn: Decimal
-    facturacion_periodo_mxn: Decimal   # usar este en el análisis, no total_mxn
+    facturacion_periodo_mxn: Decimal   # = subtotal_mxn + iva_mxn; NO usar en cálculos, solo para trazabilidad
     derecho_alumbrado_publico_mxn: Decimal
     credito_aplicado_mxn: Decimal      # negativo si aplica, Decimal("0") si no
     total_mxn: Decimal
