@@ -19,6 +19,12 @@
   .tabla-punta-total td { background: var(--color-primary-soft); font-weight: 600; }
   .link-datos { font-size: .8rem; color: #6c757d; text-decoration: none; white-space: nowrap; }
   .link-datos:hover { color: var(--color-primary); }
+  .modal-resizable > .modal-content {
+    overflow: auto !important;
+    resize: both;
+    min-width: 380px;
+    min-height: 250px;
+  }
 </style>
 {% endblock %}
 
@@ -309,7 +315,7 @@
 <!-- ═══ MODALES ═══ -->
 {% if tablas and tablas.consumos_demandas %}
 <div class="modal fade" id="modalConsumosDemandas" tabindex="-1" aria-labelledby="modalConsumosDemandasLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-resizable">
     <div class="modal-content">
       <div class="modal-header" style="background:var(--color-primary-soft)">
         <h5 class="modal-title" id="modalConsumosDemandasLabel" style="color:var(--color-primary-dark)">Consumos y demandas por horario</h5>
@@ -361,7 +367,7 @@
 
 {% if tablas and tablas.costos_detallados %}
 <div class="modal fade" id="modalCostosDetallados" tabindex="-1" aria-labelledby="modalCostosDetalladosLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-resizable">
     <div class="modal-content">
       <div class="modal-header" style="background:var(--color-primary-soft)">
         <h5 class="modal-title" id="modalCostosDetalladosLabel" style="color:var(--color-primary-dark)">Costos detallados por componente</h5>
@@ -417,7 +423,7 @@
 
 {% if tablas and tablas.indicadores %}
 <div class="modal fade" id="modalIndicadores" tabindex="-1" aria-labelledby="modalIndicadoresLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-resizable">
     <div class="modal-content">
       <div class="modal-header" style="background:var(--color-primary-soft)">
         <h5 class="modal-title" id="modalIndicadoresLabel" style="color:var(--color-primary-dark)">Indicadores de eficiencia</h5>
@@ -470,81 +476,101 @@
   <hr>
 </div>
 
-<!-- Tabla histórica gas -->
-<div class="card shadow-sm mb-4">
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead>
-          <tr style="background:var(--color-primary-soft)">
-            <th class="ps-3" style="color:var(--color-primary-dark)">Mes</th>
-            <th class="text-end" style="color:var(--color-primary-dark)">Consumo (GJ)</th>
-            <th class="text-end" style="color:var(--color-primary-dark)">Molécula ($/GJ)</th>
-            <th class="text-end" style="color:var(--color-primary-dark)">Transporte ($/GJ)</th>
-            <th class="text-end" style="color:var(--color-primary-dark)">Costo Molécula ($)</th>
-            <th class="text-end" style="color:var(--color-primary-dark)">Costo Transporte ($)</th>
-            <th class="text-end" style="color:var(--color-primary-dark)">Costo Total ($)</th>
-            <th class="text-end" style="color:var(--color-primary-dark)">C.U. ($/GJ)</th>
-            <th class="text-end" style="color:var(--color-primary-dark)">C.U. ($/kWh)</th>
-            <th class="text-end" style="color:var(--color-primary-dark)">PCS (GJ/m³)</th>
-            <th class="text-end pe-3" style="color:var(--color-primary-dark)">PCS (kWh/m³)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for f in historico_gas.filas %}
-          <tr>
-            <td class="ps-3 small">
-              {{ f.mes }}
-              {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
-            </td>
-            <td class="text-end small">{{ "{:,.2f}".format(f.consumo_gj) }}</td>
-            <td class="text-end small">{% if f.molecula_precio_gj is not none %}{{ "{:,.4f}".format(f.molecula_precio_gj) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">{% if f.transporte_precio_gj is not none %}{{ "{:,.4f}".format(f.transporte_precio_gj) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">{% if f.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(f.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">{% if f.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(f.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">${{ "{:,.2f}".format(f.costo_total_mxn) }}</td>
-            <td class="text-end small">{{ "{:,.4f}".format(f.costo_unit_gj) }}</td>
-            <td class="text-end small">{% if f.costo_unit_kwh is not none %}{{ "{:.6f}".format(f.costo_unit_kwh) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">{% if f.pcs_gj_m3 is not none %}{{ "{:.5f}".format(f.pcs_gj_m3) }}{% else %}—{% endif %}</td>
-            <td class="text-end small pe-3">{% if f.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(f.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
-          </tr>
-          {% endfor %}
-          {# Fila TOTAL #}
-          {% set t = historico_gas.total %}
-          <tr class="total-row">
-            <td class="ps-3 small fw-bold">TOTAL / PROM.</td>
-            <td class="text-end small">{{ "{:,.2f}".format(t.consumo_gj) }}</td>
-            <td class="text-end small">{% if t.molecula_precio_gj is not none %}{{ "{:,.4f}".format(t.molecula_precio_gj) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">{% if t.transporte_precio_gj is not none %}{{ "{:,.4f}".format(t.transporte_precio_gj) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">{% if t.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(t.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">{% if t.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(t.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">${{ "{:,.2f}".format(t.costo_total_mxn) }}</td>
-            <td class="text-end small">{% if t.costo_unit_gj is not none %}{{ "{:,.4f}".format(t.costo_unit_gj) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">{% if t.costo_unit_kwh is not none %}{{ "{:.6f}".format(t.costo_unit_kwh) }}{% else %}—{% endif %}</td>
-            <td class="text-end small">{% if t.pcs_gj_m3 is not none %}{{ "{:.5f}".format(t.pcs_gj_m3) }}{% else %}—{% endif %}</td>
-            <td class="text-end small pe-3">{% if t.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(t.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
 <!-- Gráfica gas 1: Consumo vs Costo Unitario -->
 <div class="card shadow-sm mb-4">
   <div class="card-body">
-    <h5 class="card-title">Consumos mensuales de gas (GJ) vs costo unitario ($/GJ)</h5>
-    <p class="text-muted small mb-2">Barras: GJ consumido (eje izq.) · Línea: $/GJ total (eje der.)</p>
-    <canvas id="chartGasConsumo" height="100"></canvas>
+    <div class="d-flex align-items-start justify-content-between mb-1">
+      <div>
+        <h5 class="card-title mb-0">Consumos mensuales de gas (GJ) vs costo unitario ($/GJ)</h5>
+        <p class="text-muted small mt-1 mb-0">Barras: GJ consumido (eje izq.) · Línea: $/GJ total (eje der.)</p>
+      </div>
+      <a href="#" class="link-datos ms-3 mt-1" data-bs-toggle="modal" data-bs-target="#modalGasHistorico">Ver datos</a>
+    </div>
+    <canvas id="chartGasConsumo" height="100" class="mt-2"></canvas>
   </div>
 </div>
 
 <!-- Gráfica gas 2: Costos apilados vs Costo Unitario -->
 <div class="card shadow-sm mb-4">
   <div class="card-body">
-    <h5 class="card-title">Costos mensuales de gas ($) vs costo unitario ($/GJ)</h5>
-    <p class="text-muted small mb-2">Barras apiladas: Molécula + Transporte (eje izq.) · Línea: $/GJ total (eje der.)</p>
-    <canvas id="chartGasCostos" height="100"></canvas>
+    <div class="d-flex align-items-start justify-content-between mb-1">
+      <div>
+        <h5 class="card-title mb-0">Costos mensuales de gas ($) vs costo unitario ($/GJ)</h5>
+        <p class="text-muted small mt-1 mb-0">Barras apiladas: Molécula + Transporte (eje izq.) · Línea: $/GJ total (eje der.)</p>
+      </div>
+      <a href="#" class="link-datos ms-3 mt-1" data-bs-toggle="modal" data-bs-target="#modalGasHistorico">Ver datos</a>
+    </div>
+    <canvas id="chartGasCostos" height="100" class="mt-2"></canvas>
+  </div>
+</div>
+
+<!-- Modal: Histórico de consumos y costos de gas natural -->
+<div class="modal fade" id="modalGasHistorico" tabindex="-1" aria-labelledby="modalGasHistoricoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-resizable">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--color-primary-soft)">
+        <h5 class="modal-title" id="modalGasHistoricoLabel" style="color:var(--color-primary-dark)">Histórico de consumos y costos de gas natural</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead>
+              <tr style="background:var(--color-primary-soft)">
+                <th class="ps-3" style="color:var(--color-primary-dark)">Mes</th>
+                <th class="text-end" style="color:var(--color-primary-dark)">Consumo (GJ)</th>
+                <th class="text-end" style="color:var(--color-primary-dark)">Molécula ($/GJ)</th>
+                <th class="text-end" style="color:var(--color-primary-dark)">Transporte ($/GJ)</th>
+                <th class="text-end" style="color:var(--color-primary-dark)">Costo Molécula ($)</th>
+                <th class="text-end" style="color:var(--color-primary-dark)">Costo Transporte ($)</th>
+                <th class="text-end" style="color:var(--color-primary-dark)">Costo Total ($)</th>
+                <th class="text-end" style="color:var(--color-primary-dark)">C.U. ($/GJ)</th>
+                <th class="text-end" style="color:var(--color-primary-dark)">C.U. ($/kWh)</th>
+                <th class="text-end" style="color:var(--color-primary-dark)">PCS (GJ/m³)</th>
+                <th class="text-end pe-3" style="color:var(--color-primary-dark)">PCS (kWh/m³)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in historico_gas.filas %}
+              <tr>
+                <td class="ps-3 small">
+                  {{ f.mes }}
+                  {% if f.prorrateado %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6em">★</span>{% endif %}
+                </td>
+                <td class="text-end small">{{ "{:,.2f}".format(f.consumo_gj) }}</td>
+                <td class="text-end small">{% if f.molecula_precio_gj is not none %}{{ "{:,.4f}".format(f.molecula_precio_gj) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">{% if f.transporte_precio_gj is not none %}{{ "{:,.4f}".format(f.transporte_precio_gj) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">{% if f.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(f.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">{% if f.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(f.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">${{ "{:,.2f}".format(f.costo_total_mxn) }}</td>
+                <td class="text-end small">{{ "{:,.4f}".format(f.costo_unit_gj) }}</td>
+                <td class="text-end small">{% if f.costo_unit_kwh is not none %}{{ "{:.6f}".format(f.costo_unit_kwh) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">{% if f.pcs_gj_m3 is not none %}{{ "{:.5f}".format(f.pcs_gj_m3) }}{% else %}—{% endif %}</td>
+                <td class="text-end small pe-3">{% if f.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(f.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
+              </tr>
+              {% endfor %}
+              {% set t = historico_gas.total %}
+              <tr class="total-row">
+                <td class="ps-3 small fw-bold">TOTAL / PROM.</td>
+                <td class="text-end small">{{ "{:,.2f}".format(t.consumo_gj) }}</td>
+                <td class="text-end small">{% if t.molecula_precio_gj is not none %}{{ "{:,.4f}".format(t.molecula_precio_gj) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">{% if t.transporte_precio_gj is not none %}{{ "{:,.4f}".format(t.transporte_precio_gj) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">{% if t.costo_molecula_mxn is not none %}${{ "{:,.2f}".format(t.costo_molecula_mxn) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">{% if t.costo_transporte_mxn is not none %}${{ "{:,.2f}".format(t.costo_transporte_mxn) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">${{ "{:,.2f}".format(t.costo_total_mxn) }}</td>
+                <td class="text-end small">{% if t.costo_unit_gj is not none %}{{ "{:,.4f}".format(t.costo_unit_gj) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">{% if t.costo_unit_kwh is not none %}{{ "{:.6f}".format(t.costo_unit_kwh) }}{% else %}—{% endif %}</td>
+                <td class="text-end small">{% if t.pcs_gj_m3 is not none %}{{ "{:.5f}".format(t.pcs_gj_m3) }}{% else %}—{% endif %}</td>
+                <td class="text-end small pe-3">{% if t.pcs_kwh_m3 is not none %}{{ "{:.5f}".format(t.pcs_kwh_m3) }}{% else %}—{% endif %}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
   </div>
 </div>
 {% endif %}
@@ -883,6 +909,17 @@ new Chart(document.getElementById("chartGasCostos"), {
   }
 });
 {% endif %}
+
+// Resetear tamaño de modales redimensionables al cerrar
+document.querySelectorAll('.modal').forEach(modalEl => {
+  modalEl.addEventListener('hidden.bs.modal', () => {
+    const content = modalEl.querySelector('.modal-resizable > .modal-content');
+    if (content) {
+      content.style.width = '';
+      content.style.height = '';
+    }
+  });
+});
 </script>
 {% endif %}
 {% endblock %}
