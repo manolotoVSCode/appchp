@@ -42,12 +42,13 @@ class CFEParser(InvoiceParser):
         if invoice.periodo_fin <= invoice.periodo_inicio:
             errores.append("periodo_fin debe ser posterior a periodo_inicio")
 
-        # Total = subtotal + IVA + DAP + crédito (tolerancia de 1 peso)
+        # Total = subtotal + IVA + DAP + crédito/neto-adeudo (tolerancia de 1 peso)
+        # credito_aplicado_mxn es negativo si es crédito, positivo si hay adeudo neto pendiente
         total_calculado = (
             invoice.subtotal_mxn
             + invoice.iva_mxn
             + invoice.derecho_alumbrado_publico_mxn
-            + invoice.credito_aplicado_mxn  # ya es negativo
+            + invoice.credito_aplicado_mxn
         )
         diferencia = abs(total_calculado - invoice.total_mxn)
         if diferencia > Decimal("1.00"):

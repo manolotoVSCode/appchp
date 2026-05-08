@@ -31,7 +31,7 @@ RE_KWH_PUNTA   = re.compile(r'kWh\s+punta\s+([\d,]+)')
 RE_KW_BASE     = re.compile(r'kW\s+base\s+([\d,]+)')
 RE_KW_INTER    = re.compile(r'kW\s+intermedia\s+([\d,]+)')
 RE_KW_PUNTA    = re.compile(r'kW\s+punta\s+([\d,]+)')
-RE_KW_MAX      = re.compile(r'kWMax\s+([\d,]+)')
+RE_KW_MAX      = re.compile(r'[Kk][Ww][Mm]ax\s+([\d,]+)')
 RE_KVARH       = re.compile(r'kVArh\s+([\d,]+)')
 RE_FP          = re.compile(r'Factor\s+de\s+potencia\s+%\s+([\d.]+)')
 
@@ -44,18 +44,25 @@ RE_MEM_GEN_B       = re.compile(r'Generaci[oó]n\s+B\s+([\d,.]+)\s+([\d,.]+)\s+(
 RE_MEM_GEN_I       = re.compile(r'Generaci[oó]n\s+I\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)')
 RE_MEM_GEN_P       = re.compile(r'Generaci[oó]n\s+P\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)')
 RE_MEM_CAPACIDAD   = re.compile(r'Capacidad\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)')
-# SCnMEM(¹) — maneja el paréntesis con [^\d\n]+
-RE_MEM_SCNMEM      = re.compile(r'SCnMEM[^\d\n]+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)')
+# SCnMEM(¹)/(1) — anotación superscript o paréntesis antes de los valores
+RE_MEM_SCNMEM      = re.compile(r'SCnMEM\s*(?:\([^)]+\))?\s*([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)')
 
-RE_CARGO_FIJO      = re.compile(r'Cargo\s+Fijo[³3]?\s+([\d,]+\.?\d*)')
+# Notación 2023: superíndice ³ (ej. "Cargo Fijo³ 362.60")
+# Notación 2024: paréntesis (ej. "Cargo Fijo(3) 362.60")
+_SUPERSCRIPT = r'(?:\s*(?:[¹²³]|\(\d\)))?\s+'
+RE_CARGO_FIJO      = re.compile(r'Cargo\s+Fijo' + _SUPERSCRIPT + r'([\d,]+\.?\d*)')
 RE_ENERGIA         = re.compile(r'Energ[íi]a\s+([\d,]+\.?\d*)')
-RE_CARGO_FP        = re.compile(r'Cargo\s+Factor\s+de\s+Potencia[³3]?\s+([\d,]+\.?\d*)')
+RE_CARGO_FP        = re.compile(r'Cargo\s+Factor\s+de\s+Potencia' + _SUPERSCRIPT + r'([\d,]+\.?\d*)')
 RE_SUBTOTAL        = re.compile(r'Subtotal\s+([\d,]+\.?\d*)')
 RE_IVA             = re.compile(r'IVA\s+16\s*%\s+([\d,]+\.?\d*)')
 RE_FACT_PERIODO    = re.compile(r'Facturaci[oó]n\s+del\s+Periodo\s+([\d,]+\.?\d*)')
-RE_DAP             = re.compile(r'Derecho\s+de\s+Alumbrado\s+P[úu]blico[²2]?\s+([\d,]+\.?\d*)')
-RE_CREDITO         = re.compile(r'Cr[eé]dito\s+Aplic\.\s*Fac\.[³3]?\s+([\d,]+\.?\d*)-')
-RE_TOTAL_FINAL     = re.compile(r'Total\s+\$([\d,]+\.?\d*)')
+RE_DAP             = re.compile(r'Derecho\s+de\s+Alumbrado\s+P[úu]blico' + _SUPERSCRIPT + r'([\d,]+\.?\d*)')
+RE_CREDITO         = re.compile(r'Cr[eé]dito\s+Aplic\.\s*Fac\.' + _SUPERSCRIPT + r'([\d,]+\.?\d*)-')
+RE_ADEUDO          = re.compile(r'Adeudo\s+Anterior\s+([\d,]+\.?\d*)')
+RE_SU_PAGO         = re.compile(r'Su\s+Pago\s+-?\s*([\d,]+\.?\d*)')
+# 2023: "Total $1,126,771.85" mid-line (requires $); 2024: "Total 4,743,510.51" at line start
+RE_TOTAL_CON_SIGNO = re.compile(r'Total\s+\$([\d,]+\.\d{2})')
+RE_TOTAL_SIN_SIGNO = re.compile(r'^Total\s+([\d,]+\.\d{2})', re.MULTILINE)
 
 # CFDI datos (página 2)
 RE_RFC_RECEPTOR    = re.compile(r'RFC:\s*([A-Z&]{3,4}\d{6}[A-Z0-9]{3})')
@@ -68,6 +75,22 @@ RE_UUID            = re.compile(
 
 # Nombre cliente: está en la misma línea que "TOTAL A PAGAR:"
 RE_NOMBRE_CLIENTE  = re.compile(r'^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+?)\s+TOTAL\s+A\s+PAGAR', re.MULTILINE)
+
+
+def _extract_total(texto: str, advertencias: list) -> str | None:
+    """Extrae el total de la factura.
+
+    2023: 'Total $1,126,771.85' aparece a mitad de línea — requiere '$'.
+    2024: 'Total 4,743,510.51' aparece al inicio de línea — sin '$'.
+    """
+    m = RE_TOTAL_CON_SIGNO.search(texto)
+    if m:
+        return m.group(1)
+    m = RE_TOTAL_SIN_SIGNO.search(texto)
+    if m:
+        return m.group(1)
+    advertencias.append("Campo no encontrado: total")
+    return None
 
 
 def _req(texto: str, patron: re.Pattern, nombre: str, advertencias: list) -> str | None:
@@ -204,8 +227,20 @@ class GDMTHParser(CFEParser):
         ]
 
         # --- Financiero ---
-        credito_raw = _req(texto, RE_CREDITO, "credito", advertencias)
-        credito = -_d(credito_raw)
+        # 2023: "Credito Aplic. Fac.(3) 123,456.78-"  → negativo
+        # 2024: "Adeudo Anterior X" / "Su Pago -X"   → net = adeudo - pago
+        credito_raw = RE_CREDITO.search(texto)
+        if credito_raw:
+            credito = -_d(credito_raw.group(1))
+        else:
+            adeudo_raw = RE_ADEUDO.search(texto)
+            pago_raw   = RE_SU_PAGO.search(texto)
+            if adeudo_raw and pago_raw:
+                credito = _d(adeudo_raw.group(1)) - _d(pago_raw.group(1))
+            elif adeudo_raw:
+                credito = _d(adeudo_raw.group(1))
+            else:
+                credito = Decimal("0")
 
         return CFEInvoice(
             uuid_cfdi=uuid_cfdi,
@@ -237,7 +272,7 @@ class GDMTHParser(CFEParser):
             facturacion_periodo_mxn=_d(_req(texto, RE_FACT_PERIODO, "fact_periodo", advertencias)),
             derecho_alumbrado_publico_mxn=_d(_req(texto, RE_DAP,   "dap",          advertencias)),
             credito_aplicado_mxn=credito,
-            total_mxn=_d(_req(texto, RE_TOTAL_FINAL,       "total",        advertencias)),
+            total_mxn=_d(_extract_total(texto, advertencias)),
             pdf_path=str(pdf_path),
             advertencias=advertencias,
         )
