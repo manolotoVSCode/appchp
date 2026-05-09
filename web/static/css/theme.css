@@ -194,3 +194,18 @@ a:hover { color: var(--color-primary-dark); }
 .text-primary-brand { color: var(--color-primary); }
 .bg-primary-soft    { background-color: var(--color-primary-soft); }
 .border-primary     { border-color: var(--color-primary) !important; }
+
+/* ── Sidebar — iconos Bootstrap Icons ────────────────────────────────────── */
+.sidebar-link .bi,
+.sidebar-link-contrato .bi,
+.sidebar-bottom .btn .bi {
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  margin-right: .5rem;
+  vertical-align: -.125em;
+  flex-shrink: 0;
+}
+.sidebar-link.active .bi,
+.sidebar-link-contrato.active .bi {
+  color: var(--color-primary);
+}

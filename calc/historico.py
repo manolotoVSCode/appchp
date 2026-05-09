@@ -252,6 +252,12 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
             "ce_base": ce_base, "ce_inter": ce_inter,
             "ce_punta": ce_punta, "ce_total": ce_total,
             "costo_dist": costo_dist, "costo_cap": costo_cap, "costo_dem": costo_dem,
+            "ct_base":  round(ct_base,  2) if ct_base  is not None else None,
+            "ct_inter": round(ct_inter, 2) if ct_inter is not None else None,
+            "ct_punta": round(ct_punta, 2) if ct_punta is not None else None,
+            "cu_base_total":  cu_base_total,
+            "cu_inter_total": cu_inter_total,
+            "cu_punta_total": cu_punta_total,
             "cargo_fp": cargo_fp, "subtotal": subtotal,
         })
         indicadores.append({
@@ -259,12 +265,6 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
             "costo_unit": costo_unit, "pct_energia": pct_energia,
             "pct_demanda": pct_demanda, "factor_carga": factor_carga,
             "demanda_prom": demanda_prom,
-            "ct_base":  round(ct_base,  2) if ct_base  is not None else None,
-            "ct_inter": round(ct_inter, 2) if ct_inter is not None else None,
-            "ct_punta": round(ct_punta, 2) if ct_punta is not None else None,
-            "cu_base_total":  cu_base_total,
-            "cu_inter_total": cu_inter_total,
-            "cu_punta_total": cu_punta_total,
         })
 
     # Fila ANUAL
@@ -292,6 +292,9 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
         "ce_base": sum_ce_base, "ce_inter": sum_ce_inter,
         "ce_punta": sum_ce_punta, "ce_total": sum_ce_total,
         "costo_dist": sum_dist, "costo_cap": sum_cap, "costo_dem": sum_dem,
+        "ct_base": anual_ct_base, "ct_inter": anual_ct_inter, "ct_punta": anual_ct_punta,
+        "cu_base_total": anual_cu_base, "cu_inter_total": anual_cu_inter,
+        "cu_punta_total": anual_cu_punta,
         "cargo_fp": sum_fp, "subtotal": sum_sub,
     })
     indicadores.append({
@@ -299,9 +302,6 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
         "costo_unit": anual_unit, "pct_energia": anual_pct_e,
         "pct_demanda": anual_pct_d, "factor_carga": anual_fc,
         "demanda_prom": anual_prom,
-        "ct_base": anual_ct_base, "ct_inter": anual_ct_inter, "ct_punta": anual_ct_punta,
-        "cu_base_total": anual_cu_base, "cu_inter_total": anual_cu_inter,
-        "cu_punta_total": anual_cu_punta,
     })
 
     costo_unit_promedio_total = {

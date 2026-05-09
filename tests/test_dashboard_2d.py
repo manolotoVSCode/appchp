@@ -735,23 +735,23 @@ def _mock_tablas_con_datos():
             {"mes": "Ene 2024", "prorrateado": False,
              "ce_base": 50000.0, "ce_inter": 100000.0, "ce_punta": 30000.0, "ce_total": 180000.0,
              "costo_dist": 40000.0, "costo_cap": 20000.0, "costo_dem": 60000.0,
+             "ct_base": 63333.33, "ct_inter": 126666.67, "ct_punta": 50000.0,
+             "cu_base_total": 6.333333, "cu_inter_total": 6.333333, "cu_punta_total": 10.0,
              "cargo_fp": 5000.0, "subtotal": 245000.0},
             {"mes": "ANUAL", "prorrateado": False,
              "ce_base": 50000.0, "ce_inter": 100000.0, "ce_punta": 30000.0, "ce_total": 180000.0,
              "costo_dist": 40000.0, "costo_cap": 20000.0, "costo_dem": 60000.0,
+             "ct_base": 63333.33, "ct_inter": 126666.67, "ct_punta": 50000.0,
+             "cu_base_total": 6.333333, "cu_inter_total": 6.333333, "cu_punta_total": 10.0,
              "cargo_fp": 5000.0, "subtotal": 245000.0},
         ],
         "indicadores": [
             {"mes": "Ene 2024", "prorrateado": False,
              "costo_unit": 7.0, "pct_energia": 73, "pct_demanda": 24,
-             "factor_carga": 45, "demanda_prom": 47.5,
-             "ct_base": 63333.33, "ct_inter": 126666.67, "ct_punta": 50000.0,
-             "cu_base_total": 6.333333, "cu_inter_total": 6.333333, "cu_punta_total": 10.0},
+             "factor_carga": 45, "demanda_prom": 47.5},
             {"mes": "ANUAL", "prorrateado": False,
              "costo_unit": 7.0, "pct_energia": 73, "pct_demanda": 24,
-             "factor_carga": 45, "demanda_prom": 47.5,
-             "ct_base": 63333.33, "ct_inter": 126666.67, "ct_punta": 50000.0,
-             "cu_base_total": 6.333333, "cu_inter_total": 6.333333, "cu_punta_total": 10.0},
+             "factor_carga": 45, "demanda_prom": 47.5},
         ],
         "costo_unit_promedio_total": {"base": 6.3333, "intermedio": 6.3333, "punta": 10.0},
     }
@@ -1007,7 +1007,7 @@ def test_f1_columnas_nuevas_valores_conocidos():
     # dist: 40000 MXN, cap: 20000 MXN
     inv = _make_invoice_con_mem(10000, 20000, 5000, 5.0, 5.0, 6.0, 40000, 20000)
     tablas = calcular_tablas_cfe([inv])
-    fila = tablas["indicadores"][0]
+    fila = tablas["costos_detallados"][0]
 
     # Distribución se reparte entre base e inter proporcional a kWh
     # kwh_bi = 30000; base frac = 10000/30000 = 1/3; inter frac = 20000/30000 = 2/3
@@ -1030,7 +1030,7 @@ def test_f1_distribucion_no_va_a_punta():
     from calc.historico import calcular_tablas_cfe
     inv = _make_invoice_con_mem(10000, 20000, 5000, 5.0, 5.0, 6.0, 40000, 0)
     tablas = calcular_tablas_cfe([inv])
-    fila = tablas["indicadores"][0]
+    fila = tablas["costos_detallados"][0]
 
     # Con cap=0, ct_punta = ce_punta + 0 = 5000*6.0 = 30000
     assert abs(fila["ct_punta"] - 30000.0) < 0.01
@@ -1046,7 +1046,7 @@ def test_f1_capacidad_va_100_porciento_a_punta():
     from calc.historico import calcular_tablas_cfe
     inv = _make_invoice_con_mem(10000, 20000, 5000, 5.0, 5.0, 6.0, 0, 20000)
     tablas = calcular_tablas_cfe([inv])
-    fila = tablas["indicadores"][0]
+    fila = tablas["costos_detallados"][0]
 
     # ct_punta = 5000*6.0 + 20000 = 50000
     assert abs(fila["ct_punta"] - 50000.0) < 0.01
@@ -1062,7 +1062,7 @@ def test_f1_sin_base_inter_distribucion_none():
     from calc.historico import calcular_tablas_cfe
     inv = _make_invoice_con_mem(0, 0, 5000, 0.0, 0.0, 6.0, 40000, 20000)
     tablas = calcular_tablas_cfe([inv])
-    fila = tablas["indicadores"][0]
+    fila = tablas["costos_detallados"][0]
 
     assert fila["ct_base"]      is None
     assert fila["ct_inter"]     is None
@@ -1080,7 +1080,7 @@ def test_f1_sin_punta_cu_punta_none():
     from calc.historico import calcular_tablas_cfe
     inv = _make_invoice_con_mem(10000, 20000, 0, 5.0, 5.0, 0.0, 40000, 20000)
     tablas = calcular_tablas_cfe([inv])
-    fila = tablas["indicadores"][0]
+    fila = tablas["costos_detallados"][0]
 
     # ct_punta = 0 + cap, pero cu_punta_total = None porque kwh_punta = 0
     assert fila["cu_punta_total"] is None
@@ -1125,7 +1125,8 @@ def test_f1_sin_capacidad_punta_none():
     )
 
     tablas = calcular_tablas_cfe([inv])
-    fila = tablas["indicadores"][0]
+    fila = tablas["costos_detallados"][0]
+    fila_ind = tablas["indicadores"][0]
 
     assert fila["ct_punta"]       is None
     assert fila["cu_punta_total"] is None
@@ -1133,7 +1134,7 @@ def test_f1_sin_capacidad_punta_none():
     assert fila["ct_base"]       is not None
     assert fila["cu_base_total"] is not None
     # No rompe el render (costo_unit sigue calculable)
-    assert fila["costo_unit"] > 0
+    assert fila_ind["costo_unit"] > 0
 
 
 # ══════════════════════════════════════════════════════════════════════════════

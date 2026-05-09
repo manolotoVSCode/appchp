@@ -334,6 +334,12 @@
           <th class="text-end">Distribución</th>
           <th class="text-end">Capacidad</th>
           <th class="text-end">Total Demanda</th>
+          <th class="text-end">Cto. total Base ($)</th>
+          <th class="text-end">Cto. total Interm. ($)</th>
+          <th class="text-end">Cto. total Punta ($)</th>
+          <th class="text-end">$/kWh Base</th>
+          <th class="text-end">$/kWh Interm.</th>
+          <th class="text-end">$/kWh Punta</th>
           <th class="text-end">Factor Potencia</th>
           <th class="text-end pe-3">Subtotal</th>
         </tr>
@@ -353,6 +359,12 @@
           <td class="text-end small">${{ "{:,.0f}".format(f.costo_dist) }}</td>
           <td class="text-end small">${{ "{:,.0f}".format(f.costo_cap) }}</td>
           <td class="text-end small">${{ "{:,.0f}".format(f.costo_dem) }}</td>
+          <td class="text-end small">{% if f.ct_base is not none %}${{ "{:,.0f}".format(f.ct_base) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.ct_inter is not none %}${{ "{:,.0f}".format(f.ct_inter) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.ct_punta is not none %}${{ "{:,.0f}".format(f.ct_punta) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.cu_base_total is not none %}{{ "{:.4f}".format(f.cu_base_total) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.cu_inter_total is not none %}{{ "{:.4f}".format(f.cu_inter_total) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.cu_punta_total is not none %}{{ "{:.4f}".format(f.cu_punta_total) }}{% else %}—{% endif %}</td>
           <td class="text-end small">${{ "{:,.0f}".format(f.cargo_fp) }}</td>
           <td class="text-end small pe-3">${{ "{:,.0f}".format(f.subtotal) }}</td>
         </tr>
@@ -379,13 +391,7 @@
           <th class="text-end">Energía (%)</th>
           <th class="text-end">Demanda (%)</th>
           <th class="text-end">F. Carga (%)</th>
-          <th class="text-end">Dem. Prom. (kW)</th>
-          <th class="text-end">Cto. total Base ($)</th>
-          <th class="text-end">Cto. total Interm. ($)</th>
-          <th class="text-end">Cto. total Punta ($)</th>
-          <th class="text-end">$/kWh Base</th>
-          <th class="text-end">$/kWh Interm.</th>
-          <th class="text-end pe-3">$/kWh Punta</th>
+          <th class="text-end pe-3">Dem. Prom. (kW)</th>
         </tr>
       </thead>
       <tbody id="tablaIndicadoresBody">
@@ -400,13 +406,7 @@
           <td class="text-end small">{{ f.pct_energia }}%</td>
           <td class="text-end small">{{ f.pct_demanda }}%</td>
           <td class="text-end small">{{ f.factor_carga }}%</td>
-          <td class="text-end small">{{ "{:,.1f}".format(f.demanda_prom) }}</td>
-          <td class="text-end small">{% if f.ct_base is not none %}${{ "{:,.0f}".format(f.ct_base) }}{% else %}—{% endif %}</td>
-          <td class="text-end small">{% if f.ct_inter is not none %}${{ "{:,.0f}".format(f.ct_inter) }}{% else %}—{% endif %}</td>
-          <td class="text-end small">{% if f.ct_punta is not none %}${{ "{:,.0f}".format(f.ct_punta) }}{% else %}—{% endif %}</td>
-          <td class="text-end small">{% if f.cu_base_total is not none %}{{ "{:.4f}".format(f.cu_base_total) }}{% else %}—{% endif %}</td>
-          <td class="text-end small">{% if f.cu_inter_total is not none %}{{ "{:.4f}".format(f.cu_inter_total) }}{% else %}—{% endif %}</td>
-          <td class="text-end small pe-3">{% if f.cu_punta_total is not none %}{{ "{:.4f}".format(f.cu_punta_total) }}{% else %}—{% endif %}</td>
+          <td class="text-end small pe-3">{{ "{:,.1f}".format(f.demanda_prom) }}</td>
         </tr>
         {% endfor %}
       </tbody>
