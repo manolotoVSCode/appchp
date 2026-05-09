@@ -134,7 +134,8 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
 
     Aplica prorrateo a facturas con periodo corto (< umbral días).
     Periodos faltantes en una factura devuelven 0.0 (no excepción).
-    Devuelve dict con claves: consumos_demandas, costos_detallados, indicadores.
+    Devuelve dict con claves: consumos_demandas, costos_detallados, indicadores,
+    costo_unit_promedio_total.
     Cada lista termina con una fila de totales ANUAL.
     """
     facturas_ordenadas = sorted(
@@ -146,13 +147,17 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
     costos_detallados: list[dict] = []
     indicadores: list[dict] = []
 
-    # Acumuladores para fila ANUAL
+    # Acumuladores para fila ANUAL — existentes
     sum_kwh_base = sum_kwh_inter = sum_kwh_punta = sum_kwh_total = 0.0
     sum_ce_base = sum_ce_inter = sum_ce_punta = sum_ce_total = 0.0
     sum_dist = sum_cap = sum_dem = 0.0
     sum_fp = sum_sub = 0.0
     sum_horas = 0.0
     max_demanda = 0.0
+    # Acumuladores para costos totales por horario (solo meses con desglose disponible)
+    sum_ct_base  = 0.0; sum_kwh_base_ct  = 0.0
+    sum_ct_inter = 0.0; sum_kwh_inter_ct = 0.0
+    sum_ct_punta = 0.0; sum_kwh_punta_ct = 0.0
 
     for inv_orig in facturas_ordenadas:
         inv, factor = prorratear_cfe(inv_orig)
@@ -184,8 +189,10 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
         ce_total = ce_base + ce_inter + ce_punta
 
         comp = {c.nombre: c for c in inv.componentes_mem}
-        costo_dist = float(comp["Distribución"].cargo_demanda_mxn) if "Distribución" in comp else 0.0
-        costo_cap  = float(comp["Capacidad"].cargo_demanda_mxn)    if "Capacidad"    in comp else 0.0
+        dist_disp = "Distribución" in comp
+        cap_disp  = "Capacidad"    in comp
+        costo_dist = float(comp["Distribución"].cargo_demanda_mxn) if dist_disp else 0.0
+        costo_cap  = float(comp["Capacidad"].cargo_demanda_mxn)    if cap_disp  else 0.0
         costo_dem  = costo_dist + costo_cap
 
         cargo_fp = float(inv.cargo_factor_potencia_mxn)
@@ -198,6 +205,26 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
         pct_demanda  = round(costo_dem / subtotal * 100) if subtotal > 0 else 0
         factor_carga = round(demanda_prom / demanda_max * 100) if demanda_max > 0 else 0
 
+        # Reparto de Distribución (proporcional entre Base e Intermedia) y Capacidad (100% Punta)
+        kwh_bi = kwh_base + kwh_inter
+        if dist_disp and kwh_bi > 0:
+            ct_base  = ce_base  + costo_dist * kwh_base  / kwh_bi
+            ct_inter = ce_inter + costo_dist * kwh_inter / kwh_bi
+            cu_base_total  = round(ct_base  / kwh_base,  6) if kwh_base  > 0 else None
+            cu_inter_total = round(ct_inter / kwh_inter, 6) if kwh_inter > 0 else None
+        else:
+            ct_base  = None
+            ct_inter = None
+            cu_base_total  = None
+            cu_inter_total = None
+
+        if cap_disp:
+            ct_punta       = ce_punta + costo_cap
+            cu_punta_total = round(ct_punta / kwh_punta, 6) if kwh_punta > 0 else None
+        else:
+            ct_punta       = None
+            cu_punta_total = None
+
         # Acumular
         sum_kwh_base  += kwh_base;  sum_kwh_inter += kwh_inter
         sum_kwh_punta += kwh_punta; sum_kwh_total += kwh_total
@@ -207,6 +234,12 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
         sum_dem       += costo_dem;  sum_fp        += cargo_fp
         sum_sub       += subtotal;   sum_horas     += horas
         max_demanda    = max(max_demanda, demanda_max)
+        if ct_base is not None:
+            sum_ct_base  += ct_base;  sum_kwh_base_ct  += kwh_base
+        if ct_inter is not None:
+            sum_ct_inter += ct_inter; sum_kwh_inter_ct += kwh_inter
+        if ct_punta is not None:
+            sum_ct_punta += ct_punta; sum_kwh_punta_ct += kwh_punta
 
         consumos_demandas.append({
             "mes": mes_label, "prorrateado": prorrateado,
@@ -226,6 +259,12 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
             "costo_unit": costo_unit, "pct_energia": pct_energia,
             "pct_demanda": pct_demanda, "factor_carga": factor_carga,
             "demanda_prom": demanda_prom,
+            "ct_base":  round(ct_base,  2) if ct_base  is not None else None,
+            "ct_inter": round(ct_inter, 2) if ct_inter is not None else None,
+            "ct_punta": round(ct_punta, 2) if ct_punta is not None else None,
+            "cu_base_total":  cu_base_total,
+            "cu_inter_total": cu_inter_total,
+            "cu_punta_total": cu_punta_total,
         })
 
     # Fila ANUAL
@@ -234,6 +273,13 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
     anual_pct_e  = round(sum_ce_total / sum_sub * 100)       if sum_sub > 0      else 0
     anual_pct_d  = round(sum_dem / sum_sub * 100)            if sum_sub > 0      else 0
     anual_fc     = round(anual_prom / max_demanda * 100)     if max_demanda > 0  else 0
+
+    anual_ct_base  = round(sum_ct_base,  2) if sum_kwh_base_ct  > 0 else None
+    anual_ct_inter = round(sum_ct_inter, 2) if sum_kwh_inter_ct > 0 else None
+    anual_ct_punta = round(sum_ct_punta, 2) if sum_kwh_punta_ct > 0 else None
+    anual_cu_base  = round(sum_ct_base  / sum_kwh_base_ct,  6) if sum_kwh_base_ct  > 0 else None
+    anual_cu_inter = round(sum_ct_inter / sum_kwh_inter_ct, 6) if sum_kwh_inter_ct > 0 else None
+    anual_cu_punta = round(sum_ct_punta / sum_kwh_punta_ct, 6) if sum_kwh_punta_ct > 0 else None
 
     consumos_demandas.append({
         "mes": "ANUAL", "prorrateado": False,
@@ -253,12 +299,22 @@ def calcular_tablas_cfe(cfe_invoices: list[CFEInvoice]) -> dict:
         "costo_unit": anual_unit, "pct_energia": anual_pct_e,
         "pct_demanda": anual_pct_d, "factor_carga": anual_fc,
         "demanda_prom": anual_prom,
+        "ct_base": anual_ct_base, "ct_inter": anual_ct_inter, "ct_punta": anual_ct_punta,
+        "cu_base_total": anual_cu_base, "cu_inter_total": anual_cu_inter,
+        "cu_punta_total": anual_cu_punta,
     })
+
+    costo_unit_promedio_total = {
+        "base":       round(sum_ct_base  / sum_kwh_base_ct,  4) if sum_kwh_base_ct  > 0 else 0.0,
+        "intermedio": round(sum_ct_inter / sum_kwh_inter_ct, 4) if sum_kwh_inter_ct > 0 else 0.0,
+        "punta":      round(sum_ct_punta / sum_kwh_punta_ct, 4) if sum_kwh_punta_ct > 0 else 0.0,
+    }
 
     return {
         "consumos_demandas": consumos_demandas,
         "costos_detallados": costos_detallados,
         "indicadores": indicadores,
+        "costo_unit_promedio_total": costo_unit_promedio_total,
     }
 
 

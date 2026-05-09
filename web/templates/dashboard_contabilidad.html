@@ -227,42 +227,6 @@
   </div>
 </div>
 
-<!-- Viz 3: Tabla análisis costos punta -->
-<div class="card shadow-sm mb-4">
-  <div class="card-body p-0">
-    <div class="px-3 pt-3 pb-2">
-      <h5 class="card-title mb-0">Análisis de costos — horario punta</h5>
-      <p class="text-muted small mt-1 mb-0">Costo energético en horario punta, su participación en la factura total y costo unitario punta mensual.</p>
-    </div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead>
-          <tr class="table-primary-header">
-            <th class="ps-3">Mes</th>
-            <th class="text-end">Costo punta (MXN)</th>
-            <th class="text-end">% del total</th>
-            <th class="text-end pe-3">$/kWh punta</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for fila in historico.tabla_punta %}
-          {% if loop.last %}
-          <tr class="tabla-punta-total">
-          {% else %}
-          <tr>
-          {% endif %}
-            <td class="ps-3 small {% if loop.last %}fw-bold{% endif %}">{{ fila.mes }}</td>
-            <td class="text-end small">${{ "{:,.0f}".format(fila.costo_punta) }}</td>
-            <td class="text-end small">{{ "{:.1f}".format(fila.pct) }}%</td>
-            <td class="text-end small pe-3">{{ "{:.4f}".format(fila.costo_unit_punta) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
 <!-- Viz 4: Costo unitario promedio por horario -->
 <div class="card shadow-sm mb-4">
   <div class="card-body">
@@ -411,11 +375,17 @@
       <thead>
         <tr class="table-primary-header">
           <th class="ps-3">Mes</th>
-          <th class="text-end">$/kWh</th>
+          <th class="text-end">$/kWh total</th>
           <th class="text-end">Energía (%)</th>
           <th class="text-end">Demanda (%)</th>
-          <th class="text-end">Factor de Carga (%)</th>
-          <th class="text-end pe-3">Dem. Promedio (kW)</th>
+          <th class="text-end">F. Carga (%)</th>
+          <th class="text-end">Dem. Prom. (kW)</th>
+          <th class="text-end">Cto. total Base ($)</th>
+          <th class="text-end">Cto. total Interm. ($)</th>
+          <th class="text-end">Cto. total Punta ($)</th>
+          <th class="text-end">$/kWh Base</th>
+          <th class="text-end">$/kWh Interm.</th>
+          <th class="text-end pe-3">$/kWh Punta</th>
         </tr>
       </thead>
       <tbody id="tablaIndicadoresBody">
@@ -430,7 +400,13 @@
           <td class="text-end small">{{ f.pct_energia }}%</td>
           <td class="text-end small">{{ f.pct_demanda }}%</td>
           <td class="text-end small">{{ f.factor_carga }}%</td>
-          <td class="text-end small pe-3">{{ "{:,.1f}".format(f.demanda_prom) }}</td>
+          <td class="text-end small">{{ "{:,.1f}".format(f.demanda_prom) }}</td>
+          <td class="text-end small">{% if f.ct_base is not none %}${{ "{:,.0f}".format(f.ct_base) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.ct_inter is not none %}${{ "{:,.0f}".format(f.ct_inter) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.ct_punta is not none %}${{ "{:,.0f}".format(f.ct_punta) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.cu_base_total is not none %}{{ "{:.4f}".format(f.cu_base_total) }}{% else %}—{% endif %}</td>
+          <td class="text-end small">{% if f.cu_inter_total is not none %}{{ "{:.4f}".format(f.cu_inter_total) }}{% else %}—{% endif %}</td>
+          <td class="text-end small pe-3">{% if f.cu_punta_total is not none %}{{ "{:.4f}".format(f.cu_punta_total) }}{% else %}—{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -643,17 +619,15 @@ new Chart(document.getElementById("chartConsumo"), {
   })()
 });
 
+const cuTotalPromedio = {{ (tablas.costo_unit_promedio_total or {"base": 0.0, "intermedio": 0.0, "punta": 0.0}) | tojson }};
+
 new Chart(document.getElementById("chartCostoPromedio"), {
   type: "bar",
   data: {
     labels: ["Base", "Intermedio", "Punta"],
     datasets: [{
-      label: "$/kWh promedio ponderado",
-      data: [
-        hist.costo_unit_promedio.base,
-        hist.costo_unit_promedio.intermedio,
-        hist.costo_unit_promedio.punta
-      ],
+      label: "$/kWh total (energía + distribución/capacidad)",
+      data: [cuTotalPromedio.base, cuTotalPromedio.intermedio, cuTotalPromedio.punta],
       backgroundColor: [COLOR_BASE, COLOR_INTERMEDIO, COLOR_PUNTA],
       _showLabels: true
     }]

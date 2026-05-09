@@ -262,7 +262,12 @@ def _mock_historico():
 
 
 def _mock_tablas():
-    return {"consumos_demandas": [], "costos_detallados": [], "indicadores": []}
+    return {
+        "consumos_demandas": [],
+        "costos_detallados": [],
+        "indicadores": [],
+        "costo_unit_promedio_total": {"base": 0.0, "intermedio": 0.0, "punta": 0.0},
+    }
 
 
 def _facturas_cfe_mock():
@@ -731,11 +736,16 @@ def _mock_tablas_con_datos():
         "indicadores": [
             {"mes": "Ene 2024", "prorrateado": False,
              "costo_unit": 7.0, "pct_energia": 73, "pct_demanda": 24,
-             "factor_carga": 45, "demanda_prom": 47.5},
+             "factor_carga": 45, "demanda_prom": 47.5,
+             "ct_base": 63333.33, "ct_inter": 126666.67, "ct_punta": 50000.0,
+             "cu_base_total": 6.333333, "cu_inter_total": 6.333333, "cu_punta_total": 10.0},
             {"mes": "ANUAL", "prorrateado": False,
              "costo_unit": 7.0, "pct_energia": 73, "pct_demanda": 24,
-             "factor_carga": 45, "demanda_prom": 47.5},
+             "factor_carga": 45, "demanda_prom": 47.5,
+             "ct_base": 63333.33, "ct_inter": 126666.67, "ct_punta": 50000.0,
+             "cu_base_total": 6.333333, "cu_inter_total": 6.333333, "cu_punta_total": 10.0},
         ],
+        "costo_unit_promedio_total": {"base": 6.3333, "intermedio": 6.3333, "punta": 10.0},
     }
 
 
@@ -907,3 +917,212 @@ def test_dashboard_sin_datos_no_muestra_queso(app, monkeypatch):
     resp = c.get("/clientes/1/dashboard/contabilidad")
     assert resp.status_code == 200
     assert b"chartQueso" not in resp.data
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Sub-entregable F1: costo unitario total por horario (distribución + capacidad)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _make_invoice_con_mem(kwh_base, kwh_inter, kwh_punta,
+                          cu_base, cu_inter, cu_punta,
+                          dist_mxn, cap_mxn,
+                          periodo_inicio=None, periodo_fin=None):
+    """Construye un CFEInvoice mínimo para tests de calcular_tablas_cfe."""
+    from decimal import Decimal
+    from datetime import date
+    from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
+
+    inicio = periodo_inicio or date(2024, 1, 1)
+    fin    = periodo_fin    or date(2024, 1, 31)
+
+    periodos = [
+        CFEConsumoHorario("base",       Decimal(str(kwh_base)),  Decimal("0"), Decimal(str(cu_base))),
+        CFEConsumoHorario("intermedio", Decimal(str(kwh_inter)), Decimal("0"), Decimal(str(cu_inter))),
+        CFEConsumoHorario("punta",      Decimal(str(kwh_punta)), Decimal("0"), Decimal(str(cu_punta))),
+    ]
+
+    mem_base = [
+        MEMComponente("Distribución", Decimal("0"), Decimal(str(dist_mxn)), Decimal("0"), Decimal(str(dist_mxn))),
+        MEMComponente("Capacidad",    Decimal("0"), Decimal(str(cap_mxn)),  Decimal("0"), Decimal(str(cap_mxn))),
+    ]
+
+    subtotal = (
+        Decimal(str(kwh_base))  * Decimal(str(cu_base))  +
+        Decimal(str(kwh_inter)) * Decimal(str(cu_inter)) +
+        Decimal(str(kwh_punta)) * Decimal(str(cu_punta)) +
+        Decimal(str(dist_mxn)) + Decimal(str(cap_mxn))
+    )
+
+    return CFEInvoice(
+        uuid_cfdi="test-uuid",
+        folio="1",
+        serie=None,
+        fecha_emision=inicio,
+        periodo_inicio=inicio,
+        periodo_fin=fin,
+        fecha_limite_pago=fin,
+        nombre_cliente="TEST",
+        rfc_cliente="TST000000AAA",
+        numero_servicio="0",
+        rmu=None,
+        tarifa="GDMTH",
+        numero_medidor="0",
+        multiplicador=1,
+        carga_conectada_kw=Decimal("0"),
+        demanda_contratada_kw=Decimal("0"),
+        periodos=periodos,
+        kw_max=Decimal("0"),
+        kvArh=Decimal("0"),
+        factor_potencia_pct=Decimal("0"),
+        componentes_mem=mem_base,
+        cargo_fijo_mxn=Decimal("0"),
+        energia_total_mxn=Decimal("0"),
+        cargo_factor_potencia_mxn=Decimal("0"),
+        subtotal_mxn=subtotal,
+        iva_mxn=Decimal("0"),
+        facturacion_periodo_mxn=Decimal("0"),
+        derecho_alumbrado_publico_mxn=Decimal("0"),
+        credito_aplicado_mxn=Decimal("0"),
+        total_mxn=subtotal,
+        pdf_path="test.pdf",
+        advertencias=[],
+    )
+
+
+# ── Test 29: 6 columnas nuevas con valores conocidos ─────────────────────────
+
+def test_f1_columnas_nuevas_valores_conocidos():
+    """Las 6 columnas nuevas se calculan correctamente con datos conocidos."""
+    from calc.historico import calcular_tablas_cfe
+    # kwh: 10000 base, 20000 inter, 5000 punta
+    # cu: 5.0, 5.0, 6.0 ($/kWh — solo energía)
+    # dist: 40000 MXN, cap: 20000 MXN
+    inv = _make_invoice_con_mem(10000, 20000, 5000, 5.0, 5.0, 6.0, 40000, 20000)
+    tablas = calcular_tablas_cfe([inv])
+    fila = tablas["indicadores"][0]
+
+    # Distribución se reparte entre base e inter proporcional a kWh
+    # kwh_bi = 30000; base frac = 10000/30000 = 1/3; inter frac = 20000/30000 = 2/3
+    # ct_base  = 10000*5.0 + 40000*(1/3) = 50000 + 13333.33 = 63333.33
+    # ct_inter = 20000*5.0 + 40000*(2/3) = 100000 + 26666.67 = 126666.67
+    # ct_punta = 5000*6.0 + 20000 = 30000 + 20000 = 50000
+    assert abs(fila["ct_base"]  - 63333.33) < 0.01
+    assert abs(fila["ct_inter"] - 126666.67) < 0.01
+    assert abs(fila["ct_punta"] - 50000.0) < 0.01
+
+    assert abs(fila["cu_base_total"]  - 63333.33 / 10000) < 1e-4
+    assert abs(fila["cu_inter_total"] - 126666.67 / 20000) < 1e-4
+    assert abs(fila["cu_punta_total"] - 50000.0 / 5000) < 1e-4
+
+
+# ── Test 30: Distribución solo entre Base e Intermedia ───────────────────────
+
+def test_f1_distribucion_no_va_a_punta():
+    """El cargo de distribución NO se asigna a punta."""
+    from calc.historico import calcular_tablas_cfe
+    inv = _make_invoice_con_mem(10000, 20000, 5000, 5.0, 5.0, 6.0, 40000, 0)
+    tablas = calcular_tablas_cfe([inv])
+    fila = tablas["indicadores"][0]
+
+    # Con cap=0, ct_punta = ce_punta + 0 = 5000*6.0 = 30000
+    assert abs(fila["ct_punta"] - 30000.0) < 0.01
+    # ct_base y ct_inter incluyen distribución, ct_punta no
+    assert fila["ct_base"]  > 50000.0   # > energía pura base
+    assert fila["ct_inter"] > 100000.0  # > energía pura inter
+
+
+# ── Test 31: Capacidad 100% a Punta ──────────────────────────────────────────
+
+def test_f1_capacidad_va_100_porciento_a_punta():
+    """El cargo de capacidad se asigna íntegramente a punta."""
+    from calc.historico import calcular_tablas_cfe
+    inv = _make_invoice_con_mem(10000, 20000, 5000, 5.0, 5.0, 6.0, 0, 20000)
+    tablas = calcular_tablas_cfe([inv])
+    fila = tablas["indicadores"][0]
+
+    # ct_punta = 5000*6.0 + 20000 = 50000
+    assert abs(fila["ct_punta"] - 50000.0) < 0.01
+    # Sin distribución, ct_base = ce_base, ct_inter = ce_inter
+    assert abs(fila["ct_base"]  - 50000.0)  < 0.01   # 10000*5.0
+    assert abs(fila["ct_inter"] - 100000.0) < 0.01   # 20000*5.0
+
+
+# ── Test 32: Sin consumo en Base e Intermedia → distribución en guion ────────
+
+def test_f1_sin_base_inter_distribucion_none():
+    """Cuando kwh_base + kwh_inter = 0, el reparto es imposible → None."""
+    from calc.historico import calcular_tablas_cfe
+    inv = _make_invoice_con_mem(0, 0, 5000, 0.0, 0.0, 6.0, 40000, 20000)
+    tablas = calcular_tablas_cfe([inv])
+    fila = tablas["indicadores"][0]
+
+    assert fila["ct_base"]      is None
+    assert fila["ct_inter"]     is None
+    assert fila["cu_base_total"]  is None
+    assert fila["cu_inter_total"] is None
+    # Punta sigue calculable
+    assert fila["ct_punta"]       is not None
+    assert fila["cu_punta_total"] is not None
+
+
+# ── Test 33: Sin consumo Punta → cu_punta_total en guion ─────────────────────
+
+def test_f1_sin_punta_cu_punta_none():
+    """Cuando kwh_punta = 0, cu_punta_total = None pero ct_punta es calculable."""
+    from calc.historico import calcular_tablas_cfe
+    inv = _make_invoice_con_mem(10000, 20000, 0, 5.0, 5.0, 0.0, 40000, 20000)
+    tablas = calcular_tablas_cfe([inv])
+    fila = tablas["indicadores"][0]
+
+    # ct_punta = 0 + cap, pero cu_punta_total = None porque kwh_punta = 0
+    assert fila["cu_punta_total"] is None
+    # Base e inter no se ven afectadas
+    assert fila["cu_base_total"]  is not None
+    assert fila["cu_inter_total"] is not None
+
+
+# ── Test 34: Sin componente Capacidad → columnas punta en None ───────────────
+
+def test_f1_sin_capacidad_punta_none():
+    """Sin componente Capacidad en el MEM, ct_punta y cu_punta_total son None."""
+    from decimal import Decimal
+    from datetime import date
+    from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
+    from calc.historico import calcular_tablas_cfe
+
+    inicio = date(2024, 1, 1)
+    fin    = date(2024, 1, 31)
+    periodos = [
+        CFEConsumoHorario("base",       Decimal("10000"), Decimal("0"), Decimal("5.0")),
+        CFEConsumoHorario("intermedio", Decimal("20000"), Decimal("0"), Decimal("5.0")),
+        CFEConsumoHorario("punta",      Decimal("5000"),  Decimal("0"), Decimal("6.0")),
+    ]
+    # Solo Distribución, sin Capacidad
+    mem = [MEMComponente("Distribución", Decimal("0"), Decimal("40000"), Decimal("0"), Decimal("40000"))]
+    subtotal = Decimal("10000")*Decimal("5") + Decimal("20000")*Decimal("5") + Decimal("5000")*Decimal("6") + Decimal("40000")
+
+    inv = CFEInvoice(
+        uuid_cfdi="u", folio="1", serie=None, fecha_emision=inicio,
+        periodo_inicio=inicio, periodo_fin=fin, fecha_limite_pago=fin,
+        nombre_cliente="T", rfc_cliente="T000000AAA", numero_servicio="0",
+        rmu=None, tarifa="GDMTH", numero_medidor="0", multiplicador=1,
+        carga_conectada_kw=Decimal("0"), demanda_contratada_kw=Decimal("0"),
+        periodos=periodos, kw_max=Decimal("0"), kvArh=Decimal("0"),
+        factor_potencia_pct=Decimal("0"), componentes_mem=mem,
+        cargo_fijo_mxn=Decimal("0"), energia_total_mxn=Decimal("0"),
+        cargo_factor_potencia_mxn=Decimal("0"), subtotal_mxn=subtotal,
+        iva_mxn=Decimal("0"), facturacion_periodo_mxn=Decimal("0"),
+        derecho_alumbrado_publico_mxn=Decimal("0"), credito_aplicado_mxn=Decimal("0"),
+        total_mxn=subtotal, pdf_path="t.pdf", advertencias=[],
+    )
+
+    tablas = calcular_tablas_cfe([inv])
+    fila = tablas["indicadores"][0]
+
+    assert fila["ct_punta"]       is None
+    assert fila["cu_punta_total"] is None
+    # Distribución sigue funcionando para base e inter
+    assert fila["ct_base"]       is not None
+    assert fila["cu_base_total"] is not None
+    # No rompe el render (costo_unit sigue calculable)
+    assert fila["costo_unit"] > 0
