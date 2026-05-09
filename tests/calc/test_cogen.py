@@ -7,7 +7,7 @@ from datetime import date
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice, GasConcepto
 from models.cogen_result import CoGenParams, CoGenMes, CoGenResultado
-from calc.cogen import calcular_cogen
+from calc.cogen import calcular_cogen, calcular_payback, calcular_flujo_acumulado
 
 
 # ── Helpers para construir fixtures sintéticos ────────────────────────────────
@@ -179,3 +179,78 @@ def test_gasto_om_anual_es_suma_mensual():
     gas = [_gas(2023, 11, GJ, PRECIO_GJ), _gas(2023, 12, GJ * 2, PRECIO_GJ)]
     r = calcular_cogen(cfe, gas, CoGenParams())
     assert r.gasto_om_anual_mxn == sum(m.gasto_om_mes_mxn for m in r.meses)
+
+
+# ── Tests de capacidad nominal, inversión, payback y flujo ───────────────────
+
+def test_capacidad_nominal_kw(resultado_un_mes):
+    """capacidad = max(kWh_mes) / 720 = 1_000_000 / 720 ≈ 1388.89 kW."""
+    esperado = (KWH / Decimal("720")).quantize(Decimal("0.01"))
+    assert resultado_un_mes.capacidad_nominal_kw == esperado
+
+
+def test_capacidad_nominal_sin_facturas():
+    """Sin facturas CFE → capacidad es None."""
+    r = calcular_cogen([], [], CoGenParams())
+    assert r.capacidad_nominal_kw is None
+
+
+def test_inversion_usd(resultado_un_mes):
+    """inversión USD = capacidad × 1400 USD/kW."""
+    capacidad = resultado_un_mes.capacidad_nominal_kw
+    esperado = (capacidad * Decimal("1400")).quantize(Decimal("0.01"))
+    assert resultado_un_mes.inversion_usd == esperado
+
+
+def test_inversion_mxn(resultado_un_mes):
+    """inversión MXN = inversión USD × tipo de cambio (17.50 por defecto)."""
+    esperado = (resultado_un_mes.inversion_usd * Decimal("17.50")).quantize(Decimal("0.01"))
+    assert resultado_un_mes.inversion_mxn == esperado
+
+
+def test_inversion_mxn_tipo_cambio_custom():
+    """Con tipo_cambio=20.00, inversión MXN refleja el nuevo TC."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams(), tipo_cambio=Decimal("20.00"))
+    esperado = (r.inversion_usd * Decimal("20.00")).quantize(Decimal("0.01"))
+    assert r.inversion_mxn == esperado
+
+
+def test_payback_calculado():
+    """Payback con inversión=100 000 y ahorro=30 000/año → año 4."""
+    assert calcular_payback(Decimal("100000"), Decimal("30000")) == 4
+
+
+def test_payback_mayor_horizonte():
+    """Con ahorro muy bajo, payback supera los 15 años."""
+    assert calcular_payback(Decimal("1000000"), Decimal("50000")) == "mayor_horizonte"
+
+
+def test_payback_no_aplica_cero():
+    """Ahorro Neto = 0 → no aplica."""
+    assert calcular_payback(Decimal("100000"), Decimal("0")) == "no_aplica"
+
+
+def test_payback_no_aplica_negativo():
+    """Ahorro Neto negativo → no aplica."""
+    assert calcular_payback(Decimal("100000"), Decimal("-5000")) == "no_aplica"
+
+
+def test_flujo_acumulado_anio_0():
+    """Año 0 del flujo acumulado = -inversión."""
+    flujo = calcular_flujo_acumulado(Decimal("100000"), Decimal("30000"))
+    assert flujo[0] == Decimal("-100000")
+
+
+def test_flujo_acumulado_progresion():
+    """Cada año suma el ahorro neto al acumulado anterior."""
+    flujo = calcular_flujo_acumulado(Decimal("100000"), Decimal("30000"))
+    for i in range(1, len(flujo)):
+        assert flujo[i] == flujo[i - 1] + Decimal("30000")
+
+
+def test_flujo_acumulado_longitud():
+    """Lista con horizonte=15 tiene 16 elementos (año 0 a año 15)."""
+    flujo = calcular_flujo_acumulado(Decimal("100000"), Decimal("30000"))
+    assert len(flujo) == 16

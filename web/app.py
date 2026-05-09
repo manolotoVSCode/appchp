@@ -7,12 +7,19 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-from flask import Flask, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, flash, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user
 from flask_wtf.csrf import CSRFProtect
 
-from storage.repository import get_cfe_invoices_for_dashboard, get_gas_invoices_for_dashboard, get_contratos_por_cliente
-from calc.cogen import calcular_cogen
+from storage.repository import (
+    get_cfe_invoices_for_dashboard,
+    get_gas_invoices_for_dashboard,
+    get_contratos_por_cliente,
+    get_configuracion,
+    get_configuracion_row,
+    set_configuracion,
+)
+from calc.cogen import calcular_cogen, calcular_payback, calcular_flujo_acumulado
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe, calcular_historico_gas
 from calc.nombre_canonico import generar_nombre_canonico
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
@@ -256,8 +263,11 @@ def create_app() -> Flask:
             return err
 
         try:
+            from decimal import Decimal as _D
             cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
-            r = calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
+            tc_str = get_configuracion("tipo_cambio_mxn_usd")
+            tipo_cambio = _D(tc_str) if tc_str else _D("17.50")
+            r = calcular_cogen(cfe_invoices, gas_invoices, CoGenParams(), tipo_cambio=tipo_cambio)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -304,6 +314,17 @@ def create_app() -> Flask:
             }
             for m in r.meses
         ]
+
+        # Payback y flujo a 15 años (solo si hay inversión calculable)
+        if r.inversion_mxn is not None and r.inversion_mxn > 0:
+            payback_inicial = calcular_payback(r.inversion_mxn, r.ebitda_anual_mxn)
+            flujo_acum_15 = [float(v) for v in calcular_flujo_acumulado(r.inversion_mxn, r.ebitda_anual_mxn)]
+            flujo_anual_15 = [-float(r.inversion_mxn)] + [float(r.ebitda_anual_mxn)] * 15
+        else:
+            payback_inicial = None
+            flujo_acum_15 = []
+            flujo_anual_15 = []
+
         return render_template(
             "dashboard_cogeneracion.html",
             r=r,
@@ -318,6 +339,9 @@ def create_app() -> Flask:
             chart_costo_gas=chart_costo_gas,
             chart_om=chart_om,
             meses_raw=meses_raw,
+            payback_inicial=payback_inicial,
+            flujo_acum_15=flujo_acum_15,
+            flujo_anual_15=flujo_anual_15,
         )
 
     @app.route("/export/excel")
@@ -344,6 +368,30 @@ def create_app() -> Flask:
             as_attachment=True,
             download_name="analisis_cogen.xlsx",
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    @app.route("/admin/configuracion", methods=["GET", "POST"])
+    def admin_configuracion():
+        """Página de configuración global del sistema."""
+        from decimal import Decimal, InvalidOperation
+        if request.method == "POST":
+            tc_str = request.form.get("tipo_cambio", "").strip()
+            try:
+                tc = Decimal(tc_str)
+                if tc < Decimal("10") or tc > Decimal("30"):
+                    raise ValueError("fuera de rango")
+            except (InvalidOperation, ValueError):
+                flash("Tipo de cambio inválido. Debe ser un número entre 10.00 y 30.00.", "danger")
+                return redirect(url_for("admin_configuracion"))
+            set_configuracion("tipo_cambio_mxn_usd", str(tc))
+            flash("Configuración guardada correctamente.", "success")
+            return redirect(url_for("admin_configuracion"))
+
+        tc_row = get_configuracion_row("tipo_cambio_mxn_usd")
+        return render_template(
+            "admin/configuracion.html",
+            tc_row=tc_row,
+            tc_valor=tc_row["valor"] if tc_row else "17.50",
         )
 
     @app.route("/changelog")

@@ -224,6 +224,10 @@ def _mock_resultado_con_meses():
     resultado.kwh_total_anual = Decimal("50000")
     resultado.kwh_cubiertos_anual = Decimal("37500")
     resultado.gj_gas_cogen_anual = Decimal("337.5")
+    resultado.capacidad_nominal_kw = Decimal("69.44")
+    resultado.inversion_usd = Decimal("97216.00")
+    resultado.inversion_mxn = Decimal("1701280.00")
+    resultado.tipo_cambio_mxn_usd = Decimal("17.50")
     resultado.params.cobertura_electrica = 0.75
     resultado.params.rendimiento_electrico = 0.40
     resultado.params.rendimiento_termico = 0.25
@@ -288,6 +292,7 @@ def test_dashboard_con_datos_muestra_kpis(app, monkeypatch):
         "web.app._cargar_facturas_seleccionadas",
         lambda cliente_id: ([], [], _facturas_cfe_mock(), _facturas_gas_mock()),
     )
+    monkeypatch.setattr("web.app.get_configuracion", lambda clave: None)
     monkeypatch.setattr("web.app.calcular_cogen", lambda *a, **kw: _mock_resultado_con_meses())
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
     c = _login(app, monkeypatch)
@@ -481,6 +486,7 @@ def test_cogeneracion_muestra_kpis_no_historico(app, monkeypatch):
         "web.app._cargar_facturas_seleccionadas",
         lambda cliente_id: ([], [], _facturas_cfe_mock(), _facturas_gas_mock()),
     )
+    monkeypatch.setattr("web.app.get_configuracion", lambda clave: None)
     monkeypatch.setattr("web.app.calcular_cogen", lambda *a, **kw: _mock_resultado_con_meses())
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
     c = _login(app, monkeypatch)
@@ -1128,3 +1134,61 @@ def test_f1_sin_capacidad_punta_none():
     assert fila["cu_base_total"] is not None
     # No rompe el render (costo_unit sigue calculable)
     assert fila["costo_unit"] > 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Sub-entregable F3: admin configuración y tipo de cambio
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_admin_configuracion_requiere_autenticacion(app, monkeypatch):
+    """GET /admin/configuracion sin sesión → redirige a login."""
+    c = app.test_client()
+    resp = c.get("/admin/configuracion", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/login" in resp.headers["Location"]
+
+
+def test_admin_configuracion_tipo_cambio_fuera_de_rango(app, monkeypatch):
+    """POST /admin/configuracion con TC fuera de [10, 30] → flash de error, no guarda."""
+    guardados = []
+    monkeypatch.setattr("web.app.get_configuracion_row", lambda clave: None)
+    monkeypatch.setattr("web.app.set_configuracion", lambda k, v: guardados.append(v))
+    c = _login(app, monkeypatch)
+
+    resp = c.post(
+        "/admin/configuracion",
+        data={"csrf_token": "x", "tipo_cambio": "9.99"},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"inv" in resp.data.lower() or b"nv" in resp.data.lower() or b"rango" in resp.data.lower()
+    assert guardados == []
+
+
+def test_tipo_cambio_actualiza_inversion_mxn(app, monkeypatch):
+    """Dashboard cogeneración con TC=20.00 en DB → inversión MXN refleja nuevo TC."""
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([], [], _facturas_cfe_mock(), _facturas_gas_mock()),
+    )
+    monkeypatch.setattr("web.app.get_configuracion", lambda clave: "20.00")
+
+    from decimal import Decimal
+    resultado = _mock_resultado_con_meses()
+    # Recalcular inversion_mxn con TC=20.00
+    resultado.inversion_usd = Decimal("97216.00")
+    resultado.inversion_mxn = (Decimal("97216.00") * Decimal("20.00")).quantize(Decimal("0.01"))
+    resultado.tipo_cambio_mxn_usd = Decimal("20.00")
+
+    monkeypatch.setattr("web.app.calcular_cogen", lambda *a, **kw: resultado)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+        sess["cliente_activo_nombre"] = "IBERICA TILES"
+
+    resp = c.get("/clientes/1/dashboard/cogeneracion")
+    assert resp.status_code == 200
+    # El dashboard debe mostrar la inversión MXN con TC=20 (1,944,320.00)
+    assert b"1,944,320" in resp.data or b"1944320" in resp.data

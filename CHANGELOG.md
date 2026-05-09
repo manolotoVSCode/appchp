@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.13.0] — 2026-05-08
+
+### Añadido
+
+- Capacidad nominal del motor: calculada como `max(kWh_mes) / 720 h` sobre las facturas CFE seleccionadas con los tres horarios completos.
+- Inversión estimada: `capacidad_nominal_kw × 1 400 USD/kW`, convertida a MXN con el tipo de cambio configurable.
+- Periodo de retorno (payback): calculado hasta un horizonte de 15 años; devuelve el año de cruce, "no_aplica" si el ahorro neto es ≤ 0, o "mayor_horizonte" si supera los 15 años.
+- Tres nuevas tarjetas KPI en el dashboard cogeneración: Capacidad Nominal, Inversión (USD y MXN) y Periodo de Retorno.
+- Gráfica de flujo de caja a 15 años: barras de flujo anual, línea de flujo acumulado y línea de referencia en cero. Se actualiza reactivamente al mover los sliders.
+- Página de administración `/admin/configuracion`: permite establecer el tipo de cambio MXN/USD (rango 10–30) con persistencia en tabla `configuracion` de Supabase. Accesible desde el sidebar bajo "Administración".
+
+### Cambiado
+
+- `calcular_cogen` acepta parámetro `tipo_cambio` (Decimal, default 17.50) para permitir personalizar la conversión USD→MXN.
+- El tipo de cambio se lee de la base de datos en cada petición al dashboard de cogeneración; si no está configurado usa 17.50 como fallback.
+
+---
+
 ## [2.12.0] — 2026-05-08
 
 ### Añadido

@@ -56,3 +56,8 @@ class CoGenResultado:
     ahorro_caldera_anual_mxn: Decimal
     ebitda_anual_mxn: Decimal
     gasto_om_anual_mxn: Decimal = Decimal("0")
+    # Capacidad e inversión (None si no hay datos CFE suficientes)
+    capacidad_nominal_kw: Decimal | None = None
+    inversion_usd: Decimal | None = None
+    inversion_mxn: Decimal | None = None
+    tipo_cambio_mxn_usd: Decimal | None = None

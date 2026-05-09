@@ -192,6 +192,13 @@
   {% endif %}
   {% endif %}
 
+  <hr class="sidebar-divider mx-3">
+  <div class="sidebar-section">Administración</div>
+  <a href="{{ url_for('admin_configuracion') }}"
+     class="sidebar-link{% if nav_active == 'configuracion' %} active{% endif %}">
+    Configuración
+  </a>
+
   <div class="sidebar-bottom">
     <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-secondary w-100">Cerrar sesión</a>
     <div class="sidebar-footer-meta">

@@ -657,3 +657,30 @@ def delete_cfe_factura(factura_id: int) -> None:
 def delete_gas_factura(factura_id: int) -> None:
     """Borra una factura de gas (ON DELETE CASCADE elimina conceptos)."""
     _supabase.table("gas_facturas").delete().eq("id", factura_id).execute()
+
+
+# ── Configuración global ──────────────────────────────────────────────────────
+
+def get_configuracion(clave: str) -> str | None:
+    """Lee el valor de una clave en la tabla configuracion. None si no existe."""
+    resp = _supabase.table("configuracion").select("valor").eq("clave", clave).limit(1).execute()
+    return resp.data[0]["valor"] if resp.data else None
+
+
+def get_configuracion_row(clave: str) -> dict | None:
+    """Lee la fila completa de configuracion para una clave. None si no existe."""
+    resp = _supabase.table("configuracion").select("*").eq("clave", clave).limit(1).execute()
+    return resp.data[0] if resp.data else None
+
+
+def set_configuracion(clave: str, valor: str) -> None:
+    """Crea o actualiza un parámetro en la tabla configuracion."""
+    from datetime import datetime, timezone
+    _supabase.table("configuracion").upsert(
+        {
+            "clave": clave,
+            "valor": valor,
+            "fecha_modificacion": datetime.now(timezone.utc).isoformat(),
+        },
+        on_conflict="clave",
+    ).execute()
