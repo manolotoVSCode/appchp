@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.12.0] — 2026-05-08
+
+### Añadido
+
+- Dashboard cogeneración reestructurado: KPIs organizados en tres secciones (Ingresos, Gastos, Ahorro Neto) con color condicional rojo/verde según signo del resultado.
+- O&M estimado: nuevo KPI mensual y anual calculado como 30 % del ahorro eléctrico. Incluye campo `gasto_om_mes_mxn` en `CoGenMes` y `gasto_om_anual_mxn` en `CoGenResultado`.
+- Tabla mensual de cogeneración movida a panel flotante (igual que contabilidad); accesible mediante enlace "Ver datos" en el encabezado de la gráfica.
+- Gráfica cogeneración: nuevo dataset "O&M" apilado como gasto; línea renombrada de "EBITDA" a "Ahorro Neto".
+
+### Cambiado
+
+- Corrección PCS/PCI aplicada al consumo de gas del motor: `gj_gas_cogen` se multiplica por el factor 1.11. El gas natural se cotiza en Poder Calorífico Superior (PCS) pero el rendimiento eléctrico del motor se define sobre Poder Calorífico Inferior (PCI); sin la corrección el consumo de gas se subestimaba un 11 %. La constante vive en `calc/cogen.py` como `_FACTOR_PCI_A_PCS = Decimal("1.11")`.
+- "EBITDA" renombrado a "Ahorro Neto" en dashboard, template y gráfica. El cálculo ahora resta también el O&M.
+- Fórmulas Excel actualizadas: `gj_gas_cogen` incorpora el factor 1.11; la columna "EBITDA Mes" pasa a llamarse "Ahorro Neto Mes" e incluye el descuento de O&M (30 % del ahorro eléctrico).
+- Sliders de sensibilidad actualizados para aplicar el factor 1.11 y el O&M en el recálculo en tiempo real.
+
+---
+
 ## [2.11.0] — 2026-05-08
 
 ### Añadido

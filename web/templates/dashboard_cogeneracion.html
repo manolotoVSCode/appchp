@@ -4,10 +4,19 @@
 {% block title %}Proyecto Cogeneración — {{ cliente_nombre }}{% endblock %}
 
 {% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/panel-flotante.css') }}">
 <style>
   .table-mes th { background: var(--color-primary); color: #fff; white-space: nowrap; }
   .total-row td { background: var(--color-primary-soft); font-weight: 600; }
-  .ebitda-cell  { background: var(--color-primary-soft); font-weight: 600; }
+  .ahorro-neto-cell  { background: var(--color-primary-soft); font-weight: 600; }
+  .kpi-section-label {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-text-muted);
+    padding: .4rem 1rem .1rem;
+  }
 </style>
 {% endblock %}
 
@@ -58,55 +67,73 @@
 
 {% if not (aviso_datos and aviso_datos.tipo == "sin_seleccion") %}
 
-<!-- KPI cards -->
-<div class="row g-3 mb-4">
-  <div class="col-md-3">
-    <div class="card kpi-card kpi-ebitda h-100 shadow-sm">
-      <div class="card-body">
-        <div class="text-muted small">EBITDA Anual</div>
-        <div class="fs-4 fw-bold text-success" id="kpi-ebitda-val">
-          ${{ "{:,.0f}".format(r.ebitda_anual_mxn|float) }}
+<!-- ── KPIs: Ingresos y Gastos ─────────────────────────────────────────────── -->
+<div class="row g-3 mb-3">
+
+  <!-- Ingresos -->
+  <div class="col-md-6">
+    <div class="card h-100 shadow-sm">
+      <div class="kpi-section-label">Ingresos</div>
+      <div class="card-body pt-1">
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="text-muted small">Ahorro Electricidad</div>
+            <div class="fs-5 fw-bold" style="color:var(--color-info)" id="kpi-elec-val">
+              ${{ "{:,.0f}".format(r.ahorro_electricidad_anual_mxn|float) }}
+            </div>
+            <div class="text-muted small">MXN / año</div>
+          </div>
+          <div class="col-6">
+            <div class="text-muted small">Ahorro Caldera</div>
+            <div class="fs-5 fw-bold text-warning" id="kpi-caldera-val">
+              ${{ "{:,.0f}".format(r.ahorro_caldera_anual_mxn|float) }}
+            </div>
+            <div class="text-muted small">MXN / año</div>
+          </div>
         </div>
-        <div class="text-muted small">MXN / año</div>
       </div>
     </div>
   </div>
-  <div class="col-md-3">
-    <div class="card kpi-card kpi-elec h-100 shadow-sm">
-      <div class="card-body">
-        <div class="text-muted small">Ahorro Electricidad</div>
-        <div class="fs-4 fw-bold" style="color:var(--color-info)" id="kpi-elec-val">
-          ${{ "{:,.0f}".format(r.ahorro_electricidad_anual_mxn|float) }}
+
+  <!-- Gastos -->
+  <div class="col-md-6">
+    <div class="card h-100 shadow-sm">
+      <div class="kpi-section-label">Gastos</div>
+      <div class="card-body pt-1">
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="text-muted small">Costo Gas Cogen</div>
+            <div class="fs-5 fw-bold text-danger" id="kpi-gas-val">
+              ${{ "{:,.0f}".format(r.costo_gas_cogen_anual_mxn|float) }}
+            </div>
+            <div class="text-muted small">MXN / año</div>
+          </div>
+          <div class="col-6">
+            <div class="text-muted small">O&amp;M estimado</div>
+            <div class="fs-5 fw-bold text-danger" id="kpi-om-val">
+              ${{ "{:,.0f}".format(r.gasto_om_anual_mxn|float) }}
+            </div>
+            <div class="text-muted small">MXN / año</div>
+          </div>
         </div>
-        <div class="text-muted small">MXN / año</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card kpi-card kpi-caldera h-100 shadow-sm">
-      <div class="card-body">
-        <div class="text-muted small">Ahorro Caldera</div>
-        <div class="fs-4 fw-bold text-warning" id="kpi-caldera-val">
-          ${{ "{:,.0f}".format(r.ahorro_caldera_anual_mxn|float) }}
-        </div>
-        <div class="text-muted small">MXN / año</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card kpi-card kpi-gas h-100 shadow-sm">
-      <div class="card-body">
-        <div class="text-muted small">Costo Gas Cogen</div>
-        <div class="fs-4 fw-bold text-danger" id="kpi-gas-val">
-          ${{ "{:,.0f}".format(r.costo_gas_cogen_anual_mxn|float) }}
-        </div>
-        <div class="text-muted small">MXN / año</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Sliders de sensibilidad -->
+<!-- ── KPI: Ahorro Neto ───────────────────────────────────────────────────── -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body text-center py-3">
+    <div class="text-muted small mb-1">Ahorro Neto Anual</div>
+    <div class="fs-2 fw-bold {% if r.ebitda_anual_mxn < 0 %}text-danger{% else %}text-success{% endif %}"
+         id="kpi-ahorro-neto-val">
+      ${{ "{:,.0f}".format(r.ebitda_anual_mxn|float) }}
+    </div>
+    <div class="text-muted small">MXN / año (ingresos − costo gas − O&amp;M)</div>
+  </div>
+</div>
+
+<!-- ── Sliders de sensibilidad ────────────────────────────────────────────── -->
 <div class="card shadow-sm mb-4">
   <div class="card-body">
     <h5 class="card-title">Análisis de sensibilidad</h5>
@@ -141,96 +168,31 @@
       </div>
     </div>
     <div class="mt-2 small text-muted">
-      EBITDA anual estimado:
-      <strong class="text-success fs-5" id="ebitda-sensibilidad">—</strong>
+      Ahorro Neto anual estimado:
+      <strong class="fs-5" id="ahorro-neto-sensibilidad">—</strong>
     </div>
   </div>
 </div>
 
-<!-- Tabla EBITDA mensual -->
-<div class="card shadow-sm mb-4">
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover table-mes mb-0">
-        <thead>
-          <tr>
-            <th>Periodo</th>
-            <th class="text-end">kWh Total</th>
-            <th class="text-end">Costo CFE (MXN)</th>
-            <th class="text-end">$/kWh</th>
-            <th class="text-end">GJ Gas Real</th>
-            <th class="text-end">$/GJ</th>
-            <th class="text-end">Costo Gas Real</th>
-            <th class="text-end">kWh Cubiertos</th>
-            <th class="text-end">GJ Cogen</th>
-            <th class="text-end">Costo Gas Cogen</th>
-            <th class="text-end">Ahorro Elec.</th>
-            <th class="text-end">Calor (GJ)</th>
-            <th class="text-end">Ahorro Caldera</th>
-            <th class="text-end ebitda-cell">EBITDA Mes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for m in r.meses %}
-          <tr class="mes-row">
-            <td>
-              {{ m.periodo_inicio.strftime("%b %Y") }}
-              {% if m.prorrateado %}
-              <span class="badge bg-warning text-dark ms-1" style="font-size:.65em"
-                    title="{{ m.nota_prorrateo }}">★ prorrateado</span>
-              {% endif %}
-            </td>
-            <td class="text-end">{{ "{:,.0f}".format(m.kwh_total|float) }}</td>
-            <td class="text-end">{{ "${:,.0f}".format(m.costo_cfe_mxn|float) }}</td>
-            <td class="text-end">{{ "{:.4f}".format(m.costo_promedio_kwh|float) }}</td>
-            <td class="text-end">{{ "{:,.2f}".format(m.gj_consumido|float) }}</td>
-            <td class="text-end">{{ "{:.4f}".format(m.costo_unitario_gj|float) }}</td>
-            <td class="text-end">{{ "${:,.0f}".format(m.costo_gas_actual_mxn|float) }}</td>
-            <td class="text-end">{{ "{:,.0f}".format(m.kwh_cubiertos|float) }}</td>
-            <td class="text-end">{{ "{:,.2f}".format(m.gj_gas_cogen|float) }}</td>
-            <td class="text-end">{{ "${:,.0f}".format(m.costo_gas_cogen_mxn|float) }}</td>
-            <td class="text-end">{{ "${:,.0f}".format(m.ahorro_electricidad_mxn|float) }}</td>
-            <td class="text-end">{{ "{:,.2f}".format(m.calor_recuperado_gj|float) }}</td>
-            <td class="text-end">{{ "${:,.0f}".format(m.ahorro_caldera_mxn|float) }}</td>
-            <td class="text-end ebitda-cell">{{ "${:,.0f}".format(m.ebitda_mes_mxn|float) }}</td>
-          </tr>
-          {% endfor %}
-          <tr class="total-row">
-            <td><strong>TOTAL ANUAL</strong></td>
-            <td class="text-end">{{ "{:,.0f}".format(r.kwh_total_anual|float) }}</td>
-            <td class="text-end"></td>
-            <td class="text-end"></td>
-            <td class="text-end"></td>
-            <td class="text-end"></td>
-            <td class="text-end"></td>
-            <td class="text-end">{{ "{:,.0f}".format(r.kwh_cubiertos_anual|float) }}</td>
-            <td class="text-end">{{ "{:,.2f}".format(r.gj_gas_cogen_anual|float) }}</td>
-            <td class="text-end">{{ "${:,.0f}".format(r.costo_gas_cogen_anual_mxn|float) }}</td>
-            <td class="text-end">{{ "${:,.0f}".format(r.ahorro_electricidad_anual_mxn|float) }}</td>
-            <td class="text-end"></td>
-            <td class="text-end">{{ "${:,.0f}".format(r.ahorro_caldera_anual_mxn|float) }}</td>
-            <td class="text-end ebitda-cell">{{ "${:,.0f}".format(r.ebitda_anual_mxn|float) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- Gráfica EBITDA mensual -->
+<!-- ── Gráfica ─────────────────────────────────────────────────────────────── -->
 <div class="card shadow-sm mb-4">
   <div class="card-body">
-    <h5 class="card-title">EBITDA Mensual vs Componentes</h5>
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <h5 class="card-title mb-0">Ahorro Neto Mensual vs Componentes</h5>
+      <a href="#" class="small text-decoration-none"
+         onclick="abrirPanel('panelTablaCoGen'); return false;">Ver datos</a>
+    </div>
     <canvas id="cogenChart" height="90"></canvas>
   </div>
 </div>
 
-<!-- Parámetros usados -->
+<!-- ── Parámetros usados ──────────────────────────────────────────────────── -->
 <div class="mt-3 mb-4 text-muted small">
   Parámetros: cobertura eléctrica={{ (r.params.cobertura_electrica * 100)|int }}% &#183;
   rendimiento eléctrico={{ (r.params.rendimiento_electrico * 100)|int }}% &#183;
   rendimiento térmico={{ (r.params.rendimiento_termico * 100)|int }}% &#183;
-  eficiencia caldera={{ (r.params.eficiencia_caldera * 100)|int }}%
+  eficiencia caldera={{ (r.params.eficiencia_caldera * 100)|int }}% &#183;
+  factor PCS/PCI=1.11 &#183; O&amp;M=30&nbsp;% del ahorro eléctrico
 </div>
 
 {% endif %}{# fin bloque sin_seleccion #}
@@ -239,6 +201,7 @@
 {% block scripts %}
 {% if not (aviso_datos and aviso_datos.tipo == "sin_seleccion") %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/panel-flotante.js') }}"></script>
 <script>
 new Chart(document.getElementById("cogenChart"), {
   type: "bar",
@@ -246,9 +209,10 @@ new Chart(document.getElementById("cogenChart"), {
     labels: {{ chart_labels | tojson }},
     datasets: [
       { label: "Ahorro Electricidad", data: {{ chart_ahorro_elec | tojson }},    backgroundColor: "rgba(106,138,154,0.65)", stack: "componentes" },
-      { label: "Ahorro Caldera",      data: {{ chart_ahorro_caldera | tojson }}, backgroundColor: "rgba(232,181,71,0.65)", stack: "componentes" },
+      { label: "Ahorro Caldera",      data: {{ chart_ahorro_caldera | tojson }}, backgroundColor: "rgba(232,181,71,0.65)",  stack: "componentes" },
       { label: "Costo Gas Cogen",     data: {{ chart_costo_gas | tojson }}.map(v => -v), backgroundColor: "rgba(216,90,90,0.65)", stack: "componentes" },
-      { type: "line", label: "EBITDA", data: {{ chart_ebitda | tojson }},
+      { label: "O&M",                 data: {{ chart_om | tojson }}.map(v => -v), backgroundColor: "rgba(180,100,180,0.65)", stack: "componentes" },
+      { type: "line", label: "Ahorro Neto", data: {{ chart_ebitda | tojson }},
         borderColor: "#1F7A4C", backgroundColor: "rgba(31,122,76,0.1)",
         borderWidth: 2, pointRadius: 4, fill: false, tension: 0.3 }
     ]
@@ -274,12 +238,13 @@ const meses_raw = {{ meses_raw | tojson }};
 
 function recalcularMes(m, p) {
   const kwh_cub    = m.kwh_total * p.cobertura;
-  const gj_cogen   = kwh_cub * 0.0036 / p.rend_elec;
+  const gj_cogen   = kwh_cub * 0.0036 * 1.11 / p.rend_elec;
   const costo_gas  = gj_cogen * m.costo_unitario_gj;
   const ah_elec    = kwh_cub * m.costo_promedio_kwh;
   const calor_rec  = gj_cogen * p.rend_term;
   const ah_caldera = (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
-  return { ah_elec, ah_caldera, costo_gas, ebitda: ah_elec + ah_caldera - costo_gas };
+  const om         = ah_elec * 0.3;
+  return { ah_elec, ah_caldera, costo_gas, om, ahorro_neto: ah_elec + ah_caldera - costo_gas - om };
 }
 
 function leerParams() {
@@ -298,21 +263,31 @@ function actualizarSensibilidad() {
   document.getElementById("val-rendimiento-term").textContent = Math.round(p.rend_term * 100);
   document.getElementById("val-caldera").textContent          = Math.round(p.efic_caldera * 100);
 
-  let ebitda_anual = 0, ah_elec_anual = 0, ah_caldera_anual = 0, costo_gas_anual = 0;
+  let ahorro_neto_anual = 0, ah_elec_anual = 0, ah_caldera_anual = 0, costo_gas_anual = 0, om_anual = 0;
   meses_raw.forEach(m => {
     const r = recalcularMes(m, p);
-    ebitda_anual     += r.ebitda;
-    ah_elec_anual    += r.ah_elec;
-    ah_caldera_anual += r.ah_caldera;
-    costo_gas_anual  += r.costo_gas;
+    ahorro_neto_anual += r.ahorro_neto;
+    ah_elec_anual     += r.ah_elec;
+    ah_caldera_anual  += r.ah_caldera;
+    costo_gas_anual   += r.costo_gas;
+    om_anual          += r.om;
   });
 
   const fmt = v => "$" + Math.round(v).toLocaleString("es-MX");
-  document.getElementById("ebitda-sensibilidad").textContent = fmt(ebitda_anual);
-  document.getElementById("kpi-ebitda-val").textContent      = fmt(ebitda_anual);
-  document.getElementById("kpi-elec-val").textContent        = fmt(ah_elec_anual);
-  document.getElementById("kpi-caldera-val").textContent     = fmt(ah_caldera_anual);
-  document.getElementById("kpi-gas-val").textContent         = fmt(costo_gas_anual);
+  const colorClass = ahorro_neto_anual < 0 ? "text-danger" : "text-success";
+
+  const kpiAhorroNeto = document.getElementById("kpi-ahorro-neto-val");
+  kpiAhorroNeto.textContent = fmt(ahorro_neto_anual);
+  kpiAhorroNeto.className   = "fs-2 fw-bold " + colorClass;
+
+  const sensEl = document.getElementById("ahorro-neto-sensibilidad");
+  sensEl.textContent  = fmt(ahorro_neto_anual);
+  sensEl.className    = "fs-5 " + colorClass;
+
+  document.getElementById("kpi-elec-val").textContent    = fmt(ah_elec_anual);
+  document.getElementById("kpi-caldera-val").textContent = fmt(ah_caldera_anual);
+  document.getElementById("kpi-gas-val").textContent     = fmt(costo_gas_anual);
+  document.getElementById("kpi-om-val").textContent      = fmt(om_anual);
 }
 
 ["cobertura","rendimiento-elec","rendimiento-term","caldera"].forEach(id => {
@@ -322,3 +297,83 @@ actualizarSensibilidad();
 </script>
 {% endif %}
 {% endblock %}
+
+<!-- ── Panel flotante: tabla mensual ─────────────────────────────────────── -->
+{% if not (aviso_datos and aviso_datos.tipo == "sin_seleccion") %}
+<div class="panel-flotante" id="panelTablaCoGen">
+  <div class="panel-header">
+    <span class="panel-titulo">Detalle mensual — Cogeneración</span>
+    <button class="panel-cerrar" aria-label="Cerrar">&#x2715;</button>
+  </div>
+  <div class="panel-body">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover table-mes mb-0">
+        <thead>
+          <tr>
+            <th class="ps-3">Periodo</th>
+            <th class="text-end">kWh Total</th>
+            <th class="text-end">Costo CFE</th>
+            <th class="text-end">$/kWh</th>
+            <th class="text-end">GJ Gas Real</th>
+            <th class="text-end">$/GJ</th>
+            <th class="text-end">Costo Gas Real</th>
+            <th class="text-end">kWh Cubiertos</th>
+            <th class="text-end">GJ Cogen</th>
+            <th class="text-end">Costo Gas Cogen</th>
+            <th class="text-end">Ahorro Elec.</th>
+            <th class="text-end">Calor (GJ)</th>
+            <th class="text-end">Ahorro Caldera</th>
+            <th class="text-end">O&amp;M</th>
+            <th class="text-end ahorro-neto-cell pe-3">Ahorro Neto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in r.meses %}
+          <tr>
+            <td class="ps-3">
+              {{ m.periodo_inicio.strftime("%b %Y") }}
+              {% if m.prorrateado %}
+              <span class="badge bg-warning text-dark ms-1" style="font-size:.65em"
+                    title="{{ m.nota_prorrateo }}">★ prorrateado</span>
+              {% endif %}
+            </td>
+            <td class="text-end small">{{ "{:,.0f}".format(m.kwh_total|float) }}</td>
+            <td class="text-end small">{{ "${:,.0f}".format(m.costo_cfe_mxn|float) }}</td>
+            <td class="text-end small">{{ "{:.4f}".format(m.costo_promedio_kwh|float) }}</td>
+            <td class="text-end small">{{ "{:,.2f}".format(m.gj_consumido|float) }}</td>
+            <td class="text-end small">{{ "{:.4f}".format(m.costo_unitario_gj|float) }}</td>
+            <td class="text-end small">{{ "${:,.0f}".format(m.costo_gas_actual_mxn|float) }}</td>
+            <td class="text-end small">{{ "{:,.0f}".format(m.kwh_cubiertos|float) }}</td>
+            <td class="text-end small">{{ "{:,.2f}".format(m.gj_gas_cogen|float) }}</td>
+            <td class="text-end small">{{ "${:,.0f}".format(m.costo_gas_cogen_mxn|float) }}</td>
+            <td class="text-end small">{{ "${:,.0f}".format(m.ahorro_electricidad_mxn|float) }}</td>
+            <td class="text-end small">{{ "{:,.2f}".format(m.calor_recuperado_gj|float) }}</td>
+            <td class="text-end small">{{ "${:,.0f}".format(m.ahorro_caldera_mxn|float) }}</td>
+            <td class="text-end small">{{ "${:,.0f}".format(m.gasto_om_mes_mxn|float) }}</td>
+            <td class="text-end small ahorro-neto-cell pe-3">{{ "${:,.0f}".format(m.ebitda_mes_mxn|float) }}</td>
+          </tr>
+          {% endfor %}
+          <tr class="total-row">
+            <td class="ps-3"><strong>TOTAL ANUAL</strong></td>
+            <td class="text-end small">{{ "{:,.0f}".format(r.kwh_total_anual|float) }}</td>
+            <td class="text-end small"></td>
+            <td class="text-end small"></td>
+            <td class="text-end small"></td>
+            <td class="text-end small"></td>
+            <td class="text-end small"></td>
+            <td class="text-end small">{{ "{:,.0f}".format(r.kwh_cubiertos_anual|float) }}</td>
+            <td class="text-end small">{{ "{:,.2f}".format(r.gj_gas_cogen_anual|float) }}</td>
+            <td class="text-end small">{{ "${:,.0f}".format(r.costo_gas_cogen_anual_mxn|float) }}</td>
+            <td class="text-end small">{{ "${:,.0f}".format(r.ahorro_electricidad_anual_mxn|float) }}</td>
+            <td class="text-end small"></td>
+            <td class="text-end small">{{ "${:,.0f}".format(r.ahorro_caldera_anual_mxn|float) }}</td>
+            <td class="text-end small">{{ "${:,.0f}".format(r.gasto_om_anual_mxn|float) }}</td>
+            <td class="text-end small ahorro-neto-cell pe-3">{{ "${:,.0f}".format(r.ebitda_anual_mxn|float) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel-resize"></div>
+</div>
+{% endif %}

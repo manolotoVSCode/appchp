@@ -109,7 +109,7 @@ INV_FEB = _cfe(
 
 def test_estructura_keys():
     h = calcular_tablas_cfe([INV_ENE])
-    assert set(h.keys()) == {"consumos_demandas", "costos_detallados", "indicadores"}
+    assert set(h.keys()) == {"consumos_demandas", "costos_detallados", "indicadores", "costo_unit_promedio_total"}
 
 
 def test_longitud_con_anual():

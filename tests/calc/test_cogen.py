@@ -104,13 +104,13 @@ def test_costo_promedio_kwh(resultado_un_mes):
 
 
 def test_gj_gas_cogen(resultado_un_mes):
-    # 750_000 × 0.0036 / 0.40 = 6_750.00
-    assert resultado_un_mes.meses[0].gj_gas_cogen == Decimal("6750.0000")
+    # 750_000 × 0.0036 × 1.11 / 0.40 = 7_492.50
+    assert resultado_un_mes.meses[0].gj_gas_cogen == Decimal("7492.5000")
 
 
 def test_costo_gas_cogen(resultado_un_mes):
-    # 6_750 × 80 = 540_000.00
-    assert resultado_un_mes.meses[0].costo_gas_cogen_mxn == Decimal("540000.00")
+    # 7_492.5 × 80 = 599_400.00
+    assert resultado_un_mes.meses[0].costo_gas_cogen_mxn == Decimal("599400.00")
 
 
 def test_ahorro_electricidad(resultado_un_mes):
@@ -119,19 +119,19 @@ def test_ahorro_electricidad(resultado_un_mes):
 
 
 def test_calor_recuperado(resultado_un_mes):
-    # 6_750 × 0.25 = 1_687.5000
-    assert resultado_un_mes.meses[0].calor_recuperado_gj == Decimal("1687.5000")
+    # 7_492.5 × 0.25 = 1_873.1250
+    assert resultado_un_mes.meses[0].calor_recuperado_gj == Decimal("1873.1250")
 
 
 def test_ahorro_caldera(resultado_un_mes):
-    # (1_687.5 / 0.85) × 80 = 1985.2941... × 80 = 158_823.53 (redondeado a centavos)
-    esperado = (Decimal("1687.5000") / Decimal("0.85") * Decimal("80.00")).quantize(Decimal("0.01"))
+    # (1_873.125 / 0.85) × 80 = 176_247.06 (redondeado a centavos)
+    esperado = (Decimal("1873.1250") / Decimal("0.85") * Decimal("80.00")).quantize(Decimal("0.01"))
     assert resultado_un_mes.meses[0].ahorro_caldera_mxn == esperado
 
 
 def test_ebitda_mes(resultado_un_mes):
     m = resultado_un_mes.meses[0]
-    esperado = m.ahorro_electricidad_mxn + m.ahorro_caldera_mxn - m.costo_gas_cogen_mxn
+    esperado = m.ahorro_electricidad_mxn + m.ahorro_caldera_mxn - m.costo_gas_cogen_mxn - m.gasto_om_mes_mxn
     assert m.ebitda_mes_mxn == esperado
 
 
@@ -150,3 +150,32 @@ def test_totales_anuales_son_suma_mensual():
     r = calcular_cogen(cfe, gas, CoGenParams())
     assert r.ebitda_anual_mxn == sum(m.ebitda_mes_mxn for m in r.meses)
     assert r.kwh_total_anual == sum(m.kwh_total for m in r.meses)
+
+
+def test_factor_pci_pcs_incrementa_gj(resultado_un_mes):
+    """gj_gas_cogen con factor 1.11 debe ser mayor que sin corrección PCI→PCS."""
+    m = resultado_un_mes.meses[0]
+    gj_sin_factor = m.kwh_cubiertos * Decimal("0.0036") / Decimal("0.40")
+    assert m.gj_gas_cogen > gj_sin_factor
+
+
+def test_gasto_om_es_30_pct_ahorro_electricidad(resultado_un_mes):
+    """O&M = 30 % del ahorro eléctrico (kwh_cubiertos × $/kWh)."""
+    m = resultado_un_mes.meses[0]
+    esperado = (m.ahorro_electricidad_mxn * Decimal("0.3")).quantize(Decimal("0.01"))
+    assert m.gasto_om_mes_mxn == esperado
+
+
+def test_ahorro_neto_incluye_om(resultado_un_mes):
+    """ebitda_mes_mxn (Ahorro Neto) = ingresos − costo gas − O&M."""
+    m = resultado_un_mes.meses[0]
+    esperado = (m.ahorro_electricidad_mxn + m.ahorro_caldera_mxn
+                - m.costo_gas_cogen_mxn - m.gasto_om_mes_mxn)
+    assert m.ebitda_mes_mxn == esperado
+
+
+def test_gasto_om_anual_es_suma_mensual():
+    cfe = [_cfe(2023, 11, KWH, FACTURACION), _cfe(2023, 12, KWH * 2, FACTURACION * 2)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ), _gas(2023, 12, GJ * 2, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams())
+    assert r.gasto_om_anual_mxn == sum(m.gasto_om_mes_mxn for m in r.meses)

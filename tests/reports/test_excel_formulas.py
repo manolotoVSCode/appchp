@@ -25,12 +25,13 @@ def _mes(year: int, month: int, **kwargs) -> CoGenMes:
         costo_unitario_gj=Decimal("200"),
         costo_gas_actual_mxn=Decimal("10000"),
         kwh_cubiertos=Decimal("750"),
-        gj_gas_cogen=Decimal("6.75"),
-        costo_gas_cogen_mxn=Decimal("1350"),
+        gj_gas_cogen=Decimal("7.4925"),
+        costo_gas_cogen_mxn=Decimal("1498.50"),
         ahorro_electricidad_mxn=Decimal("1875"),
-        calor_recuperado_gj=Decimal("1.6875"),
-        ahorro_caldera_mxn=Decimal("397.06"),
-        ebitda_mes_mxn=Decimal("922.06"),
+        calor_recuperado_gj=Decimal("1.8731"),
+        ahorro_caldera_mxn=Decimal("440.73"),
+        gasto_om_mes_mxn=Decimal("562.50"),
+        ebitda_mes_mxn=Decimal("254.73"),
         prorrateado=False,
         nota_prorrateo="",
     )
@@ -55,11 +56,12 @@ def resultado():
         meses=meses,
         kwh_total_anual=Decimal("2000"),
         kwh_cubiertos_anual=Decimal("1500"),
-        gj_gas_cogen_anual=Decimal("13.5"),
-        costo_gas_cogen_anual_mxn=Decimal("2700"),
+        gj_gas_cogen_anual=Decimal("14.9850"),
+        costo_gas_cogen_anual_mxn=Decimal("2997.00"),
         ahorro_electricidad_anual_mxn=Decimal("3750"),
-        ahorro_caldera_anual_mxn=Decimal("794.12"),
-        ebitda_anual_mxn=Decimal("1844.12"),
+        ahorro_caldera_anual_mxn=Decimal("881.46"),
+        ebitda_anual_mxn=Decimal("509.46"),
+        gasto_om_anual_mxn=Decimal("1125.00"),
     )
 
 
@@ -108,12 +110,12 @@ def test_formulas_primera_fila(ws):
     R = _FILA_DATOS
     esperadas = {
         f"H{R}": f"=B{R}*$B$2",
-        f"I{R}": f"=H{R}*$B$6/$B$3",
+        f"I{R}": f"=H{R}*$B$6*1.11/$B$3",
         f"J{R}": f"=I{R}*F{R}",
         f"K{R}": f"=H{R}*D{R}",
         f"L{R}": f"=I{R}*$B$4",
         f"M{R}": f"=(L{R}/$B$5)*F{R}",
-        f"N{R}": f"=K{R}+M{R}-J{R}",
+        f"N{R}": f"=K{R}+M{R}-J{R}-H{R}*D{R}*0.3",
     }
     for celda, formula_esperada in esperadas.items():
         assert ws[celda].value == formula_esperada, (
@@ -181,7 +183,7 @@ def test_valores_formula_vs_python(ws, resultado):
     rend_elec  = float(params.rendimiento_electrico)
     rend_term  = float(params.rendimiento_termico)
     ef_caldera = float(params.eficiencia_caldera)
-    factor     = 0.0036
+    factor     = 0.0036 * 1.11
 
     for offset, mes in enumerate(resultado.meses):
         R = _FILA_DATOS + offset
@@ -197,7 +199,8 @@ def test_valores_formula_vs_python(ws, resultado):
         ahorro_elec    = kwh_cubiertos * cu_kwh
         calor_recup    = gj_cogen * rend_term
         ahorro_caldera = (calor_recup / ef_caldera) * cu_gj
-        ebitda         = ahorro_elec + ahorro_caldera - costo_gas_cogen
+        gasto_om       = kwh_cubiertos * cu_kwh * 0.3
+        ebitda         = ahorro_elec + ahorro_caldera - costo_gas_cogen - gasto_om
 
         assert abs(kwh_cubiertos   - float(mes.kwh_cubiertos))        < 0.01, f"Mes {R}: kwh_cubiertos"
         assert abs(gj_cogen        - float(mes.gj_gas_cogen))          < 0.01, f"Mes {R}: gj_gas_cogen"

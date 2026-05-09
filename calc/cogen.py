@@ -12,6 +12,10 @@ from calc.periodo import mes_asociado, prorratear_cfe, prorratear_gas
 
 # Factor de conversión: 1 kWh = 0.0036 GJ
 _KWH_A_GJ = Decimal("0.0036")
+# Corrección PCI→PCS: el gas se comercializa en PCS pero la termodinámica usa PCI
+_FACTOR_PCI_A_PCS = Decimal("1.11")
+# O&M estimado: 30 % del kWh cubierto (en MXN/kWh del costo promedio)
+_FACTOR_OM = Decimal("0.3")
 _CENTAVO = Decimal("0.01")
 _DIEZMILAVO = Decimal("0.0001")
 
@@ -56,12 +60,13 @@ def calcular_cogen(
         costo_unit_gj = gas.costo_unitario_total_gj
 
         kwh_cubiertos = (kwh_total * params.cobertura_electrica).quantize(_CENTAVO, ROUND_HALF_UP)
-        gj_gas_cogen = (kwh_cubiertos * _KWH_A_GJ / params.rendimiento_electrico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
+        gj_gas_cogen = (kwh_cubiertos * _KWH_A_GJ * _FACTOR_PCI_A_PCS / params.rendimiento_electrico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
         costo_gas_cogen = (gj_gas_cogen * costo_unit_gj).quantize(_CENTAVO, ROUND_HALF_UP)
         ahorro_electricidad = (kwh_cubiertos * costo_prom_kwh).quantize(_CENTAVO, ROUND_HALF_UP)
         calor_recuperado = (gj_gas_cogen * params.rendimiento_termico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
         ahorro_caldera = (calor_recuperado / params.eficiencia_caldera * costo_unit_gj).quantize(_CENTAVO, ROUND_HALF_UP)
-        ebitda = ahorro_electricidad + ahorro_caldera - costo_gas_cogen
+        gasto_om = (kwh_cubiertos * costo_prom_kwh * _FACTOR_OM).quantize(_CENTAVO, ROUND_HALF_UP)
+        ebitda = ahorro_electricidad + ahorro_caldera - costo_gas_cogen - gasto_om
 
         # Nota de prorrateo para trazabilidad
         prorrateado = factor_cfe is not None or factor_gas is not None
@@ -95,6 +100,7 @@ def calcular_cogen(
             calor_recuperado_gj=calor_recuperado,
             ahorro_caldera_mxn=ahorro_caldera,
             ebitda_mes_mxn=ebitda,
+            gasto_om_mes_mxn=gasto_om,
             prorrateado=prorrateado,
             nota_prorrateo=nota,
         ))
@@ -112,4 +118,5 @@ def calcular_cogen(
         ahorro_electricidad_anual_mxn=_sum("ahorro_electricidad_mxn"),
         ahorro_caldera_anual_mxn=_sum("ahorro_caldera_mxn"),
         ebitda_anual_mxn=_sum("ebitda_mes_mxn"),
+        gasto_om_anual_mxn=_sum("gasto_om_mes_mxn"),
     )

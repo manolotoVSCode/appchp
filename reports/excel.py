@@ -67,7 +67,7 @@ _COLUMNAS = [
     ("Ahorro Elec. (MXN)",    "ahorro_electricidad_mxn",    "moneda"),   # K — fórmula
     ("Calor Recup. (GJ)",     "calor_recuperado_gj",        "numero"),   # L — fórmula
     ("Ahorro Caldera (MXN)",  "ahorro_caldera_mxn",         "moneda"),   # M — fórmula
-    ("EBITDA Mes (MXN)",      "ebitda_mes_mxn",             "moneda"),   # N — fórmula
+    ("Ahorro Neto Mes (MXN)", "ebitda_mes_mxn",             "moneda"),   # N — fórmula
     ("Prorrateo",             "nota_prorrateo",             "texto"),    # O — valor fijo
 ]
 
@@ -80,12 +80,12 @@ _COLUMNAS = [
 #   $B$6 = factor kWh→GJ (0.0036)
 _FORMULAS: dict[str, str] = {
     "kwh_cubiertos":           "=B{R}*$B$2",
-    "gj_gas_cogen":            "=H{R}*$B$6/$B$3",
+    "gj_gas_cogen":            "=H{R}*$B$6*1.11/$B$3",
     "costo_gas_cogen_mxn":     "=I{R}*F{R}",
     "ahorro_electricidad_mxn": "=H{R}*D{R}",
     "calor_recuperado_gj":     "=I{R}*$B$4",
     "ahorro_caldera_mxn":      "=(L{R}/$B$5)*F{R}",
-    "ebitda_mes_mxn":          "=K{R}+M{R}-J{R}",
+    "ebitda_mes_mxn":          "=K{R}+M{R}-J{R}-H{R}*D{R}*0.3",
 }
 
 # Columnas que tienen fila de totales (=SUM).

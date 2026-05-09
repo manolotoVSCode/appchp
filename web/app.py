@@ -291,6 +291,7 @@ def create_app() -> Flask:
         chart_ahorro_elec = [float(m.ahorro_electricidad_mxn) for m in r.meses]
         chart_ahorro_caldera = [float(m.ahorro_caldera_mxn) for m in r.meses]
         chart_costo_gas = [float(m.costo_gas_cogen_mxn) for m in r.meses]
+        chart_om = [float(m.gasto_om_mes_mxn) for m in r.meses]
         meses_raw = [
             {
                 "periodo": m.periodo_inicio.strftime("%b %Y"),
@@ -315,6 +316,7 @@ def create_app() -> Flask:
             chart_ahorro_elec=chart_ahorro_elec,
             chart_ahorro_caldera=chart_ahorro_caldera,
             chart_costo_gas=chart_costo_gas,
+            chart_om=chart_om,
             meses_raw=meses_raw,
         )
 

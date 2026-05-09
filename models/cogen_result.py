@@ -36,6 +36,7 @@ class CoGenMes:
     calor_recuperado_gj: Decimal
     ahorro_caldera_mxn: Decimal
     ebitda_mes_mxn: Decimal
+    gasto_om_mes_mxn: Decimal = Decimal("0")
     # Prorrateo (campo informativo, vacío si no se aplicó)
     prorrateado: bool = False
     nota_prorrateo: str = ""
@@ -54,3 +55,4 @@ class CoGenResultado:
     ahorro_electricidad_anual_mxn: Decimal
     ahorro_caldera_anual_mxn: Decimal
     ebitda_anual_mxn: Decimal
+    gasto_om_anual_mxn: Decimal = Decimal("0")

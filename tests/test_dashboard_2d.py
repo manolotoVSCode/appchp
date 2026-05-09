@@ -210,6 +210,7 @@ def _mock_resultado_con_meses():
     mes.kwh_cubiertos = Decimal("37500")
     mes.gj_gas_cogen = Decimal("337.5")
     mes.calor_recuperado_gj = Decimal("84.375")
+    mes.gasto_om_mes_mxn = Decimal("24000")
     mes.prorrateado = False
     mes.nota_prorrateo = ""
 
@@ -219,6 +220,7 @@ def _mock_resultado_con_meses():
     resultado.ahorro_electricidad_anual_mxn = Decimal("80000")
     resultado.ahorro_caldera_anual_mxn = Decimal("40000")
     resultado.costo_gas_cogen_anual_mxn = Decimal("20000")
+    resultado.gasto_om_anual_mxn = Decimal("24000")
     resultado.kwh_total_anual = Decimal("50000")
     resultado.kwh_cubiertos_anual = Decimal("37500")
     resultado.gj_gas_cogen_anual = Decimal("337.5")
@@ -296,7 +298,7 @@ def test_dashboard_con_datos_muestra_kpis(app, monkeypatch):
 
     resp = c.get("/clientes/1/dashboard/cogeneracion")
     assert resp.status_code == 200
-    assert b"EBITDA Anual" in resp.data
+    assert b"Ahorro Neto Anual" in resp.data
     assert b"Sin facturas seleccionadas" not in resp.data
 
 
@@ -320,7 +322,7 @@ def test_dashboard_sin_seleccion_muestra_aviso(app, monkeypatch):
     resp = c.get("/clientes/1/dashboard/contabilidad")
     assert resp.status_code == 200
     assert "Sin facturas seleccionadas".encode() in resp.data
-    assert b"EBITDA Anual" not in resp.data
+    assert b"Ahorro Neto Anual" not in resp.data
 
 
 # ── Test 7: Dashboard sin facturas en DB → aviso sin_facturas ────────────────
@@ -468,13 +470,13 @@ def test_contabilidad_muestra_historico_no_ebitda(app, monkeypatch):
     resp = c.get("/clientes/1/dashboard/contabilidad")
     assert resp.status_code == 200
     assert b"Contabilidad" in resp.data
-    assert b"EBITDA Anual" not in resp.data
+    assert b"Ahorro Neto Anual" not in resp.data
 
 
 # ── Test 14: cogeneración muestra KPIs, no gráficas históricas ───────────────
 
 def test_cogeneracion_muestra_kpis_no_historico(app, monkeypatch):
-    """GET /dashboard/cogeneracion → muestra KPIs de EBITDA, no gráficas históricas de demanda."""
+    """GET /dashboard/cogeneracion → muestra KPIs de Ahorro Neto, no gráficas históricas de demanda."""
     monkeypatch.setattr(
         "web.app._cargar_facturas_seleccionadas",
         lambda cliente_id: ([], [], _facturas_cfe_mock(), _facturas_gas_mock()),
@@ -488,7 +490,7 @@ def test_cogeneracion_muestra_kpis_no_historico(app, monkeypatch):
 
     resp = c.get("/clientes/1/dashboard/cogeneracion")
     assert resp.status_code == 200
-    assert b"EBITDA Anual" in resp.data
+    assert b"Ahorro Neto Anual" in resp.data
     assert b"Demanda m" not in resp.data  # "Demanda máxima" solo en contabilidad
 
 
