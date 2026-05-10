@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.17.0] — 2026-05-09
+
+### Cambiado
+
+- Dashboard cogeneración: eliminada sección "Huella de Carbono" con los dos donuts comparativos. La reducción de CO₂ se muestra ahora como tarjeta compacta con icono de árbol junto al Ahorro Neto Anual, en diseño de dos columnas. La tarjeta se actualiza reactivamente al mover los sliders.
+
+---
+
 ## [2.16.0] — 2026-05-09
 
 ### Añadido
