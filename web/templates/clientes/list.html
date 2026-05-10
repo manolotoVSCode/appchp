@@ -45,8 +45,8 @@
                  data-id="{{ c.id }}"
                  {% if cliente_activo and cliente_activo.id == c.id %}checked{% endif %}>
         </td>
-        <td>
-          <span class="fw-semibold" style="font-size:1rem">{{ c.nombre }}</span>
+        <td class="small">
+          {{ c.nombre }}
           {% if c.num_cfe == 0 and c.num_gas == 0 %}
             <span class="badge-estado badge-sin-facturas ms-1">Sin facturas</span>
           {% elif c.num_cfe > 0 and c.num_gas == 0 %}
