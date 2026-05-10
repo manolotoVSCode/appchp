@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.19.1] — 2026-05-10
+
+### Corregido
+
+- `/admin/configuracion` solo mostraba el tipo de cambio. Ahora lista y permite editar todas las claves de la tabla `configuracion` de forma dinámica. Al insertar una clave nueva en BD, aparece automáticamente sin cambios de código. Validaciones específicas por clave: tipo de cambio (10–30), factor emisión electricidad (0.1–2.0), factor emisión gas (10–200). Claves desconocidas se validan como número positivo. Indicador visual de campo modificado (borde izquierdo verde).
+
+---
+
 ## [2.19.0] — 2026-05-09
 
 ### Cambiado

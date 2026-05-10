@@ -17,6 +17,7 @@ from storage.repository import (
     get_contratos_por_cliente,
     get_configuracion,
     get_configuracion_row,
+    list_configuracion,
     set_configuracion,
 )
 from calc.cogen import calcular_cogen, calcular_payback, calcular_flujo_acumulado
@@ -741,25 +742,50 @@ def create_app() -> Flask:
     def admin_configuracion():
         """Página de configuración global del sistema."""
         from decimal import Decimal, InvalidOperation
+
+        # Validaciones específicas por clave: (min, max)
+        _RANGOS = {
+            "tipo_cambio_mxn_usd":                    (Decimal("10"),  Decimal("30")),
+            "factor_emision_electricidad_kg_co2_kwh": (Decimal("0.1"), Decimal("2.0")),
+            "factor_emision_gas_kg_co2_gj":           (Decimal("10"),  Decimal("200")),
+        }
+
         if request.method == "POST":
-            tc_str = request.form.get("tipo_cambio", "").strip()
-            try:
-                tc = Decimal(tc_str)
-                if tc < Decimal("10") or tc > Decimal("30"):
-                    raise ValueError("fuera de rango")
-            except (InvalidOperation, ValueError):
-                flash("Tipo de cambio inválido. Debe ser un número entre 10.00 y 30.00.", "danger")
+            filas = list_configuracion()
+            errores = []
+            nuevos_valores = {}
+            for fila in filas:
+                clave = fila["clave"]
+                raw = request.form.get(clave, "").strip()
+                try:
+                    val = Decimal(raw)
+                    if val <= 0:
+                        raise ValueError("no positivo")
+                    if clave in _RANGOS:
+                        lo, hi = _RANGOS[clave]
+                        if val < lo or val > hi:
+                            raise ValueError("fuera de rango")
+                    nuevos_valores[clave] = str(val)
+                except (InvalidOperation, ValueError):
+                    desc = fila.get("descripcion") or clave
+                    if clave in _RANGOS:
+                        lo, hi = _RANGOS[clave]
+                        errores.append(f"{desc}: valor inválido (rango {lo} – {hi}).")
+                    else:
+                        errores.append(f"{desc}: debe ser un número positivo.")
+
+            if errores:
+                for msg in errores:
+                    flash(msg, "danger")
                 return redirect(url_for("admin_configuracion"))
-            set_configuracion("tipo_cambio_mxn_usd", str(tc))
+
+            for clave, valor in nuevos_valores.items():
+                set_configuracion(clave, valor)
             flash("Configuración guardada correctamente.", "success")
             return redirect(url_for("admin_configuracion"))
 
-        tc_row = get_configuracion_row("tipo_cambio_mxn_usd")
-        return render_template(
-            "admin/configuracion.html",
-            tc_row=tc_row,
-            tc_valor=tc_row["valor"] if tc_row else "17.50",
-        )
+        filas = list_configuracion()
+        return render_template("admin/configuracion.html", filas=filas)
 
     @app.route("/changelog")
     def changelog():

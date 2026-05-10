@@ -5,47 +5,89 @@
 
 {% block content %}
 <div class="d-flex align-items-center mb-4 gap-3">
-  <h1 class="h3 mb-0">Configuración</h1>
-  <span class="text-muted small">Parámetros generales del sistema</span>
+  <h1 class="h3 mb-0">Configuración del sistema</h1>
+  <span class="text-muted small">Parámetros generales</span>
 </div>
 
-<div class="card shadow-sm mb-4" style="max-width: 560px;">
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert" style="max-width:600px;">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card shadow-sm mb-4" style="max-width: 680px;">
   <div class="card-header fw-semibold text-muted small py-2">Parámetros generales</div>
-  <div class="card-body">
-    <form method="post" action="{{ url_for('admin_configuracion') }}" novalidate>
+  <div class="card-body pb-2">
+    <form method="post" action="{{ url_for('admin_configuracion') }}" novalidate id="form-config">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-      <div class="mb-3">
-        <label for="tipo_cambio" class="form-label fw-semibold">
-          Tipo de cambio peso/dólar (MXN/USD)
-        </label>
-        <div class="input-group" style="max-width: 260px;">
-          <span class="input-group-text text-muted small">MXN / USD</span>
+      {% for fila in filas %}
+      <div class="row align-items-center mb-3 gx-3 config-row" data-clave="{{ fila.clave }}">
+
+        <!-- Label -->
+        <div class="col-md-5">
+          <label for="input-{{ fila.clave }}" class="form-label mb-0 fw-semibold small">
+            {{ fila.descripcion or fila.clave }}
+          </label>
+          <div class="text-muted" style="font-size:.72rem;">{{ fila.clave }}</div>
+        </div>
+
+        <!-- Input -->
+        <div class="col-md-3">
           <input type="number"
-                 class="form-control"
-                 id="tipo_cambio"
-                 name="tipo_cambio"
-                 value="{{ tc_valor }}"
-                 min="10" max="30" step="0.01"
+                 class="form-control form-control-sm"
+                 id="input-{{ fila.clave }}"
+                 name="{{ fila.clave }}"
+                 value="{{ fila.valor }}"
+                 step="any"
                  required>
         </div>
-        <div class="form-text text-muted" style="font-size:.78rem;">
-          Rango permitido: 10.00 – 30.00
-          {% if tc_row and tc_row.fecha_modificacion %}
-          &nbsp;·&nbsp; Última modificación:
-          <strong>{{ tc_row.fecha_modificacion[:16].replace("T", " ") }} UTC</strong>
+
+        <!-- Última modificación -->
+        <div class="col-md-4 text-muted" style="font-size:.75rem;">
+          {% if fila.fecha_modificacion %}
+            Modificado: {{ fila.fecha_modificacion[:16].replace("T", " ") }} UTC
+          {% else %}
+            —
           {% endif %}
         </div>
-      </div>
 
-      <button type="submit" class="btn btn-primary btn-sm px-4">Guardar</button>
+      </div>
+      {% else %}
+      <p class="text-muted small">No hay parámetros configurados en la base de datos.</p>
+      {% endfor %}
+
+      <hr class="mt-1 mb-3">
+      <button type="submit" class="btn btn-primary btn-sm px-4">Guardar cambios</button>
     </form>
   </div>
 </div>
 
-<p class="text-muted small">
-  Este valor se usa en el cálculo de inversión del Proyecto Cogeneración.
-  Cambiar el tipo de cambio afecta los nuevos cálculos; los dashboards abiertos
-  deben recargarse para reflejar el valor actualizado.
+<p class="text-muted small" style="max-width:600px;">
+  Los cambios afectan los nuevos cálculos. Los dashboards abiertos deben recargarse para reflejar los valores actualizados.
 </p>
+
+<script>
+// Marcar visualmente los campos modificados respecto al valor inicial
+(function () {
+  const form = document.getElementById("form-config");
+  if (!form) return;
+  form.querySelectorAll("input[type=number]").forEach(input => {
+    const initial = input.value;
+    const row = input.closest(".config-row");
+    input.addEventListener("input", () => {
+      if (input.value !== initial) {
+        row.style.borderLeft = "3px solid var(--color-primary)";
+        row.style.paddingLeft = "0.5rem";
+      } else {
+        row.style.borderLeft = "";
+        row.style.paddingLeft = "";
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}

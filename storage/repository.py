@@ -789,6 +789,12 @@ def delete_gas_factura(factura_id: int) -> None:
 
 # ── Configuración global ──────────────────────────────────────────────────────
 
+def list_configuracion() -> list[dict]:
+    """Devuelve todas las filas de configuracion ordenadas por clave."""
+    resp = _supabase.table("configuracion").select("*").order("clave").execute()
+    return resp.data or []
+
+
 def get_configuracion(clave: str) -> str | None:
     """Lee el valor de una clave en la tabla configuracion. None si no existe."""
     resp = _supabase.table("configuracion").select("valor").eq("clave", clave).limit(1).execute()
