@@ -267,7 +267,16 @@ def create_app() -> Flask:
             cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
             tc_str = get_configuracion("tipo_cambio_mxn_usd")
             tipo_cambio = _D(tc_str) if tc_str else _D("17.50")
-            r = calcular_cogen(cfe_invoices, gas_invoices, CoGenParams(), tipo_cambio=tipo_cambio)
+            fe_elec_str = get_configuracion("factor_emision_electricidad_kg_co2_kwh")
+            fe_gas_str  = get_configuracion("factor_emision_gas_kg_co2_gj")
+            fe_elec = _D(fe_elec_str) if fe_elec_str else None
+            fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
+            r = calcular_cogen(
+                cfe_invoices, gas_invoices, CoGenParams(),
+                tipo_cambio=tipo_cambio,
+                factor_emision_elec=fe_elec,
+                factor_emision_gas=fe_gas,
+            )
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -342,6 +351,8 @@ def create_app() -> Flask:
             payback_inicial=payback_inicial,
             flujo_acum_15=flujo_acum_15,
             flujo_anual_15=flujo_anual_15,
+            factor_emision_elec=float(fe_elec) if fe_elec is not None else None,
+            factor_emision_gas=float(fe_gas)   if fe_gas  is not None else None,
         )
 
     @app.route("/export/excel")

@@ -261,6 +261,57 @@
   </div>
 </div>
 
+<!-- ── Huella de Carbono ──────────────────────────────────────────────────── -->
+{% if r.co2_actual_total_kg_anual is not none %}
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="card-title mb-3">Huella de Carbono</h5>
+    <div class="row g-4 align-items-start">
+      <!-- Donut 1: Actual (estático) -->
+      <div class="col-md-5 text-center">
+        <div class="text-muted small mb-2">Huella actual <em>(sin cogeneración)</em></div>
+        <div style="position:relative;max-width:220px;margin:0 auto">
+          <canvas id="co2ActualChart"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;text-align:center">
+            <div class="fw-bold" style="font-size:1.05rem">{{ "{:.1f}".format(r.co2_actual_total_kg_anual|float / 1000) }}</div>
+            <div class="text-muted" style="font-size:.65rem">t CO₂/año</div>
+          </div>
+        </div>
+      </div>
+      <!-- Donut 2: Proyectado (reactivo) -->
+      <div class="col-md-5 text-center">
+        <div class="text-muted small mb-2">Huella <em>con</em> cogeneración</div>
+        <div style="position:relative;max-width:220px;margin:0 auto">
+          <canvas id="co2ProyChart"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;text-align:center">
+            <div class="fw-bold" style="font-size:1.05rem" id="co2-proy-total">{{ "{:.1f}".format(r.co2_proyectado_total_kg_anual|float / 1000) }}</div>
+            <div class="text-muted" style="font-size:.65rem">t CO₂/año</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Caja resumen (reactiva) -->
+    <div id="co2-resumen" class="mt-4 p-3 rounded text-center bg-primary-soft">
+      {% set reduccion_t = (r.co2_reduccion_kg_anual|float / 1000) %}
+      {% set pct = r.co2_reduccion_porcentaje|float %}
+      {% set arboles = (reduccion_t * 50)|int %}
+      {% if reduccion_t >= 0 %}
+      <div class="fw-bold" style="color:var(--color-primary-dark)">
+        Reducción anual: {{ "{:.1f}".format(reduccion_t) }} toneladas CO₂ ({{ "{:.1f}".format(pct) }}% menos)
+      </div>
+      <div class="text-muted small mt-1">
+        Equivalente a {{ "{:,}".format(arboles) }} árboles plantados al año
+      </div>
+      {% else %}
+      <div class="fw-bold text-danger">
+        AUMENTO de {{ "{:.1f}".format(reduccion_t|abs) }} toneladas CO₂ con la configuración actual
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- ── Gráfica 15 años ────────────────────────────────────────────────────── -->
 {% if r.inversion_mxn is not none %}
 <div class="card shadow-sm mb-4">
@@ -503,6 +554,100 @@ function actualizarChart15(ahorroNetoAnual) {
   });
 }
 
+// ── CO2 / Huella de Carbono ───────────────────────────────────────────────────
+{% if r.co2_actual_total_kg_anual is not none %}
+const CO2_FE_ELEC = {{ factor_emision_elec }};
+const CO2_FE_GAS  = {{ factor_emision_gas }};
+const co2ActualData = [
+  {{ (r.co2_actual_electricidad_kg_anual|float / 1000)|round(2) }},
+  {{ (r.co2_actual_gas_kg_anual|float / 1000)|round(2) }}
+];
+
+new Chart(document.getElementById("co2ActualChart"), {
+  type: "doughnut",
+  data: {
+    labels: ["Electricidad", "Gas caldera"],
+    datasets: [{ data: co2ActualData,
+      backgroundColor: ["rgba(216,90,90,0.8)", "rgba(232,181,71,0.8)"],
+      borderWidth: 1 }]
+  },
+  options: {
+    cutout: "65%",
+    plugins: {
+      legend: { position: "bottom", labels: { font: { size: 11 } } },
+      tooltip: { callbacks: { label: ctx => ctx.label + ": " + ctx.parsed.toFixed(1) + " t CO₂" } }
+    }
+  }
+});
+
+let co2ProyChart = null;
+
+function recalcularCO2Proy(p) {
+  const gj_caldera = meses_raw.reduce((s, m) => s + m.gj_consumido, 0);
+  let kwh_cub_total = 0, gj_cogen_total = 0, calor_rec_total = 0;
+  meses_raw.forEach(m => {
+    const kc = m.kwh_total * p.cobertura;
+    const gj = kc * 0.0036 * 1.11 / p.rend_elec;
+    kwh_cub_total  += kc;
+    gj_cogen_total += gj;
+    calor_rec_total += gj * p.rend_term;
+  });
+  const kwh_total = meses_raw.reduce((s, m) => s + m.kwh_total, 0);
+  const co2_elec = (kwh_total - kwh_cub_total) * CO2_FE_ELEC / 1000;
+  const gj_caldera_cogen = Math.max(gj_caldera - calor_rec_total / p.efic_caldera, 0);
+  const co2_gas = (gj_cogen_total + gj_caldera_cogen) * CO2_FE_GAS / 1000;
+  return { co2_elec: Math.max(co2_elec, 0), co2_gas: Math.max(co2_gas, 0) };
+}
+
+function actualizarCO2(p) {
+  const { co2_elec, co2_gas } = recalcularCO2Proy(p);
+  const co2_proy = co2_elec + co2_gas;
+  const co2_actual = co2ActualData[0] + co2ActualData[1];
+  const reduccion  = co2_actual - co2_proy;
+  const pct = co2_actual > 0 ? reduccion / co2_actual * 100 : 0;
+  const arboles = Math.round(reduccion * 50);
+
+  document.getElementById("co2-proy-total").textContent = co2_proy.toFixed(1);
+
+  const data2 = [co2_elec, co2_gas];
+  if (co2ProyChart) {
+    co2ProyChart.data.datasets[0].data = data2;
+    co2ProyChart.update();
+  } else {
+    co2ProyChart = new Chart(document.getElementById("co2ProyChart"), {
+      type: "doughnut",
+      data: {
+        labels: ["Electricidad red", "Gas total"],
+        datasets: [{ data: data2,
+          backgroundColor: ["rgba(216,90,90,0.8)", "rgba(232,181,71,0.8)"],
+          borderWidth: 1 }]
+      },
+      options: {
+        cutout: "65%",
+        plugins: {
+          legend: { position: "bottom", labels: { font: { size: 11 } } },
+          tooltip: { callbacks: { label: ctx => ctx.label + ": " + ctx.parsed.toFixed(1) + " t CO₂" } }
+        }
+      }
+    });
+  }
+
+  const el = document.getElementById("co2-resumen");
+  if (reduccion >= 0) {
+    el.className = "mt-4 p-3 rounded text-center bg-primary-soft";
+    el.style.background = "";
+    el.innerHTML = `<div class="fw-bold" style="color:var(--color-primary-dark)">Reducción anual: ${reduccion.toFixed(1)} toneladas CO₂ (${Math.abs(pct).toFixed(1)}% menos)</div>
+      <div class="text-muted small mt-1">Equivalente a ${arboles.toLocaleString("es-MX")} árboles plantados al año</div>`;
+  } else {
+    el.className = "mt-4 p-3 rounded text-center";
+    el.style.background = "var(--bs-danger-bg-subtle, #f8d7da)";
+    el.innerHTML = `<div class="fw-bold text-danger">AUMENTO de ${Math.abs(reduccion).toFixed(1)} toneladas CO₂ con la configuración actual</div>`;
+  }
+}
+{% else %}
+function actualizarCO2(p) {}
+{% endif %}
+
 // ── Sensibilidad / sliders ────────────────────────────────────────────────────
 const meses_raw = {{ meses_raw | tojson }};
 
@@ -569,6 +714,8 @@ function actualizarSensibilidad() {
     if (el) { el.textContent = texto; el.className = clase; }
     actualizarChart15(ahorro_neto_anual);
   }
+
+  actualizarCO2(p);
 }
 
 ["cobertura","rendimiento-elec","rendimiento-term","caldera"].forEach(id => {

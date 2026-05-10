@@ -254,3 +254,92 @@ def test_flujo_acumulado_longitud():
     """Lista con horizonte=15 tiene 16 elementos (año 0 a año 15)."""
     flujo = calcular_flujo_acumulado(Decimal("100000"), Decimal("30000"))
     assert len(flujo) == 16
+
+
+# ── Tests de huella de carbono ────────────────────────────────────────────────
+
+FE_ELEC = Decimal("0.435")   # kg CO2 / kWh
+FE_GAS  = Decimal("56.1")    # kg CO2 / GJ
+
+
+def test_co2_actual_huella_con_factores_conocidos():
+    """CO2 actual = kWh_anual × fe_elec + GJ_gas_anual × fe_gas."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams(), factor_emision_elec=FE_ELEC, factor_emision_gas=FE_GAS)
+
+    esperado_elec = (KWH * FE_ELEC).quantize(Decimal("0.01"))
+    esperado_gas  = (GJ  * FE_GAS ).quantize(Decimal("0.01"))
+    assert r.co2_actual_electricidad_kg_anual == esperado_elec
+    assert r.co2_actual_gas_kg_anual          == esperado_gas
+    assert r.co2_actual_total_kg_anual        == esperado_elec + esperado_gas
+
+
+def test_co2_proyectado_cobertura_75():
+    """Con cobertura 75% la electricidad de red se reduce a 25%; el gas cogen se suma."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    params = CoGenParams(cobertura_electrica=Decimal("0.75"))
+    r = calcular_cogen(cfe, gas, params, factor_emision_elec=FE_ELEC, factor_emision_gas=FE_GAS)
+
+    assert r.co2_proyectado_electricidad_kg_anual is not None
+    assert r.co2_proyectado_gas_kg_anual          is not None
+    assert r.co2_proyectado_total_kg_anual        is not None
+    # Electricidad de red = 25% del total
+    esperado_elec_proy = (KWH * Decimal("0.25") * FE_ELEC).quantize(Decimal("0.01"))
+    assert r.co2_proyectado_electricidad_kg_anual == esperado_elec_proy
+
+
+def test_co2_reduccion_positiva():
+    """La reducción de CO2 debe ser positiva con parámetros estándar."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams(), factor_emision_elec=FE_ELEC, factor_emision_gas=FE_GAS)
+
+    assert r.co2_reduccion_kg_anual      is not None
+    assert r.co2_reduccion_kg_anual      > 0
+    assert r.co2_reduccion_porcentaje    > 0
+
+
+def test_co2_reduccion_cero_con_cobertura_cero():
+    """Cobertura 0% → sin cogen → reducción ≈ 0 (misma huella proyectada)."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    params = CoGenParams(cobertura_electrica=Decimal("0"))
+    r = calcular_cogen(cfe, gas, params, factor_emision_elec=FE_ELEC, factor_emision_gas=FE_GAS)
+
+    assert r.co2_reduccion_kg_anual == Decimal("0.00") or r.co2_reduccion_kg_anual < Decimal("0.01")
+    assert r.co2_proyectado_total_kg_anual == r.co2_actual_total_kg_anual
+
+
+def test_co2_calor_recuperado_supera_caldera():
+    """Si calor recuperado > GJ caldera actual, gj_caldera_con_cogen → 0 (no negativo)."""
+    # Gas muy bajo (10 GJ), calor recuperado con cobertura 100% será mayor
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, Decimal("10"), PRECIO_GJ)]
+    params = CoGenParams(cobertura_electrica=Decimal("1.0"))
+    r = calcular_cogen(cfe, gas, params, factor_emision_elec=FE_ELEC, factor_emision_gas=FE_GAS)
+
+    # El total proyectado debe ser no negativo
+    assert r.co2_proyectado_gas_kg_anual          >= 0
+    assert r.co2_proyectado_electricidad_kg_anual == Decimal("0.00")
+
+
+def test_co2_sin_facturas_cfe_es_none():
+    """Sin facturas CFE no hay meses → campos CO2 son None."""
+    r = calcular_cogen([], [], CoGenParams(), factor_emision_elec=FE_ELEC, factor_emision_gas=FE_GAS)
+
+    assert r.co2_actual_total_kg_anual     is None
+    assert r.co2_proyectado_total_kg_anual is None
+    assert r.co2_reduccion_kg_anual        is None
+
+
+def test_co2_none_sin_factores_emision():
+    """Sin factores de emisión los campos CO2 quedan None (backward-compat)."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams())
+
+    assert r.co2_actual_total_kg_anual     is None
+    assert r.co2_proyectado_total_kg_anual is None
+    assert r.co2_reduccion_kg_anual        is None

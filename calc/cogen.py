@@ -81,6 +81,8 @@ def calcular_cogen(
     gas_invoices: list[GasInvoice],
     params: CoGenParams,
     tipo_cambio: Decimal = _TC_DEFAULT,
+    factor_emision_elec: Decimal | None = None,
+    factor_emision_gas: Decimal | None = None,
 ) -> CoGenResultado:
     """Calcula el EBITDA mensual emparejando facturas por mes asociado.
 
@@ -172,6 +174,37 @@ def calcular_cogen(
     else:
         inv_usd = inv_mxn = None
 
+    # ── Huella de carbono ────────────────────────────────────────────────────
+    co2_elec_actual = co2_gas_actual = co2_actual = None
+    co2_elec_proy = co2_gas_proy = co2_proy = None
+    co2_reduccion = co2_reduccion_pct = None
+
+    if factor_emision_elec is not None and factor_emision_gas is not None and meses:
+        kwh_anual        = _sum("kwh_total")
+        kwh_cub_anual    = _sum("kwh_cubiertos")
+        gj_caldera_anual = _sum("gj_consumido")
+        gj_cogen_anual   = _sum("gj_gas_cogen")
+        calor_rec_anual  = _sum("calor_recuperado_gj")
+
+        co2_elec_actual = (kwh_anual * factor_emision_elec).quantize(_CENTAVO, ROUND_HALF_UP)
+        co2_gas_actual  = (gj_caldera_anual * factor_emision_gas).quantize(_CENTAVO, ROUND_HALF_UP)
+        co2_actual      = co2_elec_actual + co2_gas_actual
+
+        co2_elec_proy = ((kwh_anual - kwh_cub_anual) * factor_emision_elec).quantize(_CENTAVO, ROUND_HALF_UP)
+        gj_caldera_con_cogen = max(
+            gj_caldera_anual - (calor_rec_anual / params.eficiencia_caldera),
+            Decimal("0"),
+        )
+        gj_gas_total_proy = gj_cogen_anual + gj_caldera_con_cogen
+        co2_gas_proy = (gj_gas_total_proy * factor_emision_gas).quantize(_CENTAVO, ROUND_HALF_UP)
+        co2_proy     = co2_elec_proy + co2_gas_proy
+
+        co2_reduccion = co2_actual - co2_proy
+        if co2_actual > 0:
+            co2_reduccion_pct = ((co2_reduccion / co2_actual) * 100).quantize(_CENTAVO, ROUND_HALF_UP)
+        else:
+            co2_reduccion_pct = Decimal("0")
+
     return CoGenResultado(
         params=params,
         meses=meses,
@@ -187,4 +220,12 @@ def calcular_cogen(
         inversion_usd=inv_usd,
         inversion_mxn=inv_mxn,
         tipo_cambio_mxn_usd=tipo_cambio,
+        co2_actual_electricidad_kg_anual=co2_elec_actual,
+        co2_actual_gas_kg_anual=co2_gas_actual,
+        co2_actual_total_kg_anual=co2_actual,
+        co2_proyectado_electricidad_kg_anual=co2_elec_proy,
+        co2_proyectado_gas_kg_anual=co2_gas_proy,
+        co2_proyectado_total_kg_anual=co2_proy,
+        co2_reduccion_kg_anual=co2_reduccion,
+        co2_reduccion_porcentaje=co2_reduccion_pct,
     )

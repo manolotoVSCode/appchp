@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.14.0] — 2026-05-09
+
+### Añadido
+
+- Sección "Huella de Carbono" en el dashboard de Cogeneración: dos donuts comparativos (huella actual sin cogeneración vs. huella proyectada con cogeneración) y caja resumen con reducción anual en toneladas CO₂, porcentaje y equivalencia en árboles.
+- Nuevos campos en `CoGenResultado`: `co2_actual_electricidad_kg_anual`, `co2_actual_gas_kg_anual`, `co2_actual_total_kg_anual`, `co2_proyectado_electricidad_kg_anual`, `co2_proyectado_gas_kg_anual`, `co2_proyectado_total_kg_anual`, `co2_reduccion_kg_anual`, `co2_reduccion_porcentaje`. Todos `Decimal | None`.
+- Dos nuevas claves en tabla `configuracion`: `factor_emision_electricidad_kg_co2_kwh` (0.435) y `factor_emision_gas_kg_co2_gj` (56.1). Si no están configuradas, la sección de huella no aparece.
+- Reactividad al slider de cobertura y rendimientos: el donut proyectado y la caja resumen se recalculan en JS sin recarga de página. El donut actual es fijo.
+
+### Cambiado
+
+- `calcular_cogen` acepta dos nuevos parámetros opcionales: `factor_emision_elec` y `factor_emision_gas` (ambos `Decimal | None`, default `None`).
+
+---
+
 ## [2.13.0] — 2026-05-08
 
 ### Añadido

@@ -61,3 +61,12 @@ class CoGenResultado:
     inversion_usd: Decimal | None = None
     inversion_mxn: Decimal | None = None
     tipo_cambio_mxn_usd: Decimal | None = None
+    # Huella de carbono (None si no hay factores de emisión configurados)
+    co2_actual_electricidad_kg_anual: Decimal | None = None
+    co2_actual_gas_kg_anual: Decimal | None = None
+    co2_actual_total_kg_anual: Decimal | None = None
+    co2_proyectado_electricidad_kg_anual: Decimal | None = None
+    co2_proyectado_gas_kg_anual: Decimal | None = None
+    co2_proyectado_total_kg_anual: Decimal | None = None
+    co2_reduccion_kg_anual: Decimal | None = None
+    co2_reduccion_porcentaje: Decimal | None = None
