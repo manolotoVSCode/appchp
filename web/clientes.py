@@ -33,8 +33,13 @@ from storage.repository import (
     get_gas_facturas_por_contrato,
     delete_cfe_factura,
     delete_gas_factura,
-    update_factura_seleccionada,
-    update_facturas_seleccion_masiva,
+    get_sidebar_data_contrato,
+    get_meses_seleccionados_por_contrato,
+    get_meses_con_factura,
+    upsert_mes_seleccionado,
+    delete_mes_seleccionado,
+    upsert_meses_seleccionados_anio,
+    delete_meses_seleccionados_anio,
 )
 
 logger = logging.getLogger(__name__)
@@ -780,15 +785,12 @@ def contrato_factura_borrar(cliente_id: int, contrato_id: int, factura_id: int):
 
 
 @clientes_bp.route(
-    "/<int:cliente_id>/contratos/<int:contrato_id>/facturas/<int:factura_id>/seleccion",
-    methods=["PATCH"],
+    "/<int:cliente_id>/contratos/<int:contrato_id>/seleccion",
+    methods=["GET"],
 )
-def contrato_factura_seleccion(cliente_id: int, contrato_id: int, factura_id: int):
+def contrato_get_seleccion(cliente_id: int, contrato_id: int):
+    """Devuelve los datos del sidebar para el contrato: años con facturas y meses seleccionados."""
     from flask import Response, jsonify
-
-    cliente = get_cliente_con_conteos(cliente_id)
-    if cliente is None:
-        return jsonify({"error": "Cliente no encontrado"}), 404
 
     resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
     if resultado is None:
@@ -796,34 +798,21 @@ def contrato_factura_seleccion(cliente_id: int, contrato_id: int, factura_id: in
     if isinstance(resultado, Response):
         return jsonify({"error": "Acceso denegado"}), 403
 
-    data = request.get_json(silent=True) or {}
-    seleccionada = data.get("seleccionada")
-    tipo = data.get("tipo", "").strip()
-    if not isinstance(seleccionada, bool):
-        return jsonify({"error": "'seleccionada' debe ser true o false"}), 400
-    if tipo not in ("cfe", "gas"):
-        return jsonify({"error": "Tipo inválido. Debe ser 'cfe' o 'gas'."}), 400
-
     try:
-        update_factura_seleccionada(factura_id, tipo, seleccionada)
-        return jsonify({"ok": True, "seleccionada": seleccionada})
+        data = get_sidebar_data_contrato(contrato_id)
+        return jsonify({"ok": True, "anios": data})
     except Exception as exc:
-        logger.error(
-            "Error actualizando selección factura id=%d, tipo=%s: %s", factura_id, tipo, exc
-        )
+        logger.error("Error cargando sidebar data contrato_id=%d: %s", contrato_id, exc)
         return jsonify({"error": str(exc)}), 500
 
 
 @clientes_bp.route(
-    "/<int:cliente_id>/contratos/<int:contrato_id>/facturas/seleccion-masiva",
-    methods=["PATCH"],
+    "/<int:cliente_id>/contratos/<int:contrato_id>/seleccion/mes",
+    methods=["POST"],
 )
-def contrato_facturas_seleccion_masiva(cliente_id: int, contrato_id: int):
+def contrato_seleccion_mes(cliente_id: int, contrato_id: int):
+    """Toggle de selección de un mes para el contrato."""
     from flask import Response, jsonify
-
-    cliente = get_cliente_con_conteos(cliente_id)
-    if cliente is None:
-        return jsonify({"error": "Cliente no encontrado"}), 404
 
     resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
     if resultado is None:
@@ -832,15 +821,54 @@ def contrato_facturas_seleccion_masiva(cliente_id: int, contrato_id: int):
         return jsonify({"error": "Acceso denegado"}), 403
 
     data = request.get_json(silent=True) or {}
-    seleccionada = data.get("seleccionada")
-    if not isinstance(seleccionada, bool):
-        return jsonify({"error": "'seleccionada' debe ser true o false"}), 400
+    anio = data.get("anio")
+    mes = data.get("mes")
+    seleccionado = data.get("seleccionado")
+    if not isinstance(anio, int) or not isinstance(mes, int) or mes < 1 or mes > 12:
+        return jsonify({"error": "anio y mes deben ser enteros válidos"}), 400
+    if not isinstance(seleccionado, bool):
+        return jsonify({"error": "'seleccionado' debe ser true o false"}), 400
 
     try:
-        actualizadas = update_facturas_seleccion_masiva(contrato_id, seleccionada)
-        return jsonify({"ok": True, "actualizadas": actualizadas, "seleccionada": seleccionada})
+        if seleccionado:
+            upsert_mes_seleccionado(contrato_id, anio, mes)
+        else:
+            delete_mes_seleccionado(contrato_id, anio, mes)
+        return jsonify({"ok": True, "seleccionado": seleccionado})
     except Exception as exc:
-        logger.error(
-            "Error en selección masiva contrato_id=%d: %s", contrato_id, exc
-        )
+        logger.error("Error en selección mes contrato_id=%d %d-%d: %s", contrato_id, anio, mes, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/seleccion/anio",
+    methods=["POST"],
+)
+def contrato_seleccion_anio(cliente_id: int, contrato_id: int):
+    """Selección masiva de todos los meses con factura de un año."""
+    from flask import Response, jsonify
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        return jsonify({"error": "Contrato no encontrado"}), 404
+    if isinstance(resultado, Response):
+        return jsonify({"error": "Acceso denegado"}), 403
+
+    data = request.get_json(silent=True) or {}
+    anio = data.get("anio")
+    seleccionado = data.get("seleccionado")
+    if not isinstance(anio, int):
+        return jsonify({"error": "'anio' debe ser un entero"}), 400
+    if not isinstance(seleccionado, bool):
+        return jsonify({"error": "'seleccionado' debe ser true o false"}), 400
+
+    try:
+        if seleccionado:
+            n = upsert_meses_seleccionados_anio(contrato_id, anio)
+            return jsonify({"ok": True, "insertados": n})
+        else:
+            delete_meses_seleccionados_anio(contrato_id, anio)
+            return jsonify({"ok": True, "eliminados": True})
+    except Exception as exc:
+        logger.error("Error en selección anio contrato_id=%d %d: %s", contrato_id, anio, exc)
         return jsonify({"error": str(exc)}), 500

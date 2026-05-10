@@ -13,6 +13,7 @@ from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice, GasConcepto
 from models.contrato import Contrato
 from calc.nombre_canonico import generar_nombre_canonico
+from calc.periodo import mes_asociado as _mes_asociado
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,9 @@ def save_cfe_invoice(invoice: CFEInvoice, cliente_id: int, contrato_id: int | No
         "nombre_canonico": nombre_canonico,
         "advertencias": json.dumps(invoice.advertencias, ensure_ascii=False),
     }
+    _anio, _mes = _mes_asociado(invoice.periodo_inicio, invoice.periodo_fin)
+    row["anio"] = _anio
+    row["mes"] = _mes
     try:
         result = _supabase.table("cfe_facturas").insert(row).execute()
     except Exception as exc:
@@ -216,6 +220,9 @@ def save_gas_invoice(invoice: GasInvoice, cliente_id: int, contrato_id: int | No
         "nombre_canonico": nombre_canonico,
         "advertencias": json.dumps(invoice.advertencias, ensure_ascii=False),
     }
+    _anio, _mes = _mes_asociado(invoice.periodo_inicio, invoice.periodo_fin)
+    row["anio"] = _anio
+    row["mes"] = _mes
     try:
         result = _supabase.table("gas_facturas").insert(row).execute()
     except Exception as exc:
@@ -601,52 +608,152 @@ def delete_contrato(contrato_id: int) -> None:
 # ── Facturas por contrato ──────────────────────────────────────────────────────
 
 def get_cfe_facturas_por_contrato(contrato_id: int) -> list[dict]:
-    """Devuelve las facturas CFE del contrato (campos básicos para la ficha, incluyendo seleccionada)."""
+    """Devuelve las facturas CFE del contrato (campos básicos para la ficha)."""
     result = _supabase.table("cfe_facturas").select(
-        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn, seleccionada"
+        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn"
     ).eq("contrato_id", contrato_id).order("periodo_inicio").execute()
     return result.data
 
 
 def get_gas_facturas_por_contrato(contrato_id: int) -> list[dict]:
-    """Devuelve las facturas de gas del contrato (campos básicos para la ficha, incluyendo seleccionada)."""
+    """Devuelve las facturas de gas del contrato (campos básicos para la ficha)."""
     result = _supabase.table("gas_facturas").select(
-        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn, seleccionada"
+        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn"
     ).eq("contrato_id", contrato_id).order("periodo_inicio").execute()
     return result.data
 
 
-def update_factura_seleccionada(factura_id: int, tipo: str, seleccionada: bool) -> None:
-    """Actualiza el campo seleccionada de una factura CFE o gas."""
-    tabla = "cfe_facturas" if tipo == "cfe" else "gas_facturas"
-    _supabase.table(tabla).update({"seleccionada": seleccionada}).eq("id", factura_id).execute()
+# ── Selección por mes (contrato_meses_seleccionados) ──────────────────────────
+
+def _get_contrato_ids_de_cliente(cliente_id: int) -> list[int]:
+    result = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).execute()
+    return [r["id"] for r in result.data]
 
 
-def update_facturas_seleccion_masiva(contrato_id: int, seleccionada: bool) -> int:
-    """Actualiza seleccionada en todas las facturas CFE y gas del contrato. Devuelve el número afectado."""
-    cfe = _supabase.table("cfe_facturas").update({"seleccionada": seleccionada}).eq(
+def get_meses_seleccionados_por_contrato(contrato_id: int) -> list[tuple[int, int]]:
+    """Retorna lista de (anio, mes) seleccionados para el contrato."""
+    result = _supabase.table("contrato_meses_seleccionados").select("anio, mes").eq(
         "contrato_id", contrato_id
     ).execute()
-    gas = _supabase.table("gas_facturas").update({"seleccionada": seleccionada}).eq(
-        "contrato_id", contrato_id
+    return [(r["anio"], r["mes"]) for r in result.data]
+
+
+def get_meses_seleccionados_por_cliente(cliente_id: int) -> set[tuple[int, int, int]]:
+    """Retorna set de (contrato_id, anio, mes) seleccionados para el cliente."""
+    contrato_ids = _get_contrato_ids_de_cliente(cliente_id)
+    if not contrato_ids:
+        return set()
+    result = _supabase.table("contrato_meses_seleccionados").select(
+        "contrato_id, anio, mes"
+    ).in_("contrato_id", contrato_ids).execute()
+    return {(r["contrato_id"], r["anio"], r["mes"]) for r in result.data}
+
+
+def get_anios_con_facturas_por_contrato(contrato_id: int) -> list[int]:
+    """Retorna lista ordenada de años que tienen al menos una factura en el contrato."""
+    cfe = _supabase.table("cfe_facturas").select("anio").eq("contrato_id", contrato_id).not_.is_(
+        "anio", "null"
     ).execute()
-    return len(cfe.data) + len(gas.data)
+    gas = _supabase.table("gas_facturas").select("anio").eq("contrato_id", contrato_id).not_.is_(
+        "anio", "null"
+    ).execute()
+    anios = {r["anio"] for r in cfe.data} | {r["anio"] for r in gas.data}
+    return sorted(anios)
+
+
+def get_meses_con_factura(contrato_id: int, anio: int) -> set[int]:
+    """Retorna conjunto de meses (1-12) con al menos una factura en ese contrato/año."""
+    cfe = _supabase.table("cfe_facturas").select("mes").eq("contrato_id", contrato_id).eq(
+        "anio", anio
+    ).not_.is_("mes", "null").execute()
+    gas = _supabase.table("gas_facturas").select("mes").eq("contrato_id", contrato_id).eq(
+        "anio", anio
+    ).not_.is_("mes", "null").execute()
+    return {r["mes"] for r in cfe.data} | {r["mes"] for r in gas.data}
+
+
+def upsert_mes_seleccionado(contrato_id: int, anio: int, mes: int) -> None:
+    """Marca un mes como seleccionado (ON CONFLICT DO NOTHING vía upsert)."""
+    _supabase.table("contrato_meses_seleccionados").upsert(
+        {"contrato_id": contrato_id, "anio": anio, "mes": mes}
+    ).execute()
+
+
+def delete_mes_seleccionado(contrato_id: int, anio: int, mes: int) -> None:
+    """Deselecciona un mes."""
+    _supabase.table("contrato_meses_seleccionados").delete().eq(
+        "contrato_id", contrato_id
+    ).eq("anio", anio).eq("mes", mes).execute()
+
+
+def upsert_meses_seleccionados_anio(contrato_id: int, anio: int) -> int:
+    """Selecciona todos los meses con factura del año. Retorna cantidad insertada."""
+    meses = get_meses_con_factura(contrato_id, anio)
+    if not meses:
+        return 0
+    _supabase.table("contrato_meses_seleccionados").upsert(
+        [{"contrato_id": contrato_id, "anio": anio, "mes": m} for m in meses]
+    ).execute()
+    return len(meses)
+
+
+def delete_meses_seleccionados_anio(contrato_id: int, anio: int) -> None:
+    """Deselecciona todos los meses del año para ese contrato."""
+    _supabase.table("contrato_meses_seleccionados").delete().eq(
+        "contrato_id", contrato_id
+    ).eq("anio", anio).execute()
+
+
+def get_sidebar_data_contrato(contrato_id: int) -> list[dict]:
+    """Retorna datos completos del sidebar para un contrato: años con facturas y selección.
+
+    Cada elemento: {"anio": int, "meses_con_factura": [int], "meses_seleccionados": [int]}
+    Ordenado por año descendente (más reciente primero).
+    """
+    anios = get_anios_con_facturas_por_contrato(contrato_id)
+    seleccionados = set(get_meses_seleccionados_por_contrato(contrato_id))
+    resultado = []
+    for anio in sorted(anios, reverse=True):
+        meses_factura = sorted(get_meses_con_factura(contrato_id, anio))
+        meses_sel = sorted(m for (a, m) in seleccionados if a == anio)
+        resultado.append({
+            "anio": anio,
+            "meses_con_factura": meses_factura,
+            "meses_seleccionados": meses_sel,
+        })
+    return resultado
 
 
 def get_cfe_invoices_for_dashboard(cliente_id: int) -> list[CFEInvoice]:
-    """Carga facturas CFE del cliente con seleccionada=True, para el dashboard."""
+    """Carga facturas CFE del cliente cuyos meses están seleccionados en contrato_meses_seleccionados."""
+    seleccionados = get_meses_seleccionados_por_cliente(cliente_id)
+    if not seleccionados:
+        return []
+    contrato_ids = list({c for c, _, _ in seleccionados})
     result = _supabase.table("cfe_facturas").select(
         "*, clientes(nombre, rfc), cfe_periodos(*), cfe_mem_componentes(*)"
-    ).eq("cliente_id", cliente_id).eq("seleccionada", True).order("periodo_inicio").execute()
-    return [_row_to_cfe_invoice(row) for row in result.data]
+    ).eq("cliente_id", cliente_id).in_("contrato_id", contrato_ids).order("periodo_inicio").execute()
+    return [
+        _row_to_cfe_invoice(row) for row in result.data
+        if row.get("anio") and row.get("mes")
+        and (row["contrato_id"], row["anio"], row["mes"]) in seleccionados
+    ]
 
 
 def get_gas_invoices_for_dashboard(cliente_id: int) -> list[GasInvoice]:
-    """Carga facturas de gas del cliente con seleccionada=True, para el dashboard."""
+    """Carga facturas de gas del cliente cuyos meses están seleccionados en contrato_meses_seleccionados."""
+    seleccionados = get_meses_seleccionados_por_cliente(cliente_id)
+    if not seleccionados:
+        return []
+    contrato_ids = list({c for c, _, _ in seleccionados})
     result = _supabase.table("gas_facturas").select(
         "*, clientes(nombre, rfc), gas_conceptos(*)"
-    ).eq("cliente_id", cliente_id).eq("seleccionada", True).order("periodo_inicio").execute()
-    return [_row_to_gas_invoice(row) for row in result.data]
+    ).eq("cliente_id", cliente_id).in_("contrato_id", contrato_ids).order("periodo_inicio").execute()
+    return [
+        _row_to_gas_invoice(row) for row in result.data
+        if row.get("anio") and row.get("mes")
+        and (row["contrato_id"], row["anio"], row["mes"]) in seleccionados
+    ]
 
 
 def delete_cfe_factura(factura_id: int) -> None:

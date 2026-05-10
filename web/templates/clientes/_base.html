@@ -74,7 +74,7 @@
     }
 
     /* Contract sub-items */
-    .sidebar-contratos { max-height: 14rem; overflow-y: auto; }
+    .sidebar-contratos { max-height: 22rem; overflow-y: auto; }
     .sidebar-link-contrato {
       display: block; padding: .35rem 1.25rem .35rem 2rem; font-size: .8rem;
       color: #8A8A8A; text-decoration: none;
@@ -91,6 +91,69 @@
       border-left-color: var(--color-primary);
       font-weight: 600;
     }
+
+    /* Sidebar submenú contratos expandible */
+    .sidebar-contrato-header {
+      display: flex; align-items: center; gap: .35rem;
+      padding: .35rem 1.25rem .35rem 2rem; font-size: .8rem;
+      color: #6A6A6A; cursor: pointer; border-left: 3px solid transparent;
+      user-select: none; transition: background .1s, color .1s;
+    }
+    .sidebar-contrato-header:hover { background: #F0F0F2; color: var(--color-text-primary); }
+    .sidebar-contrato-header .chev {
+      font-size: .65rem; margin-left: auto; flex-shrink: 0;
+      transition: transform .2s;
+    }
+    .sidebar-contrato-body { display: none; }
+    .sidebar-contrato-body.open { display: block; }
+    .sidebar-contrato-header.open .chev { transform: rotate(90deg); }
+
+    .sidebar-contrato-ficha {
+      display: block; padding: .3rem 1.25rem .3rem 2.5rem; font-size: .775rem;
+      color: #6A6A6A; text-decoration: none; border-left: 3px solid transparent;
+    }
+    .sidebar-contrato-ficha:hover { background: #F0F0F2; color: var(--color-text-primary); }
+
+    .sidebar-anio-header {
+      display: flex; align-items: center; gap: .35rem;
+      padding: .2rem 1.25rem .2rem 2.5rem; font-size: .72rem; font-weight: 600;
+      color: var(--color-text-sidebar-muted); cursor: pointer; user-select: none;
+    }
+    .sidebar-anio-header:hover { color: var(--color-text-primary); }
+    .sidebar-anio-header .chev-a {
+      font-size: .6rem; margin-left: auto; transition: transform .2s;
+    }
+    .sidebar-anio-header.open .chev-a { transform: rotate(90deg); }
+
+    .sidebar-anio-body { display: none; padding: .2rem 1.25rem .3rem 2.5rem; }
+    .sidebar-anio-body.open { display: block; }
+
+    .meses-grid {
+      display: grid; grid-template-columns: repeat(6, 1fr);
+      gap: 2px; margin-top: .25rem;
+    }
+    .mes-btn {
+      font-size: .62rem; padding: 1px 0; text-align: center; border-radius: 3px;
+      cursor: pointer; border: 1px solid transparent; line-height: 1.6;
+      transition: background .1s;
+    }
+    .mes-btn.disponible { color: #5A5A5A; border-color: #D0D0D0; background: #F8F8F8; }
+    .mes-btn.disponible:hover { background: #E8F4ED; border-color: var(--color-primary-light); }
+    .mes-btn.seleccionado { background: var(--color-primary); color: #fff; border-color: var(--color-primary); font-weight: 600; }
+    .mes-btn.seleccionado:hover { background: var(--color-primary-dark); }
+    .mes-btn.no-disponible { color: #C0C0C0; border-color: #EBEBEB; background: transparent; cursor: default; }
+
+    .maestro-anio {
+      width: 11px; height: 11px; cursor: pointer; flex-shrink: 0;
+      accent-color: var(--color-primary);
+    }
+
+    .sidebar-ver-mas {
+      display: block; padding: .25rem 1.25rem .25rem 2.5rem;
+      font-size: .72rem; color: var(--color-primary); cursor: pointer;
+      text-decoration: none;
+    }
+    .sidebar-ver-mas:hover { text-decoration: underline; }
 
     /* Bottom */
     .sidebar-bottom {
@@ -181,13 +244,26 @@
   </a>
   {% if cliente_activo.contratos %}
   <div class="sidebar-sub-header">Contratos</div>
-  <div class="sidebar-contratos">
+  <div class="sidebar-contratos" id="sidebar-contratos-{{ cliente_activo.id }}">
     {% for contrato in cliente_activo.contratos %}
-    <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente_activo.id, contrato_id=contrato.id) }}"
-       class="sidebar-link-contrato{% if nav_active == 'contrato' and contrato_activo_id == contrato.id %} active{% endif %}"
-       title="{{ contrato.nombre }}">
-      <i class="bi bi-file-earmark-text"></i>{{ contrato.nombre }}
-    </a>
+    <div class="sidebar-contrato-item" data-contrato-id="{{ contrato.id }}" data-cliente-id="{{ cliente_activo.id }}">
+      <div class="sidebar-contrato-header{% if nav_active == 'contrato' and contrato_activo_id == contrato.id %} active{% endif %}"
+           title="{{ contrato.nombre }}"
+           onclick="toggleContrato(this)">
+        <i class="bi bi-file-earmark-text" style="font-size:.8rem;flex-shrink:0"></i>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ contrato.nombre }}</span>
+        <span class="chev">&#9658;</span>
+      </div>
+      <div class="sidebar-contrato-body">
+        <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente_activo.id, contrato_id=contrato.id) }}"
+           class="sidebar-contrato-ficha">
+          <i class="bi bi-card-list" style="font-size:.75rem;margin-right:.3rem"></i>Ficha del contrato
+        </a>
+        <div class="sidebar-anios-placeholder text-muted" style="padding:.3rem 1.25rem .2rem 2.5rem;font-size:.7rem">
+          Cargando…
+        </div>
+      </div>
+    </div>
     {% endfor %}
   </div>
   {% endif %}
@@ -243,6 +319,214 @@
       });
     }
   })();
+</script>
+
+<script>
+// ── Sidebar submenú contratos ─────────────────────────────────────────────────
+const _MESES_ABREV = ["", "Ene","Feb","Mar","Abr","May","Jun",
+                           "Jul","Ago","Sep","Oct","Nov","Dic"];
+const _cargados = {};  // contrato_id → true (ya se cargó)
+const _csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+
+function toggleContrato(headerEl) {
+  const item = headerEl.closest(".sidebar-contrato-item");
+  const body = item.querySelector(".sidebar-contrato-body");
+  const isOpen = body.classList.contains("open");
+  if (!isOpen) {
+    body.classList.add("open");
+    headerEl.classList.add("open");
+    const contratoId = item.dataset.contratoId;
+    if (!_cargados[contratoId]) {
+      _cargados[contratoId] = true;
+      cargarAnios(item);
+    }
+  } else {
+    body.classList.remove("open");
+    headerEl.classList.remove("open");
+  }
+}
+
+async function cargarAnios(item) {
+  const contratoId = item.dataset.contratoId;
+  const clienteId  = item.dataset.clienteId;
+  const placeholder = item.querySelector(".sidebar-anios-placeholder");
+  try {
+    const resp = await fetch(
+      `/clientes/${clienteId}/contratos/${contratoId}/seleccion`,
+      { headers: { "X-CSRFToken": _csrf } }
+    );
+    const json = await resp.json();
+    if (!resp.ok || !json.ok) throw new Error(json.error || "Error");
+    if (placeholder) placeholder.remove();
+    renderAnios(item, json.anios, contratoId, clienteId);
+  } catch(e) {
+    if (placeholder) placeholder.textContent = "Error al cargar";
+    console.error("cargarAnios:", e);
+  }
+}
+
+function renderAnios(item, anios, contratoId, clienteId) {
+  const body = item.querySelector(".sidebar-contrato-body");
+  if (!anios || anios.length === 0) {
+    const msg = document.createElement("div");
+    msg.className = "text-muted";
+    msg.style.cssText = "padding:.3rem 1.25rem .2rem 2.5rem;font-size:.7rem";
+    msg.textContent = "Sin facturas cargadas";
+    body.appendChild(msg);
+    return;
+  }
+
+  // Regla: mostrar los 3 más recientes; ocultar el resto tras "Ver años anteriores"
+  const VISIBLE_MAX = 3;
+  const verMas = anios.length > VISIBLE_MAX;
+
+  anios.forEach((d, idx) => {
+    const oculto = verMas && idx >= VISIBLE_MAX;
+    const anioEl = crearAnioEl(d, contratoId, clienteId, idx === 0, oculto);
+    body.appendChild(anioEl);
+  });
+
+  if (verMas) {
+    const link = document.createElement("a");
+    link.className = "sidebar-ver-mas";
+    link.textContent = "Ver años anteriores";
+    link.id = `ver-mas-${contratoId}`;
+    link.addEventListener("click", () => {
+      body.querySelectorAll(".anio-oculto").forEach(el => el.classList.remove("anio-oculto"));
+      link.remove();
+    });
+    body.appendChild(link);
+  }
+}
+
+function crearAnioEl(d, contratoId, clienteId, expandirPorDefecto, oculto) {
+  const wrap = document.createElement("div");
+  if (oculto) wrap.classList.add("anio-oculto");
+  if (oculto) wrap.style.display = "none";
+
+  const sel = new Set(d.meses_seleccionados);
+  const con = new Set(d.meses_con_factura);
+  const allSel = con.size > 0 && [...con].every(m => sel.has(m));
+  const noneSel = [...con].every(m => !sel.has(m));
+
+  // Header del año con checkbox maestro
+  const header = document.createElement("div");
+  header.className = "sidebar-anio-header" + (expandirPorDefecto ? " open" : "");
+
+  const chk = document.createElement("input");
+  chk.type = "checkbox";
+  chk.className = "maestro-anio";
+  chk.checked = allSel;
+  chk.indeterminate = !allSel && !noneSel;
+  chk.addEventListener("change", () => toggleAnio(contratoId, clienteId, d.anio, chk, wrap));
+  header.appendChild(chk);
+
+  const label = document.createElement("span");
+  label.textContent = String(d.anio);
+  header.appendChild(label);
+
+  const chevA = document.createElement("span");
+  chevA.className = "chev-a";
+  chevA.textContent = "▶";
+  header.appendChild(chevA);
+
+  header.addEventListener("click", (e) => {
+    if (e.target === chk) return; // no propagar click del checkbox
+    const anioBody = wrap.querySelector(".sidebar-anio-body");
+    const isOpen = anioBody.classList.contains("open");
+    anioBody.classList.toggle("open", !isOpen);
+    header.classList.toggle("open", !isOpen);
+  });
+
+  wrap.appendChild(header);
+
+  // Grid de meses
+  const anioBody = document.createElement("div");
+  anioBody.className = "sidebar-anio-body" + (expandirPorDefecto ? " open" : "");
+
+  const grid = document.createElement("div");
+  grid.className = "meses-grid";
+
+  for (let m = 1; m <= 12; m++) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = _MESES_ABREV[m];
+    btn.dataset.mes = m;
+    btn.dataset.anio = d.anio;
+    if (!con.has(m)) {
+      btn.className = "mes-btn no-disponible";
+      btn.disabled = true;
+    } else if (sel.has(m)) {
+      btn.className = "mes-btn seleccionado";
+    } else {
+      btn.className = "mes-btn disponible";
+    }
+    if (con.has(m)) {
+      btn.addEventListener("click", () =>
+        toggleMes(contratoId, clienteId, d.anio, m, btn, chk, wrap)
+      );
+    }
+    grid.appendChild(btn);
+  }
+  anioBody.appendChild(grid);
+  wrap.appendChild(anioBody);
+  return wrap;
+}
+
+async function toggleMes(contratoId, clienteId, anio, mes, btn, maestroChk, wrap) {
+  const seleccionado = !btn.classList.contains("seleccionado");
+  btn.disabled = true;
+  try {
+    const resp = await fetch(
+      `/clientes/${clienteId}/contratos/${contratoId}/seleccion/mes`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": _csrf },
+        body: JSON.stringify({ anio, mes, seleccionado }),
+      }
+    );
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    btn.className = seleccionado ? "mes-btn seleccionado" : "mes-btn disponible";
+    actualizarMaestro(maestroChk, wrap);
+  } catch(e) {
+    console.error("toggleMes:", e);
+  }
+  btn.disabled = false;
+}
+
+async function toggleAnio(contratoId, clienteId, anio, chk, wrap) {
+  const seleccionado = chk.checked;
+  const botonesDisponibles = Array.from(wrap.querySelectorAll(".mes-btn:not(.no-disponible)"));
+  botonesDisponibles.forEach(b => { b.disabled = true; });
+  try {
+    const resp = await fetch(
+      `/clientes/${clienteId}/contratos/${contratoId}/seleccion/anio`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": _csrf },
+        body: JSON.stringify({ anio, seleccionado }),
+      }
+    );
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    botonesDisponibles.forEach(b => {
+      b.className = seleccionado ? "mes-btn seleccionado" : "mes-btn disponible";
+    });
+    chk.indeterminate = false;
+    chk.checked = seleccionado;
+  } catch(e) {
+    console.error("toggleAnio:", e);
+    chk.checked = !seleccionado; // revertir
+  }
+  botonesDisponibles.forEach(b => { b.disabled = false; });
+}
+
+function actualizarMaestro(chk, wrap) {
+  const btns = Array.from(wrap.querySelectorAll(".mes-btn:not(.no-disponible)"));
+  const selCount = btns.filter(b => b.classList.contains("seleccionado")).length;
+  if (selCount === 0) { chk.checked = false; chk.indeterminate = false; }
+  else if (selCount === btns.length) { chk.checked = true; chk.indeterminate = false; }
+  else { chk.checked = false; chk.indeterminate = true; }
+}
 </script>
 {% block scripts %}{% endblock %}
 </body>

@@ -62,6 +62,25 @@ def _verificar_cliente_activo(cliente_id: int):
     return cliente, None
 
 
+def _calcular_periodo_label(cfe_invoices, gas_invoices) -> str:
+    """Retorna etiqueta del periodo cubierto por las facturas seleccionadas."""
+    anios: set[int] = set()
+    for inv in cfe_invoices:
+        anio, _ = mes_asociado(inv.periodo_inicio, inv.periodo_fin)
+        anios.add(anio)
+    for inv in gas_invoices:
+        anio, _ = mes_asociado(inv.periodo_inicio, inv.periodo_fin)
+        anios.add(anio)
+    if not anios:
+        return ""
+    ordenados = sorted(anios)
+    if len(ordenados) == 1:
+        return str(ordenados[0])
+    if len(ordenados) == 2 and ordenados[1] == ordenados[0] + 1:
+        return f"{ordenados[0]}–{ordenados[1]}"
+    return "Múltiples años"
+
+
 def _cargar_facturas_seleccionadas(cliente_id: int):
     """Carga facturas CFE y gas seleccionadas del cliente y las formatea para templates.
 
@@ -236,6 +255,7 @@ def create_app() -> Flask:
         kwh_total_periodo = sum(f["kwh_total"] for f in facturas_cfe)
         costo_total_periodo = sum(f["costo_mxn"] for f in facturas_cfe)
         costo_unit_promedio = costo_total_periodo / kwh_total_periodo if kwh_total_periodo > 0 else 0.0
+        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
 
         return render_template(
             "dashboard_contabilidad.html",
@@ -253,6 +273,7 @@ def create_app() -> Flask:
             kwh_total_periodo=kwh_total_periodo,
             costo_total_periodo=costo_total_periodo,
             costo_unit_promedio=costo_unit_promedio,
+            periodo_label=periodo_label,
         )
 
     @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion")
@@ -334,6 +355,8 @@ def create_app() -> Flask:
             flujo_acum_15 = []
             flujo_anual_15 = []
 
+        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
+
         return render_template(
             "dashboard_cogeneracion.html",
             r=r,
@@ -341,6 +364,7 @@ def create_app() -> Flask:
             cliente_id=cliente_id,
             cliente_nombre=cliente["nombre"],
             logo_url=cliente.get("logo_url"),
+            periodo_label=periodo_label,
             chart_labels=chart_labels,
             chart_ebitda=chart_ebitda,
             chart_ahorro_elec=chart_ahorro_elec,

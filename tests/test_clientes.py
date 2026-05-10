@@ -656,7 +656,7 @@ def test_sidebar_con_cliente_activo_muestra_estructura(app, monkeypatch):
     assert "IBERICA TILES" in html
     assert "Contabilidad Energ" in html
     assert "Proyecto Cogenera" in html
-    assert "Ficha cliente" in html
+    assert "Detalles" in html
     assert "sidebar-sub-header" in html
 
 

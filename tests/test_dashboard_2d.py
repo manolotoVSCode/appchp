@@ -114,78 +114,173 @@ def test_borrar_cliente_activo_limpia_sesion(app, monkeypatch):
         assert sess.get("cliente_activo_nombre") is None
 
 
-# ── Test 3: Toggle selección individual ──────────────────────────────────────
+# ── Test 3: GET selección sidebar del contrato ────────────────────────────────
 
-def test_toggle_seleccion_individual(app, monkeypatch):
-    """PATCH /seleccion → llama a update_factura_seleccionada con los parámetros correctos."""
+def test_get_seleccion_contrato(app, monkeypatch):
+    """GET /seleccion → devuelve datos del sidebar con ok y lista de años."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
+    monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
+    monkeypatch.setattr(
+        "web.clientes.get_sidebar_data_contrato",
+        lambda contrato_id: [{"anio": 2024, "meses_con_factura": [1, 2], "meses_seleccionados": [1]}],
+    )
+    c = _login(app, monkeypatch)
+
+    resp = c.get("/clientes/1/contratos/10/seleccion")
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data["ok"] is True
+    assert len(data["anios"]) == 1
+    assert data["anios"][0]["anio"] == 2024
+
+
+def test_get_seleccion_contrato_no_encontrado(app, monkeypatch):
+    """GET /seleccion con contrato inexistente → 404."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
+    monkeypatch.setattr("web.clientes.get_contrato", lambda id: None)
+    c = _login(app, monkeypatch)
+
+    resp = c.get("/clientes/1/contratos/99/seleccion")
+    assert resp.status_code == 404
+
+
+# ── Test 4: POST selección de mes ─────────────────────────────────────────────
+
+def test_seleccion_mes_upsert(app, monkeypatch):
+    """POST /seleccion/mes con seleccionado=true → llama a upsert_mes_seleccionado."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
     llamadas = []
     monkeypatch.setattr(
-        "web.clientes.update_factura_seleccionada",
-        lambda factura_id, tipo, seleccionada: llamadas.append((factura_id, tipo, seleccionada)),
+        "web.clientes.upsert_mes_seleccionado",
+        lambda contrato_id, anio, mes: llamadas.append(("upsert", contrato_id, anio, mes)),
     )
+    monkeypatch.setattr("web.clientes.delete_mes_seleccionado", lambda *a: None)
     c = _login(app, monkeypatch)
 
-    resp = c.patch(
-        "/clientes/1/contratos/10/facturas/42/seleccion",
-        json={"seleccionada": False, "tipo": "cfe"},
+    resp = c.post(
+        "/clientes/1/contratos/10/seleccion/mes",
+        json={"anio": 2024, "mes": 3, "seleccionado": True},
         content_type="application/json",
     )
     data = resp.get_json()
     assert resp.status_code == 200
     assert data["ok"] is True
-    assert data["seleccionada"] is False
-    assert llamadas == [(42, "cfe", False)]
+    assert data["seleccionado"] is True
+    assert llamadas == [("upsert", 10, 2024, 3)]
 
 
-def test_toggle_seleccion_tipo_invalido(app, monkeypatch):
-    """PATCH /seleccion con tipo inválido → 400."""
+def test_seleccion_mes_delete(app, monkeypatch):
+    """POST /seleccion/mes con seleccionado=false → llama a delete_mes_seleccionado."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
+    monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
+    monkeypatch.setattr("web.clientes.upsert_mes_seleccionado", lambda *a: None)
+    eliminados = []
+    monkeypatch.setattr(
+        "web.clientes.delete_mes_seleccionado",
+        lambda contrato_id, anio, mes: eliminados.append((contrato_id, anio, mes)),
+    )
+    c = _login(app, monkeypatch)
+
+    resp = c.post(
+        "/clientes/1/contratos/10/seleccion/mes",
+        json={"anio": 2024, "mes": 3, "seleccionado": False},
+        content_type="application/json",
+    )
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data["ok"] is True
+    assert data["seleccionado"] is False
+    assert eliminados == [(10, 2024, 3)]
+
+
+def test_seleccion_mes_mes_invalido(app, monkeypatch):
+    """POST /seleccion/mes con mes=13 → 400."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
     c = _login(app, monkeypatch)
 
-    resp = c.patch(
-        "/clientes/1/contratos/10/facturas/42/seleccion",
-        json={"seleccionada": True, "tipo": "invalido"},
+    resp = c.post(
+        "/clientes/1/contratos/10/seleccion/mes",
+        json={"anio": 2024, "mes": 13, "seleccionado": True},
         content_type="application/json",
     )
     assert resp.status_code == 400
 
 
-# ── Test 4: Selección masiva ──────────────────────────────────────────────────
-
-def test_seleccion_masiva(app, monkeypatch):
-    """PATCH /seleccion-masiva → llama a update_facturas_seleccion_masiva y devuelve actualizadas."""
+def test_seleccion_mes_seleccionado_no_bool(app, monkeypatch):
+    """POST /seleccion/mes con seleccionado='si' → 400."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
-    monkeypatch.setattr(
-        "web.clientes.update_facturas_seleccion_masiva",
-        lambda contrato_id, seleccionada: 3,
-    )
     c = _login(app, monkeypatch)
 
-    resp = c.patch(
-        "/clientes/1/contratos/10/facturas/seleccion-masiva",
-        json={"seleccionada": False},
+    resp = c.post(
+        "/clientes/1/contratos/10/seleccion/mes",
+        json={"anio": 2024, "mes": 3, "seleccionado": "si"},
+        content_type="application/json",
+    )
+    assert resp.status_code == 400
+
+
+# ── Test 4b: POST selección de año ────────────────────────────────────────────
+
+def test_seleccion_anio_activa(app, monkeypatch):
+    """POST /seleccion/anio con seleccionado=true → llama a upsert_meses_seleccionados_anio."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
+    monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
+    llamadas = []
+    monkeypatch.setattr(
+        "web.clientes.upsert_meses_seleccionados_anio",
+        lambda contrato_id, anio: llamadas.append((contrato_id, anio)) or 12,
+    )
+    monkeypatch.setattr("web.clientes.delete_meses_seleccionados_anio", lambda *a: None)
+    c = _login(app, monkeypatch)
+
+    resp = c.post(
+        "/clientes/1/contratos/10/seleccion/anio",
+        json={"anio": 2024, "seleccionado": True},
         content_type="application/json",
     )
     data = resp.get_json()
     assert resp.status_code == 200
     assert data["ok"] is True
-    assert data["actualizadas"] == 3
-    assert data["seleccionada"] is False
+    assert data["insertados"] == 12
+    assert llamadas == [(10, 2024)]
 
 
-def test_seleccion_masiva_sin_bool(app, monkeypatch):
-    """PATCH /seleccion-masiva con seleccionada=null → 400."""
+def test_seleccion_anio_desactiva(app, monkeypatch):
+    """POST /seleccion/anio con seleccionado=false → llama a delete_meses_seleccionados_anio."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
+    monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
+    monkeypatch.setattr("web.clientes.upsert_meses_seleccionados_anio", lambda *a: 0)
+    eliminados = []
+    monkeypatch.setattr(
+        "web.clientes.delete_meses_seleccionados_anio",
+        lambda contrato_id, anio: eliminados.append((contrato_id, anio)),
+    )
+    c = _login(app, monkeypatch)
+
+    resp = c.post(
+        "/clientes/1/contratos/10/seleccion/anio",
+        json={"anio": 2024, "seleccionado": False},
+        content_type="application/json",
+    )
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data["ok"] is True
+    assert data["eliminados"] is True
+    assert eliminados == [(10, 2024)]
+
+
+def test_seleccion_anio_sin_bool(app, monkeypatch):
+    """POST /seleccion/anio sin seleccionado bool → 400."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
     c = _login(app, monkeypatch)
 
-    resp = c.patch(
-        "/clientes/1/contratos/10/facturas/seleccion-masiva",
-        json={"seleccionada": "si"},
+    resp = c.post(
+        "/clientes/1/contratos/10/seleccion/anio",
+        json={"anio": 2024, "seleccionado": "yes"},
         content_type="application/json",
     )
     assert resp.status_code == 400
@@ -326,7 +421,7 @@ def test_dashboard_sin_seleccion_muestra_aviso(app, monkeypatch):
 
     resp = c.get("/clientes/1/dashboard/contabilidad")
     assert resp.status_code == 200
-    assert "Sin facturas seleccionadas".encode() in resp.data
+    assert b"Selecciona meses en el sidebar" in resp.data
     assert b"Ahorro Neto Anual" not in resp.data
 
 

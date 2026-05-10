@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.15.0] — 2026-05-08
+
+### Añadido
+
+- Sidebar expandible por contrato: cada contrato del cliente activo aparece como sección colapsable en el sidebar; la primera expansión hace un fetch AJAX que carga años con facturas y estado de selección por mes, cacheado para expansiones posteriores.
+- Selección de meses por contrato: rejilla de botones mes por año con tres estados (disponible, seleccionado, no-disponible). Checkbox maestro por año (selecciona/deselecciona todos los meses con factura). Botón "Ver años anteriores" si hay más de 3 años.
+- Tres nuevos endpoints REST en el blueprint de clientes: `GET /<cliente_id>/contratos/<contrato_id>/seleccion` (datos del sidebar), `POST /seleccion/mes` (toggle de un mes), `POST /seleccion/anio` (selección masiva de año).
+- Nueva tabla `contrato_meses_seleccionados(contrato_id, anio, mes)` con clave primaria compuesta y FK en cascada hacia `contratos`.
+- Columnas `anio` y `mes` en `cfe_facturas` y `gas_facturas`, pobladas al momento de guardar la factura usando `mes_asociado`.
+- Script de migración `scripts/migrar_seleccion_a_meses.py`: (1) puebla `anio`/`mes` en facturas existentes con `contrato_id NOT NULL`; (2) inserta en `contrato_meses_seleccionados` todas las combinaciones únicas. Idempotente.
+- Etiqueta de periodo en el encabezado de ambos dashboards: muestra el año o rango de años de las facturas seleccionadas.
+- Botón "Detalles" en el encabezado del sidebar de cliente activo, en lugar del link separado "Ficha cliente".
+
+### Cambiado
+
+- La selección de facturas pasa de columna booleana `seleccionada` en cada factura a tabla `contrato_meses_seleccionados`. Las columnas `seleccionada` han sido eliminadas del schema.
+- Los loaders de dashboard (`get_cfe_invoices_for_dashboard`, `get_gas_invoices_for_dashboard`) filtran ahora por meses seleccionados en lugar de por flag booleano.
+- La ficha del contrato ya no muestra checkboxes de selección; indica que la selección se gestiona desde el sidebar.
+- Mensaje informativo en ambos dashboards sin datos actualizado para orientar al usuario al sidebar.
+- Tamaño de fuente de los links principales del sidebar igualado a `.8rem`.
+
+---
+
 ## [2.14.0] — 2026-05-09
 
 ### Añadido

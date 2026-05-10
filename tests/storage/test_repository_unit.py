@@ -133,14 +133,12 @@ class TestSaveCfeInvoice:
     def test_llama_insert_en_cfe_facturas_con_campos_correctos(self):
         invoice = _make_cfe_invoice()
 
-        clientes_mock = _make_table_mock(upsert_return_data=[{"id": 1}])
         cfe_facturas_mock = _make_table_mock(insert_return_data=[{"id": 42}])
         cfe_periodos_mock = _make_table_mock(insert_return_data=[])
         cfe_mem_mock = _make_table_mock(insert_return_data=[])
 
         def table_router(name):
             return {
-                "clientes": clientes_mock,
                 "cfe_facturas": cfe_facturas_mock,
                 "cfe_periodos": cfe_periodos_mock,
                 "cfe_mem_componentes": cfe_mem_mock,
@@ -149,7 +147,7 @@ class TestSaveCfeInvoice:
         with patch("storage.repository._supabase") as mock_client:
             mock_client.table.side_effect = table_router
             import storage.repository as repo
-            factura_id = repo.save_cfe_invoice(invoice)
+            factura_id, _ = repo.save_cfe_invoice(invoice, cliente_id=1)
 
         assert factura_id == 42
 
@@ -163,18 +161,18 @@ class TestSaveCfeInvoice:
         assert insert_call_args["credito_aplicado_mxn"] == "-242816.00"
         assert insert_call_args["periodo_inicio"] == "2023-11-07"
         assert insert_call_args["advertencias"] == '["advertencia de prueba"]'
+        assert insert_call_args["anio"] == 2023
+        assert insert_call_args["mes"] == 11
 
     def test_llama_insert_en_cfe_periodos(self):
         invoice = _make_cfe_invoice()
 
-        clientes_mock = _make_table_mock(upsert_return_data=[{"id": 1}])
         cfe_facturas_mock = _make_table_mock(insert_return_data=[{"id": 10}])
         cfe_periodos_mock = _make_table_mock(insert_return_data=[])
         cfe_mem_mock = _make_table_mock(insert_return_data=[])
 
         def table_router(name):
             return {
-                "clientes": clientes_mock,
                 "cfe_facturas": cfe_facturas_mock,
                 "cfe_periodos": cfe_periodos_mock,
                 "cfe_mem_componentes": cfe_mem_mock,
@@ -183,7 +181,7 @@ class TestSaveCfeInvoice:
         with patch("storage.repository._supabase") as mock_client:
             mock_client.table.side_effect = table_router
             import storage.repository as repo
-            repo.save_cfe_invoice(invoice)
+            repo.save_cfe_invoice(invoice, cliente_id=1)
 
         periodos_data = cfe_periodos_mock.insert.call_args[0][0]
         assert len(periodos_data) == 3
@@ -193,14 +191,12 @@ class TestSaveCfeInvoice:
     def test_llama_insert_en_cfe_mem_componentes(self):
         invoice = _make_cfe_invoice()
 
-        clientes_mock = _make_table_mock(upsert_return_data=[{"id": 1}])
         cfe_facturas_mock = _make_table_mock(insert_return_data=[{"id": 10}])
         cfe_periodos_mock = _make_table_mock(insert_return_data=[])
         cfe_mem_mock = _make_table_mock(insert_return_data=[])
 
         def table_router(name):
             return {
-                "clientes": clientes_mock,
                 "cfe_facturas": cfe_facturas_mock,
                 "cfe_periodos": cfe_periodos_mock,
                 "cfe_mem_componentes": cfe_mem_mock,
@@ -209,7 +205,7 @@ class TestSaveCfeInvoice:
         with patch("storage.repository._supabase") as mock_client:
             mock_client.table.side_effect = table_router
             import storage.repository as repo
-            repo.save_cfe_invoice(invoice)
+            repo.save_cfe_invoice(invoice, cliente_id=1)
 
         mem_data = cfe_mem_mock.insert.call_args[0][0]
         assert len(mem_data) == 3
@@ -223,13 +219,11 @@ class TestSaveGasInvoice:
     def test_llama_insert_en_gas_facturas_con_campos_correctos(self):
         invoice = _make_gas_invoice()
 
-        clientes_mock = _make_table_mock(upsert_return_data=[{"id": 2}])
         gas_facturas_mock = _make_table_mock(insert_return_data=[{"id": 99}])
         gas_conceptos_mock = _make_table_mock(insert_return_data=[])
 
         def table_router(name):
             return {
-                "clientes": clientes_mock,
                 "gas_facturas": gas_facturas_mock,
                 "gas_conceptos": gas_conceptos_mock,
             }[name]
@@ -237,7 +231,7 @@ class TestSaveGasInvoice:
         with patch("storage.repository._supabase") as mock_client:
             mock_client.table.side_effect = table_router
             import storage.repository as repo
-            factura_id = repo.save_gas_invoice(invoice)
+            factura_id, _ = repo.save_gas_invoice(invoice, cliente_id=2)
 
         assert factura_id == 99
 
@@ -248,17 +242,17 @@ class TestSaveGasInvoice:
         assert insert_args["consumo_total_gj"] == "106445.1830"
         assert insert_args["subtotal_mxn"] == "8460263.13"
         assert insert_args["periodo_inicio"] == "2023-11-01"
+        assert insert_args["anio"] == 2023
+        assert insert_args["mes"] == 11
 
     def test_llama_insert_en_gas_conceptos(self):
         invoice = _make_gas_invoice()
 
-        clientes_mock = _make_table_mock(upsert_return_data=[{"id": 2}])
         gas_facturas_mock = _make_table_mock(insert_return_data=[{"id": 55}])
         gas_conceptos_mock = _make_table_mock(insert_return_data=[])
 
         def table_router(name):
             return {
-                "clientes": clientes_mock,
                 "gas_facturas": gas_facturas_mock,
                 "gas_conceptos": gas_conceptos_mock,
             }[name]
@@ -266,7 +260,7 @@ class TestSaveGasInvoice:
         with patch("storage.repository._supabase") as mock_client:
             mock_client.table.side_effect = table_router
             import storage.repository as repo
-            repo.save_gas_invoice(invoice)
+            repo.save_gas_invoice(invoice, cliente_id=2)
 
         conceptos_data = gas_conceptos_mock.insert.call_args[0][0]
         assert len(conceptos_data) == 2

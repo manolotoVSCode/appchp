@@ -38,10 +38,8 @@ def _login(client, username="operador", password="test_pass"):
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-def test_login_exitoso(client, monkeypatch):
-    """Credenciales correctas → 302 al dashboard."""
-    # Evitar carga real de Supabase en el redirect
-    monkeypatch.setattr("web.app._cargar_datos", lambda: _mock_datos())
+def test_login_exitoso(client):
+    """Credenciales correctas → 302 a la raíz."""
     resp = _login(client)
     assert resp.status_code == 302
     assert resp.headers["Location"].endswith("/")
@@ -78,9 +76,8 @@ def test_ruta_raiz_redirige_a_clientes(client):
     assert "/clientes" in resp.headers["Location"]
 
 
-def test_logout(client, monkeypatch):
+def test_logout(client):
     """Logout destruye sesión; acceso posterior redirige a /login."""
-    monkeypatch.setattr("web.app._cargar_datos", lambda: _mock_datos())
     _login(client)
     resp_logout = client.get("/logout", follow_redirects=False)
     assert resp_logout.status_code == 302
