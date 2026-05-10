@@ -155,7 +155,6 @@
 <!-- Acciones cliente -->
 <div class="d-flex gap-2 mt-4">
   <a href="{{ url_for('clientes.editar', cliente_id=cliente.id) }}" class="btn btn-outline-primary btn-sm">Editar ficha</a>
-  <a href="{{ url_for('cliente_dashboard', cliente_id=cliente.id) }}" class="btn btn-outline-secondary btn-sm">Ver dashboard</a>
   <button class="btn btn-outline-danger btn-sm ms-auto"
           data-bs-toggle="modal" data-bs-target="#modalBorrarCliente">Borrar cliente</button>
 </div>
@@ -196,8 +195,6 @@
           <td class="text-end">
             <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=c.id) }}"
                class="btn btn-outline-secondary btn-sm">Detalles</a>
-            <a href="{{ url_for('clientes.contrato_editar', cliente_id=cliente.id, contrato_id=c.id) }}"
-               class="btn btn-outline-secondary btn-sm ms-1">Editar</a>
             <button class="btn btn-outline-danger btn-sm ms-1"
                     data-bs-toggle="modal" data-bs-target="#modalBorrarContrato"
                     data-contrato-id="{{ c.id }}"

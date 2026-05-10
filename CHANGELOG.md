@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.16.0] — 2026-05-09
+
+### Añadido
+
+- Bloqueo de acceso en pantallas < 1024px: pantalla de bloqueo de página completa en todas las rutas (incluyendo login) con mensaje informativo de escritorio. Implementado con media query CSS, sin parpadeo en el primer render.
+- Buscador en tiempo real en el listado de clientes: filtra por nombre, RFC, contacto y email. Case-insensitive, sin recarga de página.
+- Ordenamiento por columna en el listado de clientes: Nombre, RFC, Facturas CFE, Facturas Gas, Alta. Indicador de dirección (▲/▼). Click alterna asc/desc; cambio de columna reinicia a ascendente.
+- Badges de estado junto al nombre del cliente: "Sin facturas" (gris) si no tiene ninguna, "Solo CFE" o "Solo gas" (amarillo) si le falta una de las dos. Sin badge si tiene ambas.
+- Conteo de clientes sobre la tabla: muestra total o "Mostrando N de M clientes" cuando hay filtro activo.
+- Click en fila completa navega a la ficha del cliente. Cursor pointer y hover suave. Los botones de acción bloquean la propagación.
+
+### Cambiado
+
+- Ficha del cliente: eliminado botón "Ver dashboard" de las acciones.
+- Ficha del cliente: eliminada columna "Editar" de la tabla de contratos (la edición sigue accesible desde la ficha del contrato).
+
+---
+
 ## [2.15.0] — 2026-05-08
 
 ### Añadido

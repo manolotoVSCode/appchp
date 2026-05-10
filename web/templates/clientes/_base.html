@@ -204,6 +204,17 @@
 </head>
 <body>
 
+<!-- Pantalla de bloqueo para dispositivos < 1024px -->
+<div class="mobile-block-screen" style="position:fixed;inset:0;background:var(--color-bg,#F8F9FA);z-index:9999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;">
+  <div style="max-width:420px;">
+    <div style="font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--color-primary,#1F7A4C);margin-bottom:.5rem;">CHP App</div>
+    <div style="font-size:.95rem;font-weight:600;color:var(--color-text-secondary,#5A5A5A);margin-bottom:1.5rem;">Análisis Energético</div>
+    <hr style="border-color:var(--color-border,#E0E0E0);margin:0 0 1.5rem;">
+    <p style="color:var(--color-text-primary,#1A1A1A);font-size:.95rem;font-weight:600;margin-bottom:1rem;">Esta aplicación está optimizada para escritorio.</p>
+    <p style="color:var(--color-text-secondary,#5A5A5A);font-size:.875rem;line-height:1.75;margin:0;">Para acceder al análisis completo de tus consumos energéticos y proyectos de cogeneración, ingresa desde un equipo de escritorio o laptop con pantalla mínima de 1024 píxeles de ancho.</p>
+  </div>
+</div>
+
 <!-- Mobile topbar -->
 <div id="topbar">
   <button class="btn btn-sm btn-outline-secondary" id="sidebar-toggle" aria-label="Menú">

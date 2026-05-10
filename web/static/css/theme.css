@@ -195,6 +195,39 @@ a:hover { color: var(--color-primary-dark); }
 .bg-primary-soft    { background-color: var(--color-primary-soft); }
 .border-primary     { border-color: var(--color-primary) !important; }
 
+/* ── Bloqueo de acceso móvil (< 1024px) ──────────────────────────────────── */
+@media (max-width: 1023px) {
+  body > *:not(.mobile-block-screen) { display: none !important; }
+  .mobile-block-screen { display: flex !important; }
+}
+@media (min-width: 1024px) {
+  .mobile-block-screen { display: none !important; }
+}
+
+/* ── Badges de estado de cliente ──────────────────────────────────────────── */
+.badge-estado {
+  font-size: .65rem;
+  font-weight: 600;
+  padding: .15em .5em;
+  border-radius: .25rem;
+  vertical-align: middle;
+  letter-spacing: .02em;
+  display: inline-block;
+}
+.badge-sin-facturas {
+  background: #E8E8E8;
+  color: #5A5A5A;
+}
+.badge-solo-cfe,
+.badge-solo-gas {
+  background: #FEF3CD;
+  color: #7A5C00;
+}
+
+/* ── Fila de tabla clickable ──────────────────────────────────────────────── */
+.fila-cliente { cursor: pointer; }
+.fila-cliente:hover td { background-color: #F5F6F7; }
+
 /* ── Sidebar — iconos Bootstrap Icons ────────────────────────────────────── */
 .sidebar-link .bi,
 .sidebar-link-contrato .bi,
