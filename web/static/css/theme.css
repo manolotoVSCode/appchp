@@ -242,3 +242,54 @@ a:hover { color: var(--color-primary-dark); }
 .sidebar-link-contrato.active .bi {
   color: var(--color-primary);
 }
+
+/* ── Dashboard: spinner de carga, error banner, fade-out ──────────────────── */
+.dashboard-loading-indicator {
+  position: fixed;
+  top: .75rem;
+  right: 1.25rem;
+  z-index: 1090;
+  display: none;
+  align-items: center;
+  gap: .5rem;
+  background: rgba(255,255,255,.92);
+  border: 1px solid var(--color-border);
+  border-radius: 2rem;
+  padding: .3rem .85rem .3rem .5rem;
+  box-shadow: var(--shadow-sm);
+  font-size: .8rem;
+  color: var(--color-text-muted);
+}
+.dashboard-loading-indicator.visible { display: flex; }
+.dashboard-loading-indicator .spinner-border {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-width: .15em;
+  color: var(--color-primary);
+}
+.dashboard-fading { opacity: 0.5; transition: opacity .15s; }
+.dashboard-error-banner {
+  display: none;
+  align-items: center;
+  gap: .75rem;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: var(--radius-md);
+  padding: .75rem 1rem;
+  margin-bottom: 1rem;
+  color: #b91c1c;
+  font-size: .9rem;
+}
+.dashboard-error-banner.visible { display: flex; }
+.dashboard-error-banner .btn-reintentar {
+  margin-left: auto;
+  white-space: nowrap;
+  background: #b91c1c;
+  color: #fff;
+  border: none;
+  border-radius: .4rem;
+  padding: .2rem .7rem;
+  font-size: .8rem;
+  cursor: pointer;
+}
+.dashboard-error-banner .btn-reintentar:hover { background: #991b1b; }

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.19.0] — 2026-05-09
+
+### Cambiado
+
+- Sub-entregable G: renderizado client-side en ambos dashboards. Los dos dashboards (Contabilidad y Cogeneración) ahora obtienen sus datos vía fetch JSON al cargar y al cambiar la selección de meses, sin recarga de página. Nuevos endpoints `GET /clientes/<id>/dashboard/contabilidad/data` y `GET /clientes/<id>/dashboard/cogeneracion/data`. Nuevos módulos JS `dashboard-contabilidad.js` y `dashboard-cogeneracion.js` (patrón IIFE, Chart.js upsert, AbortController, debounce 300 ms, timeout 10 s, preservación de scroll). Los sliders de cogeneración siguen recalculando 100 % client-side sin llamar al endpoint. Spinner fijo en esquina superior derecha con fade-out; banner de error con botón "Reintentar".
+
+---
+
 ## [2.18.0] — 2026-05-09
 
 ### Añadido

@@ -1,0 +1,582 @@
+/**
+ * dashboard-cogeneracion.js
+ * Client-side rendering del dashboard de Cogeneración.
+ * Fetch al endpoint /clientes/<id>/dashboard/cogeneracion/data
+ * Sliders recalculan client-side (sin llamar al endpoint).
+ * Escucha dashboardDataChanged para refrescar datos base al cambiar meses.
+ */
+
+(function () {
+  "use strict";
+
+  const root = document.getElementById("dashboard-cogeneracion-root");
+  if (!root) return;
+
+  const CLIENTE_ID = parseInt(root.dataset.clienteId, 10);
+  const DATA_URL   = `/clientes/${CLIENTE_ID}/dashboard/cogeneracion/data`;
+
+  const spinner     = document.getElementById("dashboard-spinner");
+  const errorBanner = document.getElementById("dashboard-error-banner");
+  const errorMsg    = document.getElementById("dashboard-error-msg");
+  const btnReintentar = document.getElementById("btn-reintentar");
+
+  // ── Estado global de datos base (cargados del endpoint) ───────────────────
+  let meses_raw   = [];         // datos mensuales crudos para sliders
+  let celsBase    = null;       // CELsResultado del endpoint (para constantes de referencia)
+  let inversionMxn = 0;        // inversión fija
+  let tieneInversion = false;
+  let co2Datos    = null;       // {actual_total_t, factor_emision_elec, factor_emision_gas}
+
+  // ── Instancias Chart.js ───────────────────────────────────────────────────
+  let cogenChart = null;
+  let chart15    = null;
+
+  // ── AbortController + debounce ────────────────────────────────────────────
+  let _abortCtrl  = null;
+  let _debounceId = null;
+  const DEBOUNCE_MS = 300;
+
+  // ── Helpers formateo ──────────────────────────────────────────────────────
+  const fmt  = v => "$" + Math.round(v).toLocaleString("es-MX");
+  const fmt2 = v => v != null ? v.toLocaleString("es-MX", { maximumFractionDigits: 2, minimumFractionDigits: 2 }) : "N/A";
+  const fmt4 = v => v != null ? v.toFixed(4) : "N/A";
+  const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+
+  // ── UI spinner / error ────────────────────────────────────────────────────
+  function showSpinner() {
+    if (spinner) spinner.classList.add("visible");
+    const mc = document.getElementById("dashboard-main-content");
+    if (mc) mc.classList.add("dashboard-fading");
+  }
+  function hideSpinner() {
+    if (spinner) spinner.classList.remove("visible");
+    const mc = document.getElementById("dashboard-main-content");
+    if (mc) mc.classList.remove("dashboard-fading");
+  }
+  function showError(msg) {
+    hideSpinner();
+    if (errorBanner) {
+      errorBanner.classList.add("visible");
+      if (errorMsg) errorMsg.textContent = msg || "No se pudo cargar el dashboard. Intenta recargar.";
+    }
+  }
+  function hideError() {
+    if (errorBanner) errorBanner.classList.remove("visible");
+  }
+
+  // ── Leer parámetros de sliders ────────────────────────────────────────────
+  function leerParams() {
+    return {
+      cobertura:    (document.getElementById("cobertura")?.value ?? 75) / 100,
+      rend_elec:    (document.getElementById("rendimiento-elec")?.value ?? 40) / 100,
+      rend_term:    (document.getElementById("rendimiento-term")?.value ?? 25) / 100,
+      efic_caldera: (document.getElementById("caldera")?.value ?? 85) / 100,
+    };
+  }
+
+  // ── Recalcular mes con parámetros de sliders ──────────────────────────────
+  function recalcularMes(m, p) {
+    const kwh_cub   = m.kwh_total * p.cobertura;
+    const gj_cogen  = kwh_cub * 0.0036 * 1.11 / p.rend_elec;
+    const costo_gas = gj_cogen * m.costo_unitario_gj;
+    const ah_elec   = kwh_cub * m.costo_promedio_kwh;
+    const calor_rec = gj_cogen * p.rend_term;
+    const ah_caldera= (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
+    const om        = ah_elec * 0.3;
+    return { ah_elec, ah_caldera, costo_gas, om, ahorro_neto: ah_elec + ah_caldera - costo_gas - om };
+  }
+
+  // ── Payback helpers ───────────────────────────────────────────────────────
+  function calcularPaybackJS(invMxn, ahorroAnual) {
+    if (ahorroAnual <= 0 || invMxn <= 0) return null;
+    let acum = -invMxn;
+    for (let i = 1; i <= 15; i++) { acum += ahorroAnual; if (acum >= 0) return i; }
+    return -1;
+  }
+  function textoPayback(payback) {
+    if (payback === null) return { texto: "No aplica", clase: "fs-5 fw-bold text-muted" };
+    if (payback === -1)   return { texto: "> 15 años", clase: "fs-5 fw-bold text-danger" };
+    const color = payback <= 5 ? "text-success" : payback <= 10 ? "text-warning" : "text-danger";
+    return { texto: payback + " años", clase: "fs-5 fw-bold " + color };
+  }
+
+  // ── CO2 reactivo ──────────────────────────────────────────────────────────
+  function recalcularCO2Proy(p) {
+    if (!co2Datos || !co2Datos.factor_emision_elec) return null;
+    const FE_ELEC = co2Datos.factor_emision_elec;
+    const FE_GAS  = co2Datos.factor_emision_gas;
+    const gj_caldera = meses_raw.reduce((s, m) => s + m.gj_consumido, 0);
+    let kwh_cub_tot = 0, gj_cogen_tot = 0, calor_rec_tot = 0;
+    meses_raw.forEach(m => {
+      const kc = m.kwh_total * p.cobertura;
+      const gj = kc * 0.0036 * 1.11 / p.rend_elec;
+      kwh_cub_tot  += kc;
+      gj_cogen_tot += gj;
+      calor_rec_tot += gj * p.rend_term;
+    });
+    const kwh_total = meses_raw.reduce((s, m) => s + m.kwh_total, 0);
+    const co2_elec  = Math.max((kwh_total - kwh_cub_tot) * FE_ELEC / 1000, 0);
+    const gj_cal_cogen = Math.max(gj_caldera - calor_rec_tot / p.efic_caldera, 0);
+    const co2_gas   = Math.max((gj_cogen_tot + gj_cal_cogen) * FE_GAS / 1000, 0);
+    return co2_elec + co2_gas;
+  }
+
+  function actualizarCO2(p) {
+    const el = document.getElementById("co2-reduccion-texto");
+    if (!el || !co2Datos) return;
+    const co2_proy = recalcularCO2Proy(p);
+    if (co2_proy === null) return;
+    const co2_actual = co2Datos.actual_total_t || 0;
+    const reduccion  = co2_actual - co2_proy;
+    const pct        = co2_actual > 0 ? reduccion / co2_actual * 100 : 0;
+    const arboles    = Math.round(reduccion * 50);
+    if (reduccion >= 0) {
+      el.innerHTML = `<div class="small text-muted mb-1">Reducción Huella de Carbono</div>
+        <div class="fw-bold text-success">${reduccion.toFixed(1)} t CO₂/año (${Math.abs(pct).toFixed(1)}% menos)</div>
+        <div class="text-muted small mt-1">≈ ${arboles.toLocaleString("es-MX")} árboles plantados al año</div>`;
+    } else {
+      el.innerHTML = `<div class="small text-muted mb-1">Reducción Huella de Carbono</div>
+        <div class="fw-bold text-danger">+${Math.abs(reduccion).toFixed(1)} t CO₂/año con esta configuración</div>`;
+    }
+  }
+
+  // ── CELs reactivos a sliders ──────────────────────────────────────────────
+  function recalcularCELs(p) {
+    if (!celsBase) return null;
+    const REFE        = celsBase.RefE;
+    const REFH        = celsBase.RefH;
+    const REFE_PRIMA  = celsBase.RefE_prima;
+    const _GJ_A_MWH   = 277.778;
+    let E_kwh = 0, gj_pci = 0, calor_gj = 0;
+    meses_raw.forEach(m => {
+      const kc         = m.kwh_total * p.cobertura;
+      const gj_pcs     = kc * 0.0036 * 1.11 / p.rend_elec;
+      const gj_pci_mes = kc * 0.0036 / p.rend_elec;
+      E_kwh    += kc;
+      gj_pci   += gj_pci_mes;
+      calor_gj += gj_pcs * p.rend_term;
+    });
+    const E  = E_kwh / 1000;
+    const F  = gj_pci   * _GJ_A_MWH / 1000;
+    const H  = calor_gj * _GJ_A_MWH / 1000;
+    const Fh = REFH > 0 ? H / REFH : 0;
+    const Fe = F - Fh;
+    const EP = (REFE_PRIMA > 0 ? E / REFE_PRIMA : 0) + (REFH > 0 ? H / REFH : 0);
+    const AEP  = EP - F;
+    const ELC  = AEP * REFE;
+    const cels_mwh = ELC > 0 ? ELC : 0;
+    return {
+      E, F, H, Fh, Fe, EP, AEP, ELC, cels_mwh,
+      EE:    Fe > 0 ? E / Fe : null,
+      APEP:  EP > 0 ? AEP / EP : null,
+      AREL:  Fe > 0 ? AEP / Fe : null,
+      pctELC: E > 0 ? ELC / E : null,
+    };
+  }
+
+  function actualizarCELsUI(res) {
+    if (!res) return;
+    setText("cels-valor", fmt2(res.cels_mwh));
+    const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setTxt("cd-E",        fmt2(res.E)   + " MWh");
+    setTxt("cd-F",        fmt2(res.F)   + " MWh");
+    setTxt("cd-H",        fmt2(res.H)   + " MWh");
+    setTxt("cd-Fh",       fmt2(res.Fh)  + " MWh");
+    setTxt("cd-Fe",       fmt2(res.Fe)  + " MWh");
+    setTxt("cd-EE",       fmt4(res.EE));
+    setTxt("cd-EP",       fmt2(res.EP)  + " MWh");
+    setTxt("cd-AEP",      fmt2(res.AEP) + " MWh");
+    setTxt("cd-APEP",     fmt4(res.APEP));
+    setTxt("cd-AREL",     fmt4(res.AREL));
+    setTxt("cd-ELC",      fmt2(res.ELC) + " MWh");
+    setTxt("cd-pctELC",   fmt4(res.pctELC));
+    setTxt("cd-cels-final", fmt2(res.cels_mwh));
+    const resEl = document.getElementById("cd-resultado");
+    if (resEl) {
+      if (res.ELC > 0) {
+        resEl.textContent = "Cogeneración eficiente ✓";
+        resEl.className   = "fw-bold text-success";
+      } else {
+        resEl.textContent = "No califica como cogeneración eficiente";
+        resEl.className   = "fw-bold text-warning";
+      }
+    }
+  }
+
+  // ── Chart: gráfica mensual cogeneración ──────────────────────────────────
+  function upsertCogenChart(labels, ahorro_elec, ahorro_caldera, costo_gas, om, ebitda) {
+    const datasets = [
+      { label: "Ahorro Electricidad", data: ahorro_elec,                    backgroundColor: "rgba(106,138,154,0.65)", stack: "componentes" },
+      { label: "Ahorro Caldera",      data: ahorro_caldera,                 backgroundColor: "rgba(232,181,71,0.65)",  stack: "componentes" },
+      { label: "Costo Gas Cogen",     data: costo_gas.map(v => -v),         backgroundColor: "rgba(216,90,90,0.65)",   stack: "componentes" },
+      { label: "O&M",                 data: om.map(v => -v),                backgroundColor: "rgba(180,100,180,0.65)", stack: "componentes" },
+      { type: "line", label: "Ahorro Neto", data: ebitda,
+        borderColor: "#1F7A4C", backgroundColor: "rgba(31,122,76,0.1)",
+        borderWidth: 2, pointRadius: 4, fill: false, tension: 0.3 }
+    ];
+    if (!cogenChart) {
+      const ctx = document.getElementById("cogenChart");
+      if (!ctx) return;
+      cogenChart = new Chart(ctx, {
+        type: "bar",
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: "top" },
+            tooltip: { callbacks: { label: ctx => ctx.dataset.label + ": $" + Math.abs(ctx.raw).toLocaleString("es-MX", { maximumFractionDigits: 0 }) } }
+          },
+          scales: {
+            y: { ticks: { callback: v => "$" + Math.abs(v).toLocaleString("es-MX", { maximumFractionDigits: 0 }) } }
+          }
+        }
+      });
+    } else {
+      cogenChart.data.labels = labels;
+      cogenChart.data.datasets.forEach((ds, i) => { ds.data = datasets[i].data; });
+      cogenChart.update();
+    }
+  }
+
+  // ── Chart: flujo 15 años ──────────────────────────────────────────────────
+  function actualizarChart15(ahorroAnual) {
+    const ctxEl = document.getElementById("chart15Year");
+    if (!ctxEl || !tieneInversion || !inversionMxn) return;
+    const flujoAnual = [-inversionMxn, ...Array(15).fill(ahorroAnual)];
+    let acum = 0;
+    const flujoAcum = flujoAnual.map(v => { acum += v; return acum; });
+    const bgColors  = flujoAnual.map(v => v < 0 ? "rgba(216,90,90,0.75)" : "rgba(85,170,85,0.6)");
+    if (!chart15) {
+      chart15 = new Chart(ctxEl, {
+        type: "bar",
+        data: {
+          labels: Array.from({ length: 16 }, (_, i) => "Año " + i),
+          datasets: [
+            { label: "Flujo anual", data: flujoAnual, backgroundColor: bgColors, order: 2 },
+            { type: "line", label: "Flujo acumulado", data: flujoAcum,
+              borderColor: "#1F7A4C", backgroundColor: "rgba(31,122,76,0.08)",
+              borderWidth: 2, pointRadius: 4, fill: false, tension: 0.25, order: 1 },
+            { type: "line", label: "_cero", data: Array(16).fill(0),
+              borderColor: "rgba(130,130,130,0.35)", borderWidth: 1,
+              borderDash: [5, 4], pointRadius: 0, fill: false, order: 0 }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: "top", labels: { filter: item => item.text !== "_cero" } },
+            tooltip: { callbacks: { label: ctx => ctx.dataset.label === "_cero" ? null
+              : ctx.dataset.label + ": $" + Math.abs(ctx.raw).toLocaleString("es-MX", { maximumFractionDigits: 0 }) } }
+          },
+          scales: { y: { ticks: { callback: v => "$" + v.toLocaleString("es-MX", { maximumFractionDigits: 0 }) } } }
+        }
+      });
+    } else {
+      chart15.data.datasets[0].data            = flujoAnual;
+      chart15.data.datasets[0].backgroundColor = bgColors;
+      chart15.data.datasets[1].data            = flujoAcum;
+      chart15.update();
+    }
+  }
+
+  // ── Actualización desde sliders ───────────────────────────────────────────
+  function actualizarSensibilidad() {
+    if (!meses_raw.length) return;
+    const p = leerParams();
+
+    setText("val-cobertura",        Math.round(p.cobertura * 100));
+    setText("val-rendimiento-elec", Math.round(p.rend_elec * 100));
+    setText("val-rendimiento-term", Math.round(p.rend_term * 100));
+    setText("val-caldera",          Math.round(p.efic_caldera * 100));
+
+    let ahorro_neto_anual = 0, ah_elec = 0, ah_caldera = 0, costo_gas = 0, om_anual = 0;
+    const lChartE = [], lChartC = [], lChartG = [], lChartOM = [], lChartN = [];
+
+    meses_raw.forEach(m => {
+      const res = recalcularMes(m, p);
+      ahorro_neto_anual += res.ahorro_neto;
+      ah_elec   += res.ah_elec;
+      ah_caldera += res.ah_caldera;
+      costo_gas += res.costo_gas;
+      om_anual  += res.om;
+      lChartE.push(res.ah_elec);
+      lChartC.push(res.ah_caldera);
+      lChartG.push(res.costo_gas);
+      lChartOM.push(res.om);
+      lChartN.push(res.ahorro_neto);
+    });
+
+    const colorClass = ahorro_neto_anual < 0 ? "text-danger" : "text-success";
+
+    const kpiAN = document.getElementById("kpi-ahorro-neto-val");
+    if (kpiAN) { kpiAN.textContent = fmt(ahorro_neto_anual); kpiAN.className = "fs-2 fw-bold " + colorClass; }
+
+    const sensEl = document.getElementById("ahorro-neto-sensibilidad");
+    if (sensEl) { sensEl.textContent = fmt(ahorro_neto_anual); sensEl.className = "fs-5 " + colorClass; }
+
+    setText("kpi-elec-val",           fmt(ah_elec));
+    setText("kpi-caldera-val",        fmt(ah_caldera));
+    setText("kpi-total-ingresos-val", fmt(ah_elec + ah_caldera));
+    setText("kpi-gas-val",            fmt(costo_gas));
+    setText("kpi-om-val",             fmt(om_anual));
+    setText("kpi-total-gastos-val",   fmt(costo_gas + om_anual));
+
+    // Payback
+    if (tieneInversion) {
+      const payback = calcularPaybackJS(inversionMxn, ahorro_neto_anual);
+      const { texto, clase } = textoPayback(payback);
+      const el = document.getElementById("kpi-payback-val");
+      if (el) { el.textContent = texto; el.className = clase; }
+      actualizarChart15(ahorro_neto_anual);
+    }
+
+    // Actualizar gráfica mensual
+    const labels = meses_raw.map(m => m.periodo);
+    upsertCogenChart(labels, lChartE, lChartC, lChartG, lChartOM, lChartN);
+
+    actualizarCO2(p);
+    const celRes = recalcularCELs(p);
+    if (celRes) actualizarCELsUI(celRes);
+  }
+
+  // ── Render tabla mensual en panel flotante ────────────────────────────────
+  function renderTablaMensual(filas, totales) {
+    const tbody = document.getElementById("tbodyTablaMensual");
+    if (!tbody) return;
+    const fmtK = v => Math.round(v).toLocaleString("en-US");
+    const fmtD = (v, d) => v.toLocaleString("es-MX", { maximumFractionDigits: d, minimumFractionDigits: d });
+
+    const html = filas.map(m => {
+      const star = m.prorrateado
+        ? `<span class="badge bg-warning text-dark ms-1" style="font-size:.65em" title="${m.nota_prorrateo}">★ prorrateado</span>`
+        : "";
+      return `<tr>
+        <td class="ps-3">${m.periodo}${star}</td>
+        <td class="text-end small">${fmtK(m.kwh_total)}</td>
+        <td class="text-end small">$${fmtK(m.costo_cfe_mxn)}</td>
+        <td class="text-end small">${fmtD(m.costo_promedio_kwh, 4)}</td>
+        <td class="text-end small">${fmtD(m.gj_consumido, 2)}</td>
+        <td class="text-end small">${fmtD(m.costo_unitario_gj, 4)}</td>
+        <td class="text-end small">$${fmtK(m.costo_gas_actual_mxn)}</td>
+        <td class="text-end small">${fmtK(m.kwh_cubiertos)}</td>
+        <td class="text-end small">${fmtD(m.gj_gas_cogen, 2)}</td>
+        <td class="text-end small">$${fmtK(m.costo_gas_cogen_mxn)}</td>
+        <td class="text-end small">$${fmtK(m.ahorro_electricidad_mxn)}</td>
+        <td class="text-end small">${fmtD(m.calor_recuperado_gj, 2)}</td>
+        <td class="text-end small">$${fmtK(m.ahorro_caldera_mxn)}</td>
+        <td class="text-end small">$${fmtK(m.gasto_om_mes_mxn)}</td>
+        <td class="text-end small ahorro-neto-cell pe-3">$${fmtK(m.ebitda_mes_mxn)}</td>
+      </tr>`;
+    }).join("");
+
+    const tot = totales;
+    const totalRow = `<tr class="total-row">
+      <td class="ps-3"><strong>TOTAL ANUAL</strong></td>
+      <td class="text-end small">${fmtK(tot.kwh_total_anual)}</td>
+      <td class="text-end small"></td><td class="text-end small"></td>
+      <td class="text-end small"></td><td class="text-end small"></td>
+      <td class="text-end small"></td>
+      <td class="text-end small">${fmtK(tot.kwh_cubiertos_anual)}</td>
+      <td class="text-end small">${fmtD(tot.gj_gas_cogen_anual, 2)}</td>
+      <td class="text-end small">$${fmtK(tot.costo_gas_cogen_anual_mxn)}</td>
+      <td class="text-end small">$${fmtK(tot.ahorro_electricidad_anual_mxn)}</td>
+      <td class="text-end small"></td>
+      <td class="text-end small">$${fmtK(tot.ahorro_caldera_anual_mxn)}</td>
+      <td class="text-end small">$${fmtK(tot.gasto_om_anual_mxn)}</td>
+      <td class="text-end small ahorro-neto-cell pe-3">$${fmtK(tot.ebitda_anual_mxn)}</td>
+    </tr>`;
+
+    tbody.innerHTML = html + totalRow;
+  }
+
+  // ── Render panel CELs ─────────────────────────────────────────────────────
+  function renderCelsDatosCliente(cels) {
+    if (!cels) return;
+    const etiqMedio = { vapor_agua: "Vapor o agua caliente", gases_combustion: "Gases de combustión directos" };
+    const etiqTension = { lt_1: "Menor a 1.0 kV", "1_34": "1.0 a 34.5 kV", "69_85": "69 a 85 kV", "115_230": "115 a 230 kV", gt_400: "Mayor o igual a 400 kV" };
+    const etiqMotor = { combustion_interna: "Motor de combustión interna", turbina_gas: "Turbina de gas" };
+    setText("cd-medio-termico", etiqMedio[cels.medio_termico] || cels.medio_termico);
+    setText("cd-nivel-tension", etiqTension[cels.nivel_tension_kv] || cels.nivel_tension_kv);
+    setText("cd-altitud",       cels.altitud_msnm + " msnm");
+    setText("cd-tipo-motor",    etiqMotor[cels.tipo_motor] || "Otros");
+    setText("cd-capacidad",     fmt2(cels.capacidad_kw) + " kW" + (cels.capacidad_es_estimada ? " ⚠" : ""));
+  }
+
+  // ── Actualizar aviso ──────────────────────────────────────────────────────
+  function actualizarAviso(aviso) {
+    const cont = document.getElementById("aviso-datos-container");
+    if (!cont) return;
+    if (!aviso) { cont.innerHTML = ""; return; }
+    let html = "";
+    if (aviso.tipo === "sin_facturas") {
+      html = `<div class="alert alert-info mb-4" role="alert">
+        <strong>Sin facturas cargadas.</strong>
+        Este cliente aún no tiene facturas registradas. Ve a la ficha del cliente y sube PDFs de CFE y gas desde la ficha de cada contrato.
+      </div>`;
+    } else if (aviso.tipo === "sin_seleccion") {
+      html = `<div class="alert alert-warning mb-4" role="alert">
+        <strong>No hay datos seleccionados para análisis.</strong>
+        Selecciona meses en el sidebar de los contratos para ver el análisis.
+      </div>`;
+    } else if (aviso.tipo === "sin_par") {
+      html = `<div class="alert alert-info mb-4" role="alert">
+        <strong>Análisis incompleto.</strong>
+        El análisis de cogeneración requiere facturas tanto de electricidad (CFE) como de gas natural.
+        Hay <strong>${aviso.num_cfe} factura${aviso.num_cfe !== 1 ? "s" : ""} CFE</strong>
+        y <strong>${aviso.num_gas} de gas</strong> seleccionadas.
+      </div>`;
+    } else if (aviso.tipo === "sin_pares_mes") {
+      html = `<div class="alert alert-warning mb-4" role="alert">
+        <strong>Sin periodos emparejados.</strong>
+        Hay ${aviso.num_cfe} facturas CFE y ${aviso.num_gas} de gas, pero ningún mes tiene par CFE-gas en el mismo periodo.
+      </div>`;
+    }
+    cont.innerHTML = html;
+  }
+
+  // ── Función principal de hidratación ─────────────────────────────────────
+  function hidratarDashboardCogeneracion(data) {
+    // Periodo label
+    const periodoEl = document.getElementById("periodo-label");
+    if (periodoEl) periodoEl.textContent = data.cliente.periodo_label || "";
+
+    actualizarAviso(data.aviso_datos);
+
+    const tipo = data.aviso_datos ? data.aviso_datos.tipo : null;
+    const sinDatos = tipo === "sin_seleccion";
+    const mainSection = document.getElementById("dashboard-main-section");
+    if (mainSection) mainSection.style.display = sinDatos ? "none" : "";
+    if (sinDatos) return;
+
+    // Guardar datos base para sliders
+    meses_raw    = data.meses_raw || [];
+    celsBase     = data.cels;
+    inversionMxn = data.kpis.inversion_mxn || 0;
+    tieneInversion = inversionMxn > 0;
+    co2Datos     = data.co2;
+
+    // KPIs Inversión y Retorno
+    const secInversion = document.getElementById("seccion-inversion");
+    if (secInversion) {
+      const k = data.kpis;
+      secInversion.style.display = k.capacidad_nominal_kw ? "" : "none";
+      setText("kpi-capacidad-val", k.capacidad_nominal_kw
+        ? k.capacidad_nominal_kw.toLocaleString("es-MX", { maximumFractionDigits: 2 }) + " kW"
+        : "Sin datos");
+      if (k.inversion_usd) {
+        setText("kpi-inversion-usd-val", "$" + Math.round(k.inversion_usd).toLocaleString("en-US") + " USD");
+        setText("kpi-inversion-mxn-val",
+          "$" + Math.round(k.inversion_mxn).toLocaleString("en-US") + " MXN al tipo " +
+          (k.tipo_cambio || 0).toFixed(2));
+      }
+    }
+
+    // CO2 sección
+    const co2Section = document.getElementById("co2-reduccion-texto");
+    if (co2Section) {
+      if (!data.co2) {
+        co2Section.innerHTML = `<div class="small text-muted mb-1">Reducción Huella de Carbono</div>
+          <div class="text-muted">No disponible</div>`;
+      }
+    }
+
+    // CELs: determinar estado y actualizar card
+    actualizarCELsCard(data.cels, data.cliente_ficha_url);
+    if (data.cels) renderCelsDatosCliente(data.cels);
+
+    // Tabla mensual
+    renderTablaMensual(data.tabla_mensual || [], data.totales || {});
+
+    // Trigger slider update (re-calcula todo con parámetros actuales)
+    actualizarSensibilidad();
+
+    // Gráfica 15 años: mostrar/ocultar contenedor
+    const sec15 = document.getElementById("seccion-15-anios");
+    if (sec15) sec15.style.display = tieneInversion ? "" : "none";
+  }
+
+  // ── Card de CELs ──────────────────────────────────────────────────────────
+  function actualizarCELsCard(cels, fichUrl) {
+    const card = document.getElementById("cels-card-body");
+    if (!card) return;
+    if (!cels) {
+      card.innerHTML = `
+        <i class="bi bi-info-circle" style="font-size:2.5rem;color:var(--color-text-muted);flex-shrink:0"></i>
+        <div>
+          <div class="small text-muted mb-1">CELs Generados</div>
+          <div class="fw-bold text-muted">Datos incompletos</div>
+          <div class="text-muted small mt-1">Configura medio térmico, tensión, altitud y tipo de motor en la ficha del cliente.</div>
+          <a href="${fichUrl || '#'}" class="small text-decoration-none mt-1 d-block">Ir a ficha del cliente →</a>
+        </div>`;
+      return;
+    }
+    if (cels.es_eficiente) {
+      card.innerHTML = `
+        <i class="bi bi-patch-check" style="font-size:2.5rem;color:var(--color-primary);flex-shrink:0" id="cels-icono"></i>
+        <div>
+          <div class="small text-muted mb-1">CELs Generados</div>
+          <div class="fs-4 fw-bold text-success" id="cels-valor">${fmt2(cels.cels_mwh_anual)}</div>
+          <div class="text-muted small" id="cels-unidad">MWh CEL/año</div>
+          <div class="text-success small mt-1">Cogeneración eficiente ✓</div>
+          <a href="#" class="small text-decoration-none mt-1 d-block"
+             onclick="abrirPanel('panelCels'); return false;">Ver detalle CRE →</a>
+        </div>`;
+    } else {
+      card.innerHTML = `
+        <i class="bi bi-x-circle" style="font-size:2.5rem;color:var(--bs-warning);flex-shrink:0" id="cels-icono"></i>
+        <div>
+          <div class="small text-muted mb-1">CELs Generados</div>
+          <div class="fs-4 fw-bold text-warning" id="cels-valor">0</div>
+          <div class="text-muted small" id="cels-unidad">MWh CEL/año</div>
+          <div class="text-warning small mt-1">No califica como cogeneración eficiente</div>
+          <a href="#" class="small text-decoration-none mt-1 d-block"
+             onclick="abrirPanel('panelCels'); return false;">Ver detalle CRE →</a>
+        </div>`;
+    }
+  }
+
+  // ── Fetch con AbortController, debounce y timeout 10s ────────────────────
+  function fetchData(isRetry) {
+    if (!isRetry) clearTimeout(_debounceId);
+    if (_abortCtrl) _abortCtrl.abort();
+    _abortCtrl = new AbortController();
+    const signal = _abortCtrl.signal;
+    const scrollY = window.scrollY;
+    showSpinner();
+    hideError();
+    const timeout = setTimeout(() => _abortCtrl.abort(), 10000);
+
+    fetch(DATA_URL, { signal })
+      .then(res => { if (!res.ok) throw new Error("HTTP " + res.status); return res.json(); })
+      .then(data => {
+        clearTimeout(timeout);
+        hidratarDashboardCogeneracion(data);
+        window.scrollTo(0, scrollY);
+      })
+      .catch(err => {
+        clearTimeout(timeout);
+        if (err.name === "AbortError") return;
+        showError("No se pudo cargar el dashboard. Intenta recargar.");
+      })
+      .finally(() => hideSpinner());
+  }
+
+  function scheduleRefresh() {
+    clearTimeout(_debounceId);
+    _debounceId = setTimeout(() => fetchData(false), DEBOUNCE_MS);
+  }
+
+  // ── Event listeners ───────────────────────────────────────────────────────
+  document.addEventListener("dashboardDataChanged", scheduleRefresh);
+  if (btnReintentar) btnReintentar.addEventListener("click", () => fetchData(true));
+
+  ["cobertura", "rendimiento-elec", "rendimiento-term", "caldera"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", actualizarSensibilidad);
+  });
+
+  // ── Carga inicial ─────────────────────────────────────────────────────────
+  fetchData(false);
+
+})();

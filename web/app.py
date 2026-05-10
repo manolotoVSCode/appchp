@@ -116,6 +116,53 @@ def _cargar_facturas_seleccionadas(cliente_id: int):
     return cfe_invoices, gas_invoices, facturas_cfe, facturas_gas
 
 
+def _serial(obj):
+    """Convierte Decimal/date recursivamente a tipos JSON-safe."""
+    from decimal import Decimal
+    from datetime import date as _date
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, _date):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _serial(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_serial(v) for v in obj]
+    return obj
+
+
+def _cels_to_dict(cels) -> dict | None:
+    """Convierte CELsResultado a dict JSON-safe. None si cels es None."""
+    if cels is None:
+        return None
+    return _serial({
+        "es_eficiente": cels.es_eficiente,
+        "cels_mwh_anual": cels.cels_mwh_anual,
+        "capacidad_kw": cels.capacidad_kw,
+        "capacidad_es_estimada": cels.capacidad_es_estimada,
+        "medio_termico": cels.medio_termico,
+        "nivel_tension_kv": cels.nivel_tension_kv,
+        "altitud_msnm": cels.altitud_msnm,
+        "tipo_motor": cels.tipo_motor,
+        "E_mwh": cels.E_mwh,
+        "F_mwh": cels.F_mwh,
+        "H_mwh": cels.H_mwh,
+        "RefE": cels.RefE,
+        "RefH": cels.RefH,
+        "fp": cels.fp,
+        "RefE_prima": cels.RefE_prima,
+        "Fh": cels.Fh,
+        "Fe": cels.Fe,
+        "EE": cels.EE,
+        "EP": cels.EP,
+        "AEP": cels.AEP,
+        "APEP": cels.APEP,
+        "AREL": cels.AREL,
+        "ELC": cels.ELC,
+        "porcentaje_ELC": cels.porcentaje_ELC,
+    })
+
+
 def create_app() -> Flask:
     """Flask app factory."""
 
@@ -400,6 +447,269 @@ def create_app() -> Flask:
             cels=cels_resultado,
             cliente_ficha_url=url_for("clientes.ficha", cliente_id=cliente_id),
         )
+
+    # ── Endpoints JSON para dashboards (client-side rendering) ─────────────────
+
+    @app.route("/clientes/<int:cliente_id>/dashboard/contabilidad/data")
+    def cliente_dashboard_contabilidad_data(cliente_id: int):
+        """JSON con todos los datos del dashboard de Contabilidad Energética."""
+        from flask import jsonify
+        activo_id = session.get("cliente_activo_id")
+        if activo_id != cliente_id:
+            return jsonify({"error": "no_autorizado"}), 403
+        from storage.repository import get_cliente_con_conteos as _gcc
+        cliente = _gcc(cliente_id)
+        if cliente is None:
+            return jsonify({"error": "no_encontrado"}), 404
+
+        try:
+            cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+            historico = calcular_historico_cfe(cfe_invoices)
+            tablas = calcular_tablas_cfe(cfe_invoices)
+            historico_gas = calcular_historico_gas(gas_invoices)
+            queso = None
+            filas_mes = [f for f in tablas.get("costos_detallados", []) if f.get("mes") != "ANUAL"]
+            if filas_mes:
+                tot_e = sum(f["ce_total"] for f in filas_mes)
+                tot_d = sum(f["costo_dem"] for f in filas_mes)
+                tot_s = sum(f["subtotal"] for f in filas_mes)
+                queso = {
+                    "agregado": {
+                        "energia": tot_e, "demanda": tot_d,
+                        "otros": max(0.0, tot_s - tot_e - tot_d), "total": tot_s,
+                    },
+                    "por_mes": [
+                        {
+                            "label": f["mes"],
+                            "energia": f["ce_total"], "demanda": f["costo_dem"],
+                            "otros": max(0.0, f["subtotal"] - f["ce_total"] - f["costo_dem"]),
+                            "total": f["subtotal"],
+                        }
+                        for f in filas_mes
+                    ],
+                }
+        except Exception as _e:
+            logger.exception("Error en contabilidad/data: %s", _e)
+            return jsonify({"error": "error_calculo", "mensaje": str(_e)}), 500
+
+        num_cfe_total = cliente["num_cfe"]
+        num_gas_total = cliente["num_gas"]
+        num_cfe_sel = len(facturas_cfe)
+        num_gas_sel = len(facturas_gas)
+
+        if num_cfe_total == 0 and num_gas_total == 0:
+            aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
+        elif num_cfe_sel == 0 and num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_seleccion"}
+        elif num_cfe_sel == 0 or num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_par", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
+        else:
+            aviso_datos = None
+
+        kwh_total = sum(f["kwh_total"] for f in facturas_cfe)
+        costo_total = sum(f["costo_mxn"] for f in facturas_cfe)
+        costo_unit = costo_total / kwh_total if kwh_total > 0 else 0.0
+        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
+
+        return jsonify({
+            "estado": "ok",
+            "aviso_datos": aviso_datos,
+            "cliente": {"id": cliente_id, "nombre": cliente["nombre"], "periodo_label": periodo_label},
+            "kpis": {
+                "num_meses": len(facturas_cfe),
+                "kwh_total": kwh_total,
+                "costo_total": costo_total,
+                "costo_unit": costo_unit,
+            },
+            "facturas_cfe": facturas_cfe,
+            "facturas_gas": facturas_gas,
+            "historico": historico,
+            "tablas": tablas,
+            "queso": queso,
+            "historico_gas": historico_gas,
+        })
+
+    @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion/data")
+    def cliente_dashboard_cogeneracion_data(cliente_id: int):
+        """JSON con todos los datos del dashboard de Cogeneración."""
+        from flask import jsonify
+        from decimal import Decimal as _D
+
+        activo_id = session.get("cliente_activo_id")
+        if activo_id != cliente_id:
+            return jsonify({"error": "no_autorizado"}), 403
+        from storage.repository import get_cliente_con_conteos as _gcc
+        cliente = _gcc(cliente_id)
+        if cliente is None:
+            return jsonify({"error": "no_encontrado"}), 404
+
+        try:
+            cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+            tc_str = get_configuracion("tipo_cambio_mxn_usd")
+            tipo_cambio = _D(tc_str) if tc_str else _D("17.50")
+            fe_elec_str = get_configuracion("factor_emision_electricidad_kg_co2_kwh")
+            fe_gas_str  = get_configuracion("factor_emision_gas_kg_co2_gj")
+            fe_elec = _D(fe_elec_str) if fe_elec_str else None
+            fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
+            r = calcular_cogen(
+                cfe_invoices, gas_invoices, CoGenParams(),
+                tipo_cambio=tipo_cambio,
+                factor_emision_elec=fe_elec,
+                factor_emision_gas=fe_gas,
+            )
+        except Exception as _e:
+            logger.exception("Error en cogeneracion/data: %s", _e)
+            return jsonify({"error": "error_calculo", "mensaje": str(_e)}), 500
+
+        try:
+            from calc.cels import calcular_cels as _calcular_cels
+            calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
+            cels_resultado = _calcular_cels(
+                kwh_cubiertos_anual=r.kwh_cubiertos_anual,
+                gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
+                calor_recuperado_gj_anual=calor_recuperado_anual,
+                capacidad_nominal_kw=r.capacidad_nominal_kw,
+                medio_termico=cliente.get("medio_termico"),
+                nivel_tension_kv=cliente.get("nivel_tension_kv"),
+                altitud_msnm=cliente.get("altitud_msnm"),
+                tipo_motor=cliente.get("tipo_motor"),
+                capacidad_instalada_kw=cliente.get("capacidad_instalada_kw"),
+            )
+        except Exception as _e_cels:
+            logger.error("Error calculando CELs en data endpoint: %s", _e_cels)
+            cels_resultado = None
+
+        num_cfe_total = cliente["num_cfe"]
+        num_gas_total = cliente["num_gas"]
+        num_cfe_sel = len(facturas_cfe)
+        num_gas_sel = len(facturas_gas)
+
+        if num_cfe_total == 0 and num_gas_total == 0:
+            aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
+        elif num_cfe_sel == 0 and num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_seleccion"}
+        elif num_cfe_sel == 0 or num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_par", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
+        elif not r.meses:
+            aviso_datos = {"tipo": "sin_pares_mes", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
+        else:
+            aviso_datos = None
+
+        chart_labels        = [m.periodo_inicio.strftime("%b %Y") for m in r.meses]
+        chart_ebitda        = [float(m.ebitda_mes_mxn)            for m in r.meses]
+        chart_ahorro_elec   = [float(m.ahorro_electricidad_mxn)   for m in r.meses]
+        chart_ahorro_caldera= [float(m.ahorro_caldera_mxn)        for m in r.meses]
+        chart_costo_gas     = [float(m.costo_gas_cogen_mxn)       for m in r.meses]
+        chart_om            = [float(m.gasto_om_mes_mxn)          for m in r.meses]
+
+        meses_raw = [
+            {
+                "periodo": m.periodo_inicio.strftime("%b %Y"),
+                "kwh_total": float(m.kwh_total),
+                "costo_cfe_mxn": float(m.costo_cfe_mxn),
+                "costo_promedio_kwh": float(m.costo_promedio_kwh),
+                "gj_consumido": float(m.gj_consumido),
+                "costo_unitario_gj": float(m.costo_unitario_gj),
+                "costo_gas_actual_mxn": float(m.costo_gas_actual_mxn),
+            }
+            for m in r.meses
+        ]
+
+        tabla_mensual = [
+            {
+                "periodo": m.periodo_inicio.strftime("%b %Y"),
+                "prorrateado": m.prorrateado,
+                "nota_prorrateo": m.nota_prorrateo,
+                "kwh_total": float(m.kwh_total),
+                "costo_cfe_mxn": float(m.costo_cfe_mxn),
+                "costo_promedio_kwh": float(m.costo_promedio_kwh),
+                "gj_consumido": float(m.gj_consumido),
+                "costo_unitario_gj": float(m.costo_unitario_gj),
+                "costo_gas_actual_mxn": float(m.costo_gas_actual_mxn),
+                "kwh_cubiertos": float(m.kwh_cubiertos),
+                "gj_gas_cogen": float(m.gj_gas_cogen),
+                "costo_gas_cogen_mxn": float(m.costo_gas_cogen_mxn),
+                "ahorro_electricidad_mxn": float(m.ahorro_electricidad_mxn),
+                "calor_recuperado_gj": float(m.calor_recuperado_gj),
+                "ahorro_caldera_mxn": float(m.ahorro_caldera_mxn),
+                "gasto_om_mes_mxn": float(m.gasto_om_mes_mxn),
+                "ebitda_mes_mxn": float(m.ebitda_mes_mxn),
+            }
+            for m in r.meses
+        ]
+
+        if r.inversion_mxn is not None and r.inversion_mxn > 0:
+            payback_inicial = calcular_payback(r.inversion_mxn, r.ebitda_anual_mxn)
+            flujo_acum_15   = [float(v) for v in calcular_flujo_acumulado(r.inversion_mxn, r.ebitda_anual_mxn)]
+            flujo_anual_15  = [-float(r.inversion_mxn)] + [float(r.ebitda_anual_mxn)] * 15
+        else:
+            payback_inicial = None
+            flujo_acum_15   = []
+            flujo_anual_15  = []
+
+        co2 = None
+        if r.co2_reduccion_kg_anual is not None:
+            reduccion_t = float(r.co2_reduccion_kg_anual) / 1000
+            co2 = {
+                "actual_total_t": float(r.co2_actual_total_kg_anual) / 1000 if r.co2_actual_total_kg_anual else None,
+                "reduccion_t": reduccion_t,
+                "reduccion_pct": float(r.co2_reduccion_porcentaje) if r.co2_reduccion_porcentaje else 0.0,
+                "arboles": int(reduccion_t * 50),
+                "factor_emision_elec": float(fe_elec) if fe_elec else None,
+                "factor_emision_gas": float(fe_gas) if fe_gas else None,
+            }
+
+        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
+
+        return jsonify({
+            "estado": "ok",
+            "aviso_datos": aviso_datos,
+            "cliente": {"id": cliente_id, "nombre": cliente["nombre"], "periodo_label": periodo_label},
+            "kpis": {
+                "ahorro_electricidad_anual": float(r.ahorro_electricidad_anual_mxn),
+                "ahorro_caldera_anual": float(r.ahorro_caldera_anual_mxn),
+                "costo_gas_cogen_anual": float(r.costo_gas_cogen_anual_mxn),
+                "gasto_om_anual": float(r.gasto_om_anual_mxn),
+                "ebitda_anual": float(r.ebitda_anual_mxn),
+                "kwh_total_anual": float(r.kwh_total_anual),
+                "kwh_cubiertos_anual": float(r.kwh_cubiertos_anual),
+                "gj_gas_cogen_anual": float(r.gj_gas_cogen_anual),
+                "capacidad_nominal_kw": float(r.capacidad_nominal_kw) if r.capacidad_nominal_kw else None,
+                "inversion_usd": float(r.inversion_usd) if r.inversion_usd else None,
+                "inversion_mxn": float(r.inversion_mxn) if r.inversion_mxn else None,
+                "tipo_cambio": float(r.tipo_cambio_mxn_usd) if r.tipo_cambio_mxn_usd else None,
+            },
+            "co2": co2,
+            "cels": _cels_to_dict(cels_resultado),
+            "chart_labels": chart_labels,
+            "chart_ebitda": chart_ebitda,
+            "chart_ahorro_elec": chart_ahorro_elec,
+            "chart_ahorro_caldera": chart_ahorro_caldera,
+            "chart_costo_gas": chart_costo_gas,
+            "chart_om": chart_om,
+            "meses_raw": meses_raw,
+            "tabla_mensual": tabla_mensual,
+            "totales": {
+                "kwh_total_anual": float(r.kwh_total_anual),
+                "kwh_cubiertos_anual": float(r.kwh_cubiertos_anual),
+                "gj_gas_cogen_anual": float(r.gj_gas_cogen_anual),
+                "costo_gas_cogen_anual_mxn": float(r.costo_gas_cogen_anual_mxn),
+                "ahorro_electricidad_anual_mxn": float(r.ahorro_electricidad_anual_mxn),
+                "ahorro_caldera_anual_mxn": float(r.ahorro_caldera_anual_mxn),
+                "gasto_om_anual_mxn": float(r.gasto_om_anual_mxn),
+                "ebitda_anual_mxn": float(r.ebitda_anual_mxn),
+            },
+            "payback_inicial": payback_inicial,
+            "flujo_acum_15": flujo_acum_15,
+            "flujo_anual_15": flujo_anual_15,
+            "params": {
+                "cobertura_electrica": float(r.params.cobertura_electrica),
+                "rendimiento_electrico": float(r.params.rendimiento_electrico),
+                "rendimiento_termico": float(r.params.rendimiento_termico),
+                "eficiencia_caldera": float(r.params.eficiencia_caldera),
+            },
+            "cliente_ficha_url": url_for("clientes.ficha", cliente_id=cliente_id),
+        })
 
     @app.route("/export/excel")
     def export_excel():
