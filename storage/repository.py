@@ -314,7 +314,8 @@ _CLIENTE_CAMPOS_EXTENDIDOS = (
     "sector_industrial, contacto_nombre, contacto_cargo, contacto_email, contacto_telefono, "
     "direccion, estado, codigo_postal, tarifa_cfe, "
     "capacidad_instalada_kw, demanda_contratada_kw, anio_inicio_operacion, "
-    "regimen_operacion, consumo_anual_estimado_mwh, logo_url"
+    "regimen_operacion, consumo_anual_estimado_mwh, logo_url, "
+    "medio_termico, nivel_tension_kv, altitud_msnm, tipo_motor"
 )
 
 
@@ -340,6 +341,10 @@ def _row_to_cliente_dict(row: dict) -> dict:
         "anio_inicio_operacion": row.get("anio_inicio_operacion"),
         "regimen_operacion": row.get("regimen_operacion"),
         "consumo_anual_estimado_mwh": row.get("consumo_anual_estimado_mwh"),
+        "medio_termico": row.get("medio_termico"),
+        "nivel_tension_kv": row.get("nivel_tension_kv"),
+        "altitud_msnm": row.get("altitud_msnm"),
+        "tipo_motor": row.get("tipo_motor"),
         "num_cfe": len(row.get("cfe_facturas") or []),
         "num_gas": len(row.get("gas_facturas") or []),
     }
@@ -382,6 +387,10 @@ def create_cliente(
     anio_inicio_operacion: int | None = None,
     regimen_operacion: str | None = None,
     consumo_anual_estimado_mwh: float | None = None,
+    medio_termico: str | None = None,
+    nivel_tension_kv: str | None = None,
+    altitud_msnm: int | None = None,
+    tipo_motor: str | None = None,
 ) -> int:
     """Crea un nuevo cliente. Devuelve el id asignado."""
     data: dict = {
@@ -402,6 +411,10 @@ def create_cliente(
         "anio_inicio_operacion": anio_inicio_operacion,
         "regimen_operacion": regimen_operacion,
         "consumo_anual_estimado_mwh": consumo_anual_estimado_mwh,
+        "medio_termico": medio_termico,
+        "nivel_tension_kv": nivel_tension_kv,
+        "altitud_msnm": altitud_msnm,
+        "tipo_motor": tipo_motor,
     }
     result = _supabase.table("clientes").insert(data).execute()
     return result.data[0]["id"]
@@ -426,6 +439,10 @@ def update_cliente(
     anio_inicio_operacion: int | None = None,
     regimen_operacion: str | None = None,
     consumo_anual_estimado_mwh: float | None = None,
+    medio_termico: str | None = None,
+    nivel_tension_kv: str | None = None,
+    altitud_msnm: int | None = None,
+    tipo_motor: str | None = None,
 ) -> None:
     """Actualiza los campos del cliente. rfc=None preserva el RFC actual sin tocarlo."""
     data: dict = {
@@ -445,6 +462,10 @@ def update_cliente(
         "anio_inicio_operacion": anio_inicio_operacion,
         "regimen_operacion": regimen_operacion,
         "consumo_anual_estimado_mwh": consumo_anual_estimado_mwh,
+        "medio_termico": medio_termico,
+        "nivel_tension_kv": nivel_tension_kv,
+        "altitud_msnm": altitud_msnm,
+        "tipo_motor": tipo_motor,
     }
     if rfc is not None:
         data["rfc"] = rfc

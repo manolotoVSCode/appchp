@@ -156,6 +156,53 @@
         </div>
       </div>
 
+      <!-- Datos para CELs -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header small fw-semibold text-muted">Datos regulatorios cogeneración (CELs)</div>
+        <div class="card-body p-4">
+          <p class="text-muted small mb-3">
+            Necesarios para el cálculo de Certificados de Energías Limpias según CRE (RES/1838/2016 Caso I).
+            Opcionales — si se omiten, el cálculo de CELs no estará disponible en el dashboard.
+          </p>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Medio térmico de cogeneración</label>
+              <select name="medio_termico" class="form-select">
+                <option value="">— Sin especificar —</option>
+                <option value="vapor_agua"{% if medio_termico == 'vapor_agua' %} selected{% endif %}>Vapor o agua caliente</option>
+                <option value="gases_combustion"{% if medio_termico == 'gases_combustion' %} selected{% endif %}>Gases de combustión directos</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Nivel de tensión de interconexión</label>
+              <select name="nivel_tension_kv" class="form-select">
+                <option value="">— Sin especificar —</option>
+                <option value="lt_1"{% if nivel_tension_kv == 'lt_1' %} selected{% endif %}>Menor a 1.0 kV</option>
+                <option value="1_34"{% if nivel_tension_kv == '1_34' %} selected{% endif %}>1.0 a 34.5 kV</option>
+                <option value="69_85"{% if nivel_tension_kv == '69_85' %} selected{% endif %}>69 a 85 kV</option>
+                <option value="115_230"{% if nivel_tension_kv == '115_230' %} selected{% endif %}>115 a 230 kV</option>
+                <option value="gt_400"{% if nivel_tension_kv == 'gt_400' %} selected{% endif %}>Mayor o igual a 400 kV</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Altitud (msnm)</label>
+              <input type="number" name="altitud_msnm" class="form-control"
+                     value="{{ altitud_msnm | default('') }}" placeholder="1600" min="0" max="5000">
+              <div class="form-text">Metros sobre el nivel del mar. Rango: 0–5000.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Tipo de motor</label>
+              <select name="tipo_motor" class="form-select">
+                <option value="">— Sin especificar —</option>
+                <option value="combustion_interna"{% if tipo_motor == 'combustion_interna' %} selected{% endif %}>Motor de combustión interna</option>
+                <option value="turbina_gas"{% if tipo_motor == 'turbina_gas' %} selected{% endif %}>Turbina de gas</option>
+                <option value="otros"{% if tipo_motor == 'otros' %} selected{% endif %}>Otros</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="d-grid">
         <button type="submit" class="btn btn-primary">Crear cliente</button>
       </div>

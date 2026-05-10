@@ -150,6 +150,51 @@
       </div>
     </div>
   </div>
+
+  <!-- Datos regulatorios cogeneración -->
+  <div class="col-12 mt-2">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold small text-muted">Datos regulatorios cogeneración (CELs)</div>
+      <div class="card-body">
+        <div class="row g-3 small">
+          <div class="col-md-3">
+            <div class="text-muted mb-1">Medio térmico</div>
+            <div class="fw-semibold">
+              {% if cliente.medio_termico == 'vapor_agua' %}Vapor o agua caliente
+              {% elif cliente.medio_termico == 'gases_combustion' %}Gases de combustión directos
+              {% else %}—{% endif %}
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-muted mb-1">Nivel de tensión</div>
+            <div class="fw-semibold">
+              {% if cliente.nivel_tension_kv == 'lt_1' %}Menor a 1.0 kV
+              {% elif cliente.nivel_tension_kv == '1_34' %}1.0 a 34.5 kV
+              {% elif cliente.nivel_tension_kv == '69_85' %}69 a 85 kV
+              {% elif cliente.nivel_tension_kv == '115_230' %}115 a 230 kV
+              {% elif cliente.nivel_tension_kv == 'gt_400' %}Mayor o igual a 400 kV
+              {% else %}—{% endif %}
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-muted mb-1">Altitud</div>
+            <div class="fw-semibold">
+              {% if cliente.altitud_msnm is not none %}{{ cliente.altitud_msnm }} msnm{% else %}—{% endif %}
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="text-muted mb-1">Tipo de motor</div>
+            <div class="fw-semibold">
+              {% if cliente.tipo_motor == 'combustion_interna' %}Motor de combustión interna
+              {% elif cliente.tipo_motor == 'turbina_gas' %}Turbina de gas
+              {% elif cliente.tipo_motor == 'otros' %}Otros
+              {% else %}—{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Acciones cliente -->

@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.18.0] — 2026-05-09
+
+### Añadido
+
+- Cálculo de Certificados de Energías Limpias (CELs) según metodología CRE Caso I (RES/1838/2016). Nuevo módulo `calc/cels.py` con función `calcular_cels`: tablas de RefE principal y alternativa (altitud), RefH por medio térmico, fp por nivel de tensión, fórmulas EP/AEP/ELC completas.
+- Cuatro campos nuevos en la ficha del cliente: medio térmico de cogeneración, nivel de tensión de interconexión, altitud (msnm) y tipo de motor. Formularios de crear y editar actualizados. Sección "Datos regulatorios cogeneración (CELs)" en la ficha.
+- Tarjeta "CELs Generados" en el dashboard de cogeneración (tercera columna junto a Ahorro Neto y Reducción CO₂). Tres estados: datos incompletos / cogeneración eficiente / no califica. Actualización reactiva al mover los sliders de sensibilidad.
+- Panel flotante "Detalle Cálculo CELs según CRE (Caso I)" con todas las variables intermedias (E, F, H, Fh, Fe, EE, EP, AEP, APEP, AREL, ELC, %ELC) en tabla monoespaciada. Se actualiza reactivamente con los sliders.
+- Campo `gj_gas_cogen_pci_anual` en `CoGenResultado`: energía de gas en PCI (sin factor 1.11) para uso exclusivo del cálculo regulatorio CELs.
+- 15 tests nuevos en `tests/test_cels.py`: tablas de RefE, RefH, fp, lógica híbrida de capacidad, bug PCI/PCS, H=0 no eficiente, datos completos/incompletos.
+
+### Cambiado
+
+- Fila "Ahorro Neto + Huella de Carbono" reestructurada a tres columnas de igual ancho (`col-md-4`).
+- Icono del árbol en "Reducción Huella de Carbono" cambiado de `bi-tree-fill` a SVG outline.
+
+---
+
 ## [2.17.0] — 2026-05-09
 
 ### Cambiado

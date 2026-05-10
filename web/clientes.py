@@ -104,6 +104,14 @@ def _validar_campos_extendidos(form) -> str | None:
                 return f"El año de inicio debe estar entre 1900 y {current_year + 1}."
         except ValueError:
             return "El año de inicio de operación debe ser un número entero."
+    altitud = form.get("altitud_msnm", "").strip()
+    if altitud:
+        try:
+            alt_int = int(altitud)
+            if not (0 <= alt_int <= 5000):
+                return "La altitud debe estar entre 0 y 5000 msnm."
+        except ValueError:
+            return "La altitud debe ser un número entero."
     return None
 
 
@@ -138,6 +146,10 @@ def _extraer_campos_extendidos(form) -> dict:
         "anio_inicio_operacion": _opt_int("anio_inicio_operacion"),
         "regimen_operacion": form.get("regimen_operacion", "").strip() or None,
         "consumo_anual_estimado_mwh": _opt_float("consumo_anual_estimado_mwh"),
+        "medio_termico": form.get("medio_termico", "").strip() or None,
+        "nivel_tension_kv": form.get("nivel_tension_kv", "").strip() or None,
+        "altitud_msnm": _opt_int("altitud_msnm"),
+        "tipo_motor": form.get("tipo_motor", "").strip() or None,
     }
 
 
@@ -335,6 +347,10 @@ def editar(cliente_id: int):
         anio_inicio_operacion=cliente.get("anio_inicio_operacion"),
         regimen_operacion=cliente.get("regimen_operacion"),
         consumo_anual_estimado_mwh=cliente.get("consumo_anual_estimado_mwh"),
+        medio_termico=cliente.get("medio_termico"),
+        nivel_tension_kv=cliente.get("nivel_tension_kv"),
+        altitud_msnm=cliente.get("altitud_msnm"),
+        tipo_motor=cliente.get("tipo_motor"),
         **_FORM_SELECTS,
     )
 

@@ -310,6 +310,26 @@ def create_app() -> Flask:
                 500,
             )
 
+        # ── CELs ─────────────────────────────────────────────────────────────────────
+        try:
+            from calc.cels import calcular_cels as _calcular_cels
+            calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
+            cels_resultado = _calcular_cels(
+                kwh_cubiertos_anual=r.kwh_cubiertos_anual,
+                gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
+                calor_recuperado_gj_anual=calor_recuperado_anual,
+                capacidad_nominal_kw=r.capacidad_nominal_kw,
+                medio_termico=cliente.get("medio_termico"),
+                nivel_tension_kv=cliente.get("nivel_tension_kv"),
+                altitud_msnm=cliente.get("altitud_msnm"),
+                tipo_motor=cliente.get("tipo_motor"),
+                capacidad_instalada_kw=cliente.get("capacidad_instalada_kw"),
+            )
+        except Exception as _e_cels:
+            import logging as _logging
+            _logging.getLogger(__name__).error("Error calculando CELs: %s", _e_cels)
+            cels_resultado = None
+
         num_cfe_total = cliente["num_cfe"]
         num_gas_total = cliente["num_gas"]
         num_cfe_sel = len(facturas_cfe)
@@ -377,6 +397,8 @@ def create_app() -> Flask:
             flujo_anual_15=flujo_anual_15,
             factor_emision_elec=float(fe_elec) if fe_elec is not None else None,
             factor_emision_gas=float(fe_gas)   if fe_gas  is not None else None,
+            cels=cels_resultado,
+            cliente_ficha_url=url_for("clientes.ficha", cliente_id=cliente_id),
         )
 
     @app.route("/export/excel")
