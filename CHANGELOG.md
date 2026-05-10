@@ -16,6 +16,10 @@
 - Fila "Ahorro Neto + Huella de Carbono" reestructurada a tres columnas de igual ancho (`col-md-4`).
 - Icono del árbol en "Reducción Huella de Carbono" cambiado de `bi-tree-fill` a SVG outline.
 
+### Corregido
+
+- Nombre del cliente en el listado aparecía en negrita y tamaño mayor al resto de celdas. Eliminado `<span class="fw-semibold" style="font-size:1rem">` y unificado con clase `small` igual que RFC, facturas y fecha.
+
 ---
 
 ## [2.17.0] — 2026-05-09
