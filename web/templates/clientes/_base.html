@@ -538,6 +538,14 @@ function actualizarMaestro(chk, wrap) {
   else if (selCount === btns.length) { chk.checked = true; chk.indeterminate = false; }
   else { chk.checked = false; chk.indeterminate = true; }
 }
+
+// Auto-expandir contratos del cliente activo al cargar la página
+document.addEventListener("DOMContentLoaded", function () {
+  document.querySelectorAll(".sidebar-contrato-item").forEach(function (item) {
+    const header = item.querySelector(".sidebar-contrato-header");
+    if (header) toggleContrato(header);
+  });
+});
 </script>
 {% block scripts %}{% endblock %}
 </body>
