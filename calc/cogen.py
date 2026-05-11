@@ -14,7 +14,7 @@ from calc.periodo import mes_asociado, prorratear_cfe, prorratear_gas
 _KWH_A_GJ = Decimal("0.0036")
 # Corrección PCI→PCS: el gas se comercializa en PCS pero la termodinámica usa PCI
 _FACTOR_PCI_A_PCS = Decimal("1.11")
-# O&M estimado: 30 % del ahorro eléctrico
+# O&M estimado: 0.3 MXN fijos por kWh cubierto (costo de operación y mantenimiento)
 _FACTOR_OM = Decimal("0.3")
 # Dimensionamiento de motor: horas de operación mensual y costo USD/kW instalado
 _HORAS_MES = Decimal("720")
@@ -124,7 +124,7 @@ def calcular_cogen(
         ahorro_electricidad = (kwh_cubiertos * costo_prom_kwh).quantize(_CENTAVO, ROUND_HALF_UP)
         calor_recuperado = (gj_gas_cogen * params.rendimiento_termico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
         ahorro_caldera = (calor_recuperado / params.eficiencia_caldera * costo_unit_gj).quantize(_CENTAVO, ROUND_HALF_UP)
-        gasto_om = (kwh_cubiertos * costo_prom_kwh * _FACTOR_OM).quantize(_CENTAVO, ROUND_HALF_UP)
+        gasto_om = (kwh_cubiertos * _FACTOR_OM).quantize(_CENTAVO, ROUND_HALF_UP)
         ebitda = ahorro_electricidad + ahorro_caldera - costo_gas_cogen - gasto_om
 
         # Nota de prorrateo para trazabilidad

@@ -106,7 +106,9 @@ Paso 4. Costo de gas adicional. Energía eléctrica generada dividida entre rend
 
 Paso 5. Aprovechamiento térmico. Energía contenida en gas multiplicada por rendimiento térmico igual calor recuperable. Calor recuperable dividido entre eficiencia de caldera de referencia igual gas que el cliente deja de quemar. Multiplicar por costo unitario del gas. Resultado: ahorro térmico monetizado.
 
-Paso 6. Ahorro neto y EBITDA. Ahorro eléctrico bruto más ahorro térmico menos costo de gas adicional. Cálculo mensual sobre las 12 facturas reales (preserva estacionalidad), suma anual.
+Paso 6. Costo O&M (Operación y Mantenimiento). 0.3 MXN fijos por cada kWh cubierto por el motor. Es un costo FIJO por kWh, no un porcentaje del costo de la electricidad. O&M mensual = 0.3 MXN/kWh × kWh_cubiertos_mes.
+
+Paso 7. Ahorro neto y EBITDA. Ahorro eléctrico bruto más ahorro térmico menos costo de gas adicional menos O&M. Cálculo mensual sobre las 12 facturas reales (preserva estacionalidad), suma anual.
 
 ## Restricciones de comunicación
 

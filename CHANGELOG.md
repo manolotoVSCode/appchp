@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.20.0] — 2026-05-11
+
+### Corregido
+
+- Fórmula de Gasto O&M en cogeneración. Antes calculaba como porcentaje (30%) del ahorro eléctrico en MXN (`kwh_cubiertos × $/kWh × 0.3`). Ahora correctamente como 0.3 MXN fijos por kWh cubierto (`kwh_cubiertos × 0.3`). Los valores anteriores de O&M estaban sobreestimados aproximadamente 2–3× (dependiendo del costo promedio del kWh), y el Ahorro Neto correspondiente estaba subestimado en la misma magnitud. Afecta `calc/cogen.py`, slider JS en `dashboard-cogeneracion.js` y tests.
+
+---
+
 ## [2.19.1] — 2026-05-10
 
 ### Corregido

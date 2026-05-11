@@ -83,7 +83,7 @@
     const ah_elec   = kwh_cub * m.costo_promedio_kwh;
     const calor_rec = gj_cogen * p.rend_term;
     const ah_caldera= (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
-    const om        = ah_elec * 0.3;
+    const om        = kwh_cub * 0.3;   // 0.3 MXN fijos por kWh cubierto
     return { ah_elec, ah_caldera, costo_gas, om, ahorro_neto: ah_elec + ah_caldera - costo_gas - om };
   }
 

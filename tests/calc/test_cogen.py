@@ -159,10 +159,11 @@ def test_factor_pci_pcs_incrementa_gj(resultado_un_mes):
     assert m.gj_gas_cogen > gj_sin_factor
 
 
-def test_gasto_om_es_30_pct_ahorro_electricidad(resultado_un_mes):
-    """O&M = 30 % del ahorro eléctrico (kwh_cubiertos × $/kWh)."""
+def test_gasto_om_es_0_3_mxn_por_kwh_cubierto(resultado_un_mes):
+    """O&M = 0.3 MXN/kWh × kWh_cubiertos (costo fijo por kWh, no porcentaje del costo)."""
     m = resultado_un_mes.meses[0]
-    esperado = (m.ahorro_electricidad_mxn * Decimal("0.3")).quantize(Decimal("0.01"))
+    # 750_000 kWh × 0.3 MXN/kWh = 225_000.00 MXN
+    esperado = (m.kwh_cubiertos * Decimal("0.3")).quantize(Decimal("0.01"))
     assert m.gasto_om_mes_mxn == esperado
 
 
