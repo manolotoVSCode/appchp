@@ -412,6 +412,7 @@ function renderAnios(item, anios, contratoId, clienteId) {
 
 function crearAnioEl(d, contratoId, clienteId, expandirPorDefecto, oculto) {
   const wrap = document.createElement("div");
+  wrap.dataset.anio = d.anio;  // identifica el contenedor del año para event delegation
   if (oculto) wrap.classList.add("anio-oculto");
   if (oculto) wrap.style.display = "none";
 
@@ -429,7 +430,7 @@ function crearAnioEl(d, contratoId, clienteId, expandirPorDefecto, oculto) {
   chk.className = "maestro-anio";
   chk.checked = allSel;
   chk.indeterminate = !allSel && !noneSel;
-  chk.addEventListener("change", () => toggleAnio(contratoId, clienteId, d.anio, chk, wrap));
+  // NO se añade listener aquí: manejado por event delegation en #sidebar
   header.appendChild(chk);
 
   const label = document.createElement("span");
@@ -472,11 +473,7 @@ function crearAnioEl(d, contratoId, clienteId, expandirPorDefecto, oculto) {
     } else {
       btn.className = "mes-btn disponible";
     }
-    if (con.has(m)) {
-      btn.addEventListener("click", () =>
-        toggleMes(contratoId, clienteId, d.anio, m, btn, chk, wrap)
-      );
-    }
+    // NO se añade listener aquí: manejado por event delegation en #sidebar
     grid.appendChild(btn);
   }
   anioBody.appendChild(grid);
@@ -548,6 +545,44 @@ document.addEventListener("DOMContentLoaded", function () {
     if (header) toggleContrato(header);
   });
 });
+
+// ── Event delegation: UN solo listener para todos los botones de mes ──────────
+// Reemplaza los listeners individuales por botón. Garantiza exactamente UN
+// handler por interacción independientemente de cuántas veces se renderice el DOM.
+(function () {
+  const sidebar = document.getElementById("sidebar");
+  if (!sidebar) return;
+
+  // Delegación de clicks en botones de mes
+  sidebar.addEventListener("click", function (e) {
+    const btn = e.target.closest(".mes-btn");
+    if (!btn || btn.disabled || btn.classList.contains("no-disponible")) return;
+    const item = btn.closest(".sidebar-contrato-item");
+    if (!item) return;
+    const wrap = btn.closest("[data-anio]");
+    if (!wrap) return;
+    const contratoId = item.dataset.contratoId;
+    const clienteId  = item.dataset.clienteId;
+    const anio = parseInt(btn.dataset.anio, 10);
+    const mes  = parseInt(btn.dataset.mes, 10);
+    const maestroChk = wrap.querySelector(".maestro-anio");
+    toggleMes(contratoId, clienteId, anio, mes, btn, maestroChk, wrap);
+  });
+
+  // Delegación de cambios en checkbox maestro de año
+  sidebar.addEventListener("change", function (e) {
+    if (!e.target.classList.contains("maestro-anio")) return;
+    const chk  = e.target;
+    const wrap = chk.closest("[data-anio]");
+    if (!wrap) return;
+    const item = wrap.closest(".sidebar-contrato-item");
+    if (!item) return;
+    const contratoId = item.dataset.contratoId;
+    const clienteId  = item.dataset.clienteId;
+    const anio = parseInt(wrap.dataset.anio, 10);
+    toggleAnio(contratoId, clienteId, anio, chk, wrap);
+  });
+})();
 </script>
 {% block scripts %}{% endblock %}
 </body>

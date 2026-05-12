@@ -12,8 +12,7 @@ from flask_login import current_user
 from flask_wtf.csrf import CSRFProtect
 
 from storage.repository import (
-    get_cfe_invoices_for_dashboard,
-    get_gas_invoices_for_dashboard,
+    get_facturas_para_dashboard,
     get_contratos_por_cliente,
     get_configuracion,
     get_configuracion_row,
@@ -86,9 +85,9 @@ def _cargar_facturas_seleccionadas(cliente_id: int):
     """Carga facturas CFE y gas seleccionadas del cliente y las formatea para templates.
 
     Retorna (cfe_invoices, gas_invoices, facturas_cfe, facturas_gas).
+    Usa get_facturas_para_dashboard para compartir la query de meses seleccionados (4 queries en total).
     """
-    cfe_invoices = get_cfe_invoices_for_dashboard(cliente_id)
-    gas_invoices = get_gas_invoices_for_dashboard(cliente_id)
+    cfe_invoices, gas_invoices = get_facturas_para_dashboard(cliente_id)
 
     facturas_cfe = [
         {
@@ -334,10 +333,11 @@ def create_app() -> Flask:
         try:
             from decimal import Decimal as _D
             cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
-            tc_str = get_configuracion("tipo_cambio_mxn_usd")
+            _cfg = {r["clave"]: r["valor"] for r in list_configuracion()}
+            tc_str = _cfg.get("tipo_cambio_mxn_usd")
             tipo_cambio = _D(tc_str) if tc_str else _D("17.50")
-            fe_elec_str = get_configuracion("factor_emision_electricidad_kg_co2_kwh")
-            fe_gas_str  = get_configuracion("factor_emision_gas_kg_co2_gj")
+            fe_elec_str = _cfg.get("factor_emision_electricidad_kg_co2_kwh")
+            fe_gas_str  = _cfg.get("factor_emision_gas_kg_co2_gj")
             fe_elec = _D(fe_elec_str) if fe_elec_str else None
             fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
             r = calcular_cogen(
@@ -546,10 +546,11 @@ def create_app() -> Flask:
 
         try:
             cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
-            tc_str = get_configuracion("tipo_cambio_mxn_usd")
+            _cfg = {row["clave"]: row["valor"] for row in list_configuracion()}
+            tc_str = _cfg.get("tipo_cambio_mxn_usd")
             tipo_cambio = _D(tc_str) if tc_str else _D("17.50")
-            fe_elec_str = get_configuracion("factor_emision_electricidad_kg_co2_kwh")
-            fe_gas_str  = get_configuracion("factor_emision_gas_kg_co2_gj")
+            fe_elec_str = _cfg.get("factor_emision_electricidad_kg_co2_kwh")
+            fe_gas_str  = _cfg.get("factor_emision_gas_kg_co2_gj")
             fe_elec = _D(fe_elec_str) if fe_elec_str else None
             fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
             r = calcular_cogen(

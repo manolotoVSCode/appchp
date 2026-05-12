@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.22.0] — 2026-05-11
+
+### Performance
+
+- Eliminados listeners por elemento en checkboxes/botones del sidebar. Ahora hay UN solo listener delegado en `#sidebar` para todos los clicks en `.mes-btn` y UN solo listener delegado para cambios en `.maestro-anio`. Antes cada botón de mes y cada checkbox de año tenía su propio `addEventListener`, lo que podía resultar en listeners duplicados. Ahora: cero handlers por elemento, un solo handler por tipo de evento en el contenedor padre.
+
+- Debounce de 300ms ya operativo en ambos dashboards (`dashboard-cogeneracion.js`, `dashboard-contabilidad.js`). Clicks rápidos consecutivos en meses disparan UN solo fetch al endpoint `/data` al finalizar la ráfaga.
+
+- Endpoint `/dashboard/cogeneracion/data` optimizado de 10 queries a 6 queries a Supabase. Nueva función `get_facturas_para_dashboard` comparte la consulta de meses seleccionados entre CFE y gas (−2 queries duplicadas). Las 3 llamadas separadas a `get_configuracion` reemplazadas por 1 `list_configuracion` con lookup en dict (−2 queries adicionales). Lo mismo aplicado al endpoint SSR de cogeneración. Ahorro estimado: ~400–600ms en latencia de red por request.
+
+- Transición visual fluida activada en ambos dashboards: `showSpinner` aplica `opacity: 0.5` sobre `#dashboard-main-content` al iniciar fetch; `hideSpinner` lo restaura con `transition: opacity 0.15s`.
+
+---
+
 ## [2.21.0] — 2026-05-11
 
 ### Corregido

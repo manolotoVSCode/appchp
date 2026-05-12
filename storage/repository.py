@@ -772,36 +772,45 @@ def get_sidebar_data_contrato(contrato_id: int) -> list[dict]:
     return resultado
 
 
-def get_cfe_invoices_for_dashboard(cliente_id: int) -> list[CFEInvoice]:
-    """Carga facturas CFE del cliente cuyos meses están seleccionados en contrato_meses_seleccionados."""
+def get_facturas_para_dashboard(cliente_id: int) -> tuple[list[CFEInvoice], list[GasInvoice]]:
+    """Carga facturas CFE y gas seleccionadas en 4 queries fijas, compartiendo la consulta de
+    meses seleccionados. Evita las 2 queries duplicadas que ocurrían al llamar a
+    get_cfe_invoices_for_dashboard y get_gas_invoices_for_dashboard por separado.
+    """
     seleccionados = get_meses_seleccionados_por_cliente(cliente_id)
     if not seleccionados:
-        return []
+        return [], []
     contrato_ids = list({c for c, _, _ in seleccionados})
-    result = _supabase.table("cfe_facturas").select(
+
+    cfe_result = _supabase.table("cfe_facturas").select(
         "*, clientes(nombre, rfc), cfe_periodos(*), cfe_mem_componentes(*)"
     ).eq("cliente_id", cliente_id).in_("contrato_id", contrato_ids).order("periodo_inicio").execute()
-    return [
-        _row_to_cfe_invoice(row) for row in result.data
+
+    gas_result = _supabase.table("gas_facturas").select(
+        "*, clientes(nombre, rfc), gas_conceptos(*)"
+    ).eq("cliente_id", cliente_id).in_("contrato_id", contrato_ids).order("periodo_inicio").execute()
+
+    cfe_invoices = [
+        _row_to_cfe_invoice(row) for row in cfe_result.data
         if row.get("anio") and row.get("mes")
         and (row["contrato_id"], row["anio"], row["mes"]) in seleccionados
     ]
+    gas_invoices = [
+        _row_to_gas_invoice(row) for row in gas_result.data
+        if row.get("anio") and row.get("mes")
+        and (row["contrato_id"], row["anio"], row["mes"]) in seleccionados
+    ]
+    return cfe_invoices, gas_invoices
+
+
+def get_cfe_invoices_for_dashboard(cliente_id: int) -> list[CFEInvoice]:
+    """Carga facturas CFE del cliente cuyos meses están seleccionados. Usa get_facturas_para_dashboard internamente."""
+    return get_facturas_para_dashboard(cliente_id)[0]
 
 
 def get_gas_invoices_for_dashboard(cliente_id: int) -> list[GasInvoice]:
-    """Carga facturas de gas del cliente cuyos meses están seleccionados en contrato_meses_seleccionados."""
-    seleccionados = get_meses_seleccionados_por_cliente(cliente_id)
-    if not seleccionados:
-        return []
-    contrato_ids = list({c for c, _, _ in seleccionados})
-    result = _supabase.table("gas_facturas").select(
-        "*, clientes(nombre, rfc), gas_conceptos(*)"
-    ).eq("cliente_id", cliente_id).in_("contrato_id", contrato_ids).order("periodo_inicio").execute()
-    return [
-        _row_to_gas_invoice(row) for row in result.data
-        if row.get("anio") and row.get("mes")
-        and (row["contrato_id"], row["anio"], row["mes"]) in seleccionados
-    ]
+    """Carga facturas de gas del cliente cuyos meses están seleccionados. Usa get_facturas_para_dashboard internamente."""
+    return get_facturas_para_dashboard(cliente_id)[1]
 
 
 def delete_cfe_factura(factura_id: int) -> None:
