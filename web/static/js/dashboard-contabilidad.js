@@ -541,30 +541,36 @@
   }
 
   // ── Actualizar banner de aviso ────────────────────────────────────────────
+  function _mkAlerta(cls, titulo, ...nodos) {
+    const div = document.createElement("div");
+    div.className = "alert " + cls + " mb-4";
+    div.setAttribute("role", "alert");
+    const strong = document.createElement("strong");
+    strong.textContent = titulo;
+    div.appendChild(strong);
+    nodos.forEach(n => div.appendChild(typeof n === "string" ? document.createTextNode(n) : n));
+    return div;
+  }
+
   function actualizarAviso(aviso) {
     const cont = document.getElementById("aviso-datos-container");
     if (!cont) return;
-    if (!aviso) { cont.innerHTML = ""; return; }
-    let html = "";
+    cont.textContent = "";
+    if (!aviso) return;
+
     if (aviso.tipo === "sin_facturas") {
-      html = `<div class="alert alert-info mb-4" role="alert">
-        <strong>Sin facturas cargadas.</strong>
-        Este cliente aún no tiene facturas registradas. Ve a la ficha del cliente y sube PDFs de CFE desde la ficha de cada contrato.
-      </div>`;
+      cont.appendChild(_mkAlerta("alert-info", "Sin facturas cargadas.",
+        " Este cliente aún no tiene facturas registradas. Ve a la ficha del cliente y sube PDFs de CFE desde la ficha de cada contrato."));
     } else if (aviso.tipo === "sin_seleccion") {
-      html = `<div class="alert alert-warning mb-4" role="alert">
-        <strong>No hay datos seleccionados para análisis.</strong>
-        Selecciona meses en el sidebar de los contratos para ver el análisis.
-      </div>`;
+      cont.appendChild(_mkAlerta("alert-warning", "No hay datos seleccionados para análisis.",
+        " Selecciona meses en el sidebar de los contratos para ver el análisis."));
     } else if (aviso.tipo === "sin_par") {
-      const nCfe = aviso.num_cfe || 0;
-      html = `<div class="alert alert-info mb-4" role="alert">
-        <strong>Sin facturas CFE seleccionadas.</strong>
-        Hay <strong>${nCfe} factura${nCfe !== 1 ? "s" : ""} CFE</strong> seleccionadas.
-        Carga o selecciona facturas de electricidad para ver el análisis histórico.
-      </div>`;
+      const nCfe = parseInt(aviso.num_cfe, 10) || 0;
+      const sCfe = document.createElement("strong");
+      sCfe.textContent = nCfe + " factura" + (nCfe !== 1 ? "s" : "") + " CFE";
+      cont.appendChild(_mkAlerta("alert-info", "Sin facturas CFE seleccionadas.",
+        " Hay ", sCfe, " seleccionadas. Carga o selecciona facturas de electricidad para ver el análisis histórico."));
     }
-    cont.innerHTML = html;
   }
 
   // ── Actualizar selector del queso ─────────────────────────────────────────

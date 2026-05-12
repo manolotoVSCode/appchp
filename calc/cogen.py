@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import calendar
+import logging
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
+
+logger = logging.getLogger(__name__)
 
 from models.cfe_invoice import CFEInvoice
 from models.gas_invoice import GasInvoice
@@ -102,8 +105,10 @@ def calcular_cogen(
         clave = mes_asociado(cfe_orig.periodo_inicio, cfe_orig.periodo_fin)
         gas_orig = gas_por_mes.get(clave)
         if gas_orig is None:
-            print(f"WARNING: Sin factura de gas para {clave} "
-                  f"(CFE: {cfe_orig.periodo_inicio}–{cfe_orig.periodo_fin})")
+            logger.warning(
+                "Sin factura de gas para %s (CFE: %s–%s)",
+                clave, cfe_orig.periodo_inicio, cfe_orig.periodo_fin,
+            )
             continue
 
         # Prorrateo si el periodo es corto
@@ -121,6 +126,9 @@ def calcular_cogen(
         kwh_cubiertos = (kwh_total * params.cobertura_electrica).quantize(_CENTAVO, ROUND_HALF_UP)
         gj_gas_cogen = (kwh_cubiertos * _KWH_A_GJ * _FACTOR_PCI_A_PCS / params.rendimiento_electrico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
         costo_gas_cogen = (gj_gas_cogen * costo_unit_gj).quantize(_CENTAVO, ROUND_HALF_UP)
+        # Simplificación: se usa el costo promedio del kWh (subtotal / kWh totales),
+        # no el costo por horario. El resultado tiende a subestimar el ahorro real porque
+        # la cobertura del motor beneficia proporcionalmente también horas punta (más caras).
         ahorro_electricidad = (kwh_cubiertos * costo_prom_kwh).quantize(_CENTAVO, ROUND_HALF_UP)
         calor_recuperado = (gj_gas_cogen * params.rendimiento_termico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
         ahorro_caldera = (calor_recuperado / params.eficiencia_caldera * costo_unit_gj).quantize(_CENTAVO, ROUND_HALF_UP)

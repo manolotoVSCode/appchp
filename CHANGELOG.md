@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.21.0] — 2026-05-11
+
+### Corregido
+
+- Open redirect en `/login`: el parámetro `next` ya se valida con `urllib.parse`; solo se acepta si es una URL relativa (empieza por `/`, sin `//`, sin esquema ni host). Afecta `web/auth.py`.
+- XSS por `innerHTML` con datos del servidor en `dashboard-cogeneracion.js` (`actualizarAviso`, `actualizarCELsCard`, bloque CO2) y `dashboard-contabilidad.js` (`actualizarAviso`). Reemplazado por construcción explícita de DOM con `createElement`/`textContent`/`setAttribute`.
+- Selección de mes sin factura: `POST .../seleccion/mes` ahora valida que exista al menos una factura para (contrato_id, anio, mes) antes de insertar en `contrato_meses_seleccionados`. Devuelve 400 si no hay factura. El `DELETE` (deselección) sigue siendo libre. Afecta `web/clientes.py`.
+- N+1 queries en `get_sidebar_data_contrato`: consolida de 2+N×2+1 queries a 3 fijas (CFE, gas, seleccionados), agrupando en Python con `defaultdict`. Afecta `storage/repository.py`.
+- `print()` en `calc/cogen.py` reemplazado por `logger.warning()`. Añadido logger de módulo con `logging.getLogger(__name__)`.
+
+### Añadido
+
+- `render.yaml`: variables `SECRET_KEY`, `APP_USER` y `APP_PASSWORD_HASH` declaradas con `sync: false`. Antes solo estaban `SUPABASE_URL` y `SUPABASE_KEY`.
+
+### Cambiado
+
+- `storage/schema.sql`: actualizado para reflejar el schema real. Añadidas tablas `contratos`, `contrato_meses_seleccionados`, `configuracion`. Añadidas columnas `contrato_id`, `nombre_canonico`, `anio`, `mes`, `advertencias` en `cfe_facturas` y `gas_facturas`. Añadidos campos CELs en `clientes`. Añadidos ON DELETE CASCADE/SET NULL, índices.
+- `CLAUDE.md`: schema actualizado, descripción O&M corregida, nuevas secciones de arquitectura de contratos y configuración del sistema.
+- `calc/cogen.py`: comentario en el cálculo de `ahorro_electricidad` explica la simplificación de usar costo promedio del kWh en lugar de costo por horario.
+
+---
+
 ## [2.20.0] — 2026-05-11
 
 ### Corregido

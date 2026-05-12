@@ -847,6 +847,9 @@ def contrato_seleccion_mes(cliente_id: int, contrato_id: int):
 
     try:
         if seleccionado:
+            meses_con_factura = get_meses_con_factura(contrato_id, anio)
+            if mes not in meses_con_factura:
+                return jsonify({"error": f"No existe factura para {anio}-{mes:02d} en este contrato"}), 400
             upsert_mes_seleccionado(contrato_id, anio, mes)
         else:
             delete_mes_seleccionado(contrato_id, anio, mes)

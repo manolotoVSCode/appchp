@@ -404,35 +404,44 @@
   }
 
   // ── Actualizar aviso ──────────────────────────────────────────────────────
+  function _mkAlerta(cls, titulo, ...nodos) {
+    const div = document.createElement("div");
+    div.className = "alert " + cls + " mb-4";
+    div.setAttribute("role", "alert");
+    const strong = document.createElement("strong");
+    strong.textContent = titulo;
+    div.appendChild(strong);
+    nodos.forEach(n => div.appendChild(typeof n === "string" ? document.createTextNode(n) : n));
+    return div;
+  }
+
   function actualizarAviso(aviso) {
     const cont = document.getElementById("aviso-datos-container");
     if (!cont) return;
-    if (!aviso) { cont.innerHTML = ""; return; }
-    let html = "";
+    cont.textContent = "";
+    if (!aviso) return;
+
     if (aviso.tipo === "sin_facturas") {
-      html = `<div class="alert alert-info mb-4" role="alert">
-        <strong>Sin facturas cargadas.</strong>
-        Este cliente aún no tiene facturas registradas. Ve a la ficha del cliente y sube PDFs de CFE y gas desde la ficha de cada contrato.
-      </div>`;
+      cont.appendChild(_mkAlerta("alert-info", "Sin facturas cargadas.",
+        " Este cliente aún no tiene facturas registradas. Ve a la ficha del cliente y sube PDFs de CFE y gas desde la ficha de cada contrato."));
     } else if (aviso.tipo === "sin_seleccion") {
-      html = `<div class="alert alert-warning mb-4" role="alert">
-        <strong>No hay datos seleccionados para análisis.</strong>
-        Selecciona meses en el sidebar de los contratos para ver el análisis.
-      </div>`;
+      cont.appendChild(_mkAlerta("alert-warning", "No hay datos seleccionados para análisis.",
+        " Selecciona meses en el sidebar de los contratos para ver el análisis."));
     } else if (aviso.tipo === "sin_par") {
-      html = `<div class="alert alert-info mb-4" role="alert">
-        <strong>Análisis incompleto.</strong>
-        El análisis de cogeneración requiere facturas tanto de electricidad (CFE) como de gas natural.
-        Hay <strong>${aviso.num_cfe} factura${aviso.num_cfe !== 1 ? "s" : ""} CFE</strong>
-        y <strong>${aviso.num_gas} de gas</strong> seleccionadas.
-      </div>`;
+      const numCfe = parseInt(aviso.num_cfe, 10) || 0;
+      const numGas = parseInt(aviso.num_gas, 10) || 0;
+      const sCfe = document.createElement("strong");
+      sCfe.textContent = numCfe + " factura" + (numCfe !== 1 ? "s" : "") + " CFE";
+      const sGas = document.createElement("strong");
+      sGas.textContent = numGas + " de gas";
+      cont.appendChild(_mkAlerta("alert-info", "Análisis incompleto.",
+        " El análisis de cogeneración requiere facturas tanto de electricidad (CFE) como de gas natural. Hay ", sCfe, " y ", sGas, " seleccionadas."));
     } else if (aviso.tipo === "sin_pares_mes") {
-      html = `<div class="alert alert-warning mb-4" role="alert">
-        <strong>Sin periodos emparejados.</strong>
-        Hay ${aviso.num_cfe} facturas CFE y ${aviso.num_gas} de gas, pero ningún mes tiene par CFE-gas en el mismo periodo.
-      </div>`;
+      const numCfe = parseInt(aviso.num_cfe, 10) || 0;
+      const numGas = parseInt(aviso.num_gas, 10) || 0;
+      cont.appendChild(_mkAlerta("alert-warning", "Sin periodos emparejados.",
+        " Hay " + numCfe + " facturas CFE y " + numGas + " de gas, pero ningún mes tiene par CFE-gas en el mismo periodo."));
     }
-    cont.innerHTML = html;
   }
 
   // ── Función principal de hidratación ─────────────────────────────────────
@@ -474,11 +483,16 @@
 
     // CO2 sección
     const co2Section = document.getElementById("co2-reduccion-texto");
-    if (co2Section) {
-      if (!data.co2) {
-        co2Section.innerHTML = `<div class="small text-muted mb-1">Reducción Huella de Carbono</div>
-          <div class="text-muted">No disponible</div>`;
-      }
+    if (co2Section && !data.co2) {
+      co2Section.textContent = "";
+      const lbl = document.createElement("div");
+      lbl.className = "small text-muted mb-1";
+      lbl.textContent = "Reducción Huella de Carbono";
+      const val = document.createElement("div");
+      val.className = "text-muted";
+      val.textContent = "No disponible";
+      co2Section.appendChild(lbl);
+      co2Section.appendChild(val);
     }
 
     // CELs: determinar estado y actualizar card
@@ -500,40 +514,97 @@
   function actualizarCELsCard(cels, fichUrl) {
     const card = document.getElementById("cels-card-body");
     if (!card) return;
+    card.textContent = "";
+
+    const icon = document.createElement("i");
+    icon.style.fontSize = "2.5rem";
+    icon.style.flexShrink = "0";
+    const inner = document.createElement("div");
+
+    const lbl = document.createElement("div");
+    lbl.className = "small text-muted mb-1";
+    lbl.textContent = "CELs Generados";
+    inner.appendChild(lbl);
+
     if (!cels) {
-      card.innerHTML = `
-        <i class="bi bi-info-circle" style="font-size:2.5rem;color:var(--color-text-muted);flex-shrink:0"></i>
-        <div>
-          <div class="small text-muted mb-1">CELs Generados</div>
-          <div class="fw-bold text-muted">Datos incompletos</div>
-          <div class="text-muted small mt-1">Configura medio térmico, tensión, altitud y tipo de motor en la ficha del cliente.</div>
-          <a href="${fichUrl || '#'}" class="small text-decoration-none mt-1 d-block">Ir a ficha del cliente →</a>
-        </div>`;
-      return;
-    }
-    if (cels.es_eficiente) {
-      card.innerHTML = `
-        <i class="bi bi-patch-check" style="font-size:2.5rem;color:var(--color-primary);flex-shrink:0" id="cels-icono"></i>
-        <div>
-          <div class="small text-muted mb-1">CELs Generados</div>
-          <div class="fs-4 fw-bold text-success" id="cels-valor">${fmt2(cels.cels_mwh_anual)}</div>
-          <div class="text-muted small" id="cels-unidad">MWh CEL/año</div>
-          <div class="text-success small mt-1">Cogeneración eficiente ✓</div>
-          <a href="#" class="small text-decoration-none mt-1 d-block"
-             onclick="abrirPanel('panelCels'); return false;">Ver detalle CRE →</a>
-        </div>`;
+      icon.className = "bi bi-info-circle";
+      icon.style.color = "var(--color-text-muted)";
+
+      const titulo = document.createElement("div");
+      titulo.className = "fw-bold text-muted";
+      titulo.textContent = "Datos incompletos";
+      inner.appendChild(titulo);
+
+      const desc = document.createElement("div");
+      desc.className = "text-muted small mt-1";
+      desc.textContent = "Configura medio térmico, tensión, altitud y tipo de motor en la ficha del cliente.";
+      inner.appendChild(desc);
+
+      const link = document.createElement("a");
+      link.setAttribute("href", fichUrl || "#");
+      link.className = "small text-decoration-none mt-1 d-block";
+      link.textContent = "Ir a ficha del cliente →";
+      inner.appendChild(link);
+    } else if (cels.es_eficiente) {
+      icon.className = "bi bi-patch-check";
+      icon.id = "cels-icono";
+      icon.style.color = "var(--color-primary)";
+
+      const valor = document.createElement("div");
+      valor.className = "fs-4 fw-bold text-success";
+      valor.id = "cels-valor";
+      valor.textContent = fmt2(cels.cels_mwh_anual);
+      inner.appendChild(valor);
+
+      const unidad = document.createElement("div");
+      unidad.className = "text-muted small";
+      unidad.id = "cels-unidad";
+      unidad.textContent = "MWh CEL/año";
+      inner.appendChild(unidad);
+
+      const estado = document.createElement("div");
+      estado.className = "text-success small mt-1";
+      estado.textContent = "Cogeneración eficiente ✓";
+      inner.appendChild(estado);
+
+      const link = document.createElement("a");
+      link.setAttribute("href", "#");
+      link.className = "small text-decoration-none mt-1 d-block";
+      link.textContent = "Ver detalle CRE →";
+      link.addEventListener("click", e => { e.preventDefault(); abrirPanel("panelCels"); });
+      inner.appendChild(link);
     } else {
-      card.innerHTML = `
-        <i class="bi bi-x-circle" style="font-size:2.5rem;color:var(--bs-warning);flex-shrink:0" id="cels-icono"></i>
-        <div>
-          <div class="small text-muted mb-1">CELs Generados</div>
-          <div class="fs-4 fw-bold text-warning" id="cels-valor">0</div>
-          <div class="text-muted small" id="cels-unidad">MWh CEL/año</div>
-          <div class="text-warning small mt-1">No califica como cogeneración eficiente</div>
-          <a href="#" class="small text-decoration-none mt-1 d-block"
-             onclick="abrirPanel('panelCels'); return false;">Ver detalle CRE →</a>
-        </div>`;
+      icon.className = "bi bi-x-circle";
+      icon.id = "cels-icono";
+      icon.style.color = "var(--bs-warning)";
+
+      const valor = document.createElement("div");
+      valor.className = "fs-4 fw-bold text-warning";
+      valor.id = "cels-valor";
+      valor.textContent = "0";
+      inner.appendChild(valor);
+
+      const unidad = document.createElement("div");
+      unidad.className = "text-muted small";
+      unidad.id = "cels-unidad";
+      unidad.textContent = "MWh CEL/año";
+      inner.appendChild(unidad);
+
+      const estado = document.createElement("div");
+      estado.className = "text-warning small mt-1";
+      estado.textContent = "No califica como cogeneración eficiente";
+      inner.appendChild(estado);
+
+      const link = document.createElement("a");
+      link.setAttribute("href", "#");
+      link.className = "small text-decoration-none mt-1 d-block";
+      link.textContent = "Ver detalle CRE →";
+      link.addEventListener("click", e => { e.preventDefault(); abrirPanel("panelCels"); });
+      inner.appendChild(link);
     }
+
+    card.appendChild(icon);
+    card.appendChild(inner);
   }
 
   // ── Fetch con AbortController, debounce y timeout 10s ────────────────────

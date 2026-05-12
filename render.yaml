@@ -9,6 +9,12 @@ services:
         sync: false
       - key: SUPABASE_KEY
         sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: APP_USER
+        sync: false
+      - key: APP_PASSWORD_HASH
+        sync: false
       - key: PYTHON_VERSION
         value: "3.11"
       - key: WEB_CONCURRENCY

@@ -52,17 +52,31 @@ Los campos numéricos en Supabase están tipados como text para preservar exacti
 
 ## Schema de Supabase (tablas existentes)
 
-clientes: id, nombre, rfc (único), created_at.
+clientes: id, nombre, rfc (único), notas, created_at, sector_industrial, contacto_nombre, contacto_cargo, contacto_email, contacto_telefono, direccion, estado, codigo_postal, tarifa_cfe, capacidad_instalada_kw, demanda_contratada_kw, anio_inicio_operacion, regimen_operacion, consumo_anual_estimado_mwh, logo_url, medio_termico, nivel_tension_kv, altitud_msnm, tipo_motor.
 
-cfe_facturas: id, cliente_id, uuid_cfdi, folio, serie, fecha_emision, periodo_inicio, periodo_fin, fecha_limite_pago, numero_servicio, rmu, tarifa, numero_medidor, multiplicador, carga_conectada_kw, demanda_contratada_kw, kw_max, kvarh, factor_potencia_pct, cargo_fijo_mxn, energia_total_mxn, cargo_factor_potencia_mxn, subtotal_mxn, iva_mxn, facturacion_periodo_mxn, derecho_alumbrado_publico_mxn, credito_aplicado_mxn, total_mxn, pdf_path.
+contratos: id, cliente_id (FK clientes ON DELETE CASCADE), nombre, tipo ('electrico'|'gas'), identificador_real, notas, created_at.
 
-cfe_periodos: id, factura_id, periodo (base, intermedio, punta), consumo_kwh, demanda_kw, costo_unitario_kwh.
+cfe_facturas: id, cliente_id (FK clientes ON DELETE CASCADE), contrato_id (FK contratos ON DELETE SET NULL), uuid_cfdi, folio, serie, fecha_emision, periodo_inicio, periodo_fin, fecha_limite_pago, numero_servicio, rmu, tarifa, numero_medidor, multiplicador, carga_conectada_kw, demanda_contratada_kw, kw_max, kvarh, factor_potencia_pct, cargo_fijo_mxn, energia_total_mxn, cargo_factor_potencia_mxn, subtotal_mxn, iva_mxn, facturacion_periodo_mxn, derecho_alumbrado_publico_mxn, credito_aplicado_mxn, total_mxn, pdf_path, advertencias (JSON array), nombre_canonico, anio, mes.
 
-cfe_mem_componentes: id, factura_id, nombre, cargo_fijo_mxn, cargo_demanda_mxn, cargo_energia_mxn, importe_mxn.
+cfe_periodos: id, factura_id (FK cfe_facturas ON DELETE CASCADE), periodo (base, intermedio, punta), consumo_kwh, demanda_kw, costo_unitario_kwh.
 
-gas_facturas: id, cliente_id, uuid_cfdi, folio, fecha_emision, periodo_inicio, periodo_fin, fecha_limite_pago, nombre_proveedor, rfc_proveedor, numero_cliente, cuenta_contrato, punto_suministro, numero_caseta, tipo_lectura, consumo_m3_corregidos, consumo_sin_corregir_m3, poder_calorifico_gj_m3, consumo_total_gj, costo_unitario_total_gj, subtotal_mxn, iva_mxn, total_mxn.
+cfe_mem_componentes: id, factura_id (FK cfe_facturas ON DELETE CASCADE), nombre, cargo_fijo_mxn, cargo_demanda_mxn, cargo_energia_mxn, importe_mxn.
 
-gas_conceptos: id, factura_id, descripcion, clave_producto, cantidad_gj, precio_unitario_gj, importe_mxn.
+gas_facturas: id, cliente_id (FK clientes ON DELETE CASCADE), contrato_id (FK contratos ON DELETE SET NULL), uuid_cfdi, folio, fecha_emision, periodo_inicio, periodo_fin, fecha_limite_pago, nombre_proveedor, rfc_proveedor, numero_cliente, cuenta_contrato, punto_suministro, numero_caseta, tipo_lectura, consumo_m3_corregidos, consumo_sin_corregir_m3, poder_calorifico_gj_m3, consumo_total_gj, costo_unitario_total_gj, subtotal_mxn, iva_mxn, total_mxn, pdf_path, advertencias (JSON array), nombre_canonico, anio, mes.
+
+gas_conceptos: id, factura_id (FK gas_facturas ON DELETE CASCADE), descripcion, clave_producto, cantidad_gj, precio_unitario_gj, importe_mxn.
+
+contrato_meses_seleccionados: PK(contrato_id, anio, mes). FK contrato_id → contratos ON DELETE CASCADE.
+
+configuracion: clave (PK), valor, descripcion, updated_at. Claves activas: tipo_cambio_mxn_usd, factor_emision_electricidad_kg_co2_kwh, factor_emision_gas_kg_co2_gj.
+
+## Arquitectura de contratos y selección de meses
+
+Un cliente puede tener múltiples contratos (`contratos`), cada uno de tipo 'electrico' o 'gas'. Las facturas CFE y de gas se vinculan a un contrato mediante `contrato_id`. Los dashboards filtran por meses seleccionados en la tabla `contrato_meses_seleccionados` (combinación única contrato_id + anio + mes). La selección se gestiona desde el sidebar expandible en la ficha del cliente: fetch AJAX al endpoint `GET /<cliente_id>/contratos/<contrato_id>/seleccion`, toggle individual vía `POST .../seleccion/mes`, selección masiva por año vía `POST .../seleccion/anio`. Solo se puede seleccionar un mes si existe al menos una factura (CFE o gas) para ese contrato/año/mes.
+
+## Configuración del sistema
+
+Parámetros globales editables en `/admin/configuracion` (requiere autenticación). Se persisten en la tabla `configuracion` de Supabase. Al agregar una clave nueva directamente en BD, aparece automáticamente en la UI sin cambios de código. Validaciones por clave: tipo_cambio_mxn_usd (10–30), factor_emision_electricidad_kg_co2_kwh (0.1–2.0), factor_emision_gas_kg_co2_gj (10–200). Claves desconocidas se validan como número positivo.
 
 ## Variables de entorno requeridas
 
@@ -106,7 +120,9 @@ Paso 4. Costo de gas adicional. Energía eléctrica generada dividida entre rend
 
 Paso 5. Aprovechamiento térmico. Energía contenida en gas multiplicada por rendimiento térmico igual calor recuperable. Calor recuperable dividido entre eficiencia de caldera de referencia igual gas que el cliente deja de quemar. Multiplicar por costo unitario del gas. Resultado: ahorro térmico monetizado.
 
-Paso 6. Costo O&M (Operación y Mantenimiento). 0.3 MXN fijos por cada kWh cubierto por el motor. Es un costo FIJO por kWh, no un porcentaje del costo de la electricidad. O&M mensual = 0.3 MXN/kWh × kWh_cubiertos_mes.
+Paso 6. Costo O&M (Operación y Mantenimiento). 0.3 MXN fijos por cada kWh cubierto por el motor. Es un costo FIJO por kWh generado, no un porcentaje del ahorro eléctrico ni del costo de la electricidad. O&M mensual = 0.3 MXN/kWh × kWh_cubiertos_mes. Constante `_FACTOR_OM = Decimal("0.3")` en `calc/cogen.py`.
+
+Nota sobre el ahorro eléctrico: se calcula con el costo promedio del kWh (subtotal / kWh totales del mes), no por horario. Esto tiende a subestimar ligeramente el ahorro real porque la cobertura del motor beneficia proporcionalmente horas punta (más caras). Es una simplificación aceptada y documentada en el código.
 
 Paso 7. Ahorro neto y EBITDA. Ahorro eléctrico bruto más ahorro térmico menos costo de gas adicional menos O&M. Cálculo mensual sobre las 12 facturas reales (preserva estacionalidad), suma anual.
 

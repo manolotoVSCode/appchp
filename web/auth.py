@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import urllib.parse
 
 from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import LoginManager, UserMixin, login_required, login_user, logout_user
@@ -43,6 +44,14 @@ def _load_user(user_id: str) -> _SingleUser | None:
     return None
 
 
+def _es_url_segura(url: str) -> bool:
+    """Retorna True solo si la URL es relativa a este sitio (sin scheme ni host)."""
+    if not url or not url.startswith("/") or url.startswith("//"):
+        return False
+    parsed = urllib.parse.urlparse(url)
+    return parsed.scheme == "" and parsed.netloc == ""
+
+
 @login_manager.unauthorized_handler
 def _unauthorized():
     return redirect(url_for("auth.login", next=request.path))
@@ -58,7 +67,8 @@ def login():
         password = request.form.get("password", "")
         if _credenciales_validas(username, password):
             login_user(_USER, remember=True)
-            next_url = request.args.get("next") or url_for("dashboard")
+            raw_next = request.args.get("next", "")
+            next_url = raw_next if _es_url_segura(raw_next) else url_for("dashboard")
             return redirect(next_url)
         error = "Credenciales incorrectas. Verifica usuario y contraseña."
 

@@ -730,17 +730,44 @@ def get_sidebar_data_contrato(contrato_id: int) -> list[dict]:
 
     Cada elemento: {"anio": int, "meses_con_factura": [int], "meses_seleccionados": [int]}
     Ordenado por año descendente (más reciente primero).
+
+    Usa exactamente 3 queries fijas (CFE, gas, seleccionados), sin N+1.
     """
-    anios = get_anios_con_facturas_por_contrato(contrato_id)
-    seleccionados = set(get_meses_seleccionados_por_contrato(contrato_id))
+    from collections import defaultdict
+
+    # Query 1: todos los (anio, mes) con factura CFE para este contrato
+    cfe = _supabase.table("cfe_facturas").select("anio, mes").eq(
+        "contrato_id", contrato_id
+    ).not_.is_("anio", "null").not_.is_("mes", "null").execute()
+
+    # Query 2: todos los (anio, mes) con factura de gas para este contrato
+    gas = _supabase.table("gas_facturas").select("anio, mes").eq(
+        "contrato_id", contrato_id
+    ).not_.is_("anio", "null").not_.is_("mes", "null").execute()
+
+    # Query 3: meses seleccionados
+    sel_result = _supabase.table("contrato_meses_seleccionados").select("anio, mes").eq(
+        "contrato_id", contrato_id
+    ).execute()
+
+    # Agrupar meses con factura por año
+    meses_por_anio: dict[int, set[int]] = defaultdict(set)
+    for r in cfe.data:
+        meses_por_anio[r["anio"]].add(r["mes"])
+    for r in gas.data:
+        meses_por_anio[r["anio"]].add(r["mes"])
+
+    # Agrupar meses seleccionados por año
+    sel_por_anio: dict[int, set[int]] = defaultdict(set)
+    for r in sel_result.data:
+        sel_por_anio[r["anio"]].add(r["mes"])
+
     resultado = []
-    for anio in sorted(anios, reverse=True):
-        meses_factura = sorted(get_meses_con_factura(contrato_id, anio))
-        meses_sel = sorted(m for (a, m) in seleccionados if a == anio)
+    for anio in sorted(meses_por_anio, reverse=True):
         resultado.append({
             "anio": anio,
-            "meses_con_factura": meses_factura,
-            "meses_seleccionados": meses_sel,
+            "meses_con_factura": sorted(meses_por_anio[anio]),
+            "meses_seleccionados": sorted(sel_por_anio.get(anio, set())),
         })
     return resultado
 
