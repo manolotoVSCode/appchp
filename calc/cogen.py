@@ -144,8 +144,8 @@ def calcular_cogen(
 
         # Paso 2 — Ahorro Energía: suma por periodo de kWh_cubierto × costo_unitario
         ahorro_energia = sum(
-            kwh_por_periodo[p.periodo] * p.costo_unitario_kwh
-            for p in cfe.periodos
+            (kwh_por_periodo[p.periodo] * p.costo_unitario_kwh for p in cfe.periodos),
+            Decimal("0"),
         ).quantize(_CENTAVO, ROUND_HALF_UP)
 
         # Paso 3 — Ahorro Capacidad y Distribución = 0
