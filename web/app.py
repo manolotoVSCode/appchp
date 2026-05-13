@@ -4,8 +4,10 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
+from time import time
 
 from flask import Flask, flash, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user
@@ -232,7 +234,6 @@ def create_app() -> Flask:
 
     @app.context_processor
     def _inject_globals():
-        from time import time
         from storage.repository import get_cliente_con_conteos as _get_cliente
         id_ = session.get("cliente_activo_id")
         if not id_:
@@ -252,7 +253,7 @@ def create_app() -> Flask:
             session.pop("cliente_activo_logo_url", None)
             session.pop("_cp_cache", None)
             return {"cliente_activo": None, "app_version": _APP_VERSION}
-        contratos = get_contratos_por_cliente(id_)
+        contratos = [asdict(c) for c in get_contratos_por_cliente(id_)]
         data = {
             "id": id_,
             "nombre": cliente["nombre"],

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
@@ -733,8 +734,6 @@ def get_sidebar_data_contrato(contrato_id: int) -> list[dict]:
 
     Usa exactamente 3 queries fijas (CFE, gas, seleccionados), sin N+1.
     """
-    from collections import defaultdict
-
     # Query 1: todos los (anio, mes) con factura CFE para este contrato
     cfe = _supabase.table("cfe_facturas").select("anio, mes").eq(
         "contrato_id", contrato_id
@@ -778,8 +777,6 @@ def get_sidebar_data_cliente(cliente_id: int) -> dict[int, list[dict]]:
     Devuelve dict {contrato_id: [{"anio": int, "meses_con_factura": [int], "meses_seleccionados": [int]}, ...]}.
     Ordenado por año descendente dentro de cada contrato.
     """
-    from collections import defaultdict
-
     # Query 1: todos los (contrato_id, anio, mes) CFE del cliente
     cfe = _supabase.table("cfe_facturas").select("contrato_id, anio, mes").eq(
         "cliente_id", cliente_id

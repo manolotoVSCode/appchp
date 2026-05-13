@@ -825,7 +825,6 @@ def contrato_get_seleccion(cliente_id: int, contrato_id: int):
 
 
 @clientes_bp.route("/<int:cliente_id>/contratos/seleccion", methods=["GET"])
-@login_required
 def cliente_contratos_seleccion_batch(cliente_id: int):
     """Retorna datos de sidebar para TODOS los contratos del cliente en 3 queries."""
     from flask import jsonify
