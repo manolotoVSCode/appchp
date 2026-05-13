@@ -429,6 +429,9 @@ def create_app() -> Flask:
                 "cu_punta": float(m.cu_punta_kwh),
                 "cu_intermedia": float(m.cu_intermedia_kwh),
                 "cu_base": float(m.cu_base_kwh),
+                "kwh_punta_cubierto": float(m.kwh_punta_cubierto),
+                "kwh_intermedia_cubierto": float(m.kwh_intermedia_cubierto),
+                "kwh_base_cubierto": float(m.kwh_base_cubierto),
             }
             for m in r.meses
         ]

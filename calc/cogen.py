@@ -207,6 +207,7 @@ def calcular_cogen(
             ebitda_mes_mxn=ebitda,
             gasto_om_mes_mxn=gasto_om,
             kwh_punta_total=next((p.consumo_kwh for p in cfe.periodos if p.periodo == "punta"), Decimal("0")),
+            # Los valores de p.periodo son: "punta", "intermedio", "base" (ver schema.sql cfe_periodos)
             kwh_intermedia_total=next((p.consumo_kwh for p in cfe.periodos if p.periodo == "intermedio"), Decimal("0")),
             kwh_base_total=next((p.consumo_kwh for p in cfe.periodos if p.periodo == "base"), Decimal("0")),
             cu_punta_kwh=next((p.costo_unitario_kwh for p in cfe.periodos if p.periodo == "punta"), Decimal("0")),

@@ -91,7 +91,7 @@
         remaining -= covered;
         if (remaining <= 0) break;
     }
-    const gj_cogen   = kwh_cub * 0.0036 * 1.11 / p.rend_elec;
+    const gj_cogen   = kwh_cub * 0.0036 * 1.11 / p.rend_elec;  // 0.0036 = kWh→GJ; 1.11 = factor PCI→PCS
     const costo_gas  = gj_cogen * m.costo_unitario_gj;
     const calor_rec  = gj_cogen * p.rend_term;
     const ah_caldera = (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
