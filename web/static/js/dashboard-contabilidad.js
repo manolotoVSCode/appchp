@@ -606,6 +606,10 @@
     setText("kpi-num-meses",   k.num_meses);
     setText("kpi-kwh-total",   Math.round(k.kwh_total).toLocaleString("es-MX"));
     setText("kpi-costo-unit",  "$" + k.costo_unit.toFixed(4));
+    const costoTotal = k.costo_total;
+    if (costoTotal != null) {
+      setText("kpi-costo-total-periodo", "$" + Math.round(costoTotal).toLocaleString("es-MX"));
+    }
 
     // Facturas
     renderFacturasCfe(data.facturas_cfe);

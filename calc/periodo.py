@@ -21,13 +21,15 @@ def mes_asociado(periodo_inicio: date, periodo_fin: date) -> tuple[int, int]:
     """
     dias_por_mes: dict[tuple[int, int], int] = {}
     current = periodo_inicio
-    while current <= periodo_fin:
+    while current < periodo_fin:
         key = (current.year, current.month)
         dias_por_mes[key] = dias_por_mes.get(key, 0) + 1
         current += timedelta(days=1)
     return max(dias_por_mes, key=lambda k: (dias_por_mes[k], k))
 
 
+# Nota: demanda_kw (potencia instantánea) NO se prorratea — es un valor de pico registrado
+# en el medidor, no un consumo acumulado. Solo se escalan kwh y cargos monetarios.
 def prorratear_cfe(
     invoice: CFEInvoice,
     umbral_dias: int = UMBRAL_PRORRATEO_DIAS,

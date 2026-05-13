@@ -772,6 +772,60 @@ def get_sidebar_data_contrato(contrato_id: int) -> list[dict]:
     return resultado
 
 
+def get_sidebar_data_cliente(cliente_id: int) -> dict[int, list[dict]]:
+    """Retorna datos de sidebar para TODOS los contratos de un cliente en 3 queries.
+
+    Devuelve dict {contrato_id: [{"anio": int, "meses_con_factura": [int], "meses_seleccionados": [int]}, ...]}.
+    Ordenado por año descendente dentro de cada contrato.
+    """
+    from collections import defaultdict
+
+    # Query 1: todos los (contrato_id, anio, mes) CFE del cliente
+    cfe = _supabase.table("cfe_facturas").select("contrato_id, anio, mes").eq(
+        "cliente_id", cliente_id
+    ).not_.is_("contrato_id", "null").not_.is_("anio", "null").not_.is_("mes", "null").execute()
+
+    # Query 2: todos los (contrato_id, anio, mes) gas del cliente
+    gas = _supabase.table("gas_facturas").select("contrato_id, anio, mes").eq(
+        "cliente_id", cliente_id
+    ).not_.is_("contrato_id", "null").not_.is_("anio", "null").not_.is_("mes", "null").execute()
+
+    # Query 3: todos los meses seleccionados del cliente (via contratos del cliente)
+    contrato_ids = {r["contrato_id"] for r in cfe.data + gas.data}
+    if not contrato_ids:
+        return {}
+    sel_result = _supabase.table("contrato_meses_seleccionados").select(
+        "contrato_id, anio, mes"
+    ).in_("contrato_id", list(contrato_ids)).execute()
+
+    # Agrupar meses con factura por (contrato_id, anio)
+    meses_por_contrato_anio: dict[tuple[int, int], set[int]] = defaultdict(set)
+    for r in cfe.data + gas.data:
+        meses_por_contrato_anio[(r["contrato_id"], r["anio"])].add(r["mes"])
+
+    # Agrupar meses seleccionados por (contrato_id, anio)
+    sel_por_contrato_anio: dict[tuple[int, int], set[int]] = defaultdict(set)
+    for r in sel_result.data:
+        sel_por_contrato_anio[(r["contrato_id"], r["anio"])].add(r["mes"])
+
+    # Construir resultado
+    contrato_anios: dict[int, set[int]] = defaultdict(set)
+    for (cid, anio) in meses_por_contrato_anio:
+        contrato_anios[cid].add(anio)
+
+    resultado: dict[int, list[dict]] = {}
+    for cid in contrato_anios:
+        anios_data = []
+        for anio in sorted(contrato_anios[cid], reverse=True):
+            anios_data.append({
+                "anio": anio,
+                "meses_con_factura": sorted(meses_por_contrato_anio[(cid, anio)]),
+                "meses_seleccionados": sorted(sel_por_contrato_anio.get((cid, anio), set())),
+            })
+        resultado[cid] = anios_data
+    return resultado
+
+
 def get_facturas_para_dashboard(cliente_id: int) -> tuple[list[CFEInvoice], list[GasInvoice]]:
     """Carga facturas CFE y gas seleccionadas en 4 queries fijas, compartiendo la consulta de
     meses seleccionados. Evita las 2 queries duplicadas que ocurrían al llamar a

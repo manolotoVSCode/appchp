@@ -539,10 +539,47 @@ function actualizarMaestro(chk, wrap) {
 }
 
 // Auto-expandir contratos del cliente activo al cargar la página
-document.addEventListener("DOMContentLoaded", function () {
-  document.querySelectorAll(".sidebar-contrato-item").forEach(function (item) {
+// Usa endpoint batch: UN solo fetch para TODOS los contratos del cliente (3 queries en BD).
+document.addEventListener("DOMContentLoaded", async function () {
+  const items = document.querySelectorAll(".sidebar-contrato-item");
+  if (!items.length) return;
+
+  const clienteId = items[0].dataset.clienteId;
+  let batchData = null;
+
+  try {
+    const resp = await fetch(
+      `/clientes/${clienteId}/contratos/seleccion`,
+      { headers: { "X-CSRFToken": _csrf } }
+    );
+    const json = await resp.json();
+    if (resp.ok && json.ok) batchData = json.contratos;
+  } catch (e) {
+    console.error("sidebar batch fetch:", e);
+  }
+
+  items.forEach(function (item) {
     const header = item.querySelector(".sidebar-contrato-header");
-    if (header) toggleContrato(header);
+    if (!header) return;
+    // Abrir el body visualmente
+    const body = item.querySelector(".sidebar-contrato-body");
+    body.classList.add("open");
+    header.classList.add("open");
+    const contratoId = item.dataset.contratoId;
+    // Marcar como cargado para que toggleContrato no haga re-fetch individual
+    _cargados[contratoId] = true;
+    const placeholder = item.querySelector(".sidebar-anios-placeholder");
+    if (batchData && batchData[contratoId]) {
+      if (placeholder) placeholder.remove();
+      renderAnios(item, batchData[contratoId], contratoId, clienteId);
+    } else if (batchData) {
+      // Contrato sin facturas
+      if (placeholder) placeholder.textContent = "Sin facturas cargadas";
+    } else {
+      // Fallback: fetch individual si el batch falló
+      _cargados[contratoId] = false;
+      cargarAnios(item);
+    }
   });
 });
 

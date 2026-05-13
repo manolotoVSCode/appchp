@@ -155,6 +155,8 @@
       const gj_pci_mes = kc * 0.0036 / p.rend_elec;
       E_kwh    += kc;
       gj_pci   += gj_pci_mes;
+      // calor_gj usa PCS (no PCI): convención industrial en México; el poder calorífico superior
+      // es el estándar en contratos de gas y en la metodología CRE para CELs.
       calor_gj += gj_pcs * p.rend_term;
     });
     const E  = E_kwh / 1000;

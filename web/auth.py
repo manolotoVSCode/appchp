@@ -78,6 +78,8 @@ def login():
 @auth_bp.route("/logout")
 @login_required
 def logout():
+    from flask import session
+    session.pop("_cp_cache", None)
     logout_user()
     return redirect(url_for("auth.login"))
 

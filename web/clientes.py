@@ -34,6 +34,7 @@ from storage.repository import (
     delete_cfe_factura,
     delete_gas_factura,
     get_sidebar_data_contrato,
+    get_sidebar_data_cliente,
     get_meses_seleccionados_por_contrato,
     get_meses_con_factura,
     upsert_mes_seleccionado,
@@ -261,6 +262,7 @@ def cliente_activar(cliente_id: int):
     session["cliente_activo_id"] = cliente_id
     session["cliente_activo_nombre"] = cliente["nombre"]
     session["cliente_activo_logo_url"] = cliente.get("logo_url")
+    session.pop("_cp_cache", None)
     return jsonify({"ok": True})
 
 
@@ -820,6 +822,23 @@ def contrato_get_seleccion(cliente_id: int, contrato_id: int):
     except Exception as exc:
         logger.error("Error cargando sidebar data contrato_id=%d: %s", contrato_id, exc)
         return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/contratos/seleccion", methods=["GET"])
+@login_required
+def cliente_contratos_seleccion_batch(cliente_id: int):
+    """Retorna datos de sidebar para TODOS los contratos del cliente en 3 queries."""
+    from flask import jsonify
+    activo_id = session.get("cliente_activo_id")
+    if activo_id != cliente_id:
+        return jsonify({"error": "Acceso denegado"}), 403
+    try:
+        data = get_sidebar_data_cliente(cliente_id)
+        # Convertir claves int a str para JSON
+        return jsonify({"ok": True, "contratos": {str(k): v for k, v in data.items()}})
+    except Exception as exc:
+        logger.error("Error cargando sidebar batch cliente_id=%d: %s", cliente_id, exc)
+        return jsonify({"error": "Error interno"}), 500
 
 
 @clientes_bp.route(

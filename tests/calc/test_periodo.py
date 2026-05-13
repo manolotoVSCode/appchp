@@ -89,11 +89,19 @@ def test_mes_asociado_cruce_feb_mar():
 
 
 def test_mes_asociado_empate_asigna_posterior():
-    """Feb 15 a Mar 15 (2024): Feb tiene 14 días (15-28), Mar tiene 15 días (1-15).
-    Mar gana por días. Verificamos que el resultado sea marzo."""
-    # Feb 15 to Feb 29 = 15 días en Feb; Mar 1 to Mar 15 = 15 días en Mar → empate
-    # En empate, mes posterior (marzo)
+    """Feb 15 a Mar 15 (2024): periodo_fin excluido (< fix).
+    Feb 15 a Mar 14 (inclusive): Feb 15..29 = 15 días; Mar 1..14 = 14 días → febrero gana.
+    Nota: con periodo_fin excluido ya no hay empate; Feb tiene un día más."""
+    # Con el fix (< periodo_fin), Mar 15 queda excluido:
+    # Feb: días 15..29 = 15 días; Mar: días 1..14 = 14 días → Feb gana
     result = mes_asociado(date(2024, 2, 15), date(2024, 3, 15))
+    assert result == (2024, 2)
+
+
+def test_mes_asociado_empate_real_asigna_posterior():
+    """Empate real con periodo_fin excluido: Feb 16 a Mar 16 (2024).
+    Feb 16..29 = 14 días; Mar 1..15 = 15 días → marzo gana por días."""
+    result = mes_asociado(date(2024, 2, 16), date(2024, 3, 16))
     assert result == (2024, 3)
 
 

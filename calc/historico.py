@@ -5,7 +5,7 @@ from datetime import date
 
 from models.cfe_invoice import CFEInvoice
 from models.gas_invoice import GasInvoice
-from calc.periodo import mes_asociado, prorratear_cfe, UMBRAL_PRORRATEO_DIAS
+from calc.periodo import mes_asociado, prorratear_cfe, prorratear_gas, UMBRAL_PRORRATEO_DIAS
 
 _MESES_CORTO = {
     1: "ene", 2: "feb", 3: "mar", 4: "abr", 5: "may", 6: "jun",
@@ -355,11 +355,13 @@ def calcular_historico_gas(gas_invoices: list[GasInvoice]) -> dict | None:
     costos_molecula_mxn: list[float] = []
     costos_transporte_mxn: list[float] = []
 
-    for inv in facturas_ordenadas:
-        ma = mes_asociado(inv.periodo_inicio, inv.periodo_fin)
+    for inv_orig in facturas_ordenadas:
+        inv, factor = prorratear_gas(inv_orig)
+        prorrateado = factor is not None
+
+        ma = mes_asociado(inv_orig.periodo_inicio, inv_orig.periodo_fin)
         label = date(ma[0], ma[1], 1).strftime("%b %Y")
         labels.append(label)
-        prorrateado = (inv.periodo_fin - inv.periodo_inicio).days < UMBRAL_PRORRATEO_DIAS
 
         consumo_gj = float(inv.consumo_total_gj) if float(inv.consumo_total_gj) > 0 else 0.0
         costo_unit_gj = float(inv.costo_unitario_total_gj)

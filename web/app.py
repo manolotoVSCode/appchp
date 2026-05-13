@@ -131,6 +131,34 @@ def _serial(obj):
     return obj
 
 
+def _calcular_queso(tablas: dict) -> dict | None:
+    """Calcula datos para gráfica de composición de costo (pie chart) a partir de tablas CFE."""
+    filas_mes = [f for f in tablas.get("costos_detallados", []) if f.get("mes") != "ANUAL"]
+    if not filas_mes:
+        return None
+    tot_e = sum(f["ce_total"] for f in filas_mes)
+    tot_d = sum(f["costo_dem"] for f in filas_mes)
+    tot_s = sum(f["subtotal"] for f in filas_mes)
+    return {
+        "agregado": {
+            "energia": tot_e,
+            "demanda": tot_d,
+            "otros": max(0.0, tot_s - tot_e - tot_d),
+            "total": tot_s,
+        },
+        "por_mes": [
+            {
+                "label": f["mes"],
+                "energia": f["ce_total"],
+                "demanda": f["costo_dem"],
+                "otros": max(0.0, f["subtotal"] - f["ce_total"] - f["costo_dem"]),
+                "total": f["subtotal"],
+            }
+            for f in filas_mes
+        ],
+    }
+
+
 def _cels_to_dict(cels) -> dict | None:
     """Convierte CELsResultado a dict JSON-safe. None si cels es None."""
     if cels is None:
@@ -204,27 +232,35 @@ def create_app() -> Flask:
 
     @app.context_processor
     def _inject_globals():
+        from time import time
         from storage.repository import get_cliente_con_conteos as _get_cliente
         id_ = session.get("cliente_activo_id")
         if not id_:
             return {"cliente_activo": None, "app_version": _APP_VERSION}
-        # Verifica que el cliente sigue existiendo en BD; limpia sesión si fue borrado
+
+        # Usar valor cacheado si es fresco (TTL 60s) y corresponde al mismo cliente
+        cached = session.get("_cp_cache")
+        if (cached and cached.get("id") == id_
+                and time() - cached.get("ts", 0) < 60):
+            return {"cliente_activo": cached["data"], "app_version": _APP_VERSION}
+
+        # Cache miss: consultar BD
         cliente = _get_cliente(id_)
         if cliente is None:
             session.pop("cliente_activo_id", None)
             session.pop("cliente_activo_nombre", None)
             session.pop("cliente_activo_logo_url", None)
+            session.pop("_cp_cache", None)
             return {"cliente_activo": None, "app_version": _APP_VERSION}
         contratos = get_contratos_por_cliente(id_)
-        return {
-            "cliente_activo": {
-                "id": id_,
-                "nombre": cliente["nombre"],
-                "contratos": contratos,
-                "logo_url": cliente.get("logo_url"),
-            },
-            "app_version": _APP_VERSION,
+        data = {
+            "id": id_,
+            "nombre": cliente["nombre"],
+            "contratos": contratos,
+            "logo_url": cliente.get("logo_url"),
         }
+        session["_cp_cache"] = {"id": id_, "ts": time(), "data": data}
+        return {"cliente_activo": data, "app_version": _APP_VERSION}
 
     @app.route("/")
     def dashboard():
@@ -248,30 +284,7 @@ def create_app() -> Flask:
             historico = calcular_historico_cfe(cfe_invoices)
             tablas = calcular_tablas_cfe(cfe_invoices)
             # Datos para gráfica de composición del costo (pie chart)
-            queso = None
-            filas_mes = [f for f in tablas.get("costos_detallados", []) if f.get("mes") != "ANUAL"]
-            if filas_mes:
-                tot_e = sum(f["ce_total"] for f in filas_mes)
-                tot_d = sum(f["costo_dem"] for f in filas_mes)
-                tot_s = sum(f["subtotal"] for f in filas_mes)
-                queso = {
-                    "agregado": {
-                        "energia": tot_e,
-                        "demanda": tot_d,
-                        "otros": max(0.0, tot_s - tot_e - tot_d),
-                        "total": tot_s,
-                    },
-                    "por_mes": [
-                        {
-                            "label": f["mes"],
-                            "energia": f["ce_total"],
-                            "demanda": f["costo_dem"],
-                            "otros": max(0.0, f["subtotal"] - f["ce_total"] - f["costo_dem"]),
-                            "total": f["subtotal"],
-                        }
-                        for f in filas_mes
-                    ],
-                }
+            queso = _calcular_queso(tablas)
             historico_gas = calcular_historico_gas(gas_invoices)
         except Exception as e:
             import traceback
@@ -468,27 +481,7 @@ def create_app() -> Flask:
             historico = calcular_historico_cfe(cfe_invoices)
             tablas = calcular_tablas_cfe(cfe_invoices)
             historico_gas = calcular_historico_gas(gas_invoices)
-            queso = None
-            filas_mes = [f for f in tablas.get("costos_detallados", []) if f.get("mes") != "ANUAL"]
-            if filas_mes:
-                tot_e = sum(f["ce_total"] for f in filas_mes)
-                tot_d = sum(f["costo_dem"] for f in filas_mes)
-                tot_s = sum(f["subtotal"] for f in filas_mes)
-                queso = {
-                    "agregado": {
-                        "energia": tot_e, "demanda": tot_d,
-                        "otros": max(0.0, tot_s - tot_e - tot_d), "total": tot_s,
-                    },
-                    "por_mes": [
-                        {
-                            "label": f["mes"],
-                            "energia": f["ce_total"], "demanda": f["costo_dem"],
-                            "otros": max(0.0, f["subtotal"] - f["ce_total"] - f["costo_dem"]),
-                            "total": f["subtotal"],
-                        }
-                        for f in filas_mes
-                    ],
-                }
+            queso = _calcular_queso(tablas)
         except Exception as _e:
             logger.exception("Error en contabilidad/data: %s", _e)
             return jsonify({"error": "error_calculo", "mensaje": str(_e)}), 500
@@ -774,6 +767,11 @@ def create_app() -> Flask:
                         errores.append(f"{desc}: valor inválido (rango {lo} – {hi}).")
                     else:
                         errores.append(f"{desc}: debe ser un número positivo.")
+
+            claves_conocidas = {fila["clave"] for fila in filas}
+            for clave_form in request.form:
+                if clave_form not in claves_conocidas and not clave_form.startswith("csrf"):
+                    logger.warning("admin_configuracion: clave desconocida en POST: %r", clave_form)
 
             if errores:
                 for msg in errores:

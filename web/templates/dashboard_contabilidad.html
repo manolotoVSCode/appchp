@@ -26,7 +26,7 @@
 {% block content %}
 {# Spinner de carga (siempre presente, visible solo durante fetch) #}
 <div class="dashboard-loading-indicator" id="dashboard-spinner" role="status" aria-label="Cargando">
-  <div class="spinner-border" role="status"></div>
+  <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
   <span>Actualizando…</span>
 </div>
 
@@ -67,7 +67,7 @@
 
       {# KPIs #}
       <div class="row g-3 mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
           <div class="card h-100 shadow-sm">
             <div class="card-body">
               <div class="text-muted small">Meses analizados</div>
@@ -76,7 +76,7 @@
             </div>
           </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <div class="card h-100 shadow-sm">
             <div class="card-body">
               <div class="text-muted small">Consumo total</div>
@@ -85,12 +85,21 @@
             </div>
           </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <div class="card h-100 shadow-sm">
             <div class="card-body">
               <div class="text-muted small">Costo unitario promedio</div>
               <div class="fs-4 fw-bold" style="color:var(--color-primary-dark)" id="kpi-costo-unit">—</div>
               <div class="text-muted small">$/kWh (pre-IVA)</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card h-100 shadow-sm">
+            <div class="card-body">
+              <div class="text-muted small">Costo Total del Periodo</div>
+              <div class="fs-4 fw-bold" style="color:var(--color-primary-dark)" id="kpi-costo-total-periodo">—</div>
+              <div class="text-muted small">MXN (pre-IVA)</div>
             </div>
           </div>
         </div>
