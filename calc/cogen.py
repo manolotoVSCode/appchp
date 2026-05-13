@@ -126,10 +126,42 @@ def calcular_cogen(
         kwh_cubiertos = (kwh_total * params.cobertura_electrica).quantize(_CENTAVO, ROUND_HALF_UP)
         gj_gas_cogen = (kwh_cubiertos * _KWH_A_GJ * _FACTOR_PCI_A_PCS / params.rendimiento_electrico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
         costo_gas_cogen = (gj_gas_cogen * costo_unit_gj).quantize(_CENTAVO, ROUND_HALF_UP)
-        # Simplificación: se usa el costo promedio del kWh (subtotal / kWh totales),
-        # no el costo por horario. El resultado tiende a subestimar el ahorro real porque
-        # la cobertura del motor beneficia proporcionalmente también horas punta (más caras).
-        ahorro_electricidad = (kwh_cubiertos * costo_prom_kwh).quantize(_CENTAVO, ROUND_HALF_UP)
+
+        # Metodología GDMTH 3 componentes:
+        # Paso 1 — Cobertura greedy: se cubre primero el periodo más caro (punta)
+        sorted_periodos = sorted(cfe.periodos, key=lambda p: p.costo_unitario_kwh, reverse=True)
+        remaining = kwh_cubiertos
+        kwh_por_periodo: dict[str, Decimal] = {}
+        for p in sorted_periodos:
+            covered = min(remaining, p.consumo_kwh)
+            kwh_por_periodo[p.periodo] = covered
+            remaining -= covered
+            if remaining <= Decimal("0"):
+                break
+        # Periodos no alcanzados reciben cero
+        for p in cfe.periodos:
+            kwh_por_periodo.setdefault(p.periodo, Decimal("0"))
+
+        # Paso 2 — Ahorro Energía: suma por periodo de kWh_cubierto × costo_unitario
+        ahorro_energia = sum(
+            kwh_por_periodo[p.periodo] * p.costo_unitario_kwh
+            for p in cfe.periodos
+        ).quantize(_CENTAVO, ROUND_HALF_UP)
+
+        # Paso 3 — Ahorro Capacidad y Distribución = 0
+        # Supuesto conservador: el motor tiene paradas mensuales → kw_max no cambia →
+        # los cargos MEM por demanda (Capacidad, Distribución) no se reducen.
+        ahorro_capacidad = Decimal("0")
+        ahorro_distribucion = Decimal("0")
+
+        # Paso 4 — Ahorro eléctrico total
+        ahorro_electricidad = ahorro_energia + ahorro_capacidad + ahorro_distribucion
+
+        # Paso 5 — kWh por periodo (para campos informativos)
+        kwh_punta_cubierto = kwh_por_periodo.get("punta", Decimal("0"))
+        kwh_intermedia_cubierto = kwh_por_periodo.get("intermedio", Decimal("0"))
+        kwh_base_cubierto = kwh_por_periodo.get("base", Decimal("0"))
+
         calor_recuperado = (gj_gas_cogen * params.rendimiento_termico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
         ahorro_caldera = (calor_recuperado / params.eficiencia_caldera * costo_unit_gj).quantize(_CENTAVO, ROUND_HALF_UP)
         gasto_om = (kwh_cubiertos * _FACTOR_OM).quantize(_CENTAVO, ROUND_HALF_UP)
@@ -161,6 +193,12 @@ def calcular_cogen(
             costo_unitario_gj=costo_unit_gj,
             costo_gas_actual_mxn=gas.subtotal_mxn,
             kwh_cubiertos=kwh_cubiertos,
+            kwh_punta_cubierto=kwh_punta_cubierto,
+            kwh_intermedia_cubierto=kwh_intermedia_cubierto,
+            kwh_base_cubierto=kwh_base_cubierto,
+            ahorro_energia_mes_mxn=ahorro_energia,
+            ahorro_capacidad_mes_mxn=ahorro_capacidad,
+            ahorro_distribucion_mes_mxn=ahorro_distribucion,
             gj_gas_cogen=gj_gas_cogen,
             costo_gas_cogen_mxn=costo_gas_cogen,
             ahorro_electricidad_mxn=ahorro_electricidad,
@@ -222,6 +260,9 @@ def calcular_cogen(
         gj_gas_cogen_pci_anual=(_gj_cogen_anual / _FACTOR_PCI_A_PCS).quantize(_DIEZMILAVO, ROUND_HALF_UP),
         costo_gas_cogen_anual_mxn=_sum("costo_gas_cogen_mxn"),
         ahorro_electricidad_anual_mxn=_sum("ahorro_electricidad_mxn"),
+        ahorro_energia_anual_mxn=_sum("ahorro_energia_mes_mxn"),
+        ahorro_capacidad_anual_mxn=_sum("ahorro_capacidad_mes_mxn"),
+        ahorro_distribucion_anual_mxn=_sum("ahorro_distribucion_mes_mxn"),
         ahorro_caldera_anual_mxn=_sum("ahorro_caldera_mxn"),
         ebitda_anual_mxn=_sum("ebitda_mes_mxn"),
         gasto_om_anual_mxn=_sum("gasto_om_mes_mxn"),

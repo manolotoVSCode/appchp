@@ -30,6 +30,12 @@ class CoGenMes:
     costo_gas_actual_mxn: Decimal
     # Salidas cogeneración
     kwh_cubiertos: Decimal
+    kwh_punta_cubierto: Decimal
+    kwh_intermedia_cubierto: Decimal
+    kwh_base_cubierto: Decimal
+    ahorro_energia_mes_mxn: Decimal
+    ahorro_capacidad_mes_mxn: Decimal
+    ahorro_distribucion_mes_mxn: Decimal
     gj_gas_cogen: Decimal
     costo_gas_cogen_mxn: Decimal
     ahorro_electricidad_mxn: Decimal
@@ -56,6 +62,9 @@ class CoGenResultado:
     ahorro_caldera_anual_mxn: Decimal
     ebitda_anual_mxn: Decimal
     gasto_om_anual_mxn: Decimal = Decimal("0")
+    ahorro_energia_anual_mxn: Decimal = Decimal("0")
+    ahorro_capacidad_anual_mxn: Decimal = Decimal("0")
+    ahorro_distribucion_anual_mxn: Decimal = Decimal("0")
     gj_gas_cogen_pci_anual: Decimal = Decimal("0")  # GJ en PCI (sin factor 1.11) — para CELs
     # Capacidad e inversión (None si no hay datos CFE suficientes)
     capacidad_nominal_kw: Decimal | None = None

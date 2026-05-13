@@ -113,9 +113,12 @@ def test_costo_gas_cogen(resultado_un_mes):
     assert resultado_un_mes.meses[0].costo_gas_cogen_mxn == Decimal("599400.00")
 
 
-def test_ahorro_electricidad(resultado_un_mes):
-    # 750_000 × 3.00 = 2_250_000.00
-    assert resultado_un_mes.meses[0].ahorro_electricidad_mxn == Decimal("2250000.00")
+def test_ahorro_electricidad_es_suma_componentes(resultado_un_mes):
+    """ahorro_electricidad = ahorro_energia + ahorro_capacidad + ahorro_distribucion."""
+    m = resultado_un_mes.meses[0]
+    assert m.ahorro_electricidad_mxn == (
+        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn + m.ahorro_distribucion_mes_mxn
+    )
 
 
 def test_calor_recuperado(resultado_un_mes):
@@ -180,6 +183,78 @@ def test_gasto_om_anual_es_suma_mensual():
     gas = [_gas(2023, 11, GJ, PRECIO_GJ), _gas(2023, 12, GJ * 2, PRECIO_GJ)]
     r = calcular_cogen(cfe, gas, CoGenParams())
     assert r.gasto_om_anual_mxn == sum(m.gasto_om_mes_mxn for m in r.meses)
+
+
+# ── Tests metodología GDMTH 3 componentes ────────────────────────────────────
+
+def test_greedy_cubre_punta_primero(resultado_un_mes):
+    """Con cobertura 75%, los kWh más caros (punta) se cubren primero."""
+    m = resultado_un_mes.meses[0]
+    punta_total = KWH / 3  # fixture usa tercio igual por horario
+    # punta se cubre completa porque el greedy la prioriza y 750k > 333k
+    assert m.kwh_punta_cubierto <= punta_total
+    assert m.kwh_punta_cubierto == punta_total
+
+
+def test_ahorro_energia_mayor_que_promedio():
+    """Greedy da ahorro mayor que promedio cuando punta concentra poco consumo pero precio alto."""
+    kwh_base  = Decimal("800000")
+    kwh_inter = Decimal("150000")
+    kwh_punta = Decimal("50000")
+    total = kwh_base + kwh_inter + kwh_punta
+    cu_base  = Decimal("1.00")
+    cu_inter = Decimal("1.50")
+    cu_punta = Decimal("2.50")
+    costo_total = kwh_base * cu_base + kwh_inter * cu_inter + kwh_punta * cu_punta
+    costo_prom = costo_total / total
+
+    # Con cobertura 75%: 750_000 kWh cubiertos
+    # Greedy: 50k punta + 150k inter + 550k base
+    kwh_cub = total * Decimal("0.75")
+    ahorro_greedy = (
+        Decimal("50000") * cu_punta
+        + Decimal("150000") * cu_inter
+        + (kwh_cub - Decimal("200000")) * cu_base
+    )
+    ahorro_promedio = kwh_cub * costo_prom
+    assert ahorro_greedy > ahorro_promedio
+
+
+def test_ahorro_capacidad_cero():
+    """Ahorro capacidad es 0 (supuesto conservador: kw_max no cambia)."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams())
+    assert r.meses[0].ahorro_capacidad_mes_mxn == Decimal("0")
+
+
+def test_ahorro_distribucion_cero():
+    """Ahorro distribución es 0 (supuesto conservador: kw_max no cambia)."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams())
+    assert r.meses[0].ahorro_distribucion_mes_mxn == Decimal("0")
+
+
+def test_ahorro_electricidad_igual_suma_componentes():
+    """ahorro_electricidad = ahorro_energia + ahorro_capacidad + ahorro_distribucion."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams())
+    m = r.meses[0]
+    assert m.ahorro_electricidad_mxn == (
+        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn + m.ahorro_distribucion_mes_mxn
+    )
+
+
+def test_totales_anuales_componentes_son_suma_mensual():
+    """Los totales anuales de los 3 componentes son la suma de los mensuales."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION), _cfe(2023, 12, KWH * 2, FACTURACION * 2)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ), _gas(2023, 12, GJ * 2, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams())
+    assert r.ahorro_energia_anual_mxn == sum(m.ahorro_energia_mes_mxn for m in r.meses)
+    assert r.ahorro_capacidad_anual_mxn == sum(m.ahorro_capacidad_mes_mxn for m in r.meses)
+    assert r.ahorro_distribucion_anual_mxn == sum(m.ahorro_distribucion_mes_mxn for m in r.meses)
 
 
 # ── Tests de capacidad nominal, inversión, payback y flujo ───────────────────
