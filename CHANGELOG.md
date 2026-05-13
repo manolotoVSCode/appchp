@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.23.0] — 2026-05-13
+
+### Cambiado
+
+- Metodología de cálculo del ahorro eléctrico en cogeneración: reemplazada la simplificación de costo promedio del kWh por el algoritmo greedy de 3 componentes MEM de la tarifa GDMTH. El consumo cubierto se asigna primero al horario más caro (punta), luego a intermedio, luego a base, hasta agotar la cobertura objetivo. Los cargos de Capacidad y Distribución se mantienen en cero (supuesto conservador: el motor tiene paradas mensuales y `kw_max` no cambia). Afecta `calc/cogen.py` y el slider JS `recalcularMes` en `dashboard-cogeneracion.js`.
+
+- `CoGenMes` y `CoGenResultado` en `models/cogen_result.py` exponen ahora los 3 componentes del ahorro eléctrico (`ahorro_energia`, `ahorro_capacidad`, `ahorro_distribucion`) a nivel mensual y anual, y los kWh asignados por horario (`kwh_punta_cubierto`, `kwh_intermedia_cubierto`, `kwh_base_cubierto`) y los kWh totales facturados por horario (`kwh_punta_total`, `kwh_intermedia_total`, `kwh_base_total`) con sus costos unitarios (`cu_punta_kwh`, `cu_intermedia_kwh`, `cu_base_kwh`).
+
+- Endpoint JSON `/dashboard/cogeneracion/data`: `meses_raw` expone los 6 campos por periodo necesarios para que el slider JS replique el algoritmo greedy sin llamar al servidor. `tabla_mensual`, `kpis` y `totales` incluyen los 3 componentes del ahorro eléctrico.
+
+### Corregido
+
+- Bug crítico de serialización en sesión Flask: `get_contratos_por_cliente` devuelve objetos `Contrato` (dataclass), que no son JSON-serializables por itsdangerous. Se aplica `asdict()` antes de guardar en `session`, lo que eliminaba el error en toda navegación posterior a la primera carga. Afecta `web/app.py`.
+
+- `from time import time` y `from collections import defaultdict` movidos al nivel de módulo en `web/app.py` y `storage/repository.py` (estaban dentro de funciones).
+
+- Decorador `@login_required` fantasma en `web/clientes.py` (línea 828): nunca fue importado, causaba `NameError` en los tests. Eliminado.
+
+- 8 tests en `tests/test_dashboard_2d.py` actualizados para reflejar la arquitectura de renderizado client-side: las aserciones de texto HTML (inyectado por JS) se reemplazaron por verificación del endpoint JSON `/data`.
+
+### Añadido (sesión anterior, incluido en este release)
+
+- Prorrateo de facturas de gas: si el periodo tiene menos de 25 días, se escala a 30 días equivalentes al igual que CFE. Afecta `calc/periodo.py` y `calc/cogen.py`.
+
+- Helper `_construir_queso` en `web/app.py` para centralizar la lógica del gráfico de distribución del gasto eléctrico.
+
+- Caché de contratos en `context_processor` para evitar queries repetidas por request.
+
+- Spinner de carga en dashboard de contabilidad (ya existía en cogeneración).
+
+- KPI "Costo Total" en dashboard de contabilidad.
+
+- Endpoint batch `POST /<cliente_id>/contratos/<contrato_id>/seleccion/anio` para selección/deselección masiva de todos los meses de un año.
+
+---
+
 ## [2.22.1] — 2026-05-12
 
 ### Corregido

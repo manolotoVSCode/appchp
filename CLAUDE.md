@@ -112,17 +112,15 @@ Horas de operación previstas: 720 horas mensuales (operación continua).
 
 Paso 1. Dimensionamiento. Consumo eléctrico mensual del cliente multiplicado por la cobertura objetivo. Resultado: energía a generar mensualmente, en kWh.
 
-Paso 2. Distribución horaria. El consumo cubierto se distribuye proporcionalmente entre punta, intermedio y base según la distribución horaria de la tarifa GDMTH del cliente. El operador puede ajustar manualmente si conoce el régimen real de operación del motor.
+Paso 2. Distribución horaria (algoritmo greedy). El consumo cubierto se asigna primero al horario con mayor costo unitario (punta), luego a intermedio, luego a base, hasta agotar `kwh_cubiertos`. Si el total de kWh disponibles en los horarios más caros no es suficiente, se continúa al siguiente. Este orden greedy maximiza el ahorro eléctrico teórico.
 
-Paso 3. Ahorro eléctrico bruto por horario. Para cada horario, consumo cubierto multiplicado por costo unitario de ese horario en la factura del cliente. La suma es el ahorro eléctrico bruto mensual.
+Paso 3. Ahorro eléctrico — componente Energía. Para cada horario, kWh asignados en el paso 2 multiplicado por el costo unitario de ese horario extraído de la factura CFE. La suma de los tres horarios es el ahorro de energía mensual. Los componentes Capacidad y Distribución se fijan en cero (supuesto conservador: el motor tiene paradas mensuales, por lo que `kw_max` no disminuye y los cargos MEM por demanda no se reducen). Implementación en `calc/cogen.py`. El mismo algoritmo greedy se replica en el slider JS `recalcularMes` de `dashboard-cogeneracion.js` usando los costos unitarios por horario expuestos en `meses_raw`.
 
 Paso 4. Costo de gas adicional. Energía eléctrica generada dividida entre rendimiento eléctrico, convertida a metros cúbicos usando el poder calorífico real del gas extraído de las facturas (no factor estándar), multiplicado por costo unitario del gas del cliente.
 
 Paso 5. Aprovechamiento térmico. Energía contenida en gas multiplicada por rendimiento térmico igual calor recuperable. Calor recuperable dividido entre eficiencia de caldera de referencia igual gas que el cliente deja de quemar. Multiplicar por costo unitario del gas. Resultado: ahorro térmico monetizado.
 
 Paso 6. Costo O&M (Operación y Mantenimiento). 0.3 MXN fijos por cada kWh cubierto por el motor. Es un costo FIJO por kWh generado, no un porcentaje del ahorro eléctrico ni del costo de la electricidad. O&M mensual = 0.3 MXN/kWh × kWh_cubiertos_mes. Constante `_FACTOR_OM = Decimal("0.3")` en `calc/cogen.py`.
-
-Nota sobre el ahorro eléctrico: se calcula con el costo promedio del kWh (subtotal / kWh totales del mes), no por horario. Esto tiende a subestimar ligeramente el ahorro real porque la cobertura del motor beneficia proporcionalmente horas punta (más caras). Es una simplificación aceptada y documentada en el código.
 
 Paso 7. Ahorro neto y EBITDA. Ahorro eléctrico bruto más ahorro térmico menos costo de gas adicional menos O&M. Cálculo mensual sobre las 12 facturas reales (preserva estacionalidad), suma anual.
 
