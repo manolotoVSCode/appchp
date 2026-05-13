@@ -495,8 +495,8 @@ async function toggleMes(contratoId, clienteId, anio, mes, btn, maestroChk, wrap
     );
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     btn.className = seleccionado ? "mes-btn seleccionado" : "mes-btn disponible";
-    actualizarMaestro(maestroChk, wrap);
-    document.dispatchEvent(new CustomEvent("dashboardDataChanged", { detail: { cliente_id: clienteId } }));
+    if (maestroChk) actualizarMaestro(maestroChk, wrap);
+    document.dispatchEvent(new CustomEvent("dashboardDataChanged", { detail: { source: "mes_toggle" } }));
   } catch(e) {
     console.error("toggleMes:", e);
   }
@@ -522,7 +522,7 @@ async function toggleAnio(contratoId, clienteId, anio, chk, wrap) {
     });
     chk.indeterminate = false;
     chk.checked = seleccionado;
-    document.dispatchEvent(new CustomEvent("dashboardDataChanged", { detail: { cliente_id: clienteId } }));
+    document.dispatchEvent(new CustomEvent("dashboardDataChanged", { detail: { source: "mes_toggle" } }));
   } catch(e) {
     console.error("toggleAnio:", e);
     chk.checked = !seleccionado; // revertir
@@ -559,7 +559,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!btn || btn.disabled || btn.classList.contains("no-disponible")) return;
     const item = btn.closest(".sidebar-contrato-item");
     if (!item) return;
-    const wrap = btn.closest("[data-anio]");
+    const wrap = btn.parentElement.closest("[data-anio]");
     if (!wrap) return;
     const contratoId = item.dataset.contratoId;
     const clienteId  = item.dataset.clienteId;

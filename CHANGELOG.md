@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.22.1] — 2026-05-12
+
+### Corregido
+
+- Bug introducido en v2.22.0: tras refactor a event delegation, el evento `dashboardDataChanged` no se disparaba tras toggle de mes. El dashboard quedaba con datos viejos hasta recarga manual. Causa raíz: `btn.closest("[data-anio]")` retornaba el propio botón (que tiene `data-anio` asignado), por lo que `maestroChk` era `null`, `actualizarMaestro` lanzaba TypeError, y el dispatch nunca alcanzaba a ejecutarse. Fix: `btn.parentElement.closest("[data-anio]")` para saltar el botón y encontrar el contenedor del año. Añadido guard `if (maestroChk)` antes de `actualizarMaestro` para que el dispatch siempre ocurra tras AJAX exitoso.
+
+---
+
 ## [2.22.0] — 2026-05-11
 
 ### Performance
