@@ -423,6 +423,12 @@ def create_app() -> Flask:
                 "gj_consumido": float(m.gj_consumido),
                 "costo_unitario_gj": float(m.costo_unitario_gj),
                 "costo_gas_actual_mxn": float(m.costo_gas_actual_mxn),
+                "kwh_punta": float(m.kwh_punta_total),
+                "kwh_intermedia": float(m.kwh_intermedia_total),
+                "kwh_base": float(m.kwh_base_total),
+                "cu_punta": float(m.cu_punta_kwh),
+                "cu_intermedia": float(m.cu_intermedia_kwh),
+                "cu_base": float(m.cu_base_kwh),
             }
             for m in r.meses
         ]
@@ -607,6 +613,12 @@ def create_app() -> Flask:
                 "gj_consumido": float(m.gj_consumido),
                 "costo_unitario_gj": float(m.costo_unitario_gj),
                 "costo_gas_actual_mxn": float(m.costo_gas_actual_mxn),
+                "kwh_punta": float(m.kwh_punta_total),
+                "kwh_intermedia": float(m.kwh_intermedia_total),
+                "kwh_base": float(m.kwh_base_total),
+                "cu_punta": float(m.cu_punta_kwh),
+                "cu_intermedia": float(m.cu_intermedia_kwh),
+                "cu_base": float(m.cu_base_kwh),
             }
             for m in r.meses
         ]
@@ -623,6 +635,12 @@ def create_app() -> Flask:
                 "costo_unitario_gj": float(m.costo_unitario_gj),
                 "costo_gas_actual_mxn": float(m.costo_gas_actual_mxn),
                 "kwh_cubiertos": float(m.kwh_cubiertos),
+                "kwh_punta_cubierto": float(m.kwh_punta_cubierto),
+                "kwh_intermedia_cubierto": float(m.kwh_intermedia_cubierto),
+                "kwh_base_cubierto": float(m.kwh_base_cubierto),
+                "ahorro_energia_mes_mxn": float(m.ahorro_energia_mes_mxn),
+                "ahorro_capacidad_mes_mxn": float(m.ahorro_capacidad_mes_mxn),
+                "ahorro_distribucion_mes_mxn": float(m.ahorro_distribucion_mes_mxn),
                 "gj_gas_cogen": float(m.gj_gas_cogen),
                 "costo_gas_cogen_mxn": float(m.costo_gas_cogen_mxn),
                 "ahorro_electricidad_mxn": float(m.ahorro_electricidad_mxn),
@@ -674,6 +692,9 @@ def create_app() -> Flask:
                 "inversion_usd": float(r.inversion_usd) if r.inversion_usd else None,
                 "inversion_mxn": float(r.inversion_mxn) if r.inversion_mxn else None,
                 "tipo_cambio": float(r.tipo_cambio_mxn_usd) if r.tipo_cambio_mxn_usd else None,
+                "ahorro_energia_anual": float(r.ahorro_energia_anual_mxn),
+                "ahorro_capacidad_anual": float(r.ahorro_capacidad_anual_mxn),
+                "ahorro_distribucion_anual": float(r.ahorro_distribucion_anual_mxn),
             },
             "co2": co2,
             "cels": _cels_to_dict(cels_resultado),
@@ -694,6 +715,9 @@ def create_app() -> Flask:
                 "ahorro_caldera_anual_mxn": float(r.ahorro_caldera_anual_mxn),
                 "gasto_om_anual_mxn": float(r.gasto_om_anual_mxn),
                 "ebitda_anual_mxn": float(r.ebitda_anual_mxn),
+                "ahorro_energia_anual_mxn": float(r.ahorro_energia_anual_mxn),
+                "ahorro_capacidad_anual_mxn": float(r.ahorro_capacidad_anual_mxn),
+                "ahorro_distribucion_anual_mxn": float(r.ahorro_distribucion_anual_mxn),
             },
             "payback_inicial": payback_inicial,
             "flujo_acum_15": flujo_acum_15,

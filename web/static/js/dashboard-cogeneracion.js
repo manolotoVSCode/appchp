@@ -77,13 +77,25 @@
 
   // ── Recalcular mes con parámetros de sliders ──────────────────────────────
   function recalcularMes(m, p) {
-    const kwh_cub   = m.kwh_total * p.cobertura;
-    const gj_cogen  = kwh_cub * 0.0036 * 1.11 / p.rend_elec;
-    const costo_gas = gj_cogen * m.costo_unitario_gj;
-    const ah_elec   = kwh_cub * m.costo_promedio_kwh;
-    const calor_rec = gj_cogen * p.rend_term;
-    const ah_caldera= (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
-    const om        = kwh_cub * 0.3;   // 0.3 MXN fijos por kWh cubierto
+    const kwh_cub = m.kwh_total * p.cobertura;
+    // Greedy: cubrir primero el horario más caro (metodología GDMTH 3 componentes)
+    const periodos = [
+        { kwh: m.kwh_punta,      cu: m.cu_punta },
+        { kwh: m.kwh_intermedia, cu: m.cu_intermedia },
+        { kwh: m.kwh_base,       cu: m.cu_base },
+    ].sort((a, b) => b.cu - a.cu);
+    let remaining = kwh_cub, ah_elec = 0;
+    for (const per of periodos) {
+        const covered = Math.min(remaining, per.kwh);
+        ah_elec += covered * per.cu;
+        remaining -= covered;
+        if (remaining <= 0) break;
+    }
+    const gj_cogen   = kwh_cub * 0.0036 * 1.11 / p.rend_elec;
+    const costo_gas  = gj_cogen * m.costo_unitario_gj;
+    const calor_rec  = gj_cogen * p.rend_term;
+    const ah_caldera = (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
+    const om         = kwh_cub * 0.3;
     return { ah_elec, ah_caldera, costo_gas, om, ahorro_neto: ah_elec + ah_caldera - costo_gas - om };
   }
 

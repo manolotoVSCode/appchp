@@ -43,6 +43,12 @@ class CoGenMes:
     ahorro_caldera_mxn: Decimal
     ebitda_mes_mxn: Decimal
     gasto_om_mes_mxn: Decimal = Decimal("0")
+    kwh_punta_total: Decimal = Decimal("0")
+    kwh_intermedia_total: Decimal = Decimal("0")
+    kwh_base_total: Decimal = Decimal("0")
+    cu_punta_kwh: Decimal = Decimal("0")
+    cu_intermedia_kwh: Decimal = Decimal("0")
+    cu_base_kwh: Decimal = Decimal("0")
     # Prorrateo (campo informativo, vacío si no se aplicó)
     prorrateado: bool = False
     nota_prorrateo: str = ""

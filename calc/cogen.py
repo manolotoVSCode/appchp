@@ -206,6 +206,12 @@ def calcular_cogen(
             ahorro_caldera_mxn=ahorro_caldera,
             ebitda_mes_mxn=ebitda,
             gasto_om_mes_mxn=gasto_om,
+            kwh_punta_total=next((p.consumo_kwh for p in cfe.periodos if p.periodo == "punta"), Decimal("0")),
+            kwh_intermedia_total=next((p.consumo_kwh for p in cfe.periodos if p.periodo == "intermedio"), Decimal("0")),
+            kwh_base_total=next((p.consumo_kwh for p in cfe.periodos if p.periodo == "base"), Decimal("0")),
+            cu_punta_kwh=next((p.costo_unitario_kwh for p in cfe.periodos if p.periodo == "punta"), Decimal("0")),
+            cu_intermedia_kwh=next((p.costo_unitario_kwh for p in cfe.periodos if p.periodo == "intermedio"), Decimal("0")),
+            cu_base_kwh=next((p.costo_unitario_kwh for p in cfe.periodos if p.periodo == "base"), Decimal("0")),
             prorrateado=prorrateado,
             nota_prorrateo=nota,
         ))
