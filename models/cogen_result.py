@@ -51,6 +51,7 @@ class CoGenMes:
     cu_base_kwh: Decimal = Decimal("0")
     # Datos para slider JS (demanda y precios componentes MEM)
     kw_max: Decimal = Decimal("0")
+    kw_punta_orig: Decimal = Decimal("0")   # demanda kW del periodo punta (base Capacidad MEM)
     dias_facturados: int = 0
     kwh_total_orig: Decimal = Decimal("0")
     precio_capacidad_kw: Decimal = Decimal("0")

@@ -249,30 +249,27 @@ def test_ahorro_electricidad_igual_suma_componentes():
 
 def test_ahorro_capacidad_con_componentes_mem():
     """Con componentes MEM presentes, ahorro_capacidad > 0."""
-    # _cfe usa kw_max=100, kwh=KWH=1_000_000 (tercio por horario), periodo nov: 1→30 (29 días)
-    # Añadimos componentes MEM: Capacidad $100,000 y Distribución $30,000
-    # precio_capacidad  = 100,000 / 100 = 1,000 MXN/kW
-    # precio_distribucion = 30,000 / 100 = 300 MXN/kW
-    # kwh_total_orig = 1,000,000; cobertura=75% → kwh_cubiertos=750,000 → kwh_post=250,000
+    # kw_max=1000, punta demanda_kw=1000 → kw_punta=1000
+    # MEM: Capacidad $100,000 y Distribución $30,000
+    # precio_capacidad  = 100,000 / kw_punta(1000) = 100 MXN/kW  (Capacidad usa kw_punta)
+    # precio_distribucion = 30,000 / kw_max(1000)  =  30 MXN/kW  (Distribución usa kw_max)
+    # kwh_total_orig = 1,000,000; cobertura=75% → kwh_post=250,000
     # dias_orig = (date(2023,11,30) - date(2023,11,1)).days = 29
     # demanda_promedio_post = 250,000 / (24 × 29) = 359.1954...
     # demanda_efectiva_post = 359.1954... / 0.57 = 630.1675...
-    # reduccion_kw = max(100 - 630.17, 0) = 0  ← kw_max=100 < demanda_efectiva_post
-    # Con kw_max=100 la reduccion es 0; necesitamos un kw_max mayor.
-    # Usamos kw_max=1000 para que la reducción sea positiva:
-    #   demanda_efectiva_post ≈ 630.17 kW
-    #   reduccion_kw = max(1000 - 630.17, 0) = 369.83 kW
-    #   precio_capacidad  = 100,000 / 1000 = 100 MXN/kW
-    #   precio_distribucion = 30,000 / 1000 = 30 MXN/kW
-    #   ahorro_capacidad    = 100 × 369.83 ≈ 36,983 MXN
-    #   ahorro_distribucion = 30  × 369.83 ≈ 11,095 MXN
+    # reduccion_cap  = max(kw_punta(1000) - 630.17, 0) = 369.83 kW
+    # reduccion_dist = max(kw_max(1000)   - 630.17, 0) = 369.83 kW
+    # ahorro_capacidad    = 100 × 369.83 ≈ 36,983 MXN
+    # ahorro_distribucion =  30 × 369.83 ≈ 11,095 MXN
     from models.cfe_invoice import MEMComponente
 
     tercio = KWH / 3
     periodos = [
-        CFEConsumoHorario("base",       tercio, Decimal("100"), Decimal("1.00")),
-        CFEConsumoHorario("intermedio", tercio, Decimal("100"), Decimal("1.20")),
-        CFEConsumoHorario("punta",      tercio, Decimal("100"), Decimal("1.50")),
+        CFEConsumoHorario("base",       tercio, Decimal("100"),  Decimal("1.00")),
+        CFEConsumoHorario("intermedio", tercio, Decimal("100"),  Decimal("1.20")),
+        # demanda_kw=1000 en punta → kw_punta=1000 → precio_cap = 100,000/1000 = 100 MXN/kW
+        # reduccion_cap = max(1000 - 630.17, 0) ≈ 369.83 kW → ahorro_cap ≈ 36,983 MXN
+        CFEConsumoHorario("punta",      tercio, Decimal("1000"), Decimal("1.50")),
     ]
     inicio = date(2023, 11, 1)
     fin = date(2023, 11, 30)
@@ -325,8 +322,9 @@ def test_ahorro_capacidad_con_componentes_mem():
     )
 
     # Verificar rangos razonables:
-    # dias_orig = 29, kwh_post = 250,000, demanda_efectiva_post = 250000/(24×29)/0.57 ≈ 630.17 kW
-    # reduccion_kw = max(1000 - 630.17, 0) ≈ 369.83 kW
+    # dias_orig = 29, kwh_post = 250,000, demanda_efectiva_post ≈ 630.17 kW
+    # reduccion_cap  = max(kw_punta(1000) - 630.17, 0) ≈ 369.83 kW
+    # reduccion_dist = max(kw_max(1000)   - 630.17, 0) ≈ 369.83 kW
     # precio_cap = 100 MXN/kW → ahorro_cap ≈ 36,983 MXN
     # precio_dist = 30 MXN/kW → ahorro_dist ≈ 11,095 MXN
     assert Decimal("36000") < m.ahorro_capacidad_mes_mxn < Decimal("38000")

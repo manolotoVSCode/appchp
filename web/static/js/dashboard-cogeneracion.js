@@ -96,9 +96,10 @@
     const demanda_post  = (m.kw_max > 0 && m.dias_mes > 0)
         ? kwh_post_orig / (24 * m.dias_mes) / 0.57  // 0.57 = factor de carga regulatorio CFE GDMTH
         : 0;
-    const reduccion_kw  = Math.max(m.kw_max - demanda_post, 0);
-    const ah_cap  = m.precio_capacidad_kw  * reduccion_kw;
-    const ah_dist = m.precio_distribucion_kw * reduccion_kw;
+    const reduccion_cap  = Math.max((m.kw_punta || m.kw_max) - demanda_post, 0);  // Capacidad usa kw_punta
+    const reduccion_dist = Math.max(m.kw_max - demanda_post, 0);                   // Distribución usa kw_max
+    const ah_cap  = m.precio_capacidad_kw  * reduccion_cap;
+    const ah_dist = m.precio_distribucion_kw * reduccion_dist;
     const ah_elec = ah_energia + ah_cap + ah_dist;
     const gj_cogen   = kwh_cub * 0.0036 * 1.11 / p.rend_elec;  // 0.0036 = kWh→GJ; 1.11 = factor PCI→PCS
     const costo_gas  = gj_cogen * m.costo_unitario_gj;
