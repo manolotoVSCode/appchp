@@ -385,7 +385,6 @@ def create_app() -> Flask:
                 nivel_tension_kv=cliente.get("nivel_tension_kv"),
                 altitud_msnm=cliente.get("altitud_msnm"),
                 tipo_motor=cliente.get("tipo_motor"),
-                capacidad_instalada_kw=cliente.get("capacidad_instalada_kw"),
             )
         except Exception as _e_cels:
             import logging as _logging
@@ -586,7 +585,6 @@ def create_app() -> Flask:
                 nivel_tension_kv=cliente.get("nivel_tension_kv"),
                 altitud_msnm=cliente.get("altitud_msnm"),
                 tipo_motor=cliente.get("tipo_motor"),
-                capacidad_instalada_kw=cliente.get("capacidad_instalada_kw"),
             )
         except Exception as _e_cels:
             logger.error("Error calculando CELs en data endpoint: %s", _e_cels)

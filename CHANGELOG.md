@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.24.6] — 2026-05-14
+
+### Corregido
+- Capacidad usada para selección de RefE en cálculo de CELs: antes usaba capacidad_instalada_kw del cliente (campo BD); ahora usa la capacidad calculada como math.ceil(max(kwh_total_mes / 720)), consistente con Inversión y Capacidad Nominal del dashboard.
+- Redondeo techo (math.ceil) aplicado a la capacidad calculada en todos los puntos donde se usa: selección RefE, Inversión, Beneficio Fiscal año 1, visualización Capacidad Nominal (sin decimales).
+
 ## [2.24.5] — 2026-05-13
 
 ### Cambiado

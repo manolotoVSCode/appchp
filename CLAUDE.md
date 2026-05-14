@@ -96,6 +96,26 @@ La clave service_role debe vivir exclusivamente en variables de entorno del serv
 
 Cuando se introduzca autenticación de usuarios (entregable separado posterior, no parte de esta fase), se migrará al uso de la clave anon con políticas Row Level Security configuradas por usuario y por tenant. Esta migración es trabajo conocido y planeado.
 
+## Capacidad nominal del proyecto
+
+La capacidad nominal de la cogeneración se calcula como:
+
+capacidad_nominal_kw = math.ceil(max(kwh_total_mes / 720))
+
+Donde:
+- kwh_total_mes es la suma de kWh consumidos por horario (Base + Intermedia + Punta) de cada factura CFE seleccionada.
+- 720 son las horas mensuales estándar (24 × 30).
+- Se toma el mes de mayor consumo entre los meses seleccionados.
+- Se aplica math.ceil para redondear al entero superior, por consistencia con la metodología CFE GDMTH.
+
+Esta capacidad se usa para:
+- Selección de RefE en tabla CRE (cálculo de CELs).
+- Cálculo de Inversión MXN.
+- Visualización en caja "Capacidad Nominal" del dashboard.
+- Cálculo del Beneficio Fiscal año 1 (vía inversión).
+
+El campo capacidad_instalada_kw en BD no se usa para estos cálculos. Es información del cliente (demanda contratada CFE).
+
 ## Parámetros del motor candidato (configurables, con valores por defecto)
 
 Cobertura objetivo del consumo eléctrico mensual: 75% (rango editable 50% a 95%).

@@ -564,7 +564,7 @@
       const k = data.kpis;
       secInversion.style.display = k.capacidad_nominal_kw ? "" : "none";
       setText("kpi-capacidad-val", k.capacidad_nominal_kw
-        ? k.capacidad_nominal_kw.toLocaleString("es-MX", { maximumFractionDigits: 2 }) + " kW"
+        ? k.capacidad_nominal_kw.toLocaleString("es-MX", { maximumFractionDigits: 0 }) + " kW"
         : "Sin datos");
       if (k.inversion_usd) {
         setText("kpi-inversion-usd-val", "$" + Math.round(k.inversion_usd).toLocaleString("en-US") + " USD");
