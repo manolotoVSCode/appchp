@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.24.5] — 2026-05-13
+
+### Cambiado
+- Botón toggle del sidebar (escritorio): más sutil y menos intrusivo. Fondo transparente, sin borde, 28px, color gris `#bbb`. Posicionado en la esquina superior del borde derecho del sidebar en lugar del centro vertical.
+
+### Removido
+- Icono de descarga Excel del dashboard de Cogeneración. Los iconos Excel permanecen en Contabilidad Energética.
+
 ## [2.24.4] — 2026-05-13
 
 ### Removido

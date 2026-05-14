@@ -45,9 +45,7 @@
     color: var(--color-text-muted, #6c757d);
     margin-top: .2rem;
   }
-  .btn-excel { color: #198754; font-size: 1rem; text-decoration: none; line-height: 1; }
-  .btn-excel:hover { color: #146c43; }
-  /* Cascada — altura fija antes del flujo 15 años */
+/* Cascada — altura fija antes del flujo 15 años */
   .cascada-wrap { position: relative; height: 280px; }
 </style>
 {% endblock %}
@@ -287,12 +285,8 @@
   <div class="card-body">
     <div class="d-flex align-items-center justify-content-between mb-2">
       <h5 class="card-title mb-0">Ahorro Neto Mensual vs Componentes</h5>
-      <span class="d-flex align-items-center gap-2">
-        <a href="/clientes/{{ cliente_id }}/grafica/ahorro_neto_mensual/excel"
-           class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
-        <a href="#" class="small text-decoration-none"
-           onclick="abrirPanel('panelTablaCoGen'); return false;">Ver datos</a>
-      </span>
+      <a href="#" class="small text-decoration-none"
+         onclick="abrirPanel('panelTablaCoGen'); return false;">Ver datos</a>
     </div>
     <canvas id="cogenChart" height="90"></canvas>
   </div>

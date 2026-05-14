@@ -207,19 +207,20 @@
     }
     body.sidebar-desktop-collapsed #main-content { margin-left: 0; }
 
-    /* Toggle button — sólo en escritorio (≥ 1024px, donde no hay bloqueo móvil) */
+    /* Toggle button — sutil, arriba, sólo en escritorio (≥ 1024px) */
     #sidebar-desktop-toggle {
       display: none;
-      position: fixed; z-index: 101; top: 50%; left: var(--sidebar-w);
-      transform: translateY(-50%);
-      background: #fff; border: 1px solid #dee2e6; border-left: none;
-      border-radius: 0 8px 8px 0;
-      padding: .45rem .3rem; cursor: pointer; color: #6c757d;
-      font-size: .85rem; line-height: 1; align-items: center;
-      transition: left 0.3s ease, color 0.1s;
+      position: fixed; z-index: 101;
+      top: 1rem; left: calc(var(--sidebar-w) - 28px);
+      width: 28px; height: 28px;
+      background: transparent; border: none;
+      color: #bbb; cursor: pointer;
+      font-size: 1rem; padding: 0;
+      align-items: center; justify-content: center;
+      transition: left 0.3s ease, color 0.2s;
     }
-    #sidebar-desktop-toggle:hover { background: #f8f9fa; color: var(--color-primary); }
-    body.sidebar-desktop-collapsed #sidebar-desktop-toggle { left: 0; }
+    #sidebar-desktop-toggle:hover { color: #555; }
+    body.sidebar-desktop-collapsed #sidebar-desktop-toggle { left: 4px; }
     @media (min-width: 1024px) { #sidebar-desktop-toggle { display: flex; } }
 
     /* Colores de contratos por tipo */
