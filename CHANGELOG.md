@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.24.7] — 2026-05-14
+
+### Corregido
+- `kpi-energia-limpia-val` ahora se recalcula en cada movimiento de slider (antes solo se fijaba en la carga inicial). Fórmula: `(cels_mwh × 1000 / kwh_total_anual) × 100`. Muestra "N/D" en gris cuando el cliente no califica como cogeneración eficiente.
+- Periodo de Retorno unificado: `calcularPaybackJS` acepta ahora `beneficioFiscal` como tercer parámetro y lo suma al acumulado del año 1. Elimina el bloque de override post-`actualizarSensibilidad` que usaba el valor del backend con ★ y se sobreescribía al mover sliders. El asterisco `*` con tooltip aparece junto al valor cuando `beneficioFiscalAnio1 > 0`.
+
 ## [2.24.6] — 2026-05-14
 
 ### Corregido

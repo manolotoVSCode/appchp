@@ -120,10 +120,13 @@
   }
 
   // ── Payback helpers ───────────────────────────────────────────────────────
-  function calcularPaybackJS(invMxn, ahorroAnual) {
+  function calcularPaybackJS(invMxn, ahorroAnual, beneficioFiscal = 0) {
     if (ahorroAnual <= 0 || invMxn <= 0) return null;
     let acum = -invMxn;
-    for (let i = 1; i <= 15; i++) { acum += ahorroAnual; if (acum >= 0) return i; }
+    for (let i = 1; i <= 15; i++) {
+      acum += ahorroAnual + (i === 1 ? beneficioFiscal : 0);
+      if (acum >= 0) return i;
+    }
     return -1;
   }
   function textoPayback(payback) {
@@ -416,10 +419,13 @@
 
     // Payback
     if (tieneInversion) {
-      const payback = calcularPaybackJS(inversionMxn, ahorro_neto_anual);
+      const payback = calcularPaybackJS(inversionMxn, ahorro_neto_anual, beneficioFiscalAnio1);
       const { texto, clase } = textoPayback(payback);
       const el = document.getElementById("kpi-payback-val");
-      if (el) { el.textContent = texto; el.className = clase; }
+      if (el) {
+        el.innerHTML = texto + (beneficioFiscalAnio1 > 0 ? ' <span class="asterisco" title="Incluye beneficio fiscal por depreciación inmediata Art. 34 XIII LISR">*</span>' : '');
+        el.className = clase;
+      }
       actualizarChart15(ahorro_neto_anual, beneficioFiscalAnio1);
     }
 
@@ -430,7 +436,21 @@
 
     actualizarCO2(p);
     const celRes = recalcularCELs(p);
-    if (celRes) actualizarCELsUI(celRes);
+    if (celRes) {
+      actualizarCELsUI(celRes);
+      const elEL = document.getElementById("kpi-energia-limpia-val");
+      if (elEL) {
+        const kwh_total_anual = meses_raw.reduce((s, m) => s + m.kwh_total, 0);
+        if (celRes.cels_mwh > 0 && kwh_total_anual > 0) {
+          const pct = (celRes.cels_mwh * 1000 / kwh_total_anual) * 100;
+          elEL.textContent = pct.toFixed(1) + " %";
+          elEL.style.color = "var(--bs-success, #198754)";
+        } else {
+          elEL.textContent = "N/D";
+          elEL.style.color = "var(--bs-secondary, #6c757d)";
+        }
+      }
+    }
   }
 
   // ── Render tabla mensual en panel flotante ────────────────────────────────
@@ -604,17 +624,6 @@
 
     // Trigger slider update (re-calcula todo con parámetros actuales)
     actualizarSensibilidad();
-
-    // Payback con beneficio fiscal (override del cálculo JS local si el backend lo entrega)
-    const paybackConBeneficio = data.payback_con_beneficio;
-    if (tieneInversion && paybackConBeneficio !== null && paybackConBeneficio !== undefined) {
-      const elPb = document.getElementById("kpi-payback-val");
-      if (elPb) {
-        const { texto, clase } = textoPayback(paybackConBeneficio);
-        elPb.textContent = texto + (beneficioFiscalAnio1 > 0 ? " ★" : "");
-        elPb.className = clase;
-      }
-    }
 
     // Gráfica 15 años: mostrar/ocultar contenedor
     const sec15 = document.getElementById("seccion-15-anios");
