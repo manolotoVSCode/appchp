@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.25.0] - 2026-05-14
+
+### Añadido (sub-entregable A: modelo de datos PPA)
+- Soporte de modelo de datos para clientes con suministro eléctrico calificado (PPA).
+- Tabla `contratos`: tipo ahora acepta `electrico_basico`, `electrico_calificado`, `gas`. Contratos existentes con `electrico` migrados a `electrico_basico`.
+- Tabla `clientes`: 12 campos nuevos para datos del contrato PPA (suministrador, RFC, RPU, precio fijo USD/MWh, fecha inicio, energía contratada, capacidad máxima, margen reserva CENACE, zona de carga, división, PDF URL, notas).
+- Tabla nueva `ppa_bloques_mensuales`: bloques contratados MWh por mes/año por cliente.
+- Tabla nueva `facturas_electricidad_calificado`: estructura preparada para sub-entregable B (carga de facturas PPA).
+- Ficha de cliente: sección acordeón "Suministro Calificado (PPA)" con formulario editable y sub-sección de bloques mensuales.
+- Formulario de contrato: tipo ahora ofrece tres opciones (Eléctrico básico CFE, Eléctrico calificado PPA, Gas).
+- `models/contrato.py`: constantes `TIPO_ELECTRICO_BASICO`, `TIPO_ELECTRICO_CALIFICADO`, `TIPO_GAS`, `TIPOS_ELECTRICOS`, `TIPOS_VALIDOS`.
+- Archivo de migración: `storage/migrations/202605_ppa_support.sql`.
+
+### Documentación
+- `CLAUDE.md` actualizado con sección "Suministro eléctrico: básico vs calificado".
+
+### Pendiente (sub-entregables B y C)
+- B: Carga manual de facturas calificadas y aparición en sidebar.
+- C: Dashboard adaptado al tipo de suministro del cliente.
+
 ## [2.24.7] — 2026-05-14
 
 ### Corregido

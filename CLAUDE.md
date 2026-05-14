@@ -116,6 +116,35 @@ Esta capacidad se usa para:
 
 El campo capacidad_instalada_kw en BD no se usa para estos cálculos. Es información del cliente (demanda contratada CFE).
 
+## Suministro eléctrico: básico vs calificado
+
+La app soporta dos modalidades de suministro eléctrico, configurables por contrato.
+
+Suministro básico (electrico_basico). Cliente recibe electricidad de CFE bajo tarifa GDMTH. Factura con desglose horario (Base/Intermedia/Punta), demandas kW, componentes MEM. Parser CFE GDMTH activo.
+
+Suministro calificado (electrico_calificado). Cliente tiene contrato PPA con suministrador privado (calificado). Factura más simple: consumo MWh × precio unitario combinado, sin desglose horario. Datos del contrato PPA se capturan manualmente en la ficha del cliente.
+
+Gas (gas). Sin cambios. Factura ENGIE u otro proveedor de gas natural.
+
+CAMPOS DEL CONTRATO PPA EN FICHA DE CLIENTE
+
+Campos editables en ficha del cliente, sección "Suministro Calificado (PPA)" (acordeón colapsable): suministrador, RFC suministrador, RPU, división, zona de carga CENACE, precio fijo USD/MWh, fecha inicio suministro, energía contratada anual MWh, capacidad máxima kW, margen reserva CENACE (%), URL PDF contrato, notas. Todos opcionales.
+
+Endpoints: POST /clientes/<id>/ppa/datos (actualiza campos PPA del cliente), POST /clientes/<id>/ppa/bloques (actualiza bloques mensuales contratados MWh para un año).
+
+BLOQUES MENSUALES CONTRATADOS
+
+Por año contractual, el cliente tiene un bloque mensual contratado en MWh, capturado manualmente en la ficha. Tabla ppa_bloques_mensuales. Usado en sub-entregable C para detectar excedentes (consumo real vs bloque × 110%).
+
+CONSTANTES DE TIPO EN models/contrato.py
+
+TIPO_ELECTRICO_BASICO = 'electrico_basico'
+TIPO_ELECTRICO_CALIFICADO = 'electrico_calificado'
+TIPO_GAS = 'gas'
+TIPOS_ELECTRICOS = (TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO)
+
+Donde el código compare tipo de contrato, usar las constantes de models/contrato.py, no strings literales. Para verificar si un contrato es eléctrico (cualquier modalidad): tipo in TIPOS_ELECTRICOS.
+
 ## Parámetros del motor candidato (configurables, con valores por defecto)
 
 Cobertura objetivo del consumo eléctrico mensual: 75% (rango editable 50% a 95%).
