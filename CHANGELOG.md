@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.25.3] - 2026-05-14
+
+### Corregido
+- Al guardar bloques mensuales via AJAX y cambiar de año, los valores guardados desaparecían al volver al año anterior. La variable `_ppaBloques` (cargada al abrir la página) no se actualizaba tras el save; `precargarBloques()` leía datos desactualizados. Fix: `actualizarBloqueEnMemoria()` sincroniza `_ppaBloques` con los valores del form inmediatamente después del "✓ Guardado.".
+
 ## [2.25.2] - 2026-05-14
 
 ### Corregido

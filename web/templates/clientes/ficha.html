@@ -474,8 +474,27 @@
     precargarBloques();
   }
 
+  // Actualiza _ppaBloques en memoria tras guardar bloques (evita que precargarBloques
+  // muestre vacíos al volver al mismo año dentro de la misma sesión de página).
+  function actualizarBloqueEnMemoria() {
+    const sel = document.getElementById("anio_bloques_select");
+    if (!sel) return;
+    const anio = parseInt(sel.value);
+    if (!_ppaBloques[anio]) _ppaBloques[anio] = {};
+    for (let i = 1; i <= 12; i++) {
+      const inp = document.querySelector(`input[name="bloque_${i}"]`);
+      if (!inp) continue;
+      const v = inp.value.trim();
+      if (v) {
+        _ppaBloques[anio][i] = v;
+      } else {
+        delete _ppaBloques[anio][i];
+      }
+    }
+  }
+
   // ── AJAX submit para ambos formularios PPA ─────────────────────────────────
-  function ppaAjax(formId, msgId) {
+  function ppaAjax(formId, msgId, onSuccess) {
     const form = document.getElementById(formId);
     const msg  = document.getElementById(msgId);
     if (!form) return;
@@ -494,6 +513,7 @@
           if (resp.ok) {
             msg.className = "ms-2 small text-success fw-semibold";
             msg.textContent = "✓ Guardado.";
+            if (onSuccess) onSuccess();
           } else {
             msg.className = "ms-2 small text-danger";
             msg.textContent = "Error HTTP " + resp.status + ".";
@@ -513,7 +533,7 @@
     });
   }
   ppaAjax("formPPADatos",   "msgPPADatos");
-  ppaAjax("formPPABloques", "msgPPABloques");
+  ppaAjax("formPPABloques", "msgPPABloques", actualizarBloqueEnMemoria);
 })();
 </script>
 <script>
