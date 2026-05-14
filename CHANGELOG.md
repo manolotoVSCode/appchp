@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.24.0] — 2026-05-13
+
+### Añadido
+- Caja "Energía Limpia Generada" en bloque 2 del dashboard de Cogeneración. Muestra % del consumo total cubierto con CELs (`(cels_mwh × 1000) / kwh_total × 100`). Para IBERICA TILES: ~25.5%.
+- Beneficio fiscal año 1 en flujo acumulado de 15 años. Aplica 30% de inversión como deducción inmediata (Art. 34 fracción XIII LISR — cogeneración eficiente CRE). Barra del año 1 visiblemente más alta; tooltip explica el beneficio. Para IBERICA TILES: ~$14.4M MXN adicionales en año 1.
+- Payback recalculado incluyendo beneficio fiscal del año 1. Se expone como `payback_con_beneficio` en el endpoint `/data`.
+- Gráfica de cascada horizontal (waterfall) en bloque 1 mostrando composición: Ahorro Electricidad + Ahorro Caldera − Costo Gas − O&M = Ahorro Neto.
+- Dos donut charts con composición de Ingresos (Electricidad vs Caldera) y Gastos (Gas vs O&M).
+
+### Cambiado (visual)
+- Bloque 2 del dashboard reestructurado de 3 a 4 columnas (col-sm-6 col-lg-3). Responsive 4/2×2/1.
+- Tipografía e iconos unificados en las 4 cajas del bloque 2 con clase `.kpi-card-b2`.
+- Icono Ahorro Neto: `bi-cash-coin` (verde). Icono CO₂: hoja SVG verde sólida (sustituye outline anterior). Icono CELs: `bi-shield-check` (mantiene). Icono Energía Limpia: `bi-lightning-charge` (verde).
+
+### Backend
+- Nuevos campos en `CoGenResultado`: `beneficio_fiscal_anio_1_mxn`, `flujo_anio_1_con_beneficio_mxn`, `energia_limpia_pct`.
+- Constante `_TASA_ISR = Decimal("0.30")` a nivel de módulo en `calc/cogen.py`.
+- Endpoint `/data` expone `kpis.beneficio_fiscal_anio_1_mxn`, `kpis.energia_limpia_pct`, `flujo_anual_15_fiscal`, `flujo_acum_15_fiscal`, `payback_con_beneficio`.
+
+### Documentación
+- CLAUDE.md actualizado con secciones "Energía Limpia Generada" y "Beneficio Fiscal por Depreciación Inmediata".
+
+---
+
 ## [2.23.1] — 2026-05-13
 
 ### Corregido (metodología crítica)

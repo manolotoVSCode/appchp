@@ -592,6 +592,16 @@ def create_app() -> Flask:
             logger.error("Error calculando CELs en data endpoint: %s", _e_cels)
             cels_resultado = None
 
+        # Energía limpia generada: % del consumo total cubierto con CELs
+        if (cels_resultado is not None and cels_resultado.es_eficiente
+                and cels_resultado.cels_mwh_anual is not None
+                and r.kwh_total_anual > 0):
+            from decimal import Decimal as _D2, ROUND_HALF_UP as _RHU
+            _pct = (_D2(str(cels_resultado.cels_mwh_anual)) * _D2("1000") / r.kwh_total_anual * _D2("100"))
+            r.energia_limpia_pct = _pct.quantize(_D2("0.01"), _RHU)
+        else:
+            r.energia_limpia_pct = None
+
         num_cfe_total = cliente["num_cfe"]
         num_gas_total = cliente["num_gas"]
         num_cfe_sel = len(facturas_cfe)
@@ -608,12 +618,12 @@ def create_app() -> Flask:
         else:
             aviso_datos = None
 
-        chart_labels        = [m.periodo_inicio.strftime("%b %Y") for m in r.meses]
-        chart_ebitda        = [float(m.ebitda_mes_mxn)            for m in r.meses]
-        chart_ahorro_elec   = [float(m.ahorro_electricidad_mxn)   for m in r.meses]
-        chart_ahorro_caldera= [float(m.ahorro_caldera_mxn)        for m in r.meses]
-        chart_costo_gas     = [float(m.costo_gas_cogen_mxn)       for m in r.meses]
-        chart_om            = [float(m.gasto_om_mes_mxn)          for m in r.meses]
+        chart_labels = [m.periodo_inicio.strftime("%b %Y") for m in r.meses]
+        chart_ebitda = [float(m.ebitda_mes_mxn) for m in r.meses]
+        chart_ahorro_elec = [float(m.ahorro_electricidad_mxn) for m in r.meses]
+        chart_ahorro_caldera = [float(m.ahorro_caldera_mxn) for m in r.meses]
+        chart_costo_gas = [float(m.costo_gas_cogen_mxn) for m in r.meses]
+        chart_om = [float(m.gasto_om_mes_mxn) for m in r.meses]
 
         meses_raw = [
             {
@@ -675,10 +685,38 @@ def create_app() -> Flask:
             payback_inicial = calcular_payback(r.inversion_mxn, r.ebitda_anual_mxn)
             flujo_acum_15   = [float(v) for v in calcular_flujo_acumulado(r.inversion_mxn, r.ebitda_anual_mxn)]
             flujo_anual_15  = [-float(r.inversion_mxn)] + [float(r.ebitda_anual_mxn)] * 15
+            # Flujo con beneficio fiscal año 1 (depreciación inmediata Art. 34 XIII LISR)
+            if r.flujo_anio_1_con_beneficio_mxn is not None:
+                flujo_anual_15_fiscal = (
+                    [-float(r.inversion_mxn), float(r.flujo_anio_1_con_beneficio_mxn)]
+                    + [float(r.ebitda_anual_mxn)] * 14
+                )
+                _acum = 0.0
+                flujo_acum_15_fiscal = []
+                for v in flujo_anual_15_fiscal:
+                    _acum += v
+                    flujo_acum_15_fiscal.append(_acum)
+                # Payback con beneficio fiscal
+                _acum2 = -float(r.inversion_mxn)
+                payback_con_beneficio = None
+                for _yr, _v in enumerate(flujo_anual_15_fiscal[1:], start=1):
+                    _acum2 += _v
+                    if _acum2 >= 0:
+                        payback_con_beneficio = _yr
+                        break
+                if payback_con_beneficio is None:
+                    payback_con_beneficio = -1  # > 15 años
+            else:
+                flujo_anual_15_fiscal = flujo_anual_15
+                flujo_acum_15_fiscal = flujo_acum_15
+                payback_con_beneficio = payback_inicial
         else:
             payback_inicial = None
-            flujo_acum_15   = []
-            flujo_anual_15  = []
+            flujo_acum_15 = []
+            flujo_anual_15 = []
+            flujo_anual_15_fiscal = []
+            flujo_acum_15_fiscal = []
+            payback_con_beneficio = None
 
         co2 = None
         if r.co2_reduccion_kg_anual is not None:
@@ -714,6 +752,8 @@ def create_app() -> Flask:
                 "ahorro_energia_anual": float(r.ahorro_energia_anual_mxn),
                 "ahorro_capacidad_anual": float(r.ahorro_capacidad_anual_mxn),
                 "ahorro_distribucion_anual": float(r.ahorro_distribucion_anual_mxn),
+                "beneficio_fiscal_anio_1_mxn": float(r.beneficio_fiscal_anio_1_mxn) if r.beneficio_fiscal_anio_1_mxn else None,
+                "energia_limpia_pct": float(r.energia_limpia_pct) if r.energia_limpia_pct else None,
             },
             "co2": co2,
             "cels": _cels_to_dict(cels_resultado),
@@ -741,6 +781,9 @@ def create_app() -> Flask:
             "payback_inicial": payback_inicial,
             "flujo_acum_15": flujo_acum_15,
             "flujo_anual_15": flujo_anual_15,
+            "flujo_anual_15_fiscal": flujo_anual_15_fiscal,
+            "flujo_acum_15_fiscal": flujo_acum_15_fiscal,
+            "payback_con_beneficio": payback_con_beneficio,
             "params": {
                 "cobertura_electrica": float(r.params.cobertura_electrica),
                 "rendimiento_electrico": float(r.params.rendimiento_electrico),

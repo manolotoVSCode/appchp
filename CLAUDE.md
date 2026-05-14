@@ -124,6 +124,14 @@ Paso 6. Costo O&M (Operación y Mantenimiento). 0.3 MXN fijos por cada kWh cubie
 
 Paso 7. Ahorro neto y EBITDA. Ahorro eléctrico bruto más ahorro térmico menos costo de gas adicional menos O&M. Cálculo mensual sobre las 12 facturas reales (preserva estacionalidad), suma anual.
 
+## Energía Limpia Generada (KPI dashboard)
+
+Caja adicional en el bloque 2 del dashboard de Cogeneración. Fórmula: energia_limpia_pct = (cels_mwh_anual × 1000) / kwh_total_anual × 100. Se calcula en web/app.py después de obtener CELsResultado. Solo se muestra cuando el cliente califica como cogeneración eficiente (cels_resultado.es_eficiente = True). Se almacena en CoGenResultado.energia_limpia_pct (Decimal | None). Para IBERICA TILES 2024: ~25.5%.
+
+## Beneficio Fiscal por Depreciación Inmediata
+
+La Ley del ISR Artículo 34 fracción XIII permite deducción inmediata del 100% para activos de cogeneración eficiente certificada CRE. Cuando el cliente califica como cogeneración eficiente (cumple Caso I de CRE), puede deducir la totalidad de la inversión en el año fiscal 1. Cálculo del beneficio: beneficio_fiscal_anio_1 = inversion_mxn × tasa_ISR, donde tasa_ISR = 30% (constante _TASA_ISR en calc/cogen.py — régimen general personas morales en México). El beneficio se suma al Ahorro Neto del año 1 en la proyección del flujo acumulado a 15 años. Esto reduce significativamente el payback del proyecto. Para IBERICA TILES 2024 con inversión ~$48.1M MXN: beneficio ≈ $14.4M MXN. Si el cliente NO califica como cogeneración eficiente, el beneficio fiscal aún se muestra en la proyección (la ley aplica independientemente de CELs). La app siempre calcula el beneficio cuando hay inversión estimable.
+
 ## Restricciones de comunicación
 
 Responder en español.

@@ -98,3 +98,8 @@ class CoGenResultado:
     co2_proyectado_total_kg_anual: Decimal | None = None
     co2_reduccion_kg_anual: Decimal | None = None
     co2_reduccion_porcentaje: Decimal | None = None
+    # Beneficio fiscal por depreciación inmediata (Art. 34 fracción XIII LISR)
+    beneficio_fiscal_anio_1_mxn: Decimal | None = None  # inversion_mxn * 0.30
+    flujo_anio_1_con_beneficio_mxn: Decimal | None = None  # ebitda_anual + beneficio_fiscal_anio_1
+    # Energía limpia generada (se calcula en app.py después de obtener cels, no aquí)
+    energia_limpia_pct: Decimal | None = None  # (cels_mwh_anual * 1000) / kwh_total_anual * 100

@@ -32,6 +32,8 @@ _FACTOR_DEMANDA = Decimal("0.57")
 
 _CENTAVO = Decimal("0.01")
 _DIEZMILAVO = Decimal("0.0001")
+# Tasa ISR para cálculo de beneficio fiscal
+_TASA_ISR = Decimal("0.30")
 
 
 def _capacidad_nominal_kw(cfe_invoices: list[CFEInvoice]) -> Decimal | None:
@@ -334,6 +336,13 @@ def calcular_cogen(
         else:
             co2_reduccion_pct = Decimal("0")
 
+    if inv_mxn is not None and inv_mxn > 0:
+        beneficio_fiscal = (inv_mxn * _TASA_ISR).quantize(_CENTAVO, ROUND_HALF_UP)
+        flujo_anio_1_ben = (_sum("ebitda_mes_mxn") + beneficio_fiscal).quantize(_CENTAVO, ROUND_HALF_UP)
+    else:
+        beneficio_fiscal = None
+        flujo_anio_1_ben = None
+
     return CoGenResultado(
         params=params,
         meses=meses,
@@ -361,4 +370,6 @@ def calcular_cogen(
         co2_proyectado_total_kg_anual=co2_proy,
         co2_reduccion_kg_anual=co2_reduccion,
         co2_reduccion_porcentaje=co2_reduccion_pct,
+        beneficio_fiscal_anio_1_mxn=beneficio_fiscal,
+        flujo_anio_1_con_beneficio_mxn=flujo_anio_1_ben,
     )

@@ -26,10 +26,14 @@
   let inversionMxn = 0;        // inversión fija
   let tieneInversion = false;
   let co2Datos    = null;       // {actual_total_t, factor_emision_elec, factor_emision_gas}
+  let beneficioFiscalAnio1 = 0;   // beneficio fiscal año 1 por depreciación inmediata
 
   // ── Instancias Chart.js ───────────────────────────────────────────────────
   let cogenChart = null;
   let chart15    = null;
+  let waterfallChart = null;
+  let donutIngChart  = null;
+  let donutGasChart  = null;
 
   // ── AbortController + debounce ────────────────────────────────────────────
   let _abortCtrl  = null;
@@ -162,12 +166,13 @@
     const pct        = co2_actual > 0 ? reduccion / co2_actual * 100 : 0;
     const arboles    = Math.round(reduccion * 50);
     if (reduccion >= 0) {
-      el.innerHTML = `<div class="small text-muted mb-1">Reducción Huella de Carbono</div>
-        <div class="fw-bold text-success">${reduccion.toFixed(1)} t CO₂/año (${Math.abs(pct).toFixed(1)}% menos)</div>
-        <div class="text-muted small mt-1">≈ ${arboles.toLocaleString("es-MX")} árboles plantados al año</div>`;
+      el.innerHTML = `<div class="kpi-label">Reducción CO₂</div>
+        <div class="kpi-value text-success" style="font-size:1.2rem">${reduccion.toFixed(1)} t CO₂/año</div>
+        <div class="kpi-sublabel">${Math.abs(pct).toFixed(1)}% menos · ≈${arboles.toLocaleString("es-MX")} árboles</div>`;
     } else {
-      el.innerHTML = `<div class="small text-muted mb-1">Reducción Huella de Carbono</div>
-        <div class="fw-bold text-danger">+${Math.abs(reduccion).toFixed(1)} t CO₂/año con esta configuración</div>`;
+      el.innerHTML = `<div class="kpi-label">Reducción CO₂</div>
+        <div class="kpi-value text-danger" style="font-size:1.2rem">+${Math.abs(reduccion).toFixed(1)} t</div>
+        <div class="kpi-sublabel">con esta configuración</div>`;
     }
   }
 
@@ -271,11 +276,121 @@
     }
   }
 
+  // ── Charts: waterfall y donuts de composición ─────────────────────────────
+  function upsertGraficasComposicion(ah_elec, ah_caldera, costo_gas, om, ahorro_neto) {
+    const secGraf = document.getElementById("seccion-graficas-composicion");
+    if (secGraf) secGraf.style.display = "";
+
+    // ── Waterfall (barras horizontales simuladas) ─────────────────────────────
+    const wfCtx = document.getElementById("waterfallChart");
+    if (wfCtx) {
+      const wfLabels  = ["Ahorro Electricidad", "Ahorro Caldera", "Costo Gas Cogen", "O&M", "Ahorro Neto"];
+      const wfValues  = [ah_elec, ah_caldera, -costo_gas, -om, ahorro_neto];
+      const wfColors  = [
+        "rgba(106,138,154,0.8)",   // azul grisáceo — elec
+        "rgba(232,181,71,0.8)",    // dorado — caldera
+        "rgba(216,90,90,0.8)",     // rojo — gas
+        "rgba(180,100,180,0.8)",   // morado — O&M
+        "rgba(31,122,76,0.85)",    // verde oscuro — neto
+      ];
+      const wfData = { labels: wfLabels, datasets: [{ data: wfValues, backgroundColor: wfColors }] };
+      if (!waterfallChart) {
+        waterfallChart = new Chart(wfCtx, {
+          type: "bar",
+          data: wfData,
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { label: c => "$" + Math.abs(Math.round(c.raw)).toLocaleString("es-MX") + " MXN" } }
+            },
+            scales: {
+              x: { ticks: { callback: v => "$" + Math.abs(Math.round(v)).toLocaleString("es-MX", { maximumFractionDigits: 0 }) } }
+            }
+          }
+        });
+      } else {
+        waterfallChart.data.datasets[0].data = wfValues;
+        waterfallChart.update();
+      }
+    }
+
+    // ── Donut Ingresos ────────────────────────────────────────────────────────
+    const diCtx = document.getElementById("donutIngresosChart");
+    if (diCtx) {
+      const totalIng = ah_elec + ah_caldera;
+      const diData = {
+        labels: ["Ahorro Electricidad", "Ahorro Caldera"],
+        datasets: [{ data: [ah_elec, ah_caldera], backgroundColor: ["rgba(106,138,154,0.8)", "rgba(232,181,71,0.8)"] }]
+      };
+      if (!donutIngChart) {
+        donutIngChart = new Chart(diCtx, {
+          type: "doughnut",
+          data: diData,
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: "bottom" },
+              tooltip: {
+                callbacks: {
+                  label: c => {
+                    const pct = totalIng > 0 ? (c.raw / totalIng * 100).toFixed(1) : 0;
+                    return c.label + ": " + pct + "% ($" + Math.round(c.raw).toLocaleString("es-MX") + ")";
+                  }
+                }
+              }
+            }
+          }
+        });
+      } else {
+        donutIngChart.data.datasets[0].data = [ah_elec, ah_caldera];
+        donutIngChart.update();
+      }
+    }
+
+    // ── Donut Gastos ──────────────────────────────────────────────────────────
+    const dgCtx = document.getElementById("donutGastosChart");
+    if (dgCtx) {
+      const totalGas = costo_gas + om;
+      const dgData = {
+        labels: ["Costo Gas Cogen", "O&M"],
+        datasets: [{ data: [costo_gas, om], backgroundColor: ["rgba(216,90,90,0.8)", "rgba(180,100,180,0.8)"] }]
+      };
+      if (!donutGasChart) {
+        donutGasChart = new Chart(dgCtx, {
+          type: "doughnut",
+          data: dgData,
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { position: "bottom" },
+              tooltip: {
+                callbacks: {
+                  label: c => {
+                    const pct = totalGas > 0 ? (c.raw / totalGas * 100).toFixed(1) : 0;
+                    return c.label + ": " + pct + "% ($" + Math.round(c.raw).toLocaleString("es-MX") + ")";
+                  }
+                }
+              }
+            }
+          }
+        });
+      } else {
+        donutGasChart.data.datasets[0].data = [costo_gas, om];
+        donutGasChart.update();
+      }
+    }
+  }
+
   // ── Chart: flujo 15 años ──────────────────────────────────────────────────
-  function actualizarChart15(ahorroAnual) {
+  function actualizarChart15(ahorroAnual, beneficioFiscal) {
+    beneficioFiscal = beneficioFiscal || 0;
     const ctxEl = document.getElementById("chart15Year");
     if (!ctxEl || !tieneInversion || !inversionMxn) return;
-    const flujoAnual = [-inversionMxn, ...Array(15).fill(ahorroAnual)];
+    // Año 1 incluye beneficio fiscal
+    const flujoAnio1 = ahorroAnual + beneficioFiscal;
+    const flujoAnual = [-inversionMxn, flujoAnio1, ...Array(14).fill(ahorroAnual)];
     let acum = 0;
     const flujoAcum = flujoAnual.map(v => { acum += v; return acum; });
     const bgColors  = flujoAnual.map(v => v < 0 ? "rgba(216,90,90,0.75)" : "rgba(85,170,85,0.6)");
@@ -298,8 +413,20 @@
           responsive: true,
           plugins: {
             legend: { position: "top", labels: { filter: item => item.text !== "_cero" } },
-            tooltip: { callbacks: { label: ctx => ctx.dataset.label === "_cero" ? null
-              : ctx.dataset.label + ": $" + Math.abs(ctx.raw).toLocaleString("es-MX", { maximumFractionDigits: 0 }) } }
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  if (ctx.dataset.label === "_cero") return null;
+                  if (ctx.datasetIndex === 0 && ctx.dataIndex === 1 && beneficioFiscal > 0) {
+                    return [
+                      ctx.dataset.label + ": $" + Math.abs(Math.round(ctx.raw)).toLocaleString("es-MX", { maximumFractionDigits: 0 }),
+                      "  (incl. beneficio fiscal $" + Math.round(beneficioFiscal).toLocaleString("es-MX") + " — Art. 34 XIII LISR)"
+                    ];
+                  }
+                  return ctx.dataset.label + ": $" + Math.abs(ctx.raw).toLocaleString("es-MX", { maximumFractionDigits: 0 });
+                }
+              }
+            }
           },
           scales: { y: { ticks: { callback: v => "$" + v.toLocaleString("es-MX", { maximumFractionDigits: 0 }) } } }
         }
@@ -310,6 +437,9 @@
       chart15.data.datasets[1].data            = flujoAcum;
       chart15.update();
     }
+
+    const notaFiscal = document.getElementById("nota-beneficio-fiscal");
+    if (notaFiscal) notaFiscal.style.display = beneficioFiscal > 0 ? "" : "none";
   }
 
   // ── Actualización desde sliders ───────────────────────────────────────────
@@ -360,12 +490,13 @@
       const { texto, clase } = textoPayback(payback);
       const el = document.getElementById("kpi-payback-val");
       if (el) { el.textContent = texto; el.className = clase; }
-      actualizarChart15(ahorro_neto_anual);
+      actualizarChart15(ahorro_neto_anual, beneficioFiscalAnio1);
     }
 
     // Actualizar gráfica mensual
     const labels = meses_raw.map(m => m.periodo);
     upsertCogenChart(labels, lChartE, lChartC, lChartG, lChartOM, lChartN);
+    upsertGraficasComposicion(ah_elec, ah_caldera, costo_gas, om_anual, ahorro_neto_anual);
 
     actualizarCO2(p);
     const celRes = recalcularCELs(p);
@@ -513,18 +644,25 @@
       }
     }
 
+    // Energía Limpia Generada
+    const elLimpia = document.getElementById("kpi-energia-limpia-val");
+    if (elLimpia) {
+      if (data.kpis.energia_limpia_pct != null) {
+        elLimpia.textContent = data.kpis.energia_limpia_pct.toFixed(1) + "%";
+        elLimpia.style.color = "var(--bs-success, #28a745)";
+      } else {
+        elLimpia.textContent = "N/D";
+        elLimpia.style.color = "var(--bs-secondary, #6c757d)";
+      }
+    }
+
+    beneficioFiscalAnio1 = data.kpis.beneficio_fiscal_anio_1_mxn || 0;
+
     // CO2 sección
     const co2Section = document.getElementById("co2-reduccion-texto");
     if (co2Section && !data.co2) {
-      co2Section.textContent = "";
-      const lbl = document.createElement("div");
-      lbl.className = "small text-muted mb-1";
-      lbl.textContent = "Reducción Huella de Carbono";
-      const val = document.createElement("div");
-      val.className = "text-muted";
-      val.textContent = "No disponible";
-      co2Section.appendChild(lbl);
-      co2Section.appendChild(val);
+      co2Section.innerHTML = `<div class="kpi-label">Reducción CO₂</div>
+        <div class="kpi-sublabel">No disponible (sin factores de emisión)</div>`;
     }
 
     // CELs: determinar estado y actualizar card
@@ -536,6 +674,17 @@
 
     // Trigger slider update (re-calcula todo con parámetros actuales)
     actualizarSensibilidad();
+
+    // Payback con beneficio fiscal (override del cálculo JS local si el backend lo entrega)
+    const paybackConBeneficio = data.payback_con_beneficio;
+    if (tieneInversion && paybackConBeneficio !== null && paybackConBeneficio !== undefined) {
+      const elPb = document.getElementById("kpi-payback-val");
+      if (elPb) {
+        const { texto, clase } = textoPayback(paybackConBeneficio);
+        elPb.textContent = texto + (beneficioFiscalAnio1 > 0 ? " ★" : "");
+        elPb.className = clase;
+      }
+    }
 
     // Gráfica 15 años: mostrar/ocultar contenedor
     const sec15 = document.getElementById("seccion-15-anios");
@@ -549,8 +698,6 @@
     card.textContent = "";
 
     const icon = document.createElement("i");
-    icon.style.fontSize = "2.5rem";
-    icon.style.flexShrink = "0";
     const inner = document.createElement("div");
 
     const lbl = document.createElement("div");
@@ -559,7 +706,7 @@
     inner.appendChild(lbl);
 
     if (!cels) {
-      icon.className = "bi bi-info-circle";
+      icon.className = "bi bi-info-circle kpi-icon";
       icon.style.color = "var(--color-text-muted)";
 
       const titulo = document.createElement("div");
@@ -578,7 +725,7 @@
       link.textContent = "Ir a ficha del cliente →";
       inner.appendChild(link);
     } else if (cels.es_eficiente) {
-      icon.className = "bi bi-patch-check";
+      icon.className = "bi bi-patch-check kpi-icon";
       icon.id = "cels-icono";
       icon.style.color = "var(--color-primary)";
 
@@ -606,7 +753,7 @@
       link.addEventListener("click", e => { e.preventDefault(); abrirPanel("panelCels"); });
       inner.appendChild(link);
     } else {
-      icon.className = "bi bi-x-circle";
+      icon.className = "bi bi-x-circle kpi-icon";
       icon.id = "cels-icono";
       icon.style.color = "var(--bs-warning)";
 

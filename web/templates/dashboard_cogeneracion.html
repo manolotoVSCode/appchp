@@ -17,6 +17,34 @@
     color: var(--color-text-muted);
     padding: .4rem 1rem .1rem;
   }
+  /* KPI Cards Bloque 2 — tipografía e iconos unificados */
+  .kpi-card-b2 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.25rem 1rem;
+    height: 100%;
+  }
+  .kpi-card-b2 .kpi-icon { margin-bottom: .5rem; }
+  .kpi-card-b2 .kpi-label {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--color-text-muted, #6c757d);
+    margin-bottom: .35rem;
+  }
+  .kpi-card-b2 .kpi-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .kpi-card-b2 .kpi-sublabel {
+    font-size: .72rem;
+    color: var(--color-text-muted, #6c757d);
+    margin-top: .2rem;
+  }
 </style>
 {% endblock %}
 
@@ -118,32 +146,31 @@
   </div>
 </div>
 
-<!-- ── KPI: Ahorro Neto + Reducción CO2 + CELs ───────────────────────────── -->
+<!-- ── KPI: Ahorro Neto + Reducción CO2 + CELs + Energía Limpia ─────────── -->
 <div class="row g-3 mb-4">
 
   <!-- Ahorro Neto Anual -->
-  <div class="col-md-4">
+  <div class="col-sm-6 col-lg-3">
     <div class="card shadow-sm h-100">
-      <div class="card-body text-center py-3">
-        <div class="text-muted small mb-1">Ahorro Neto Anual</div>
-        <div class="fs-2 fw-bold" id="kpi-ahorro-neto-val">—</div>
-        <div class="text-muted small">MXN / año (ingresos − costo gas − O&amp;M)</div>
+      <div class="kpi-card-b2">
+        <i class="bi bi-cash-coin kpi-icon" style="font-size:2rem;color:#28a745"></i>
+        <div class="kpi-label">Ahorro Neto Anual</div>
+        <div class="kpi-value" id="kpi-ahorro-neto-val" style="color:#28a745">—</div>
+        <div class="kpi-sublabel">MXN / año (ingresos − gas − O&amp;M)</div>
       </div>
     </div>
   </div>
 
   <!-- Reducción Huella de Carbono -->
-  <div class="col-md-4">
+  <div class="col-sm-6 col-lg-3">
     <div class="card shadow-sm h-100">
-      <div class="card-body d-flex align-items-center gap-3 py-3">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 16 16"
-             fill="none" stroke="var(--color-primary)" stroke-width="0.6"
-             style="flex-shrink:0">
-          <path d="M8 11v4M8 11c0 0-3-1.5-3-5a3 3 0 0 1 6 0c0 3.5-3 5-3 5z"/>
-          <path d="M5.5 6.5c-.5-1.5.5-3 2-3.5M10 8c1-1 1-2.5 0-3.5"/>
+      <div class="kpi-card-b2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"
+             fill="#28a745" class="kpi-icon">
+          <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.3c.48.17.98.3 1.5.41C16 21 22 15 22 5c-1.5 2.5-5 2.5-8 3z"/>
         </svg>
         <div id="co2-reduccion-texto">
-          <div class="small text-muted mb-1">Reducción Huella de Carbono</div>
+          <div class="kpi-label">Reducción CO₂</div>
           <div class="text-muted small">Cargando…</div>
         </div>
       </div>
@@ -151,10 +178,59 @@
   </div>
 
   <!-- CELs Generados -->
-  <div class="col-md-4">
+  <div class="col-sm-6 col-lg-3">
     <div class="card shadow-sm h-100">
-      <div class="card-body d-flex align-items-center gap-3 py-3" id="cels-card-body">
-        <!-- JS renderiza el contenido según estado -->
+      <div class="kpi-card-b2" id="cels-card-body">
+        <!-- JS renderiza el contenido -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Energía Limpia Generada (NUEVA) -->
+  <div class="col-sm-6 col-lg-3">
+    <div class="card shadow-sm h-100">
+      <div class="kpi-card-b2">
+        <i class="bi bi-lightning-charge kpi-icon" style="font-size:2rem;color:#28a745"></i>
+        <div class="kpi-label">Energía Limpia Generada</div>
+        <div class="kpi-value text-success" id="kpi-energia-limpia-val">—</div>
+        <div class="kpi-sublabel">% consumo total cubierto con CELs</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Gráficas de composición: cascada + donuts ─────────────────────────── -->
+<div class="row g-3 mb-4" id="seccion-graficas-composicion" style="display:none">
+  <!-- Gráfica cascada waterfall -->
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="card-title small text-uppercase text-muted fw-semibold mb-2">
+          Composición del Ahorro Neto
+        </h6>
+        <canvas id="waterfallChart" height="60"></canvas>
+      </div>
+    </div>
+  </div>
+  <!-- Donuts: Ingresos y Gastos -->
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="card-title small text-uppercase text-muted fw-semibold mb-2">
+          Composición de Ingresos
+        </h6>
+        <canvas id="donutIngresosChart" height="180"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h6 class="card-title small text-uppercase text-muted fw-semibold mb-2">
+          Composición de Gastos
+        </h6>
+        <canvas id="donutGastosChart" height="180"></canvas>
       </div>
     </div>
   </div>
@@ -255,6 +331,10 @@
     <div class="card-body">
       <h5 class="card-title mb-2">Flujo de caja acumulado del proyecto a 15 años</h5>
       <canvas id="chart15Year" height="90"></canvas>
+      <p class="small text-muted mt-2 mb-0" id="nota-beneficio-fiscal" style="display:none">
+        ★ Año 1 incluye beneficio fiscal del 30% sobre inversión por depreciación inmediata
+        (Art. 34 fracción XIII LISR — aplicable a cogeneración eficiente certificada CRE).
+      </p>
     </div>
   </div>
 </div>
