@@ -558,14 +558,14 @@ def get_ppa_bloques_mensuales(cliente_id: int, anio: int | None = None) -> list[
 
 
 def upsert_ppa_bloque_mensual(
-    cliente_id: int, anio: int, mes: int, bloque_mwh: float
+    cliente_id: int, anio: int, mes: int, bloque_mwh: Decimal
 ) -> None:
     """Inserta o actualiza el bloque contratado para un mes dado."""
     _supabase.table("ppa_bloques_mensuales").upsert({
         "cliente_id": cliente_id,
         "anio": anio,
         "mes": mes,
-        "bloque_contratado_mwh": bloque_mwh,
+        "bloque_contratado_mwh": str(bloque_mwh),
     }, on_conflict="cliente_id,anio,mes").execute()
 
 
