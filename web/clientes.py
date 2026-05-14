@@ -8,7 +8,7 @@ import unicodedata
 from pathlib import Path
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
-from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO
+from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
 from parsers.cfe import get_cfe_parser
 from parsers.gas import get_gas_parser
 from storage.repository import (
@@ -42,6 +42,11 @@ from storage.repository import (
     delete_mes_seleccionado,
     upsert_meses_seleccionados_anio,
     delete_meses_seleccionados_anio,
+    get_facturas_calificado_por_contrato,
+    create_factura_calificado,
+    get_factura_calificado,
+    update_factura_calificado,
+    delete_factura_calificado,
 )
 
 logger = logging.getLogger(__name__)
@@ -553,6 +558,7 @@ def contrato_ficha(cliente_id: int, contrato_id: int):
     contrato = get_contrato_con_conteos(contrato_id)
     facturas_cfe = get_cfe_facturas_por_contrato(contrato_id)
     facturas_gas = get_gas_facturas_por_contrato(contrato_id)
+    facturas_calificado = get_facturas_calificado_por_contrato(contrato_id)
 
     return render_template(
         "clientes/contratos/ficha.html",
@@ -560,6 +566,7 @@ def contrato_ficha(cliente_id: int, contrato_id: int):
         contrato=contrato,
         facturas_cfe=facturas_cfe,
         facturas_gas=facturas_gas,
+        facturas_calificado=facturas_calificado,
     )
 
 
@@ -824,9 +831,10 @@ def contrato_get_seleccion(cliente_id: int, contrato_id: int):
         return jsonify({"error": "Contrato no encontrado"}), 404
     if isinstance(resultado, Response):
         return jsonify({"error": "Acceso denegado"}), 403
+    contrato = resultado
 
     try:
-        data = get_sidebar_data_contrato(contrato_id)
+        data = get_sidebar_data_contrato(contrato_id, contrato_tipo=contrato.tipo)
         return jsonify({"ok": True, "anios": data})
     except Exception as exc:
         logger.error("Error cargando sidebar data contrato_id=%d: %s", contrato_id, exc)
@@ -862,6 +870,7 @@ def contrato_seleccion_mes(cliente_id: int, contrato_id: int):
         return jsonify({"error": "Contrato no encontrado"}), 404
     if isinstance(resultado, Response):
         return jsonify({"error": "Acceso denegado"}), 403
+    contrato = resultado
 
     data = request.get_json(silent=True) or {}
     anio = data.get("anio")
@@ -874,7 +883,7 @@ def contrato_seleccion_mes(cliente_id: int, contrato_id: int):
 
     try:
         if seleccionado:
-            meses_con_factura = get_meses_con_factura(contrato_id, anio)
+            meses_con_factura = get_meses_con_factura(contrato_id, anio, contrato_tipo=contrato.tipo)
             if mes not in meses_con_factura:
                 return jsonify({"error": f"No existe factura para {anio}-{mes:02d} en este contrato"}), 400
             upsert_mes_seleccionado(contrato_id, anio, mes)
@@ -918,6 +927,330 @@ def contrato_seleccion_anio(cliente_id: int, contrato_id: int):
     except Exception as exc:
         logger.error("Error en selección anio contrato_id=%d %d: %s", contrato_id, anio, exc)
         return jsonify({"error": str(exc)}), 500
+
+
+# ── Facturas calificadas (suministro eléctrico PPA) ───────────────────────────
+
+def _validar_y_parsear_factura_calificado(form, contrato_id, cliente_id, excluir_factura_id=None):
+    """Valida y parsea los campos del formulario de factura calificada.
+
+    Devuelve (datos_dict, error_str). Si hay error, datos_dict es None.
+    Si excluir_factura_id es None, verifica duplicados; si es un int, los omite (modo editar).
+    """
+    from datetime import date as date_type
+    from decimal import Decimal, InvalidOperation
+    from storage.repository import get_ppa_bloques_mensuales
+
+    rpu = form.get("rpu", "").strip()
+    suministrador = form.get("suministrador", "").strip() or None
+    serie_folio = form.get("serie_folio", "").strip() or None
+    periodo_inicio_str = form.get("periodo_inicio", "").strip()
+    periodo_fin_str = form.get("periodo_fin", "").strip()
+    consumo_kwh_str = form.get("consumo_kwh", "").strip()
+    precio_unitario_str = form.get("precio_unitario_mxn_kwh", "").strip()
+    subtotal_str = form.get("subtotal_mxn", "").strip()
+    iva_str = form.get("iva_mxn", "").strip()
+    total_str = form.get("total_mxn", "").strip()
+
+    error = None
+    if not rpu:
+        error = "El RPU es obligatorio."
+    elif not periodo_inicio_str:
+        error = "El periodo de inicio es obligatorio."
+    elif not periodo_fin_str:
+        error = "El periodo de fin es obligatorio."
+    elif not consumo_kwh_str:
+        error = "El consumo en kWh es obligatorio."
+    elif not precio_unitario_str:
+        error = "El precio unitario MXN/kWh es obligatorio."
+    elif not subtotal_str:
+        error = "El subtotal MXN es obligatorio."
+
+    if error:
+        return None, error
+
+    try:
+        periodo_inicio = date_type.fromisoformat(periodo_inicio_str)
+        periodo_fin = date_type.fromisoformat(periodo_fin_str)
+    except ValueError:
+        return None, "Fechas inválidas."
+
+    if periodo_fin <= periodo_inicio:
+        return None, "El periodo de fin debe ser posterior al de inicio."
+
+    try:
+        consumo_kwh = Decimal(consumo_kwh_str)
+        if consumo_kwh <= 0:
+            raise ValueError()
+    except (InvalidOperation, ValueError):
+        return None, "El consumo kWh debe ser un número positivo."
+
+    try:
+        precio_unitario = Decimal(precio_unitario_str)
+        if precio_unitario <= 0:
+            raise ValueError()
+    except (InvalidOperation, ValueError):
+        return None, "El precio unitario debe ser un número positivo."
+
+    try:
+        subtotal_mxn = Decimal(subtotal_str)
+        if subtotal_mxn <= 0:
+            raise ValueError()
+    except (InvalidOperation, ValueError):
+        return None, "El subtotal debe ser un número positivo."
+
+    iva_mxn = None
+    if iva_str:
+        try:
+            iva_mxn = Decimal(iva_str)
+        except InvalidOperation:
+            return None, "El IVA debe ser un número válido."
+
+    total_mxn = None
+    if total_str:
+        try:
+            total_mxn = Decimal(total_str)
+        except InvalidOperation:
+            return None, "El total debe ser un número válido."
+
+    if iva_mxn is not None and total_mxn is not None:
+        expected_total = subtotal_mxn + iva_mxn
+        if abs(expected_total - total_mxn) > Decimal("1"):
+            return None, "El total no es coherente con subtotal + IVA (tolerancia ±1 peso)."
+
+    dias_facturados = (periodo_fin - periodo_inicio).days + 1
+    anio = periodo_fin.year
+    mes = periodo_fin.month
+    consumo_mwh = consumo_kwh / Decimal("1000")
+    nombre_canonico = f"{anio:04d}-{mes:02d}"
+
+    # Verificar duplicado solo en modo crear
+    if excluir_factura_id is None:
+        existing = get_facturas_calificado_por_contrato(contrato_id)
+        if any(f.get("anio") == anio and f.get("mes") == mes for f in existing):
+            return None, (
+                f"Ya existe una factura para {nombre_canonico} en este contrato. "
+                "¿Deseas editar la existente?"
+            )
+
+    # Detección de excedente
+    try:
+        bloques = get_ppa_bloques_mensuales(cliente_id, anio)
+        bloque_mes = next((b for b in bloques if b["mes"] == mes), None)
+        excedente_detectado = False
+        if bloque_mes:
+            bloque_mwh = Decimal(str(bloque_mes["bloque_contratado_mwh"]))
+            excedente_detectado = consumo_mwh > bloque_mwh * Decimal("1.10")
+    except Exception:
+        excedente_detectado = False
+
+    datos = {
+        "suministrador": suministrador,
+        "rpu": rpu,
+        "serie_folio": serie_folio,
+        "periodo_inicio": periodo_inicio.isoformat(),
+        "periodo_fin": periodo_fin.isoformat(),
+        "dias_facturados": dias_facturados,
+        "anio": anio,
+        "mes": mes,
+        "nombre_canonico": nombre_canonico,
+        "consumo_kwh": consumo_kwh,
+        "precio_unitario_mxn_kwh": precio_unitario,
+        "subtotal_mxn": subtotal_mxn,
+        "iva_mxn": iva_mxn,
+        "total_mxn": total_mxn,
+        "excedente_detectado": excedente_detectado,
+    }
+    return datos, None
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/factura_calificado/crear",
+    methods=["GET", "POST"],
+)
+def factura_calificado_crear(cliente_id: int, contrato_id: int):
+    from flask import Response
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    if isinstance(resultado, Response):
+        return resultado
+    contrato = resultado
+
+    if contrato.tipo != TIPO_ELECTRICO_CALIFICADO:
+        flash("Este contrato no es de tipo eléctrico calificado.", "danger")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    if request.method == "POST":
+        datos, error = _validar_y_parsear_factura_calificado(
+            request.form, contrato_id, cliente_id, excluir_factura_id=None
+        )
+        if not error:
+            try:
+                factura_id = create_factura_calificado(contrato_id, cliente_id, datos)
+                nombre_canonico = datos["nombre_canonico"]
+                logger.info(
+                    "Factura calificada creada: id=%d, contrato_id=%d", factura_id, contrato_id
+                )
+                flash(f"Factura {nombre_canonico} cargada correctamente.", "success")
+                return redirect(url_for(
+                    "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
+                ))
+            except Exception as exc:
+                logger.error("Error creando factura calificada: %s", exc)
+                error = f"Error al guardar: {exc}"
+
+        return render_template(
+            "clientes/contratos/factura_calificado_form.html",
+            cliente=cliente,
+            contrato=contrato,
+            modo="crear",
+            factura=None,
+            error=error,
+            form_data=request.form,
+        )
+
+    return render_template(
+        "clientes/contratos/factura_calificado_form.html",
+        cliente=cliente,
+        contrato=contrato,
+        modo="crear",
+        factura=None,
+        error=None,
+        form_data={
+            "rpu": cliente.get("ppa_rpu") or "",
+            "suministrador": cliente.get("ppa_suministrador") or "",
+        },
+    )
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/factura_calificado/<int:factura_id>/editar",
+    methods=["GET", "POST"],
+)
+def factura_calificado_editar(cliente_id: int, contrato_id: int, factura_id: int):
+    from flask import Response
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    if isinstance(resultado, Response):
+        return resultado
+    contrato = resultado
+
+    if contrato.tipo != TIPO_ELECTRICO_CALIFICADO:
+        flash("Este contrato no es de tipo eléctrico calificado.", "warning")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    factura = get_factura_calificado(factura_id)
+    if factura is None:
+        flash("La factura solicitada no existe.", "warning")
+        return redirect(url_for(
+            "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
+        ))
+
+    if factura.contrato_id != contrato_id:
+        flash("La factura no pertenece a este contrato.", "warning")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    if request.method == "POST":
+        datos, error = _validar_y_parsear_factura_calificado(
+            request.form, contrato_id, cliente_id, excluir_factura_id=factura_id
+        )
+        if not error:
+            try:
+                update_factura_calificado(factura_id, datos)
+                nombre_canonico = datos["nombre_canonico"]
+                logger.info(
+                    "Factura calificada actualizada: id=%d, contrato_id=%d", factura_id, contrato_id
+                )
+                flash(f"Factura {nombre_canonico} actualizada.", "success")
+                return redirect(url_for(
+                    "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
+                ))
+            except Exception as exc:
+                logger.error("Error actualizando factura calificada id=%d: %s", factura_id, exc)
+                error = f"Error al guardar: {exc}"
+
+        return render_template(
+            "clientes/contratos/factura_calificado_form.html",
+            cliente=cliente,
+            contrato=contrato,
+            modo="editar",
+            factura=factura,
+            error=error,
+            form_data=request.form,
+        )
+
+    return render_template(
+        "clientes/contratos/factura_calificado_form.html",
+        cliente=cliente,
+        contrato=contrato,
+        modo="editar",
+        factura=factura,
+        error=None,
+        form_data=vars(factura),
+    )
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/factura_calificado/<int:factura_id>/borrar",
+    methods=["POST"],
+)
+def factura_calificado_borrar(cliente_id: int, contrato_id: int, factura_id: int):
+    from flask import Response
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    if isinstance(resultado, Response):
+        return resultado
+    contrato = resultado
+
+    if contrato.tipo != TIPO_ELECTRICO_CALIFICADO:
+        flash("Este contrato no es de tipo eléctrico calificado.", "warning")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    factura = get_factura_calificado(factura_id)
+    if factura is None:
+        flash("La factura solicitada no existe.", "warning")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    if factura.contrato_id != contrato_id:
+        flash("La factura no pertenece a este contrato.", "warning")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    try:
+        delete_factura_calificado(factura_id)
+        logger.info(
+            "Factura calificada borrada: id=%d, contrato_id=%d", factura_id, contrato_id
+        )
+        flash("Factura borrada.", "success")
+    except Exception as exc:
+        logger.error("Error borrando factura calificada id=%d: %s", factura_id, exc)
+        flash(f"Error al borrar: {exc}", "danger")
+    return redirect(url_for(
+        "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
+    ))
 
 
 # ── Datos PPA del cliente ──────────────────────────────────────────────────────
