@@ -1,0 +1,105 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "contrato" %}
+{% set contrato_activo_id = contrato.id %}
+{% block title %}{% if modo == "editar" %}Editar factura calificada{% else %}Nueva factura calificada{% endif %} — {{ contrato.nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
+  <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">
+    {% if modo == "editar" %}Editar factura calificada{% else %}Nueva factura calificada{% endif %}
+    — {{ contrato.nombre }}
+  </h4>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="card shadow-sm" style="max-width:540px">
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="mb-3">
+        <label for="periodo_inicio" class="form-label fw-semibold">Periodo inicio <span class="text-danger">*</span></label>
+        <input type="date" class="form-control" id="periodo_inicio" name="periodo_inicio"
+               value="{{ form_data.get('periodo_inicio', '') or '' }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label for="periodo_fin" class="form-label fw-semibold">Periodo fin <span class="text-danger">*</span></label>
+        <input type="date" class="form-control" id="periodo_fin" name="periodo_fin"
+               value="{{ form_data.get('periodo_fin', '') or '' }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label for="consumo_kwh" class="form-label fw-semibold">Consumo kWh <span class="text-danger">*</span></label>
+        <input type="number" class="form-control" id="consumo_kwh" name="consumo_kwh"
+               step="0.01" min="0"
+               value="{{ form_data.get('consumo_kwh', '') or '' }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label for="precio_unitario_mxn_kwh" class="form-label fw-semibold">Precio unitario MXN/kWh <span class="text-danger">*</span></label>
+        <input type="number" class="form-control" id="precio_unitario_mxn_kwh" name="precio_unitario_mxn_kwh"
+               step="0.000001" min="0"
+               value="{{ form_data.get('precio_unitario_mxn_kwh', '') or '' }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label for="subtotal_mxn" class="form-label fw-semibold">Subtotal MXN <span class="text-danger">*</span></label>
+        <input type="number" class="form-control" id="subtotal_mxn" name="subtotal_mxn"
+               step="0.01" min="0"
+               value="{{ form_data.get('subtotal_mxn', '') or '' }}" required>
+      </div>
+
+      <hr class="my-3">
+
+      <div class="mb-3">
+        <label for="suministrador" class="form-label fw-semibold">Suministrador</label>
+        <input type="text" class="form-control" id="suministrador" name="suministrador"
+               value="{{ form_data.get('suministrador', '') or '' }}">
+      </div>
+
+      <div class="mb-3">
+        <label for="rpu" class="form-label fw-semibold">RPU</label>
+        <input type="text" class="form-control" id="rpu" name="rpu"
+               value="{{ form_data.get('rpu', '') or '' }}">
+      </div>
+
+      <div class="mb-3">
+        <label for="serie_folio" class="form-label fw-semibold">Serie/Folio</label>
+        <input type="text" class="form-control font-monospace" id="serie_folio" name="serie_folio"
+               value="{{ form_data.get('serie_folio', '') or '' }}">
+      </div>
+
+      <div class="mb-3">
+        <label for="iva_mxn" class="form-label fw-semibold">IVA MXN</label>
+        <input type="number" class="form-control" id="iva_mxn" name="iva_mxn"
+               step="0.01"
+               value="{{ form_data.get('iva_mxn', '') or '' }}">
+      </div>
+
+      <div class="mb-3">
+        <label for="total_mxn" class="form-label fw-semibold">Total MXN</label>
+        <input type="number" class="form-control" id="total_mxn" name="total_mxn"
+               step="0.01"
+               value="{{ form_data.get('total_mxn', '') or '' }}">
+      </div>
+
+      <div class="mb-4">
+        <label for="pdf_url" class="form-label fw-semibold">URL del PDF</label>
+        <input type="url" class="form-control" id="pdf_url" name="pdf_url"
+               value="{{ form_data.get('pdf_url', '') or '' }}">
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Guardar factura</button>
+        <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+           class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

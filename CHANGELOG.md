@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.26.0] - 2026-05-14
+
+### Añadido (sub-entregable B: facturas de electricidad calificada PPA)
+- CRUD completo de facturas de electricidad calificada: carga manual desde la ficha del contrato, edición y borrado. Tabla `facturas_electricidad_calificado`.
+- Modelo `models/factura_calificado.py` (FacturaCalificado) con campos: consumo_kwh, precio_unitario_mxn_kwh, subtotal_mxn, iva_mxn, total_mxn, excedente_detectado, suministrador, rpu, serie_folio, periodo_inicio, periodo_fin, advertencias, pdf_url.
+- Validaciones: período coherente, consumo y precio positivos, coherencia IVA+subtotal vs total (±1 MXN), sin duplicado por contrato/año/mes, detección de excedente vs bloque contratado (×110%).
+- Nombre canónico automático: `CALIFICADO-{AAAA}-{MM}-{suministrador_slug}`.
+- Funciones de repositorio: `create_factura_calificado`, `get_factura_calificado`, `get_facturas_calificado_por_contrato`, `get_facturas_calificado_por_cliente`, `update_factura_calificado`, `delete_factura_calificado`, `get_facturas_para_dashboard_calificado`.
+- `get_sidebar_data_contrato` y `get_meses_con_factura` ahora despachan a la tabla correcta según `contrato_tipo`.
+- `get_sidebar_data_cliente` incluye facturas calificadas en el agrupamiento del sidebar.
+- Ficha de contrato calificado: oculta zona de upload PDF, muestra botón "+ Nueva factura calificada", tabla de facturas con editar y borrar.
+- Template `web/templates/clientes/contratos/factura_calificado_form.html` para crear/editar.
+- Ficha de contrato: badges y textos de tipo actualizados para los tres valores (`electrico_basico`, `electrico_calificado`, `gas`); contador de facturas adaptado por tipo.
+- `CLAUDE.md` actualizado con sección "Facturas de electricidad calificada (PPA)".
+
 ## [2.25.3] - 2026-05-14
 
 ### Corregido

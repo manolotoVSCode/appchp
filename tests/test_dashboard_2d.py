@@ -122,7 +122,7 @@ def test_get_seleccion_contrato(app, monkeypatch):
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
     monkeypatch.setattr(
         "web.clientes.get_sidebar_data_contrato",
-        lambda contrato_id: [{"anio": 2024, "meses_con_factura": [1, 2], "meses_seleccionados": [1]}],
+        lambda contrato_id, **kwargs: [{"anio": 2024, "meses_con_factura": [1, 2], "meses_seleccionados": [1]}],
     )
     c = _login(app, monkeypatch)
 
@@ -150,7 +150,7 @@ def test_seleccion_mes_upsert(app, monkeypatch):
     """POST /seleccion/mes con seleccionado=true → llama a upsert_mes_seleccionado."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
-    monkeypatch.setattr("web.clientes.get_meses_con_factura", lambda contrato_id, anio: list(range(1, 13)))
+    monkeypatch.setattr("web.clientes.get_meses_con_factura", lambda contrato_id, anio, **kwargs: list(range(1, 13)))
     llamadas = []
     monkeypatch.setattr(
         "web.clientes.upsert_mes_seleccionado",

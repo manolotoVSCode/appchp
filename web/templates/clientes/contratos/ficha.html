@@ -7,8 +7,10 @@
 <div class="d-flex align-items-center gap-2 mb-3">
   <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
   <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">{{ contrato.nombre }}</h4>
-  {% if contrato.tipo == "electrico" %}
-    <span class="badge text-bg-primary">Eléctrico</span>
+  {% if contrato.tipo == "electrico_basico" %}
+    <span class="badge text-bg-primary">Eléctrico CFE</span>
+  {% elif contrato.tipo == "electrico_calificado" %}
+    <span class="badge text-bg-info text-dark">Eléctrico Calificado (PPA)</span>
   {% else %}
     <span class="badge text-bg-warning text-dark">Gas</span>
   {% endif %}
@@ -26,7 +28,9 @@
 
       <dt class="col-sm-4 small text-muted">Tipo</dt>
       <dd class="col-sm-8 mb-2">
-        {% if contrato.tipo == "electrico" %}Eléctrico (CFE){% else %}Gas natural (ENGIE){% endif %}
+        {% if contrato.tipo == "electrico_basico" %}Eléctrico básico (CFE GDMTH)
+        {% elif contrato.tipo == "electrico_calificado" %}Eléctrico calificado (PPA)
+        {% else %}Gas natural (ENGIE){% endif %}
       </dd>
 
       <dt class="col-sm-4 small text-muted">Identificador</dt>
@@ -49,22 +53,34 @@
 
 <!-- Conteo de facturas -->
 <div class="row g-3 mt-1" style="max-width:540px">
+  {% if contrato.tipo == "electrico_basico" %}
   <div class="col-6">
     <div class="card shadow-sm h-100 text-center">
-      <div class="card-header fw-semibold small text-muted" >Facturas CFE</div>
+      <div class="card-header fw-semibold small text-muted">Facturas CFE</div>
       <div class="card-body d-flex align-items-center justify-content-center">
         <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ contrato.num_cfe }}</span>
       </div>
     </div>
   </div>
+  {% elif contrato.tipo == "electrico_calificado" %}
   <div class="col-6">
     <div class="card shadow-sm h-100 text-center">
-      <div class="card-header fw-semibold small text-muted" >Facturas Gas</div>
+      <div class="card-header fw-semibold small text-muted">Facturas PPA</div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ contrato.num_calificado }}</span>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-6">
+    <div class="card shadow-sm h-100 text-center">
+      <div class="card-header fw-semibold small text-muted">Facturas Gas</div>
       <div class="card-body d-flex align-items-center justify-content-center">
         <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ contrato.num_gas }}</span>
       </div>
     </div>
   </div>
+  {% endif %}
 </div>
 
 <!-- Acciones -->
@@ -75,6 +91,7 @@
           data-bs-toggle="modal" data-bs-target="#modalBorrarContrato">Borrar contrato</button>
 </div>
 
+{% if contrato.tipo != "electrico_calificado" %}
 <!-- Upload de facturas -->
 <div class="card shadow-sm mt-4">
   <div class="card-body">
@@ -93,6 +110,14 @@
     <div id="upload-status" class="mt-2 small"></div>
   </div>
 </div>
+{% endif %}
+
+{% if contrato.tipo == "electrico_calificado" %}
+<div class="mt-4">
+  <a href="{{ url_for('clientes.factura_calificado_crear', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+     class="btn btn-primary btn-sm">+ Nueva factura calificada</a>
+</div>
+{% endif %}
 
 <!-- Facturas CFE del contrato -->
 {% if facturas_cfe %}
@@ -170,6 +195,46 @@
 </div>
 {% endif %}
 
+{% if facturas_calificado %}
+<div class="card shadow-sm mt-3">
+  <div class="card-header fw-semibold small text-muted">
+    Facturas calificadas PPA ({{ facturas_calificado|length }})
+    <span class="fw-normal text-muted ms-1" style="font-size:.7rem">— La selección de meses se gestiona desde el sidebar</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nombre</th>
+          <th>Periodo</th>
+          <th class="text-end">Consumo kWh</th>
+          <th class="text-end">Subtotal</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in facturas_calificado %}
+        <tr>
+          <td class="font-monospace small">{{ f.nombre_canonico or "—" }}</td>
+          <td class="small text-muted">{{ f.periodo_inicio }} – {{ f.periodo_fin }}</td>
+          <td class="text-end small">{{ "{:,.2f}".format(f.consumo_kwh|float) }}</td>
+          <td class="text-end small">${{ "{:,.2f}".format(f.subtotal_mxn|float) }}</td>
+          <td class="text-end">
+            <a href="{{ url_for('clientes.factura_calificado_editar', cliente_id=cliente.id, contrato_id=contrato.id, factura_id=f.id) }}"
+               class="btn btn-outline-secondary btn-sm py-0 px-2 me-1">&#9999;</a>
+            <button class="btn btn-outline-danger btn-sm py-0 px-2"
+                    data-factura-id="{{ f.id }}"
+                    data-factura-nombre="{{ f.nombre_canonico or 'sin nombre (id ' ~ f.id ~ ')' }}"
+                    onclick="confirmarBorrarCalificado(this)">&#128465;</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 <!-- Modal confirmación discrepancia de identificador -->
 <div class="modal fade" id="modalDiscrepancia" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -204,6 +269,25 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-danger" id="btnBorrarFactura">Borrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmación borrar factura calificada -->
+<div class="modal fade" id="modalBorrarCalificado" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger">Borrar factura calificada</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>¿Borrar la factura <strong id="borrar-calificado-nombre"></strong>? <strong>Esta acción no se puede deshacer.</strong></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="btnBorrarCalificado">Borrar</button>
       </div>
     </div>
   </div>
@@ -259,17 +343,19 @@ const dropZone   = document.getElementById("drop-zone");
 const fileInput  = document.getElementById("file-input");
 const statusDiv  = document.getElementById("upload-status");
 
-dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("bg-light"); });
-dropZone.addEventListener("dragleave", () => dropZone.classList.remove("bg-light"));
-dropZone.addEventListener("drop", e => {
-  e.preventDefault();
-  dropZone.classList.remove("bg-light");
-  subirArchivos(e.dataTransfer.files);
-});
-fileInput.addEventListener("change", () => subirArchivos(fileInput.files));
-dropZone.addEventListener("click", e => {
-  if (e.target !== document.querySelector("label[for='file-input']")) fileInput.click();
-});
+if (dropZone) {
+  dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("bg-light"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("bg-light"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropZone.classList.remove("bg-light");
+    subirArchivos(e.dataTransfer.files);
+  });
+  fileInput.addEventListener("change", () => subirArchivos(fileInput.files));
+  dropZone.addEventListener("click", e => {
+    if (e.target !== document.querySelector("label[for='file-input']")) fileInput.click();
+  });
+}
 
 // Queue of files pending identifier confirmation
 let _pendingFiles = {};
@@ -379,6 +465,31 @@ document.getElementById("btnBorrarFactura").addEventListener("click", async func
       window.location.reload();
     } else {
       alert("Error al borrar: " + (data.error || "desconocido"));
+    }
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+});
+</script>
+<script>
+// ── Borrar factura calificada ──────────────────────────────────────────────────
+let _borrarCalificadoId = null;
+
+function confirmarBorrarCalificado(btn) {
+  _borrarCalificadoId = btn.dataset.facturaId;
+  document.getElementById("borrar-calificado-nombre").textContent = btn.dataset.facturaNombre;
+  new bootstrap.Modal(document.getElementById("modalBorrarCalificado")).show();
+}
+
+document.getElementById("btnBorrarCalificado").addEventListener("click", async function () {
+  if (!_borrarCalificadoId) return;
+  const borrarUrl = "{{ url_for('clientes.factura_calificado_borrar', cliente_id=cliente.id, contrato_id=contrato.id, factura_id=0) }}".replace("/0/borrar", "/" + _borrarCalificadoId + "/borrar");
+  try {
+    const resp = await fetch(borrarUrl, { method: "POST", body: null, headers: { "X-CSRFToken": csrfToken } });
+    if (resp.ok) {
+      window.location.reload();
+    } else {
+      alert("Error al borrar la factura.");
     }
   } catch (e) {
     alert("Error: " + e.message);

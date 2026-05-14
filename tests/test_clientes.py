@@ -313,6 +313,7 @@ def test_contrato_ficha(auth_client, monkeypatch):
     monkeypatch.setattr("web.clientes.get_contrato_con_conteos", lambda id: _CONTRATO_BASE_DICT)
     monkeypatch.setattr("web.clientes.get_cfe_facturas_por_contrato", lambda id: [])
     monkeypatch.setattr("web.clientes.get_gas_facturas_por_contrato", lambda id: [])
+    monkeypatch.setattr("web.clientes.get_facturas_calificado_por_contrato", lambda id: [])
     resp = auth_client.get("/clientes/1/contratos/10")
     assert resp.status_code == 200
     assert b"CFE Planta 1" in resp.data
@@ -336,6 +337,7 @@ def test_contrato_ficha_con_facturas_cfe(auth_client, monkeypatch):
         }
     ])
     monkeypatch.setattr("web.clientes.get_gas_facturas_por_contrato", lambda id: [])
+    monkeypatch.setattr("web.clientes.get_facturas_calificado_por_contrato", lambda id: [])
     resp = auth_client.get("/clientes/1/contratos/10")
     assert resp.status_code == 200
     assert b"2024 ENE CFE 812990300016" in resp.data

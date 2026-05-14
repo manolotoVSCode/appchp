@@ -145,6 +145,25 @@ TIPOS_ELECTRICOS = (TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO)
 
 Donde el código compare tipo de contrato, usar las constantes de models/contrato.py, no strings literales. Para verificar si un contrato es eléctrico (cualquier modalidad): tipo in TIPOS_ELECTRICOS.
 
+FACTURAS DE ELECTRICIDAD CALIFICADA (PPA)
+
+Tabla: facturas_electricidad_calificado. Modelo: models/factura_calificado.py (FacturaCalificado). Campos: id, contrato_id, cliente_id, suministrador, rpu, serie_folio, periodo_inicio, periodo_fin, dias_facturados, anio, mes, nombre_canonico, consumo_kwh, precio_unitario_mxn_kwh, subtotal_mxn, iva_mxn, total_mxn, excedente_detectado, advertencias, pdf_url, parser_version, created_at. Todos los campos numéricos se almacenan como TEXT en Supabase y se convierten a Decimal al leer.
+
+Nombre canónico: CALIFICADO-{AAAA}-{MM:02d}-{suministrador_slug} (snake_case del suministrador, o "sin_suministrador" si está vacío).
+
+Excedente: consumo_kwh > bloque_contratado_mwh × 1000 × 1.10 (el bloque en ppa_bloques_mensuales está en MWh; comparar en la misma unidad).
+
+Rutas CRUD (Blueprint clientes_bp, prefijo /clientes):
+- GET/POST /<cliente_id>/contratos/<contrato_id>/factura_calificado/crear → factura_calificado_crear
+- GET/POST /<cliente_id>/contratos/<contrato_id>/factura_calificado/<factura_id>/editar → factura_calificado_editar
+- POST /<cliente_id>/contratos/<contrato_id>/factura_calificado/<factura_id>/borrar → factura_calificado_borrar
+
+Validaciones (_validar_y_parsear_factura_calificado en web/clientes.py): periodo_inicio < periodo_fin, consumo_kwh > 0, precio_unitario > 0, subtotal > 0, coherencia IVA+subtotal vs total (tolerancia ±1 MXN), sin duplicado (mismo contrato_id + anio + mes).
+
+Funciones de repositorio (storage/repository.py): create_factura_calificado, get_factura_calificado, get_facturas_calificado_por_contrato, get_facturas_calificado_por_cliente, update_factura_calificado, delete_factura_calificado, get_facturas_para_dashboard_calificado.
+
+Sidebar y selección de meses: get_sidebar_data_contrato y get_meses_con_factura reciben contrato_tipo y despachan a la tabla correcta según sea electrico_basico o electrico_calificado. La selección de meses funciona igual que para contratos CFE.
+
 ## Parámetros del motor candidato (configurables, con valores por defecto)
 
 Cobertura objetivo del consumo eléctrico mensual: 75% (rango editable 50% a 95%).
