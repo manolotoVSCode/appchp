@@ -12,7 +12,8 @@ from supabase import create_client, Client
 
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice, GasConcepto
-from models.contrato import Contrato
+from models.contrato import Contrato, TIPO_ELECTRICO_CALIFICADO
+from models.factura_calificado import FacturaCalificado
 from calc.nombre_canonico import generar_nombre_canonico
 from calc.periodo import mes_asociado as _mes_asociado
 
@@ -613,13 +614,14 @@ def _row_to_contrato(row: dict) -> Contrato:
 
 
 def get_contrato_con_conteos(contrato_id: int) -> dict | None:
-    """Devuelve un contrato con conteo de facturas CFE y gas asociadas, o None si no existe."""
+    """Devuelve un contrato con conteo de facturas CFE, gas y calificado asociadas, o None si no existe."""
     result = _supabase.table("contratos").select("*").eq("id", contrato_id).execute()
     if not result.data:
         return None
     row = result.data[0]
     cfe = _supabase.table("cfe_facturas").select("id").eq("contrato_id", contrato_id).execute()
     gas = _supabase.table("gas_facturas").select("id").eq("contrato_id", contrato_id).execute()
+    calificado = _supabase.table("facturas_electricidad_calificado").select("id").eq("contrato_id", contrato_id).execute()
     return {
         "id": row["id"],
         "cliente_id": row["cliente_id"],
@@ -630,6 +632,7 @@ def get_contrato_con_conteos(contrato_id: int) -> dict | None:
         "created_at": row.get("created_at"),
         "num_cfe": len(cfe.data),
         "num_gas": len(gas.data),
+        "num_calificado": len(calificado.data),
     }
 
 
@@ -758,8 +761,17 @@ def get_anios_con_facturas_por_contrato(contrato_id: int) -> list[int]:
     return sorted(anios)
 
 
-def get_meses_con_factura(contrato_id: int, anio: int) -> set[int]:
-    """Retorna conjunto de meses (1-12) con al menos una factura en ese contrato/año."""
+def get_meses_con_factura(contrato_id: int, anio: int, contrato_tipo: str = "") -> set[int]:
+    """Retorna conjunto de meses (1-12) con al menos una factura en ese contrato/año.
+
+    Si contrato_tipo es 'electrico_calificado', consulta facturas_electricidad_calificado.
+    En cualquier otro caso consulta cfe_facturas + gas_facturas (comportamiento por defecto).
+    """
+    if contrato_tipo == TIPO_ELECTRICO_CALIFICADO:
+        cal = _supabase.table("facturas_electricidad_calificado").select("mes").eq(
+            "contrato_id", contrato_id
+        ).eq("anio", anio).not_.is_("mes", "null").execute()
+        return {r["mes"] for r in cal.data}
     cfe = _supabase.table("cfe_facturas").select("mes").eq("contrato_id", contrato_id).eq(
         "anio", anio
     ).not_.is_("mes", "null").execute()
@@ -801,35 +813,45 @@ def delete_meses_seleccionados_anio(contrato_id: int, anio: int) -> None:
     ).eq("anio", anio).execute()
 
 
-def get_sidebar_data_contrato(contrato_id: int) -> list[dict]:
+def get_sidebar_data_contrato(contrato_id: int, contrato_tipo: str = "") -> list[dict]:
     """Retorna datos completos del sidebar para un contrato: años con facturas y selección.
 
     Cada elemento: {"anio": int, "meses_con_factura": [int], "meses_seleccionados": [int]}
     Ordenado por año descendente (más reciente primero).
 
-    Usa exactamente 3 queries fijas (CFE, gas, seleccionados), sin N+1.
+    Si contrato_tipo es 'electrico_calificado', consulta facturas_electricidad_calificado (2 queries).
+    En cualquier otro caso usa CFE + gas (3 queries fijas), sin N+1.
     """
-    # Query 1: todos los (anio, mes) con factura CFE para este contrato
-    cfe = _supabase.table("cfe_facturas").select("anio, mes").eq(
-        "contrato_id", contrato_id
-    ).not_.is_("anio", "null").not_.is_("mes", "null").execute()
+    # Agrupar meses con factura por año
+    meses_por_anio: dict[int, set[int]] = defaultdict(set)
 
-    # Query 2: todos los (anio, mes) con factura de gas para este contrato
-    gas = _supabase.table("gas_facturas").select("anio, mes").eq(
-        "contrato_id", contrato_id
-    ).not_.is_("anio", "null").not_.is_("mes", "null").execute()
+    if contrato_tipo == TIPO_ELECTRICO_CALIFICADO:
+        # Query 1: facturas calificado para este contrato
+        cal = _supabase.table("facturas_electricidad_calificado").select("anio, mes").eq(
+            "contrato_id", contrato_id
+        ).not_.is_("anio", "null").not_.is_("mes", "null").execute()
+        for r in cal.data:
+            meses_por_anio[r["anio"]].add(r["mes"])
+    else:
+        # Query 1: todos los (anio, mes) con factura CFE para este contrato
+        cfe = _supabase.table("cfe_facturas").select("anio, mes").eq(
+            "contrato_id", contrato_id
+        ).not_.is_("anio", "null").not_.is_("mes", "null").execute()
 
-    # Query 3: meses seleccionados
+        # Query 2: todos los (anio, mes) con factura de gas para este contrato
+        gas = _supabase.table("gas_facturas").select("anio, mes").eq(
+            "contrato_id", contrato_id
+        ).not_.is_("anio", "null").not_.is_("mes", "null").execute()
+
+        for r in cfe.data:
+            meses_por_anio[r["anio"]].add(r["mes"])
+        for r in gas.data:
+            meses_por_anio[r["anio"]].add(r["mes"])
+
+    # Query final: meses seleccionados
     sel_result = _supabase.table("contrato_meses_seleccionados").select("anio, mes").eq(
         "contrato_id", contrato_id
     ).execute()
-
-    # Agrupar meses con factura por año
-    meses_por_anio: dict[int, set[int]] = defaultdict(set)
-    for r in cfe.data:
-        meses_por_anio[r["anio"]].add(r["mes"])
-    for r in gas.data:
-        meses_por_anio[r["anio"]].add(r["mes"])
 
     # Agrupar meses seleccionados por año
     sel_por_anio: dict[int, set[int]] = defaultdict(set)
@@ -847,10 +869,11 @@ def get_sidebar_data_contrato(contrato_id: int) -> list[dict]:
 
 
 def get_sidebar_data_cliente(cliente_id: int) -> dict[int, list[dict]]:
-    """Retorna datos de sidebar para TODOS los contratos de un cliente en 3 queries.
+    """Retorna datos de sidebar para TODOS los contratos de un cliente en 4 queries.
 
     Devuelve dict {contrato_id: [{"anio": int, "meses_con_factura": [int], "meses_seleccionados": [int]}, ...]}.
     Ordenado por año descendente dentro de cada contrato.
+    Incluye facturas CFE, gas y electrico_calificado.
     """
     # Query 1: todos los (contrato_id, anio, mes) CFE del cliente
     cfe = _supabase.table("cfe_facturas").select("contrato_id, anio, mes").eq(
@@ -862,17 +885,25 @@ def get_sidebar_data_cliente(cliente_id: int) -> dict[int, list[dict]]:
         "cliente_id", cliente_id
     ).not_.is_("contrato_id", "null").not_.is_("anio", "null").not_.is_("mes", "null").execute()
 
-    # Query 3: todos los meses seleccionados del cliente (via contratos del cliente)
-    contrato_ids = {r["contrato_id"] for r in cfe.data + gas.data}
+    # Query 3: todos los (contrato_id, anio, mes) calificado del cliente
+    cal = _supabase.table("facturas_electricidad_calificado").select("contrato_id, anio, mes").eq(
+        "cliente_id", cliente_id
+    ).not_.is_("contrato_id", "null").not_.is_("anio", "null").not_.is_("mes", "null").execute()
+
+    # Combinar todas las fuentes para determinar contrato_ids y agrupar meses con factura
+    todas = cfe.data + gas.data + cal.data
+    contrato_ids = {r["contrato_id"] for r in todas}
     if not contrato_ids:
         return {}
+
+    # Query 4: todos los meses seleccionados del cliente (via contratos del cliente)
     sel_result = _supabase.table("contrato_meses_seleccionados").select(
         "contrato_id, anio, mes"
     ).in_("contrato_id", list(contrato_ids)).execute()
 
     # Agrupar meses con factura por (contrato_id, anio)
     meses_por_contrato_anio: dict[tuple[int, int], set[int]] = defaultdict(set)
-    for r in cfe.data + gas.data:
+    for r in todas:
         meses_por_contrato_anio[(r["contrato_id"], r["anio"])].add(r["mes"])
 
     # Agrupar meses seleccionados por (contrato_id, anio)
@@ -947,6 +978,118 @@ def delete_cfe_factura(factura_id: int) -> None:
 def delete_gas_factura(factura_id: int) -> None:
     """Borra una factura de gas (ON DELETE CASCADE elimina conceptos)."""
     _supabase.table("gas_facturas").delete().eq("id", factura_id).execute()
+
+
+# ── Facturas electricidad calificado (suministro calificado / PPA) ─────────────
+
+def _row_to_factura_calificado(row: dict) -> FacturaCalificado:
+    """Convierte una fila de Supabase en un objeto FacturaCalificado."""
+    def _parse_decimal(v) -> Decimal | None:
+        if v is None:
+            return None
+        return Decimal(str(v))
+
+    return FacturaCalificado(
+        id=row["id"],
+        contrato_id=row["contrato_id"],
+        cliente_id=row["cliente_id"],
+        suministrador=row.get("suministrador"),
+        rpu=row.get("rpu"),
+        serie_folio=row.get("serie_folio"),
+        periodo_inicio=date.fromisoformat(str(row["periodo_inicio"])[:10]),
+        periodo_fin=date.fromisoformat(str(row["periodo_fin"])[:10]),
+        dias_facturados=row.get("dias_facturados"),
+        anio=row.get("anio"),
+        mes=row.get("mes"),
+        nombre_canonico=row.get("nombre_canonico"),
+        consumo_kwh=Decimal(str(row["consumo_kwh"])),
+        precio_unitario_mxn_kwh=Decimal(str(row["precio_unitario_mxn_kwh"])),
+        subtotal_mxn=Decimal(str(row["subtotal_mxn"])),
+        iva_mxn=_parse_decimal(row.get("iva_mxn")),
+        total_mxn=_parse_decimal(row.get("total_mxn")),
+        excedente_detectado=bool(row.get("excedente_detectado", False)),
+        advertencias=row.get("advertencias") or [],
+        pdf_url=row.get("pdf_url"),
+        parser_version=row.get("parser_version"),
+        created_at=row.get("created_at"),
+    )
+
+
+def create_factura_calificado(contrato_id: int, cliente_id: int, datos: dict) -> int:
+    """Inserta una nueva factura calificada. Devuelve el id asignado."""
+    _NUMERIC_FIELDS = {"consumo_kwh", "precio_unitario_mxn_kwh", "subtotal_mxn", "iva_mxn", "total_mxn"}
+    row = {"contrato_id": contrato_id, "cliente_id": cliente_id}
+    for k, v in datos.items():
+        if v is None:
+            row[k] = None
+        elif k in _NUMERIC_FIELDS and isinstance(v, Decimal):
+            row[k] = str(v)
+        else:
+            row[k] = v
+    result = _supabase.table("facturas_electricidad_calificado").insert(row).execute()
+    return result.data[0]["id"]
+
+
+def get_factura_calificado(factura_id: int) -> FacturaCalificado | None:
+    """Devuelve una factura calificada por id, o None si no existe."""
+    result = _supabase.table("facturas_electricidad_calificado").select("*").eq(
+        "id", factura_id
+    ).execute()
+    if not result.data:
+        return None
+    return _row_to_factura_calificado(result.data[0])
+
+
+def get_facturas_calificado_por_contrato(contrato_id: int) -> list[dict]:
+    """Devuelve campos básicos de las facturas calificadas del contrato (para la ficha)."""
+    result = _supabase.table("facturas_electricidad_calificado").select(
+        "id, nombre_canonico, periodo_inicio, periodo_fin, subtotal_mxn, consumo_kwh, excedente_detectado"
+    ).eq("contrato_id", contrato_id).order("periodo_inicio").execute()
+    return result.data
+
+
+def get_facturas_calificado_por_cliente(cliente_id: int) -> list[FacturaCalificado]:
+    """Devuelve todas las facturas calificadas del cliente, ordenadas por periodo_inicio."""
+    result = _supabase.table("facturas_electricidad_calificado").select("*").eq(
+        "cliente_id", cliente_id
+    ).order("periodo_inicio").execute()
+    return [_row_to_factura_calificado(row) for row in result.data]
+
+
+def update_factura_calificado(factura_id: int, datos: dict) -> None:
+    """Actualiza una factura calificada por id."""
+    _NUMERIC_FIELDS = {"consumo_kwh", "precio_unitario_mxn_kwh", "subtotal_mxn", "iva_mxn", "total_mxn"}
+    payload: dict = {}
+    for k, v in datos.items():
+        if v is None:
+            payload[k] = None
+        elif k in _NUMERIC_FIELDS and isinstance(v, Decimal):
+            payload[k] = str(v)
+        else:
+            payload[k] = v
+    _supabase.table("facturas_electricidad_calificado").update(payload).eq("id", factura_id).execute()
+
+
+def delete_factura_calificado(factura_id: int) -> None:
+    """Borra una factura calificada por id."""
+    _supabase.table("facturas_electricidad_calificado").delete().eq("id", factura_id).execute()
+
+
+def get_facturas_para_dashboard_calificado(
+    cliente_id: int,
+    meses_seleccionados: set[tuple[int, int, int]],
+) -> list[FacturaCalificado]:
+    """Devuelve FacturaCalificado para los (contrato_id, anio, mes) seleccionados del cliente."""
+    if not meses_seleccionados:
+        return []
+    result = _supabase.table("facturas_electricidad_calificado").select("*").eq(
+        "cliente_id", cliente_id
+    ).order("periodo_inicio").execute()
+    return [
+        _row_to_factura_calificado(row) for row in result.data
+        if row.get("anio") and row.get("mes")
+        and (row["contrato_id"], row["anio"], row["mes"]) in meses_seleccionados
+    ]
 
 
 # ── Configuración global ──────────────────────────────────────────────────────
