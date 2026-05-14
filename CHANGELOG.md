@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.24.1] — 2026-05-13
+
+### Añadido
+- Botón de descarga Excel (icono `bi-file-earmark-excel` verde) a la izquierda del enlace "Ver datos" en todas las gráficas de ambos dashboards (7 gráficas en total).
+- Endpoint genérico `GET /clientes/<id>/grafica/<grafica_id>/excel` con 7 handlers: `ahorro_neto_mensual`, `demanda_por_horario`, `consumo_por_horario`, `costo_unitario_promedio`, `composicion_costo`, `gas_consumo`, `gas_costos`.
+- Generación con BytesIO + openpyxl; sin archivos temporales en disco. Nombre del archivo: `{cliente} - {tabla}.xlsx`.
+
 ## [2.24.0] — 2026-05-13
 
 ### Añadido

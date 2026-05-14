@@ -819,6 +819,141 @@ def create_app() -> Flask:
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+    @app.route("/clientes/<int:cliente_id>/grafica/<grafica_id>/excel")
+    def cliente_grafica_excel(cliente_id: int, grafica_id: str):
+        """Descarga Excel con los datos crudos de la gráfica indicada."""
+        import io
+        import re
+        from openpyxl import Workbook
+
+        cliente, err = _verificar_cliente_activo(cliente_id)
+        if err:
+            return err
+
+        _GRAFICAS = {
+            "ahorro_neto_mensual":    "Cogeneración — Detalle Mensual",
+            "demanda_por_horario":    "Demanda por Horario CFE",
+            "consumo_por_horario":    "Consumo por Horario CFE",
+            "costo_unitario_promedio": "Costos Detallados CFE",
+            "composicion_costo":      "Indicadores CFE",
+            "gas_consumo":            "Histórico Gas Natural",
+            "gas_costos":             "Histórico Gas Natural",
+        }
+        if grafica_id not in _GRAFICAS:
+            return "Gráfica no encontrada.", 404
+
+        nombre_tabla = _GRAFICAS[grafica_id]
+        cfe_invoices, gas_invoices, _, _ = _cargar_facturas_seleccionadas(cliente_id)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = nombre_tabla[:31]
+
+        if grafica_id == "ahorro_neto_mensual":
+            r = calcular_cogen(cfe_invoices, gas_invoices, CoGenParams())
+            ws.append([
+                "Periodo", "kWh Total", "Costo CFE (MXN)", "$/kWh Prom.",
+                "GJ Consumido", "$/GJ Gas", "Costo Gas Actual (MXN)",
+                "kWh Cubiertos", "GJ Gas Cogeneración", "Costo Gas Cogeneración (MXN)",
+                "Ahorro Electricidad (MXN)", "Calor Recuperado (GJ)",
+                "Ahorro Caldera (MXN)", "O&M (MXN)", "EBITDA Mensual (MXN)",
+            ])
+            for m in r.meses:
+                ws.append([
+                    m.periodo_inicio.strftime("%b %Y"),
+                    float(m.kwh_total), float(m.costo_cfe_mxn),
+                    float(m.costo_promedio_kwh), float(m.gj_consumido),
+                    float(m.costo_unitario_gj), float(m.costo_gas_actual_mxn),
+                    float(m.kwh_cubiertos), float(m.gj_gas_cogen),
+                    float(m.costo_gas_cogen_mxn), float(m.ahorro_electricidad_mxn),
+                    float(m.calor_recuperado_gj), float(m.ahorro_caldera_mxn),
+                    float(m.gasto_om_mes_mxn), float(m.ebitda_mes_mxn),
+                ])
+
+        elif grafica_id in ("demanda_por_horario", "consumo_por_horario"):
+            historico = calcular_historico_cfe(cfe_invoices)
+            labels = historico["labels"]
+            if grafica_id == "demanda_por_horario":
+                ws.append(["Mes", "Demanda Punta (kW)", "Demanda Intermedia (kW)",
+                            "Demanda Base (kW)", "Costo Unitario Prom. ($/kWh)"])
+                for i, lbl in enumerate(labels):
+                    ws.append([lbl, historico["demanda_punta"][i],
+                                historico["demanda_intermedio"][i],
+                                historico["demanda_base"][i],
+                                historico["costo_unit_mes"][i]])
+            else:
+                ws.append(["Mes", "Consumo Punta (kWh)", "Consumo Intermedia (kWh)",
+                            "Consumo Base (kWh)", "Costo Unitario Prom. ($/kWh)"])
+                for i, lbl in enumerate(labels):
+                    ws.append([lbl, historico["consumo_punta"][i],
+                                historico["consumo_intermedio"][i],
+                                historico["consumo_base"][i],
+                                historico["costo_unit_mes"][i]])
+
+        elif grafica_id == "costo_unitario_promedio":
+            tablas = calcular_tablas_cfe(cfe_invoices)
+            ws.append([
+                "Mes", "CE Base (MXN)", "CE Intermedia (MXN)", "CE Punta (MXN)", "CE Total (MXN)",
+                "Cargo Distribución (MXN)", "Cargo Capacidad (MXN)", "Total Demanda (MXN)",
+                "CT Base (MXN)", "CT Intermedia (MXN)", "CT Punta (MXN)",
+                "CU Base ($/kWh)", "CU Intermedia ($/kWh)", "CU Punta ($/kWh)",
+                "Factor Potencia (MXN)", "Subtotal (MXN)",
+            ])
+            for f in tablas["costos_detallados"]:
+                ws.append([
+                    f["mes"], f["ce_base"], f["ce_inter"], f["ce_punta"], f["ce_total"],
+                    f["costo_dist"], f["costo_cap"], f["costo_dem"],
+                    f["ct_base"], f["ct_inter"], f["ct_punta"],
+                    f["cu_base_total"], f["cu_inter_total"], f["cu_punta_total"],
+                    f["cargo_fp"], f["subtotal"],
+                ])
+
+        elif grafica_id == "composicion_costo":
+            tablas = calcular_tablas_cfe(cfe_invoices)
+            ws.append(["Mes", "Costo Unitario ($/kWh)", "% Energía", "% Demanda",
+                        "Factor Carga (%)", "Demanda Promedio (kW)"])
+            for f in tablas["indicadores"]:
+                ws.append([f["mes"], f["costo_unit"], f["pct_energia"],
+                            f["pct_demanda"], f["factor_carga"], f["demanda_prom"]])
+
+        elif grafica_id in ("gas_consumo", "gas_costos"):
+            historico_gas = calcular_historico_gas(gas_invoices)
+            if historico_gas is None:
+                return "Sin datos de gas disponibles.", 404
+            ws.append([
+                "Mes", "Consumo (GJ)", "Molécula ($/GJ)", "Transporte ($/GJ)",
+                "Costo Molécula (MXN)", "Costo Transporte (MXN)", "Costo Total (MXN)",
+                "Costo Unitario ($/GJ)", "Costo Unitario ($/kWh)", "PCS (GJ/m³)", "PCS (kWh/m³)",
+            ])
+            for f in historico_gas["filas"]:
+                ws.append([
+                    f["mes"], f["consumo_gj"], f["molecula_precio_gj"],
+                    f["transporte_precio_gj"], f["costo_molecula_mxn"],
+                    f["costo_transporte_mxn"], f["costo_total_mxn"],
+                    f["costo_unit_gj"], f["costo_unit_kwh"],
+                    f["pcs_gj_m3"], f["pcs_kwh_m3"],
+                ])
+            tot = historico_gas["total"]
+            ws.append([
+                "TOTAL", tot["consumo_gj"], tot["molecula_precio_gj"],
+                tot["transporte_precio_gj"], tot["costo_molecula_mxn"],
+                tot["costo_transporte_mxn"], tot["costo_total_mxn"],
+                tot["costo_unit_gj"], tot["costo_unit_kwh"],
+                tot["pcs_gj_m3"], tot["pcs_kwh_m3"],
+            ])
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        nombre_cliente = cliente["nombre"]
+        filename = re.sub(r'[\\/*?:"<>|]', "", f"{nombre_cliente} - {nombre_tabla}.xlsx")
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
     @app.route("/admin/configuracion", methods=["GET", "POST"])
     def admin_configuracion():
         """Página de configuración global del sistema."""

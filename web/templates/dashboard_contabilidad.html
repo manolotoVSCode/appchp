@@ -20,6 +20,8 @@
   .tabla-punta-total td { background: var(--color-primary-soft); font-weight: 600; }
   .link-datos { font-size: .8rem; color: #6c757d; text-decoration: none; white-space: nowrap; }
   .link-datos:hover { color: var(--color-primary); }
+  .btn-excel { color: #198754; font-size: 1rem; text-decoration: none; line-height: 1; }
+  .btn-excel:hover { color: #146c43; }
 </style>
 {% endblock %}
 
@@ -178,7 +180,11 @@
               <h5 class="card-title mb-0">Demanda máxima por horario vs costo unitario CFE</h5>
               <p class="text-muted small mt-1 mb-0">Barras agrupadas: kW por horario (eje izq.) · Línea: $/kWh total (eje der.)</p>
             </div>
-            <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelConsumosDemandas'); return false;">Ver datos</a>
+            <span class="d-flex align-items-center gap-2 ms-3 mt-1">
+              <a href="/clientes/{{ cliente_id }}/grafica/demanda_por_horario/excel"
+                 class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
+              <a href="#" class="link-datos" onclick="abrirPanel('panelConsumosDemandas'); return false;">Ver datos</a>
+            </span>
           </div>
           <canvas id="chartDemanda" height="100" class="mt-2"></canvas>
         </div>
@@ -191,7 +197,11 @@
               <h5 class="card-title mb-0">Consumo por horario vs costo unitario CFE</h5>
               <p class="text-muted small mt-1 mb-0">Barras apiladas: kWh por horario (eje izq.) · Línea: $/kWh total (eje der.)</p>
             </div>
-            <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelConsumosDemandas'); return false;">Ver datos</a>
+            <span class="d-flex align-items-center gap-2 ms-3 mt-1">
+              <a href="/clientes/{{ cliente_id }}/grafica/consumo_por_horario/excel"
+                 class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
+              <a href="#" class="link-datos" onclick="abrirPanel('panelConsumosDemandas'); return false;">Ver datos</a>
+            </span>
           </div>
           <canvas id="chartConsumo" height="100" class="mt-2"></canvas>
         </div>
@@ -204,7 +214,11 @@
               <h5 class="card-title mb-0">Costo unitario promedio por horario (promedio ponderado por consumo)</h5>
               <p class="text-muted small mt-1 mb-0">$/kWh — promedio ponderado sobre todo el periodo cargado</p>
             </div>
-            <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelCostosDetallados'); return false;">Ver datos</a>
+            <span class="d-flex align-items-center gap-2 ms-3 mt-1">
+              <a href="/clientes/{{ cliente_id }}/grafica/costo_unitario_promedio/excel"
+                 class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
+              <a href="#" class="link-datos" onclick="abrirPanel('panelCostosDetallados'); return false;">Ver datos</a>
+            </span>
           </div>
           <canvas id="chartCostoPromedio" height="80" class="mt-2"></canvas>
         </div>
@@ -218,7 +232,11 @@
               <h5 class="card-title mb-0">Composición del costo eléctrico</h5>
               <p class="text-muted small mt-1 mb-0">Distribución del subtotal sin IVA: Energía, Demanda y Otros cargos</p>
             </div>
-            <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanelIndicadores(); return false;">Ver datos</a>
+            <span class="d-flex align-items-center gap-2 ms-3 mt-1">
+              <a href="/clientes/{{ cliente_id }}/grafica/composicion_costo/excel"
+                 class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
+              <a href="#" class="link-datos" onclick="abrirPanelIndicadores(); return false;">Ver datos</a>
+            </span>
           </div>
           <div class="mb-3" style="max-width:220px;">
             <select id="filtroMesQueso" class="form-select form-select-sm">
@@ -327,7 +345,11 @@
                 <h5 class="card-title mb-0">Consumos mensuales de gas (GJ) vs costo unitario ($/GJ)</h5>
                 <p class="text-muted small mt-1 mb-0">Barras: GJ consumido (eje izq.) · Línea: $/GJ total (eje der.)</p>
               </div>
-              <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelGasHistorico'); return false;">Ver datos</a>
+              <span class="d-flex align-items-center gap-2 ms-3 mt-1">
+                <a href="/clientes/{{ cliente_id }}/grafica/gas_consumo/excel"
+                   class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
+                <a href="#" class="link-datos" onclick="abrirPanel('panelGasHistorico'); return false;">Ver datos</a>
+              </span>
             </div>
             <canvas id="chartGasConsumo" height="100" class="mt-2"></canvas>
           </div>
@@ -340,7 +362,11 @@
                 <h5 class="card-title mb-0">Costos mensuales de gas ($) vs costo unitario ($/GJ)</h5>
                 <p class="text-muted small mt-1 mb-0">Barras apiladas: Molécula + Transporte (eje izq.) · Línea: $/GJ total (eje der.)</p>
               </div>
-              <a href="#" class="link-datos ms-3 mt-1" onclick="abrirPanel('panelGasHistorico'); return false;">Ver datos</a>
+              <span class="d-flex align-items-center gap-2 ms-3 mt-1">
+                <a href="/clientes/{{ cliente_id }}/grafica/gas_costos/excel"
+                   class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
+                <a href="#" class="link-datos" onclick="abrirPanel('panelGasHistorico'); return false;">Ver datos</a>
+              </span>
             </div>
             <canvas id="chartGasCostos" height="100" class="mt-2"></canvas>
           </div>
