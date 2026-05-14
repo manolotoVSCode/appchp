@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.25.2] - 2026-05-14
+
+### Corregido
+- Formularios PPA ("Guardar datos PPA" y "Guardar bloques") no enviaban request al backend — al hacer submit Flask redirigía a la misma ficha y el acordeón se cerraba al recargar la página, aparentando que no hubo request. Convertidos a AJAX con `fetch()`: el acordeón permanece abierto, se muestra "✓ Guardado." inline durante 4 segundos.
+- Inputs de bloques mensuales no precargaban los valores guardados en BD. La ruta `ficha()` ahora pasa `ppa_bloques` al template; JavaScript precarga los 12 campos al cargar la página y al cambiar el selector de año.
+
 ## [2.25.1] - 2026-05-14
 
 ### Corregido

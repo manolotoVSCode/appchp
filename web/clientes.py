@@ -246,12 +246,20 @@ def nuevo():
 
 @clientes_bp.route("/<int:cliente_id>")
 def ficha(cliente_id: int):
+    from storage.repository import get_ppa_bloques_mensuales
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:
         flash("El cliente solicitado no existe.", "warning")
         return redirect(url_for("clientes.listado"))
     contratos = get_contratos_por_cliente(cliente_id)
-    return render_template("clientes/ficha.html", cliente=cliente, contratos=contratos)
+    # PPA bloques para precarga: {anio: {mes: mwh_str}}
+    ppa_bloques: dict[int, dict[int, str]] = {}
+    try:
+        for b in get_ppa_bloques_mensuales(cliente_id):
+            ppa_bloques.setdefault(b["anio"], {})[b["mes"]] = b["bloque_contratado_mwh"]
+    except Exception:
+        pass
+    return render_template("clientes/ficha.html", cliente=cliente, contratos=contratos, ppa_bloques=ppa_bloques)
 
 
 @clientes_bp.route("/<int:cliente_id>/activar", methods=["POST"])
