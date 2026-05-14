@@ -1,7 +1,7 @@
 -- storage/schema.sql
 -- DDL de referencia. Las tablas existen en Supabase como infraestructura preestablecida.
 -- Ejecutar manualmente en el SQL Editor de Supabase si se necesita recrear el schema.
--- Última actualización: 2026-05-11 (v2.21.0)
+-- Última actualización: 2026-05-14 (v2.25.0)
 
 -- ── Clientes ──────────────────────────────────────────────────────────────────
 
@@ -31,7 +31,20 @@ CREATE TABLE IF NOT EXISTS clientes (
     medio_termico               TEXT,   -- 'vapor_agua' | 'gases_combustion'
     nivel_tension_kv            TEXT,   -- 'lt_1' | '1_34' | '69_85' | '115_230' | 'gt_400'
     altitud_msnm                NUMERIC,
-    tipo_motor                  TEXT    -- 'combustion_interna' | 'turbina_gas' | otro
+    tipo_motor                  TEXT,   -- 'combustion_interna' | 'turbina_gas' | otro
+    -- Campos PPA (suministro calificado)
+    ppa_suministrador                   TEXT,
+    ppa_rfc_suministrador               TEXT,
+    ppa_precio_fijo_usd_mwh             DECIMAL(10,4),
+    ppa_fecha_inicio_suministro         DATE,
+    ppa_energia_contratada_mwh_anual    DECIMAL(15,4),
+    ppa_capacidad_maxima_kw             DECIMAL(12,2),
+    ppa_margen_reserva_cenace_pct       DECIMAL(6,4),
+    ppa_zona_carga                      TEXT,
+    ppa_rpu                             TEXT,
+    ppa_division                        TEXT,
+    ppa_pdf_contrato_url                TEXT,
+    ppa_notas                           TEXT
 );
 
 -- ── Contratos ─────────────────────────────────────────────────────────────────
@@ -41,7 +54,7 @@ CREATE TABLE IF NOT EXISTS contratos (
     id                  SERIAL PRIMARY KEY,
     cliente_id          INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     nombre              TEXT    NOT NULL,
-    tipo                TEXT    NOT NULL CHECK (tipo IN ('electrico', 'gas')),
+    tipo                TEXT    NOT NULL CHECK (tipo IN ('electrico_basico', 'electrico_calificado', 'gas')),
     identificador_real  TEXT    NOT NULL,
     notas               TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -199,3 +212,47 @@ ON CONFLICT (clave) DO NOTHING;
 INSERT INTO configuracion (clave, valor, descripcion) VALUES
     ('factor_emision_gas_kg_co2_gj', '56.1', 'Factor de emisión de gas natural (kg CO₂/GJ)')
 ON CONFLICT (clave) DO NOTHING;
+
+-- ── Suministro calificado (PPA) ───────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS ppa_bloques_mensuales (
+    id                      SERIAL PRIMARY KEY,
+    cliente_id              INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    anio                    INTEGER NOT NULL,
+    mes                     INTEGER NOT NULL CHECK (mes BETWEEN 1 AND 12),
+    bloque_contratado_mwh   DECIMAL(12,3) NOT NULL,
+    created_at              TIMESTAMP DEFAULT NOW(),
+    UNIQUE(cliente_id, anio, mes)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ppa_bloques_cliente ON ppa_bloques_mensuales(cliente_id);
+
+CREATE TABLE IF NOT EXISTS facturas_electricidad_calificado (
+    id                          SERIAL PRIMARY KEY,
+    contrato_id                 INTEGER NOT NULL REFERENCES contratos(id) ON DELETE CASCADE,
+    cliente_id                  INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    suministrador               TEXT,
+    rpu                         TEXT,
+    serie_folio                 TEXT,
+    periodo_inicio              DATE NOT NULL,
+    periodo_fin                 DATE NOT NULL,
+    dias_facturados             INTEGER,
+    anio                        INTEGER,
+    mes                         INTEGER,
+    nombre_canonico             TEXT,
+    consumo_kwh                 DECIMAL(15,3) NOT NULL,
+    precio_unitario_mxn_kwh     DECIMAL(10,6) NOT NULL,
+    subtotal_mxn                DECIMAL(15,2) NOT NULL,
+    iva_mxn                     DECIMAL(15,2),
+    total_mxn                   DECIMAL(15,2),
+    excedente_detectado         BOOLEAN DEFAULT FALSE,
+    advertencias                JSONB DEFAULT '[]'::jsonb,
+    pdf_url                     TEXT,
+    parser_version              TEXT,
+    created_at                  TIMESTAMP DEFAULT NOW(),
+    UNIQUE(contrato_id, anio, mes)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fac_calif_cliente  ON facturas_electricidad_calificado(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_fac_calif_contrato ON facturas_electricidad_calificado(contrato_id);
+CREATE INDEX IF NOT EXISTS idx_fac_calif_anio_mes ON facturas_electricidad_calificado(anio, mes);

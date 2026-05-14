@@ -316,7 +316,11 @@ _CLIENTE_CAMPOS_EXTENDIDOS = (
     "direccion, estado, codigo_postal, tarifa_cfe, "
     "capacidad_instalada_kw, demanda_contratada_kw, anio_inicio_operacion, "
     "regimen_operacion, consumo_anual_estimado_mwh, logo_url, "
-    "medio_termico, nivel_tension_kv, altitud_msnm, tipo_motor"
+    "medio_termico, nivel_tension_kv, altitud_msnm, tipo_motor, "
+    "ppa_suministrador, ppa_rfc_suministrador, ppa_precio_fijo_usd_mwh, "
+    "ppa_fecha_inicio_suministro, ppa_energia_contratada_mwh_anual, ppa_capacidad_maxima_kw, "
+    "ppa_margen_reserva_cenace_pct, ppa_zona_carga, ppa_rpu, ppa_division, "
+    "ppa_pdf_contrato_url, ppa_notas"
 )
 
 
@@ -346,6 +350,19 @@ def _row_to_cliente_dict(row: dict) -> dict:
         "nivel_tension_kv": row.get("nivel_tension_kv"),
         "altitud_msnm": row.get("altitud_msnm"),
         "tipo_motor": row.get("tipo_motor"),
+        # Campos PPA
+        "ppa_suministrador": row.get("ppa_suministrador"),
+        "ppa_rfc_suministrador": row.get("ppa_rfc_suministrador"),
+        "ppa_precio_fijo_usd_mwh": row.get("ppa_precio_fijo_usd_mwh"),
+        "ppa_fecha_inicio_suministro": row.get("ppa_fecha_inicio_suministro"),
+        "ppa_energia_contratada_mwh_anual": row.get("ppa_energia_contratada_mwh_anual"),
+        "ppa_capacidad_maxima_kw": row.get("ppa_capacidad_maxima_kw"),
+        "ppa_margen_reserva_cenace_pct": row.get("ppa_margen_reserva_cenace_pct"),
+        "ppa_zona_carga": row.get("ppa_zona_carga"),
+        "ppa_rpu": row.get("ppa_rpu"),
+        "ppa_division": row.get("ppa_division"),
+        "ppa_pdf_contrato_url": row.get("ppa_pdf_contrato_url"),
+        "ppa_notas": row.get("ppa_notas"),
         "num_cfe": len(row.get("cfe_facturas") or []),
         "num_gas": len(row.get("gas_facturas") or []),
     }
@@ -499,6 +516,64 @@ def delete_logo(cliente_id: int) -> None:
 def delete_cliente(cliente_id: int) -> None:
     """Borra el cliente. ON DELETE CASCADE en el schema elimina todas sus facturas y relaciones."""
     _supabase.table("clientes").delete().eq("id", cliente_id).execute()
+
+
+# ── Datos PPA del cliente ──────────────────────────────────────────────────────
+
+_PPA_CAMPOS = (
+    "ppa_suministrador", "ppa_rfc_suministrador", "ppa_precio_fijo_usd_mwh",
+    "ppa_fecha_inicio_suministro", "ppa_energia_contratada_mwh_anual",
+    "ppa_capacidad_maxima_kw", "ppa_margen_reserva_cenace_pct",
+    "ppa_zona_carga", "ppa_rpu", "ppa_division", "ppa_pdf_contrato_url", "ppa_notas",
+)
+
+
+def get_cliente_ppa_datos(cliente_id: int) -> dict:
+    """Devuelve los campos PPA del cliente como dict. Todos pueden ser None."""
+    result = _supabase.table("clientes").select(
+        ", ".join(_PPA_CAMPOS)
+    ).eq("id", cliente_id).execute()
+    if not result.data:
+        return {}
+    return {k: result.data[0].get(k) for k in _PPA_CAMPOS}
+
+
+def update_cliente_ppa_datos(cliente_id: int, datos: dict) -> None:
+    """Actualiza los campos PPA del cliente. Solo actualiza las claves presentes en datos."""
+    allowed = set(_PPA_CAMPOS)
+    safe = {k: v for k, v in datos.items() if k in allowed}
+    if not safe:
+        return
+    _supabase.table("clientes").update(safe).eq("id", cliente_id).execute()
+
+
+def get_ppa_bloques_mensuales(cliente_id: int, anio: int | None = None) -> list[dict]:
+    """Devuelve los bloques mensuales PPA del cliente. Filtra por año si se indica."""
+    query = _supabase.table("ppa_bloques_mensuales").select(
+        "id, cliente_id, anio, mes, bloque_contratado_mwh"
+    ).eq("cliente_id", cliente_id).order("anio").order("mes")
+    if anio is not None:
+        query = query.eq("anio", anio)
+    return query.execute().data
+
+
+def upsert_ppa_bloque_mensual(
+    cliente_id: int, anio: int, mes: int, bloque_mwh: float
+) -> None:
+    """Inserta o actualiza el bloque contratado para un mes dado."""
+    _supabase.table("ppa_bloques_mensuales").upsert({
+        "cliente_id": cliente_id,
+        "anio": anio,
+        "mes": mes,
+        "bloque_contratado_mwh": bloque_mwh,
+    }, on_conflict="cliente_id,anio,mes").execute()
+
+
+def delete_ppa_bloque_mensual(cliente_id: int, anio: int, mes: int) -> None:
+    """Elimina el bloque contratado para un mes dado."""
+    _supabase.table("ppa_bloques_mensuales").delete().eq(
+        "cliente_id", cliente_id
+    ).eq("anio", anio).eq("mes", mes).execute()
 
 
 def rfc_existe(rfc: str, exclude_id: int | None = None) -> bool:
