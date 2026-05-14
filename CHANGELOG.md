@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.25.1] - 2026-05-14
+
+### Corregido
+- Sección "Suministro Calificado (PPA)" no aparecía en la ficha de cliente en el deploy inicial de v2.25.0. El template `web/templates/clientes/ficha.html` tenía los cambios pero Render necesitaba redeploy. Forzado con este bump de versión.
+
 ## [2.25.0] - 2026-05-14
 
 ### Añadido (sub-entregable A: modelo de datos PPA)
