@@ -72,7 +72,7 @@ class CELsResultado:
     """Resultado del cálculo de CELs según CRE Caso I."""
     # Capacidad y origen
     capacidad_kw: Decimal
-    capacidad_es_estimada: bool  # True si viene de facturas, False si es instalada del cliente
+    capacidad_es_estimada: bool  # Siempre True: la capacidad usada es la calculada de facturas
     # Datos del cliente usados
     medio_termico: str
     nivel_tension_kv: str
