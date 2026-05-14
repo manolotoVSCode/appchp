@@ -141,25 +141,19 @@ def test_f_usa_pci_sin_factor_1_11():
     assert result.F_mwh == expected_F
 
 
-# ── Test: lógica híbrida de capacidad ────────────────────────────────────────
+# ── Test: capacidad nominal como única fuente ─────────────────────────────────
 
-def test_capacidad_instalada_tiene_prioridad():
-    """Si capacidad_instalada_kw está llena, se usa sobre capacidad_nominal_kw."""
-    result = calcular_cels(**_base_args(
-        capacidad_nominal_kw=Decimal("5000"),   # 5 MW → RefE 44%
-        capacidad_instalada_kw=200.0,            # 0.2 MW → RefE 40%
-    ))
+def test_capacidad_nominal_es_la_unica_fuente():
+    """Capacidad nominal es la única fuente; capacidad_instalada_kw ya no existe como parámetro."""
+    result = calcular_cels(**_base_args(capacidad_nominal_kw=Decimal("200")))  # 0.2 MW → RefE 0.40
     assert result is not None
-    assert not result.capacidad_es_estimada
+    assert result.capacidad_es_estimada  # siempre True ahora
     assert result.RefE == Decimal("0.40")
 
 
-def test_capacidad_nominal_como_fallback():
-    """Si capacidad_instalada_kw es None, se usa capacidad_nominal_kw."""
-    result = calcular_cels(**_base_args(
-        capacidad_nominal_kw=Decimal("5000"),
-        capacidad_instalada_kw=None,
-    ))
+def test_capacidad_nominal_usada_directamente():
+    """Con capacidad_nominal_kw válida, se usa directamente y capacidad_es_estimada=True."""
+    result = calcular_cels(**_base_args(capacidad_nominal_kw=Decimal("5000")))
     assert result is not None
     assert result.capacidad_es_estimada
 

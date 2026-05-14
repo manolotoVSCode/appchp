@@ -48,7 +48,7 @@ def _capacidad_nominal_kw(cfe_invoices: list[CFEInvoice]) -> Decimal | None:
             maximos.append(kwh)
     if not maximos:
         return None
-    return (max(maximos) / _HORAS_MES).quantize(_CENTAVO, ROUND_HALF_UP)
+    return Decimal(math.ceil(max(maximos) / _HORAS_MES))
 
 
 def calcular_payback(

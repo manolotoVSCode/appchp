@@ -110,27 +110,21 @@ def calcular_cels(
     nivel_tension_kv: str | None,
     altitud_msnm: int | None,
     tipo_motor: str | None,
-    capacidad_instalada_kw: float | None = None,
 ) -> CELsResultado | None:
     """Calcula CELs según CRE Caso I. Devuelve None si faltan datos del cliente.
 
-    La capacidad usada es capacidad_instalada_kw si está disponible;
-    si no, capacidad_nominal_kw (estimada de facturas históricas).
-    Si ninguna está disponible, devuelve None.
+    La capacidad usada es capacidad_nominal_kw (calculada con ceil desde facturas históricas).
+    Si no está disponible, devuelve None.
     """
     # Validar que todos los campos del cliente estén presentes
     if any(v is None for v in [medio_termico, nivel_tension_kv, altitud_msnm, tipo_motor]):
         return None
 
-    # Determinar capacidad a usar (lógica híbrida confirmada por el usuario)
-    if capacidad_instalada_kw is not None and capacidad_instalada_kw > 0:
-        capacidad_kw = Decimal(str(capacidad_instalada_kw))
-        capacidad_es_estimada = False
-    elif capacidad_nominal_kw is not None and capacidad_nominal_kw > 0:
-        capacidad_kw = capacidad_nominal_kw
-        capacidad_es_estimada = True
-    else:
+    # Determinar capacidad a usar
+    if capacidad_nominal_kw is None or capacidad_nominal_kw <= 0:
         return None
+    capacidad_kw = capacidad_nominal_kw
+    capacidad_es_estimada = True
 
     refh = _REFH.get(medio_termico)
     fp = _FP.get(nivel_tension_kv)
