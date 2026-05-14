@@ -247,6 +247,92 @@ def test_ahorro_electricidad_igual_suma_componentes():
     )
 
 
+def test_ahorro_capacidad_con_componentes_mem():
+    """Con componentes MEM presentes, ahorro_capacidad > 0."""
+    # _cfe usa kw_max=100, kwh=KWH=1_000_000 (tercio por horario), periodo nov: 1→30 (29 días)
+    # Añadimos componentes MEM: Capacidad $100,000 y Distribución $30,000
+    # precio_capacidad  = 100,000 / 100 = 1,000 MXN/kW
+    # precio_distribucion = 30,000 / 100 = 300 MXN/kW
+    # kwh_total_orig = 1,000,000; cobertura=75% → kwh_cubiertos=750,000 → kwh_post=250,000
+    # dias_orig = (date(2023,11,30) - date(2023,11,1)).days = 29
+    # demanda_promedio_post = 250,000 / (24 × 29) = 359.1954...
+    # demanda_efectiva_post = 359.1954... / 0.57 = 630.1675...
+    # reduccion_kw = max(100 - 630.17, 0) = 0  ← kw_max=100 < demanda_efectiva_post
+    # Con kw_max=100 la reduccion es 0; necesitamos un kw_max mayor.
+    # Usamos kw_max=1000 para que la reducción sea positiva:
+    #   demanda_efectiva_post ≈ 630.17 kW
+    #   reduccion_kw = max(1000 - 630.17, 0) = 369.83 kW
+    #   precio_capacidad  = 100,000 / 1000 = 100 MXN/kW
+    #   precio_distribucion = 30,000 / 1000 = 30 MXN/kW
+    #   ahorro_capacidad    = 100 × 369.83 ≈ 36,983 MXN
+    #   ahorro_distribucion = 30  × 369.83 ≈ 11,095 MXN
+    from models.cfe_invoice import MEMComponente
+
+    tercio = KWH / 3
+    periodos = [
+        CFEConsumoHorario("base",       tercio, Decimal("100"), Decimal("1.00")),
+        CFEConsumoHorario("intermedio", tercio, Decimal("100"), Decimal("1.20")),
+        CFEConsumoHorario("punta",      tercio, Decimal("100"), Decimal("1.50")),
+    ]
+    inicio = date(2023, 11, 1)
+    fin = date(2023, 11, 30)
+    cfe_mem = CFEInvoice(
+        uuid_cfdi=None, folio="F1", serie=None,
+        fecha_emision=inicio, periodo_inicio=inicio, periodo_fin=fin,
+        fecha_limite_pago=fin, nombre_cliente="TEST", rfc_cliente="TST010101AAA",
+        numero_servicio="12345", rmu=None, tarifa="GDMTH", numero_medidor="M1",
+        multiplicador=1, carga_conectada_kw=Decimal("1000"),
+        demanda_contratada_kw=Decimal("1000"), periodos=periodos,
+        kw_max=Decimal("1000"), kvArh=Decimal("0"), factor_potencia_pct=Decimal("90"),
+        componentes_mem=[
+            MEMComponente(
+                nombre="Capacidad",
+                cargo_fijo_mxn=Decimal("0"),
+                cargo_demanda_mxn=Decimal("100000"),
+                cargo_energia_mxn=Decimal("0"),
+                importe_mxn=Decimal("100000"),
+            ),
+            MEMComponente(
+                nombre="Distribución",
+                cargo_fijo_mxn=Decimal("0"),
+                cargo_demanda_mxn=Decimal("30000"),
+                cargo_energia_mxn=Decimal("0"),
+                importe_mxn=Decimal("30000"),
+            ),
+        ],
+        cargo_fijo_mxn=Decimal("0"),
+        energia_total_mxn=FACTURACION, cargo_factor_potencia_mxn=Decimal("0"),
+        subtotal_mxn=FACTURACION, iva_mxn=Decimal("0"),
+        facturacion_periodo_mxn=FACTURACION,
+        derecho_alumbrado_publico_mxn=Decimal("0"), credito_aplicado_mxn=Decimal("0"),
+        total_mxn=FACTURACION, pdf_path="test.pdf",
+    )
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen([cfe_mem], gas, CoGenParams())
+    m = r.meses[0]
+
+    # Verificar que ahorro_capacidad y ahorro_distribucion > 0
+    assert m.ahorro_capacidad_mes_mxn > Decimal("0"), (
+        f"ahorro_capacidad esperado > 0, obtenido {m.ahorro_capacidad_mes_mxn}"
+    )
+    assert m.ahorro_distribucion_mes_mxn > Decimal("0"), (
+        f"ahorro_distribucion esperado > 0, obtenido {m.ahorro_distribucion_mes_mxn}"
+    )
+
+    # El invariante estructural se mantiene
+    assert m.ahorro_electricidad_mxn == (
+        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn + m.ahorro_distribucion_mes_mxn
+    )
+
+    # Verificar rangos razonables:
+    # dias_orig = 29, kwh_post = 250,000, demanda_efectiva_post = 250000/(24×29)/0.57 ≈ 630.17 kW
+    # reduccion_kw = max(1000 - 630.17, 0) ≈ 369.83 kW
+    # precio_cap = 100 MXN/kW → ahorro_cap ≈ 36,983 MXN
+    # precio_dist = 30 MXN/kW → ahorro_dist ≈ 11,095 MXN
+    assert Decimal("36000") < m.ahorro_capacidad_mes_mxn < Decimal("38000")
+    assert Decimal("10000") < m.ahorro_distribucion_mes_mxn < Decimal("12000")
+
+
 def test_totales_anuales_componentes_son_suma_mensual():
     """Los totales anuales de los 3 componentes son la suma de los mensuales."""
     cfe = [_cfe(2023, 11, KWH, FACTURACION), _cfe(2023, 12, KWH * 2, FACTURACION * 2)]

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.23.1] — 2026-05-13
+
+### Corregido (bug crítico)
+
+- Ahorro Capacidad y Ahorro Distribución reportados como cero en v2.23.0. Ahora se calculan con la metodología CFE GDMTH: `precio_componente = importe_MEM / kw_max`; `ahorro = precio × max(kw_max − demanda_efectiva_post, 0)`; donde `demanda_efectiva_post = (kWh_post_cogen / (24 × días_facturados)) / 0.57`. La asunción conservadora (kw_max no cambia) se aplica correctamente en la fórmula. El Ahorro Electricidad reportado ahora incluye los tres componentes. Afecta `calc/cogen.py`, `models/cogen_result.py`, `web/app.py`, `dashboard-cogeneracion.js`.
+
+---
+
 ## [2.23.0] — 2026-05-13
 
 ### Cambiado

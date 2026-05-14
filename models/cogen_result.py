@@ -49,6 +49,12 @@ class CoGenMes:
     cu_punta_kwh: Decimal = Decimal("0")
     cu_intermedia_kwh: Decimal = Decimal("0")
     cu_base_kwh: Decimal = Decimal("0")
+    # Datos para slider JS (demanda y precios componentes MEM)
+    kw_max: Decimal = Decimal("0")
+    dias_facturados: int = 0
+    kwh_total_orig: Decimal = Decimal("0")
+    precio_capacidad_kw: Decimal = Decimal("0")
+    precio_distribucion_kw: Decimal = Decimal("0")
     # Prorrateo (campo informativo, vacío si no se aplicó)
     prorrateado: bool = False
     nota_prorrateo: str = ""

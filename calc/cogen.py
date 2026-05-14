@@ -26,6 +26,8 @@ _USD_POR_KW = Decimal("1400")
 _TC_DEFAULT = Decimal("17.50")
 # Periodos horarios que deben estar presentes para calcular capacidad nominal
 _PERIODOS_COMPLETOS = frozenset({"base", "intermedio", "punta"})
+# Factor de carga para derivar demanda efectiva post-cogeneración
+_FACTOR_DEMANDA = Decimal("0.57")
 
 _CENTAVO = Decimal("0.01")
 _DIEZMILAVO = Decimal("0.0001")
@@ -148,11 +150,47 @@ def calcular_cogen(
             Decimal("0"),
         ).quantize(_CENTAVO, ROUND_HALF_UP)
 
-        # Paso 3 — Ahorro Capacidad y Distribución = 0
-        # Supuesto conservador: el motor tiene paradas mensuales → kw_max no cambia →
-        # los cargos MEM por demanda (Capacidad, Distribución) no se reducen.
-        ahorro_capacidad = Decimal("0")
-        ahorro_distribucion = Decimal("0")
+        # Paso 3 — Ahorro Capacidad y Distribución (metodología GDMTH)
+        # Asunción conservadora: kw_max NO cambia con cogeneración (paradas mensuales).
+        # demanda_efectiva_post = demanda_promedio_post / 0.57
+        # reduccion_kw = max(kw_max - demanda_efectiva_post, 0)
+        kw_max = cfe_orig.kw_max
+
+        # Precios unitarios desde componentes MEM (usa cfe_orig, no prorratado)
+        def _precio_comp(nombre_clave: str) -> Decimal:
+            comp = next(
+                (c for c in cfe_orig.componentes_mem
+                 if nombre_clave in c.nombre.lower()),
+                None,
+            )
+            if comp is None or kw_max <= 0:
+                return Decimal("0")
+            return (comp.importe_mxn / kw_max).quantize(_DIEZMILAVO, ROUND_HALF_UP)
+
+        precio_cap  = _precio_comp("capacidad")
+        precio_dist = _precio_comp("distribu")   # cubre "distribución" y "distribucion"
+
+        # Logging si no se encuentran componentes
+        nombres_mem = [c.nombre for c in cfe_orig.componentes_mem]
+        if precio_cap == 0 and nombres_mem and kw_max > 0:
+            logger.warning("Sin componente Capacidad para %s. Componentes: %s", clave, nombres_mem)
+        if precio_dist == 0 and nombres_mem and kw_max > 0:
+            logger.warning("Sin componente Distribución para %s. Componentes: %s", clave, nombres_mem)
+
+        # Demanda efectiva post-cogeneración (usa kwh y dias de cfe_orig)
+        kwh_total_orig = sum(p.consumo_kwh for p in cfe_orig.periodos)
+        kwh_cubiertos_orig = kwh_total_orig * params.cobertura_electrica
+        kwh_post_cogen = kwh_total_orig - kwh_cubiertos_orig
+        dias_orig = (cfe_orig.periodo_fin - cfe_orig.periodo_inicio).days
+        if dias_orig > 0 and kw_max > 0:
+            demanda_promedio_post = (kwh_post_cogen / (24 * dias_orig)).quantize(_DIEZMILAVO, ROUND_HALF_UP)
+            demanda_efectiva_post = (demanda_promedio_post / _FACTOR_DEMANDA).quantize(_DIEZMILAVO, ROUND_HALF_UP)
+            reduccion_kw = max(kw_max - demanda_efectiva_post, Decimal("0"))
+        else:
+            reduccion_kw = Decimal("0")
+
+        ahorro_capacidad    = (precio_cap  * reduccion_kw).quantize(_CENTAVO, ROUND_HALF_UP)
+        ahorro_distribucion = (precio_dist * reduccion_kw).quantize(_CENTAVO, ROUND_HALF_UP)
 
         # Paso 4 — Ahorro eléctrico total
         ahorro_electricidad = ahorro_energia + ahorro_capacidad + ahorro_distribucion
@@ -213,6 +251,11 @@ def calcular_cogen(
             cu_punta_kwh=next((p.costo_unitario_kwh for p in cfe.periodos if p.periodo == "punta"), Decimal("0")),
             cu_intermedia_kwh=next((p.costo_unitario_kwh for p in cfe.periodos if p.periodo == "intermedio"), Decimal("0")),
             cu_base_kwh=next((p.costo_unitario_kwh for p in cfe.periodos if p.periodo == "base"), Decimal("0")),
+            kw_max=kw_max,
+            dias_facturados=dias_orig,
+            kwh_total_orig=kwh_total_orig,
+            precio_capacidad_kw=precio_cap,
+            precio_distribucion_kw=precio_dist,
             prorrateado=prorrateado,
             nota_prorrateo=nota,
         ))

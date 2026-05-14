@@ -78,25 +78,35 @@
   // ── Recalcular mes con parámetros de sliders ──────────────────────────────
   function recalcularMes(m, p) {
     const kwh_cub = m.kwh_total * p.cobertura;
-    // Greedy: cubrir primero el horario más caro (metodología GDMTH 3 componentes)
+    // Greedy: cubrir primero el horario más caro (Energía)
     const periodos = [
         { kwh: m.kwh_punta,      cu: m.cu_punta },
         { kwh: m.kwh_intermedia, cu: m.cu_intermedia },
         { kwh: m.kwh_base,       cu: m.cu_base },
     ].sort((a, b) => b.cu - a.cu);
-    let remaining = kwh_cub, ah_elec = 0;
+    let remaining = kwh_cub, ah_energia = 0;
     for (const per of periodos) {
         const covered = Math.min(remaining, per.kwh);
-        ah_elec += covered * per.cu;
+        ah_energia += covered * per.cu;
         remaining -= covered;
         if (remaining <= 0) break;
     }
+    // Capacidad y Distribución (usa kwh_total_orig y dias_mes de la factura real)
+    const kwh_post_orig = m.kwh_total_orig * (1 - p.cobertura);
+    const demanda_post  = (m.kw_max > 0 && m.dias_mes > 0)
+        ? kwh_post_orig / (24 * m.dias_mes) / 0.57  // 0.57 = factor de carga regulatorio CFE GDMTH
+        : 0;
+    const reduccion_kw  = Math.max(m.kw_max - demanda_post, 0);
+    const ah_cap  = m.precio_capacidad_kw  * reduccion_kw;
+    const ah_dist = m.precio_distribucion_kw * reduccion_kw;
+    const ah_elec = ah_energia + ah_cap + ah_dist;
     const gj_cogen   = kwh_cub * 0.0036 * 1.11 / p.rend_elec;  // 0.0036 = kWh→GJ; 1.11 = factor PCI→PCS
     const costo_gas  = gj_cogen * m.costo_unitario_gj;
     const calor_rec  = gj_cogen * p.rend_term;
     const ah_caldera = (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
     const om         = kwh_cub * 0.3;
-    return { ah_elec, ah_caldera, costo_gas, om, ahorro_neto: ah_elec + ah_caldera - costo_gas - om };
+    return { ah_elec, ah_energia, ah_cap, ah_dist, ah_caldera, costo_gas, om,
+             ahorro_neto: ah_elec + ah_caldera - costo_gas - om };
   }
 
   // ── Payback helpers ───────────────────────────────────────────────────────
