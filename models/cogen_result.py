@@ -56,6 +56,11 @@ class CoGenMes:
     kwh_total_orig: Decimal = Decimal("0")
     precio_capacidad_kw: Decimal = Decimal("0")
     precio_distribucion_kw: Decimal = Decimal("0")
+    # Transparencia GDMTH: kW facturado (actual) y efectivo (post-cogen), para sliders JS
+    kw_facturado_capacidad: Decimal = Decimal("0")
+    kw_facturado_distribucion: Decimal = Decimal("0")
+    kw_efectiva_capacidad_post: Decimal = Decimal("0")
+    kw_efectiva_distribucion_post: Decimal = Decimal("0")
     # Prorrateo (campo informativo, vacío si no se aplicó)
     prorrateado: bool = False
     nota_prorrateo: str = ""

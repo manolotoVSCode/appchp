@@ -91,15 +91,22 @@
         remaining -= covered;
         if (remaining <= 0) break;
     }
-    // Capacidad y Distribución (usa kwh_total_orig y dias_mes de la factura real)
-    const kwh_post_orig = m.kwh_total_orig * (1 - p.cobertura);
-    const demanda_post  = (m.kw_max > 0 && m.dias_mes > 0)
-        ? kwh_post_orig / (24 * m.dias_mes) / 0.57  // 0.57 = factor de carga regulatorio CFE GDMTH
-        : 0;
-    const reduccion_cap  = Math.max((m.kw_punta || m.kw_max) - demanda_post, 0);  // Capacidad usa kw_punta
-    const reduccion_dist = Math.max(m.kw_max - demanda_post, 0);                   // Distribución usa kw_max
-    const ah_cap  = m.precio_capacidad_kw  * reduccion_cap;
-    const ah_dist = m.precio_distribucion_kw * reduccion_dist;
+    // Capacidad y Distribución (metodología GDMTH con redondeo ceiling)
+    // CFE GDMTH factura demanda como ceil(kWh / horas / 0.57); se aplica tanto a demanda
+    // actual (base del precio) como a demanda post-cogeneración (nueva demanda proyectada).
+    if (m.kw_max > 0 && m.dias_mes > 0) {
+        const d_ceil_actual = Math.ceil(m.kwh_total_orig / (24 * m.dias_mes) / 0.57);
+        const kw_bill_cap   = Math.min(m.kw_punta || m.kw_max, d_ceil_actual);
+        const kw_bill_dist  = Math.min(m.kw_max, d_ceil_actual);
+        const kwh_post_orig = m.kwh_total_orig * (1 - p.cobertura);
+        const d_ceil_post   = Math.ceil(kwh_post_orig / (24 * m.dias_mes) / 0.57);
+        const kw_eff_cap    = Math.min(kw_bill_cap,  d_ceil_post);
+        const kw_eff_dist   = Math.min(kw_bill_dist, d_ceil_post);
+        var ah_cap  = m.precio_capacidad_kw  * Math.max(kw_bill_cap  - kw_eff_cap,  0);
+        var ah_dist = m.precio_distribucion_kw * Math.max(kw_bill_dist - kw_eff_dist, 0);
+    } else {
+        var ah_cap = 0, ah_dist = 0;
+    }
     const ah_elec = ah_energia + ah_cap + ah_dist;
     const gj_cogen   = kwh_cub * 0.0036 * 1.11 / p.rend_elec;  // 0.0036 = kWh→GJ; 1.11 = factor PCI→PCS
     const costo_gas  = gj_cogen * m.costo_unitario_gj;

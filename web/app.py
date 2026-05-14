@@ -438,6 +438,8 @@ def create_app() -> Flask:
                 "kwh_total_orig": float(m.kwh_total_orig),
                 "precio_capacidad_kw": float(m.precio_capacidad_kw),
                 "precio_distribucion_kw": float(m.precio_distribucion_kw),
+                "kw_facturado_capacidad": float(m.kw_facturado_capacidad),
+                "kw_facturado_distribucion": float(m.kw_facturado_distribucion),
             }
             for m in r.meses
         ]
@@ -634,6 +636,8 @@ def create_app() -> Flask:
                 "kwh_total_orig": float(m.kwh_total_orig),
                 "precio_capacidad_kw": float(m.precio_capacidad_kw),
                 "precio_distribucion_kw": float(m.precio_distribucion_kw),
+                "kw_facturado_capacidad": float(m.kw_facturado_capacidad),
+                "kw_facturado_distribucion": float(m.kw_facturado_distribucion),
             }
             for m in r.meses
         ]

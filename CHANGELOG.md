@@ -2,9 +2,19 @@
 
 ## [2.23.1] — 2026-05-13
 
-### Corregido (bug crítico)
+### Corregido (metodología crítica)
 
-- Ahorro Capacidad y Ahorro Distribución reportados como cero en v2.23.0. Ahora se calculan con la metodología CFE GDMTH: `precio_componente = importe_MEM / kw_max`; `ahorro = precio × max(kw_max − demanda_efectiva_post, 0)`; donde `demanda_efectiva_post = (kWh_post_cogen / (24 × días_facturados)) / 0.57`. La asunción conservadora (kw_max no cambia) se aplica correctamente en la fórmula. El Ahorro Electricidad reportado ahora incluye los tres componentes. Afecta `calc/cogen.py`, `models/cogen_result.py`, `web/app.py`, `dashboard-cogeneracion.js`. Corrección adicional: Capacidad usa demanda del periodo punta (kw_punta) como base, no kw_max; Distribución sigue usando kw_max. Validado para IBERICA TILES enero 2024: Capacidad $421,080 ✓, Distribución $128,454 ✓.
+- Ahorro Capacidad y Ahorro Distribución calculados incorrectamente en versiones anteriores. Implementación completa de la metodología CFE GDMTH con redondeo ceiling:
+
+  - **Redondeo ceiling obligatorio**: CFE GDMTH deriva kW facturados como `ceil(kWh_total / (24 × días) / 0.57)`. Se aplica con `math.ceil()` tanto para la demanda actual (base del precio unitario) como para la demanda post-cogeneración (demanda proyectada). Implementado en `calc/cogen.py` y replicado con `Math.ceil()` en `dashboard-cogeneracion.js`.
+
+  - **Fórmulas MIN correctas**: `kw_facturado_capacidad = min(kw_punta, ceil(D_actual))` y `kw_facturado_distribucion = min(kw_max, ceil(D_actual))`. Para la reducción post-cogen: `kw_efectiva_cap = min(kw_facturado_cap, ceil(D_post))` y `kw_efectiva_dist = min(kw_facturado_dist, ceil(D_post))`.
+
+  - **Campo correcto para precio unitario**: el precio se deriva de `cargo_demanda_mxn` del componente MEM (no de `importe_mxn` que incluye otros cargos).
+
+  - **Campos de transparencia**: `CoGenMes` expone ahora `kw_facturado_capacidad`, `kw_facturado_distribucion`, `kw_efectiva_capacidad_post`, `kw_efectiva_distribucion_post` para trazabilidad y sliders JS.
+
+  Validado para IBERICA TILES enero 2024: ceil(1624.22) = 1,625 kW → kw_bill_cap = 1,456, kw_bill_dist = 1,625, D_post = 407 kW → Capacidad ≈ $420,701 ✓, Distribución ≈ $123,932 ✓, Ahorro Electricidad TOTAL ≈ $1,509,288 ✓.
 
 ---
 

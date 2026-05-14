@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+import math
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -150,51 +151,71 @@ def calcular_cogen(
             Decimal("0"),
         ).quantize(_CENTAVO, ROUND_HALF_UP)
 
-        # Paso 3 — Ahorro Capacidad y Distribución (metodología GDMTH)
+        # Paso 3 — Ahorro Capacidad y Distribución (metodología GDMTH con redondeo ceiling)
+        # CFE GDMTH factura demanda derivando kW como ceil(kWh / horas / 0.57).
+        # Los precios unitarios se obtienen desde cargo_demanda_mxn del componente MEM.
         # Asunción conservadora: kw_max NO cambia con cogeneración (paradas mensuales).
-        # Capacidad usa kw_punta (demanda del periodo punta) como base del precio unitario.
-        # Distribución usa kw_max como base del precio unitario.
-        # demanda_efectiva_post = demanda_promedio_post / 0.57
         kw_max = cfe_orig.kw_max
         kw_punta = next(
             (p.demanda_kw for p in cfe_orig.periodos if p.periodo == "punta"),
             kw_max,  # fallback a kw_max si no existe periodo punta
         )
 
-        # Precios unitarios desde componentes MEM (usa cfe_orig, no prorratado)
-        def _precio_comp(nombre_clave: str, kw_base: Decimal) -> Decimal:
-            comp = next(
-                (c for c in cfe_orig.componentes_mem
-                 if nombre_clave in c.nombre.lower()),
-                None,
-            )
-            if comp is None or kw_base <= 0:
-                return Decimal("0")
-            return (comp.importe_mxn / kw_base).quantize(_DIEZMILAVO, ROUND_HALF_UP)
-
-        precio_cap  = _precio_comp("capacidad", kw_punta)  # Capacidad → kw_punta
-        precio_dist = _precio_comp("distribu",  kw_max)    # Distribución → kw_max
-
-        # Logging si no se encuentran componentes
-        nombres_mem = [c.nombre for c in cfe_orig.componentes_mem]
-        if precio_cap == 0 and nombres_mem and kw_punta > 0:
-            logger.warning("Sin componente Capacidad para %s (kw_punta=%.2f). Componentes: %s", clave, kw_punta, nombres_mem)
-        if precio_dist == 0 and nombres_mem and kw_max > 0:
-            logger.warning("Sin componente Distribución para %s (kw_max=%.2f). Componentes: %s", clave, kw_max, nombres_mem)
-
-        # Demanda efectiva post-cogeneración (usa kwh y dias de cfe_orig)
+        # Datos originales (sin prorrateo) para derivar demanda facturada
         kwh_total_orig = sum(p.consumo_kwh for p in cfe_orig.periodos)
-        kwh_cubiertos_orig = kwh_total_orig * params.cobertura_electrica
-        kwh_post_cogen = kwh_total_orig - kwh_cubiertos_orig
         dias_orig = (cfe_orig.periodo_fin - cfe_orig.periodo_inicio).days
-        if dias_orig > 0 and (kw_punta > 0 or kw_max > 0):
-            demanda_promedio_post = (kwh_post_cogen / (24 * dias_orig)).quantize(_DIEZMILAVO, ROUND_HALF_UP)
-            demanda_efectiva_post = (demanda_promedio_post / _FACTOR_DEMANDA).quantize(_DIEZMILAVO, ROUND_HALF_UP)
-            reduccion_cap  = max(kw_punta - demanda_efectiva_post, Decimal("0"))
-            reduccion_dist = max(kw_max   - demanda_efectiva_post, Decimal("0"))
+
+        nombres_mem = [c.nombre for c in cfe_orig.componentes_mem]
+        comp_cap  = next((c for c in cfe_orig.componentes_mem if "capacidad" in c.nombre.lower()), None)
+        comp_dist = next((c for c in cfe_orig.componentes_mem if "distribu"  in c.nombre.lower()), None)
+
+        if dias_orig > 0:
+            # Demanda promedio actual → ceiling de ceil(D_avg / 0.57)
+            d_avg_actual = kwh_total_orig / (Decimal("24") * dias_orig)
+            d_ceil_actual = Decimal(math.ceil(d_avg_actual / _FACTOR_DEMANDA))
+
+            # kW facturado = min(kW real del periodo, demanda derivada con ceiling)
+            kw_facturado_capacidad    = min(kw_punta, d_ceil_actual)
+            kw_facturado_distribucion = min(kw_max,   d_ceil_actual)
+
+            # Precio unitario desde cargo_demanda_mxn (usa cfe_orig, no prorratado)
+            if comp_cap is None:
+                if nombres_mem and kw_punta > 0:
+                    logger.warning("Sin componente Capacidad para %s. Componentes: %s", clave, nombres_mem)
+                precio_cap = Decimal("0")
+            elif kw_facturado_capacidad <= 0:
+                precio_cap = Decimal("0")
+            else:
+                precio_cap = (comp_cap.cargo_demanda_mxn / kw_facturado_capacidad).quantize(_DIEZMILAVO, ROUND_HALF_UP)
+
+            if comp_dist is None:
+                if nombres_mem and kw_max > 0:
+                    logger.warning("Sin componente Distribución para %s. Componentes: %s", clave, nombres_mem)
+                precio_dist = Decimal("0")
+            elif kw_facturado_distribucion <= 0:
+                precio_dist = Decimal("0")
+            else:
+                precio_dist = (comp_dist.cargo_demanda_mxn / kw_facturado_distribucion).quantize(_DIEZMILAVO, ROUND_HALF_UP)
+
+            # Demanda post-cogeneración con ceiling
+            kwh_post_cogen = kwh_total_orig - (kwh_total_orig * params.cobertura_electrica)
+            d_avg_post = kwh_post_cogen / (Decimal("24") * dias_orig)
+            d_ceil_post = Decimal(math.ceil(d_avg_post / _FACTOR_DEMANDA))
+
+            kw_efectiva_capacidad_post    = min(kw_facturado_capacidad,    d_ceil_post)
+            kw_efectiva_distribucion_post = min(kw_facturado_distribucion, d_ceil_post)
+
+            reduccion_cap  = max(kw_facturado_capacidad    - kw_efectiva_capacidad_post,    Decimal("0"))
+            reduccion_dist = max(kw_facturado_distribucion - kw_efectiva_distribucion_post, Decimal("0"))
         else:
-            reduccion_cap  = Decimal("0")
-            reduccion_dist = Decimal("0")
+            kw_facturado_capacidad        = Decimal("0")
+            kw_facturado_distribucion     = Decimal("0")
+            kw_efectiva_capacidad_post    = Decimal("0")
+            kw_efectiva_distribucion_post = Decimal("0")
+            precio_cap                    = Decimal("0")
+            precio_dist                   = Decimal("0")
+            reduccion_cap                 = Decimal("0")
+            reduccion_dist                = Decimal("0")
 
         ahorro_capacidad    = (precio_cap  * reduccion_cap ).quantize(_CENTAVO, ROUND_HALF_UP)
         ahorro_distribucion = (precio_dist * reduccion_dist).quantize(_CENTAVO, ROUND_HALF_UP)
@@ -264,6 +285,10 @@ def calcular_cogen(
             kwh_total_orig=kwh_total_orig,
             precio_capacidad_kw=precio_cap,
             precio_distribucion_kw=precio_dist,
+            kw_facturado_capacidad=kw_facturado_capacidad,
+            kw_facturado_distribucion=kw_facturado_distribucion,
+            kw_efectiva_capacidad_post=kw_efectiva_capacidad_post,
+            kw_efectiva_distribucion_post=kw_efectiva_distribucion_post,
             prorrateado=prorrateado,
             nota_prorrateo=nota,
         ))
