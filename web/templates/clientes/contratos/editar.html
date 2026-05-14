@@ -28,7 +28,8 @@
       <div class="mb-3">
         <label for="tipo" class="form-label fw-semibold">Tipo <span class="text-danger">*</span></label>
         <select class="form-select" id="tipo" name="tipo" required>
-          <option value="electrico" {% if tipo == "electrico" %}selected{% endif %}>Eléctrico (CFE)</option>
+          <option value="electrico_basico" {% if tipo == "electrico_basico" %}selected{% endif %}>Eléctrico básico (CFE GDMTH)</option>
+          <option value="electrico_calificado" {% if tipo == "electrico_calificado" %}selected{% endif %}>Eléctrico calificado (PPA)</option>
           <option value="gas" {% if tipo == "gas" %}selected{% endif %}>Gas natural (ENGIE)</option>
         </select>
       </div>

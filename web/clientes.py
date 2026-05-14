@@ -8,6 +8,7 @@ import unicodedata
 from pathlib import Path
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO
 from parsers.cfe import get_cfe_parser
 from parsers.gas import get_gas_parser
 from storage.repository import (
@@ -483,8 +484,8 @@ def contrato_nuevo(cliente_id: int):
         error = None
         if not nombre:
             error = "El nombre del contrato es obligatorio."
-        elif tipo not in ("electrico", "gas"):
-            error = "El tipo debe ser 'electrico' o 'gas'."
+        elif tipo not in TIPOS_VALIDOS:
+            error = "Tipo inválido. Debe ser eléctrico básico (CFE), eléctrico calificado (PPA) o gas."
         elif not identificador_real:
             error = "El identificador real es obligatorio."
 
@@ -520,7 +521,7 @@ def contrato_nuevo(cliente_id: int):
         cliente=cliente,
         error=None,
         nombre="",
-        tipo="electrico",
+        tipo="electrico_basico",
         identificador_real="",
         notas="",
     )
@@ -579,8 +580,8 @@ def contrato_editar(cliente_id: int, contrato_id: int):
         error = None
         if not nombre:
             error = "El nombre del contrato es obligatorio."
-        elif tipo not in ("electrico", "gas"):
-            error = "El tipo debe ser 'electrico' o 'gas'."
+        elif tipo not in TIPOS_VALIDOS:
+            error = "Tipo inválido. Debe ser eléctrico básico (CFE), eléctrico calificado (PPA) o gas."
         elif not identificador_real:
             error = "El identificador real es obligatorio."
 
@@ -698,7 +699,7 @@ def contrato_upload(cliente_id: int, contrato_id: int):
             tmp_path = Path(tmp.name)
         try:
             tipo = _detect_tipo(tmp_path)
-            tipo_contrato = "electrico" if tipo == "cfe" else "gas"
+            tipo_contrato = TIPO_ELECTRICO_BASICO if tipo == "cfe" else "gas"
             if tipo_contrato != contrato.tipo:
                 errors.append({
                     "nombre": nombre,
@@ -909,3 +910,98 @@ def contrato_seleccion_anio(cliente_id: int, contrato_id: int):
     except Exception as exc:
         logger.error("Error en selección anio contrato_id=%d %d: %s", contrato_id, anio, exc)
         return jsonify({"error": str(exc)}), 500
+
+
+# ── Datos PPA del cliente ──────────────────────────────────────────────────────
+
+@clientes_bp.route("/<int:cliente_id>/ppa/datos", methods=["POST"])
+def cliente_ppa_datos_actualizar(cliente_id: int):
+    from flask import Response
+    from storage.repository import update_cliente_ppa_datos
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    def _opt_decimal(key: str):
+        v = request.form.get(key, "").strip()
+        if not v:
+            return None
+        try:
+            from decimal import Decimal
+            return str(Decimal(v))
+        except Exception:
+            return None
+
+    datos = {
+        "ppa_suministrador":                _sanitizar_texto(request.form.get("ppa_suministrador", "")),
+        "ppa_rfc_suministrador":            _sanitizar_texto(request.form.get("ppa_rfc_suministrador", "")),
+        "ppa_precio_fijo_usd_mwh":          _opt_decimal("ppa_precio_fijo_usd_mwh"),
+        "ppa_fecha_inicio_suministro":      request.form.get("ppa_fecha_inicio_suministro", "").strip() or None,
+        "ppa_energia_contratada_mwh_anual": _opt_decimal("ppa_energia_contratada_mwh_anual"),
+        "ppa_capacidad_maxima_kw":          _opt_decimal("ppa_capacidad_maxima_kw"),
+        "ppa_margen_reserva_cenace_pct":    _opt_decimal("ppa_margen_reserva_cenace_pct"),
+        "ppa_zona_carga":                   _sanitizar_texto(request.form.get("ppa_zona_carga", "")),
+        "ppa_rpu":                          _sanitizar_texto(request.form.get("ppa_rpu", "")),
+        "ppa_division":                     _sanitizar_texto(request.form.get("ppa_division", "")),
+        "ppa_pdf_contrato_url":             request.form.get("ppa_pdf_contrato_url", "").strip() or None,
+        "ppa_notas":                        request.form.get("ppa_notas", "").strip() or None,
+    }
+    try:
+        update_cliente_ppa_datos(cliente_id, datos)
+        flash("Datos PPA actualizados.", "success")
+    except Exception as exc:
+        logger.error("Error actualizando PPA datos cliente_id=%d: %s", cliente_id, exc)
+        flash(f"Error al guardar datos PPA: {exc}", "danger")
+    return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+
+@clientes_bp.route("/<int:cliente_id>/ppa/bloques", methods=["POST"])
+def cliente_ppa_bloques_actualizar(cliente_id: int):
+    from storage.repository import upsert_ppa_bloque_mensual, delete_ppa_bloque_mensual
+    from decimal import Decimal
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    anio_str = request.form.get("anio_bloques", "").strip()
+    try:
+        anio = int(anio_str)
+    except ValueError:
+        flash("Año inválido.", "danger")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    _MESES_NOMBRES = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+    ]
+
+    errores = 0
+    for mes in range(1, 13):
+        campo = f"bloque_{mes}"
+        val = request.form.get(campo, "").strip()
+        if not val:
+            try:
+                delete_ppa_bloque_mensual(cliente_id, anio, mes)
+            except Exception:
+                pass
+        else:
+            try:
+                bloque = Decimal(val)
+                if bloque < 0:
+                    raise ValueError("Negativo")
+                upsert_ppa_bloque_mensual(cliente_id, anio, mes, bloque)
+            except Exception as exc:
+                logger.warning(
+                    "Error en bloque mes=%d cliente_id=%d: %s", mes, cliente_id, exc
+                )
+                errores += 1
+
+    if errores:
+        flash(f"Se guardaron los bloques con {errores} error(es). Verifica los valores numéricos.", "warning")
+    else:
+        flash(f"Bloques mensuales {anio} actualizados.", "success")
+    return redirect(url_for("clientes.ficha", cliente_id=cliente_id))

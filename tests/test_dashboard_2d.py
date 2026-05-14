@@ -44,7 +44,7 @@ _CONTRATO_ELECTRICO = Contrato(
     id=10,
     cliente_id=1,
     nombre="CFE Planta 1",
-    tipo="electrico",
+    tipo="electrico_basico",
     identificador_real="812990300016",
     notas=None,
     created_at="2024-01-15T10:00:00+00:00",
@@ -309,6 +309,7 @@ def _mock_resultado_con_meses():
     mes.gasto_om_mes_mxn = Decimal("24000")
     mes.prorrateado = False
     mes.nota_prorrateo = ""
+    mes.dias_facturados = 30
 
     resultado = MagicMock()
     resultado.meses = [mes]
@@ -320,6 +321,7 @@ def _mock_resultado_con_meses():
     resultado.kwh_total_anual = Decimal("50000")
     resultado.kwh_cubiertos_anual = Decimal("37500")
     resultado.gj_gas_cogen_anual = Decimal("337.5")
+    resultado.gj_gas_cogen_pci_anual = Decimal("303.92")
     resultado.capacidad_nominal_kw = Decimal("69.44")
     resultado.inversion_usd = Decimal("97216.00")
     resultado.inversion_mxn = Decimal("1701280.00")

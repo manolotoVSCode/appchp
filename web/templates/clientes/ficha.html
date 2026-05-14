@@ -197,6 +197,131 @@
   </div>
 </div>
 
+<!-- Suministro Calificado (PPA) — Accordion -->
+<div class="mt-4">
+  <div class="accordion" id="acordeonPPA">
+    <div class="accordion-item shadow-sm">
+      <h2 class="accordion-header" id="headingPPA">
+        <button class="accordion-button collapsed fw-semibold small text-muted py-2" type="button"
+                data-bs-toggle="collapse" data-bs-target="#collapsePPA"
+                aria-expanded="false" aria-controls="collapsePPA">
+          Suministro Calificado (PPA)
+        </button>
+      </h2>
+      <div id="collapsePPA" class="accordion-collapse collapse" aria-labelledby="headingPPA">
+        <div class="accordion-body">
+
+          <!-- Formulario datos PPA -->
+          <form method="POST" action="{{ url_for('clientes.cliente_ppa_datos_actualizar', cliente_id=cliente.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Suministrador</label>
+                <input type="text" class="form-control form-control-sm" name="ppa_suministrador"
+                       value="{{ cliente.ppa_suministrador or '' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">RFC del suministrador</label>
+                <input type="text" class="form-control form-control-sm" name="ppa_rfc_suministrador"
+                       value="{{ cliente.ppa_rfc_suministrador or '' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">RPU (Registro Permanente Único)</label>
+                <input type="text" class="form-control form-control-sm" name="ppa_rpu"
+                       value="{{ cliente.ppa_rpu or '' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">División</label>
+                <input type="text" class="form-control form-control-sm" name="ppa_division"
+                       value="{{ cliente.ppa_division or '' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Zona de carga CENACE</label>
+                <input type="text" class="form-control form-control-sm" name="ppa_zona_carga"
+                       value="{{ cliente.ppa_zona_carga or '' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Precio fijo inicial (USD/MWh)</label>
+                <input type="number" step="0.01" class="form-control form-control-sm" name="ppa_precio_fijo_usd_mwh"
+                       value="{{ cliente.ppa_precio_fijo_usd_mwh or '' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Fecha inicio suministro</label>
+                <input type="date" class="form-control form-control-sm" name="ppa_fecha_inicio_suministro"
+                       value="{{ cliente.ppa_fecha_inicio_suministro or '' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Energía contratada anual (MWh)</label>
+                <input type="number" step="0.001" class="form-control form-control-sm" name="ppa_energia_contratada_mwh_anual"
+                       value="{{ cliente.ppa_energia_contratada_mwh_anual or '' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Capacidad máxima contratada (kW)</label>
+                <input type="number" step="0.01" class="form-control form-control-sm" name="ppa_capacidad_maxima_kw"
+                       value="{{ cliente.ppa_capacidad_maxima_kw or '' }}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-semibold">Margen de reserva CENACE (%)</label>
+                <input type="number" step="0.01" class="form-control form-control-sm" name="ppa_margen_reserva_cenace_pct"
+                       value="{{ cliente.ppa_margen_reserva_cenace_pct or '' }}">
+              </div>
+              <div class="col-md-8">
+                <label class="form-label small fw-semibold">PDF del contrato (URL Supabase Storage)</label>
+                <input type="url" class="form-control form-control-sm" name="ppa_pdf_contrato_url"
+                       value="{{ cliente.ppa_pdf_contrato_url or '' }}">
+              </div>
+              <div class="col-12">
+                <label class="form-label small fw-semibold">Notas PPA</label>
+                <textarea class="form-control form-control-sm" name="ppa_notas" rows="2">{{ cliente.ppa_notas or '' }}</textarea>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-sm btn-primary">Guardar datos PPA</button>
+              </div>
+            </div>
+          </form>
+
+          <hr class="my-4">
+
+          <!-- Bloques mensuales contratados -->
+          <h6 class="fw-semibold text-muted mb-3">Bloques Mensuales Contratados (MWh)</h6>
+          <form method="POST" action="{{ url_for('clientes.cliente_ppa_bloques_actualizar', cliente_id=cliente.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2 align-items-end mb-3">
+              <div class="col-auto">
+                <label class="form-label small fw-semibold">Año</label>
+                <select class="form-select form-select-sm" name="anio_bloques" id="anio_bloques_select">
+                  {% set anio_actual = 2026 %}
+                  {% for y in range(anio_actual - 2, anio_actual + 2) %}
+                  <option value="{{ y }}" {% if y == anio_actual %}selected{% endif %}>{{ y }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="row g-2">
+              {% set meses_nombres = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
+                                      "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"] %}
+              {% for i in range(12) %}
+              <div class="col-md-2 col-sm-4 col-6">
+                <label class="form-label small text-muted">{{ meses_nombres[i] }}</label>
+                <input type="number" step="0.001" min="0"
+                       class="form-control form-control-sm"
+                       name="bloque_{{ i + 1 }}"
+                       placeholder="MWh">
+              </div>
+              {% endfor %}
+            </div>
+            <div class="mt-3">
+              <button type="submit" class="btn btn-sm btn-outline-primary">Guardar bloques</button>
+              <span class="text-muted small ms-2">Los campos vacíos eliminan el bloque de ese mes.</span>
+            </div>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Acciones cliente -->
 <div class="d-flex gap-2 mt-4">
   <a href="{{ url_for('clientes.editar', cliente_id=cliente.id) }}" class="btn btn-outline-primary btn-sm">Editar ficha</a>
@@ -229,8 +354,10 @@
         <tr>
           <td class="fw-semibold">{{ c.nombre }}</td>
           <td>
-            {% if c.tipo == "electrico" %}
-              <span class="badge text-bg-primary">Eléctrico</span>
+            {% if c.tipo == "electrico_basico" %}
+              <span class="badge text-bg-primary">Eléctrico básico (CFE)</span>
+            {% elif c.tipo == "electrico_calificado" %}
+              <span class="badge text-bg-info text-dark">Eléctrico calificado (PPA)</span>
             {% else %}
               <span class="badge text-bg-warning text-dark">Gas</span>
             {% endif %}

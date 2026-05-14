@@ -38,7 +38,7 @@ _CONTRATO_BASE = Contrato(
     id=10,
     cliente_id=1,
     nombre="CFE Planta 1",
-    tipo="electrico",
+    tipo="electrico_basico",
     identificador_real="812990300016",
     notas="Contrato principal",
     created_at="2024-01-15T10:00:00+00:00",
@@ -48,7 +48,7 @@ _CONTRATO_BASE_DICT = {
     "id": 10,
     "cliente_id": 1,
     "nombre": "CFE Planta 1",
-    "tipo": "electrico",
+    "tipo": "electrico_basico",
     "identificador_real": "812990300016",
     "notas": "Contrato principal",
     "created_at": "2024-01-15T10:00:00+00:00",
@@ -267,7 +267,7 @@ def test_contrato_nuevo_exitoso(auth_client, monkeypatch):
     monkeypatch.setattr("web.clientes.create_contrato", lambda *a, **kw: 10)
     resp = auth_client.post("/clientes/1/contratos/nuevo", data={
         "nombre": "CFE Planta 1",
-        "tipo": "electrico",
+        "tipo": "electrico_basico",
         "identificador_real": "812990300016",
         "notas": "",
     }, follow_redirects=False)
@@ -280,7 +280,7 @@ def test_contrato_nuevo_campos_vacios(auth_client, monkeypatch):
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     resp = auth_client.post("/clientes/1/contratos/nuevo", data={
         "nombre": "",
-        "tipo": "electrico",
+        "tipo": "electrico_basico",
         "identificador_real": "812990300016",
         "notas": "",
     })
@@ -298,7 +298,7 @@ def test_contrato_nuevo_identificador_duplicado(auth_client, monkeypatch):
     )
     resp = auth_client.post("/clientes/1/contratos/nuevo", data={
         "nombre": "Duplicado",
-        "tipo": "electrico",
+        "tipo": "electrico_basico",
         "identificador_real": "812990300016",
         "notas": "",
     })
@@ -370,7 +370,7 @@ def test_contrato_editar_post_exitoso(auth_client, monkeypatch):
     monkeypatch.setattr("web.clientes.update_contrato", lambda *a, **kw: None)
     resp = auth_client.post("/clientes/1/contratos/10/editar", data={
         "nombre": "CFE Planta 1 Actualizado",
-        "tipo": "electrico",
+        "tipo": "electrico_basico",
         "identificador_real": "812990300016",
         "notas": "actualizado",
     }, follow_redirects=False)
