@@ -29,11 +29,14 @@
   let beneficioFiscalAnio1 = 0;   // beneficio fiscal año 1 por depreciación inmediata
 
   // ── Instancias Chart.js ───────────────────────────────────────────────────
-  let cogenChart = null;
-  let chart15    = null;
+  let cogenChart     = null;
+  let chart15        = null;
   let waterfallChart = null;
   let donutIngChart  = null;
   let donutGasChart  = null;
+  // IDs de canvas activos (mini donuts integrados en bloque 1)
+  const DONUT_ING_ID = "donutIngMiniChart";
+  const DONUT_GAS_ID = "donutGasMiniChart";
 
   // ── AbortController + debounce ────────────────────────────────────────────
   let _abortCtrl  = null;
@@ -276,31 +279,32 @@
     }
   }
 
-  // ── Charts: waterfall y donuts de composición ─────────────────────────────
+  // ── Charts: waterfall (reubicada) y donuts mini integrados en bloque 1 ──────
   function upsertGraficasComposicion(ah_elec, ah_caldera, costo_gas, om, ahorro_neto) {
-    const secGraf = document.getElementById("seccion-graficas-composicion");
-    if (secGraf) secGraf.style.display = "";
+    // Mostrar sección cascada (antes del flujo 15 años)
+    const secCascada = document.getElementById("seccion-cascada");
+    if (secCascada) secCascada.style.display = "";
 
-    // ── Waterfall (barras horizontales simuladas) ─────────────────────────────
+    // ── Waterfall (barras horizontales) — 280px fijos vía CSS .cascada-wrap ──
     const wfCtx = document.getElementById("waterfallChart");
     if (wfCtx) {
-      const wfLabels  = ["Ahorro Electricidad", "Ahorro Caldera", "Costo Gas Cogen", "O&M", "Ahorro Neto"];
-      const wfValues  = [ah_elec, ah_caldera, -costo_gas, -om, ahorro_neto];
-      const wfColors  = [
-        "rgba(106,138,154,0.8)",   // azul grisáceo — elec
-        "rgba(232,181,71,0.8)",    // dorado — caldera
-        "rgba(216,90,90,0.8)",     // rojo — gas
-        "rgba(180,100,180,0.8)",   // morado — O&M
-        "rgba(31,122,76,0.85)",    // verde oscuro — neto
+      const wfLabels = ["Ahorro Electricidad", "Ahorro Caldera", "Costo Gas Cogen", "O&M", "Ahorro Neto"];
+      const wfValues = [ah_elec, ah_caldera, -costo_gas, -om, ahorro_neto];
+      const wfColors = [
+        "rgba(106,138,154,0.8)",
+        "rgba(232,181,71,0.8)",
+        "rgba(216,90,90,0.8)",
+        "rgba(180,100,180,0.8)",
+        "rgba(31,122,76,0.85)",
       ];
-      const wfData = { labels: wfLabels, datasets: [{ data: wfValues, backgroundColor: wfColors }] };
       if (!waterfallChart) {
         waterfallChart = new Chart(wfCtx, {
           type: "bar",
-          data: wfData,
+          data: { labels: wfLabels, datasets: [{ data: wfValues, backgroundColor: wfColors }] },
           options: {
             indexAxis: "y",
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
               legend: { display: false },
               tooltip: { callbacks: { label: c => "$" + Math.abs(Math.round(c.raw)).toLocaleString("es-MX") + " MXN" } }
@@ -316,22 +320,21 @@
       }
     }
 
-    // ── Donut Ingresos ────────────────────────────────────────────────────────
-    const diCtx = document.getElementById("donutIngresosChart");
+    // ── Donut Ingresos mini (130×130, integrado en bloque 1) ──────────────────
+    const diCtx = document.getElementById(DONUT_ING_ID);
     if (diCtx) {
       const totalIng = ah_elec + ah_caldera;
-      const diData = {
-        labels: ["Ahorro Electricidad", "Ahorro Caldera"],
-        datasets: [{ data: [ah_elec, ah_caldera], backgroundColor: ["rgba(106,138,154,0.8)", "rgba(232,181,71,0.8)"] }]
-      };
       if (!donutIngChart) {
         donutIngChart = new Chart(diCtx, {
           type: "doughnut",
-          data: diData,
+          data: {
+            labels: ["Ahorro Electricidad", "Ahorro Caldera"],
+            datasets: [{ data: [ah_elec, ah_caldera], backgroundColor: ["rgba(106,138,154,0.8)", "rgba(232,181,71,0.8)"], borderWidth: 1 }]
+          },
           options: {
-            responsive: true,
+            responsive: false,
             plugins: {
-              legend: { position: "bottom" },
+              legend: { display: false },
               tooltip: {
                 callbacks: {
                   label: c => {
@@ -349,22 +352,21 @@
       }
     }
 
-    // ── Donut Gastos ──────────────────────────────────────────────────────────
-    const dgCtx = document.getElementById("donutGastosChart");
+    // ── Donut Gastos mini (130×130, integrado en bloque 1) ────────────────────
+    const dgCtx = document.getElementById(DONUT_GAS_ID);
     if (dgCtx) {
       const totalGas = costo_gas + om;
-      const dgData = {
-        labels: ["Costo Gas Cogen", "O&M"],
-        datasets: [{ data: [costo_gas, om], backgroundColor: ["rgba(216,90,90,0.8)", "rgba(180,100,180,0.8)"] }]
-      };
       if (!donutGasChart) {
         donutGasChart = new Chart(dgCtx, {
           type: "doughnut",
-          data: dgData,
+          data: {
+            labels: ["Costo Gas Cogen", "O&M"],
+            datasets: [{ data: [costo_gas, om], backgroundColor: ["rgba(216,90,90,0.8)", "rgba(180,100,180,0.8)"], borderWidth: 1 }]
+          },
           options: {
-            responsive: true,
+            responsive: false,
             plugins: {
-              legend: { position: "bottom" },
+              legend: { display: false },
               tooltip: {
                 callbacks: {
                   label: c => {

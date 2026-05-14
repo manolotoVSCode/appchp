@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.24.2] — 2026-05-13
+
+### Cambiado (visual)
+- Donuts de composición de Ingresos y Gastos: integrados dentro del bloque 1 (al lado derecho de los números) con tamaño fijo 130×130px y sin leyenda. Antes ocupaban espacio descomunal debajo del bloque. Tooltip sigue mostrando porcentaje y valor MXN.
+- Cascada de Ahorro Neto: movida justo arriba de la gráfica del flujo de 15 años. Altura fija 280px. Nueva sección titulada "Composición del Ahorro Neto Anual".
+
+### Removido
+- Donuts grandes del área inferior del bloque 1 (reemplazados por los mini donuts integrados).
+
 ## [2.24.1] — 2026-05-13
 
 ### Añadido
