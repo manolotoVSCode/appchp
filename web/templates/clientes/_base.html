@@ -601,10 +601,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   items.forEach(function (item) {
     const header = item.querySelector(".sidebar-contrato-header");
     if (!header) return;
-    // Abrir el body visualmente
     const body = item.querySelector(".sidebar-contrato-body");
-    body.classList.add("open");
-    header.classList.add("open");
     const contratoId = item.dataset.contratoId;
     // Marcar como cargado para que toggleContrato no haga re-fetch individual
     _cargados[contratoId] = true;
