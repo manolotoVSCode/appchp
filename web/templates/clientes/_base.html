@@ -197,6 +197,39 @@
       #sidebar-overlay.show { display: block; }
     }
 
+    /* Desktop sidebar collapse */
+    #sidebar { transition: transform 0.3s ease; }
+    #main-content { transition: margin-left 0.3s ease; }
+    body.sidebar-desktop-collapsed #sidebar {
+      transform: translateX(calc(-1 * var(--sidebar-w)));
+      overflow: hidden;
+      pointer-events: none;
+    }
+    body.sidebar-desktop-collapsed #main-content { margin-left: 0; }
+
+    /* Toggle button — sólo en escritorio (≥ 1024px, donde no hay bloqueo móvil) */
+    #sidebar-desktop-toggle {
+      display: none;
+      position: fixed; z-index: 101; top: 50%; left: var(--sidebar-w);
+      transform: translateY(-50%);
+      background: #fff; border: 1px solid #dee2e6; border-left: none;
+      border-radius: 0 8px 8px 0;
+      padding: .45rem .3rem; cursor: pointer; color: #6c757d;
+      font-size: .85rem; line-height: 1; align-items: center;
+      transition: left 0.3s ease, color 0.1s;
+    }
+    #sidebar-desktop-toggle:hover { background: #f8f9fa; color: var(--color-primary); }
+    body.sidebar-desktop-collapsed #sidebar-desktop-toggle { left: 0; }
+    @media (min-width: 1024px) { #sidebar-desktop-toggle { display: flex; } }
+
+    /* Colores de contratos por tipo */
+    .sidebar-contrato-item[data-tipo="electrico"] .contrato-nombre {
+      color: #1F7A4C; font-weight: 600;
+    }
+    .sidebar-contrato-item[data-tipo="gas"] .contrato-nombre {
+      color: #d4a017; font-weight: 600;
+    }
+
     /* General */
     th { white-space: nowrap; }
   </style>
@@ -257,12 +290,12 @@
   <div class="sidebar-sub-header">Contratos</div>
   <div class="sidebar-contratos" id="sidebar-contratos-{{ cliente_activo.id }}">
     {% for contrato in cliente_activo.contratos %}
-    <div class="sidebar-contrato-item" data-contrato-id="{{ contrato.id }}" data-cliente-id="{{ cliente_activo.id }}">
+    <div class="sidebar-contrato-item" data-contrato-id="{{ contrato.id }}" data-cliente-id="{{ cliente_activo.id }}" data-tipo="{{ contrato.tipo }}">
       <div class="sidebar-contrato-header{% if nav_active == 'contrato' and contrato_activo_id == contrato.id %} active{% endif %}"
            title="{{ contrato.nombre }}"
            onclick="toggleContrato(this)">
         <i class="bi bi-file-earmark-text" style="font-size:.8rem;flex-shrink:0"></i>
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ contrato.nombre }}</span>
+        <span class="contrato-nombre" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ contrato.nombre }}</span>
         <span class="chev">&#9658;</span>
       </div>
       <div class="sidebar-contrato-body">
@@ -298,6 +331,11 @@
     </div>
   </div>
 </nav>
+
+<!-- Desktop sidebar toggle -->
+<button id="sidebar-desktop-toggle" aria-label="Ocultar/mostrar sidebar">
+  <i class="bi bi-chevron-left" id="sidebar-desktop-toggle-icon"></i>
+</button>
 
 <!-- Main content -->
 <div id="main-content">
@@ -618,6 +656,28 @@ document.addEventListener("DOMContentLoaded", async function () {
     const clienteId  = item.dataset.clienteId;
     const anio = parseInt(wrap.dataset.anio, 10);
     toggleAnio(contratoId, clienteId, anio, chk, wrap);
+  });
+})();
+
+// ── Desktop sidebar toggle (estado persistido en localStorage) ────────────────
+(function () {
+  const LS_KEY = "sidebar_collapsed";
+  const btn  = document.getElementById("sidebar-desktop-toggle");
+  if (!btn) return;
+
+  function aplicarEstado(collapsed) {
+    document.body.classList.toggle("sidebar-desktop-collapsed", collapsed);
+    const icon = document.getElementById("sidebar-desktop-toggle-icon");
+    if (icon) icon.className = collapsed ? "bi bi-chevron-right" : "bi bi-chevron-left";
+    try { localStorage.setItem(LS_KEY, collapsed ? "true" : "false"); } catch (_) {}
+  }
+
+  let inicial = false;
+  try { inicial = localStorage.getItem(LS_KEY) === "true"; } catch (_) {}
+  aplicarEstado(inicial);
+
+  btn.addEventListener("click", function () {
+    aplicarEstado(!document.body.classList.contains("sidebar-desktop-collapsed"));
   });
 })();
 </script>

@@ -32,11 +32,6 @@
   let cogenChart     = null;
   let chart15        = null;
   let waterfallChart = null;
-  let donutIngChart  = null;
-  let donutGasChart  = null;
-  // IDs de canvas activos (mini donuts integrados en bloque 1)
-  const DONUT_ING_ID = "donutIngMiniChart";
-  const DONUT_GAS_ID = "donutGasMiniChart";
 
   // ── AbortController + debounce ────────────────────────────────────────────
   let _abortCtrl  = null;
@@ -279,109 +274,42 @@
     }
   }
 
-  // ── Charts: waterfall (reubicada) y donuts mini integrados en bloque 1 ──────
+  // ── Chart: waterfall de composición (reubicada sobre flujo 15 años) ──────────
   function upsertGraficasComposicion(ah_elec, ah_caldera, costo_gas, om, ahorro_neto) {
-    // Mostrar sección cascada (antes del flujo 15 años)
     const secCascada = document.getElementById("seccion-cascada");
     if (secCascada) secCascada.style.display = "";
 
-    // ── Waterfall (barras horizontales) — 280px fijos vía CSS .cascada-wrap ──
     const wfCtx = document.getElementById("waterfallChart");
-    if (wfCtx) {
-      const wfLabels = ["Ahorro Electricidad", "Ahorro Caldera", "Costo Gas Cogen", "O&M", "Ahorro Neto"];
-      const wfValues = [ah_elec, ah_caldera, -costo_gas, -om, ahorro_neto];
-      const wfColors = [
-        "rgba(106,138,154,0.8)",
-        "rgba(232,181,71,0.8)",
-        "rgba(216,90,90,0.8)",
-        "rgba(180,100,180,0.8)",
-        "rgba(31,122,76,0.85)",
-      ];
-      if (!waterfallChart) {
-        waterfallChart = new Chart(wfCtx, {
-          type: "bar",
-          data: { labels: wfLabels, datasets: [{ data: wfValues, backgroundColor: wfColors }] },
-          options: {
-            indexAxis: "y",
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: { callbacks: { label: c => "$" + Math.abs(Math.round(c.raw)).toLocaleString("es-MX") + " MXN" } }
-            },
-            scales: {
-              x: { ticks: { callback: v => "$" + Math.abs(Math.round(v)).toLocaleString("es-MX", { maximumFractionDigits: 0 }) } }
-            }
-          }
-        });
-      } else {
-        waterfallChart.data.datasets[0].data = wfValues;
-        waterfallChart.update();
-      }
-    }
-
-    // ── Donut Ingresos mini (130×130, integrado en bloque 1) ──────────────────
-    const diCtx = document.getElementById(DONUT_ING_ID);
-    if (diCtx) {
-      const totalIng = ah_elec + ah_caldera;
-      if (!donutIngChart) {
-        donutIngChart = new Chart(diCtx, {
-          type: "doughnut",
-          data: {
-            labels: ["Ahorro Electricidad", "Ahorro Caldera"],
-            datasets: [{ data: [ah_elec, ah_caldera], backgroundColor: ["rgba(106,138,154,0.8)", "rgba(232,181,71,0.8)"], borderWidth: 1 }]
+    if (!wfCtx) return;
+    const wfLabels = ["Ahorro Electricidad", "Ahorro Caldera", "Costo Gas Cogen", "O&M", "Ahorro Neto"];
+    const wfValues = [ah_elec, ah_caldera, -costo_gas, -om, ahorro_neto];
+    const wfColors = [
+      "rgba(106,138,154,0.8)",
+      "rgba(232,181,71,0.8)",
+      "rgba(216,90,90,0.8)",
+      "rgba(180,100,180,0.8)",
+      "rgba(31,122,76,0.85)",
+    ];
+    if (!waterfallChart) {
+      waterfallChart = new Chart(wfCtx, {
+        type: "bar",
+        data: { labels: wfLabels, datasets: [{ data: wfValues, backgroundColor: wfColors }] },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: c => "$" + Math.abs(Math.round(c.raw)).toLocaleString("es-MX") + " MXN" } }
           },
-          options: {
-            responsive: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: c => {
-                    const pct = totalIng > 0 ? (c.raw / totalIng * 100).toFixed(1) : 0;
-                    return c.label + ": " + pct + "% ($" + Math.round(c.raw).toLocaleString("es-MX") + ")";
-                  }
-                }
-              }
-            }
+          scales: {
+            x: { ticks: { callback: v => "$" + Math.abs(Math.round(v)).toLocaleString("es-MX", { maximumFractionDigits: 0 }) } }
           }
-        });
-      } else {
-        donutIngChart.data.datasets[0].data = [ah_elec, ah_caldera];
-        donutIngChart.update();
-      }
-    }
-
-    // ── Donut Gastos mini (130×130, integrado en bloque 1) ────────────────────
-    const dgCtx = document.getElementById(DONUT_GAS_ID);
-    if (dgCtx) {
-      const totalGas = costo_gas + om;
-      if (!donutGasChart) {
-        donutGasChart = new Chart(dgCtx, {
-          type: "doughnut",
-          data: {
-            labels: ["Costo Gas Cogen", "O&M"],
-            datasets: [{ data: [costo_gas, om], backgroundColor: ["rgba(216,90,90,0.8)", "rgba(180,100,180,0.8)"], borderWidth: 1 }]
-          },
-          options: {
-            responsive: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: c => {
-                    const pct = totalGas > 0 ? (c.raw / totalGas * 100).toFixed(1) : 0;
-                    return c.label + ": " + pct + "% ($" + Math.round(c.raw).toLocaleString("es-MX") + ")";
-                  }
-                }
-              }
-            }
-          }
-        });
-      } else {
-        donutGasChart.data.datasets[0].data = [costo_gas, om];
-        donutGasChart.update();
-      }
+        }
+      });
+    } else {
+      waterfallChart.data.datasets[0].data = wfValues;
+      waterfallChart.update();
     }
   }
 

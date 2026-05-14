@@ -47,15 +47,6 @@
   }
   .btn-excel { color: #198754; font-size: 1rem; text-decoration: none; line-height: 1; }
   .btn-excel:hover { color: #146c43; }
-  /* Bloque 1 — donut integrado al lado de los números */
-  .bloque-kpi-con-donut {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-  .bloque-numeros { flex: 1; min-width: 0; }
-  .donut-mini { width: 130px !important; height: 130px !important; flex-shrink: 0; }
   /* Cascada — altura fija antes del flujo 15 años */
   .cascada-wrap { position: relative; height: 280px; }
 </style>
@@ -111,21 +102,22 @@
     <div class="card h-100 shadow-sm">
       <div class="kpi-section-label">Ingresos</div>
       <div class="card-body pt-1">
-        <div class="bloque-kpi-con-donut">
-          <div class="bloque-numeros">
+        <div class="row g-2">
+          <div class="col-6">
             <div class="text-muted small">Ahorro Electricidad</div>
             <div class="fs-5 fw-bold" style="color:var(--color-info)" id="kpi-elec-val">—</div>
-            <div class="text-muted small mb-2">MXN / año</div>
+            <div class="text-muted small">MXN / año</div>
+          </div>
+          <div class="col-6">
             <div class="text-muted small">Ahorro Caldera</div>
             <div class="fs-5 fw-bold text-warning" id="kpi-caldera-val">—</div>
-            <div class="text-muted small mb-2">MXN / año</div>
-            <div class="pt-2 border-top mt-1">
-              <div class="text-muted small">Total Ingresos</div>
-              <div class="fs-5 fw-bold" style="color:var(--color-primary-dark)" id="kpi-total-ingresos-val">—</div>
-              <div class="text-muted small">MXN / año</div>
-            </div>
+            <div class="text-muted small">MXN / año</div>
           </div>
-          <canvas id="donutIngMiniChart" width="130" height="130" class="donut-mini"></canvas>
+          <div class="col-12 pt-2 border-top mt-1">
+            <div class="text-muted small">Total Ingresos</div>
+            <div class="fs-5 fw-bold" style="color:var(--color-primary-dark)" id="kpi-total-ingresos-val">—</div>
+            <div class="text-muted small">MXN / año</div>
+          </div>
         </div>
       </div>
     </div>
@@ -136,21 +128,22 @@
     <div class="card h-100 shadow-sm">
       <div class="kpi-section-label">Gastos</div>
       <div class="card-body pt-1">
-        <div class="bloque-kpi-con-donut">
-          <div class="bloque-numeros">
+        <div class="row g-2">
+          <div class="col-6">
             <div class="text-muted small">Costo Gas Cogen</div>
             <div class="fs-5 fw-bold text-danger" id="kpi-gas-val">—</div>
-            <div class="text-muted small mb-2">MXN / año</div>
+            <div class="text-muted small">MXN / año</div>
+          </div>
+          <div class="col-6">
             <div class="text-muted small">O&amp;M estimado</div>
             <div class="fs-5 fw-bold text-danger" id="kpi-om-val">—</div>
-            <div class="text-muted small mb-2">MXN / año</div>
-            <div class="pt-2 border-top mt-1">
-              <div class="text-muted small">Total Gastos</div>
-              <div class="fs-5 fw-bold text-danger" id="kpi-total-gastos-val">—</div>
-              <div class="text-muted small">MXN / año</div>
-            </div>
+            <div class="text-muted small">MXN / año</div>
           </div>
-          <canvas id="donutGasMiniChart" width="130" height="130" class="donut-mini"></canvas>
+          <div class="col-12 pt-2 border-top mt-1">
+            <div class="text-muted small">Total Gastos</div>
+            <div class="fs-5 fw-bold text-danger" id="kpi-total-gastos-val">—</div>
+            <div class="text-muted small">MXN / año</div>
+          </div>
         </div>
       </div>
     </div>

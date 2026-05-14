@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.24.4] — 2026-05-13
+
+### Removido
+- Donuts de composición de Ingresos y Gastos en el bloque 1 del dashboard de Cogeneración. No aportaban claridad visual. Bloque 1 recupera el layout de dos columnas numéricas simples.
+
+## [2.24.3] — 2026-05-13
+
+### Añadido
+- Botón para ocultar/mostrar el sidebar (escritorio ≥ 1024px). Icono `bi-chevron-left/right` en el borde derecho del sidebar. Al ocultarlo, el contenido principal se expande a ancho completo con transición 300ms. Estado persistido en `localStorage` (clave `sidebar_collapsed`) entre sesiones y entre dashboards.
+- Distinción visual de contratos en sidebar: contratos eléctricos en verde `#1F7A4C`, contratos de gas en ámbar `#d4a017`. Se aplica al nombre del contrato únicamente; meses y años mantienen su estilo.
+
 ## [2.24.2] — 2026-05-13
 
 ### Cambiado (visual)
