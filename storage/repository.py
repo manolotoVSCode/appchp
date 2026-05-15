@@ -1143,6 +1143,36 @@ def get_facturas_para_dashboard_calificado(
     ]
 
 
+def get_facturas_ppa_y_gas_para_dashboard(
+    cliente_id: int,
+) -> tuple[list[FacturaCalificado], list[GasInvoice]]:
+    """Carga facturas PPA y gas seleccionadas en 3 queries, para clientes con suministro calificado."""
+    seleccionados = get_meses_seleccionados_por_cliente(cliente_id)
+    if not seleccionados:
+        return [], []
+    contrato_ids = list({c for c, _, _ in seleccionados})
+
+    ppa_result = _supabase.table("facturas_electricidad_calificado").select("*").eq(
+        "cliente_id", cliente_id
+    ).in_("contrato_id", contrato_ids).order("periodo_inicio").execute()
+
+    gas_result = _supabase.table("gas_facturas").select(
+        "*, clientes(nombre, rfc), gas_conceptos(*)"
+    ).eq("cliente_id", cliente_id).in_("contrato_id", contrato_ids).order("periodo_inicio").execute()
+
+    ppa_invoices = [
+        _row_to_factura_calificado(row) for row in ppa_result.data
+        if row.get("anio") and row.get("mes")
+        and (row["contrato_id"], row["anio"], row["mes"]) in seleccionados
+    ]
+    gas_invoices = [
+        _row_to_gas_invoice(row) for row in gas_result.data
+        if row.get("anio") and row.get("mes")
+        and (row["contrato_id"], row["anio"], row["mes"]) in seleccionados
+    ]
+    return ppa_invoices, gas_invoices
+
+
 # ── Configuración global ──────────────────────────────────────────────────────
 
 def list_configuracion() -> list[dict]:

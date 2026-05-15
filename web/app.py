@@ -15,8 +15,7 @@ from flask_wtf.csrf import CSRFProtect
 
 from storage.repository import (
     get_facturas_para_dashboard,
-    get_facturas_para_dashboard_calificado,
-    get_meses_seleccionados_por_cliente,
+    get_facturas_ppa_y_gas_para_dashboard,
     get_tipo_suministro_electrico_seleccionado,
     get_contratos_por_cliente,
     get_configuracion,
@@ -24,6 +23,7 @@ from storage.repository import (
     list_configuracion,
     set_configuracion,
 )
+from models.contrato import TIPO_ELECTRICO_CALIFICADO
 from calc.cogen import calcular_cogen, calcular_cogen_ppa, calcular_payback, calcular_flujo_acumulado
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe, calcular_historico_gas
 from calc.nombre_canonico import generar_nombre_canonico
@@ -126,9 +126,7 @@ def _cargar_facturas_seleccionadas(cliente_id: int):
 
 def _cargar_facturas_ppa(cliente_id: int):
     """Carga facturas PPA y gas seleccionadas. Retorna (ppa_invoices, gas_invoices, facturas_ppa, facturas_gas)."""
-    meses_raw = get_meses_seleccionados_por_cliente(cliente_id)
-    _, gas_invoices = get_facturas_para_dashboard(cliente_id)
-    ppa_invoices = get_facturas_para_dashboard_calificado(cliente_id, meses_raw)
+    ppa_invoices, gas_invoices = get_facturas_ppa_y_gas_para_dashboard(cliente_id)
 
     facturas_ppa = [
         {
@@ -323,7 +321,7 @@ def create_app() -> Flask:
         tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
 
         try:
-            if tipo_suministro == "electrico_calificado":
+            if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
                 ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
                 historico = None
                 tablas = {}
@@ -418,7 +416,7 @@ def create_app() -> Flask:
             fe_elec = _D(fe_elec_str) if fe_elec_str else None
             fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
 
-            if tipo_suministro == "electrico_calificado":
+            if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
                 ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
                 r = calcular_cogen_ppa(
                     ppa_invoices, gas_invoices, CoGenParams(),
@@ -452,7 +450,7 @@ def create_app() -> Flask:
 
         # ── CELs (solo para GDMTH, skip para PPA) ────────────────────────────────
         cels_resultado = None
-        if tipo_suministro != "electrico_calificado":
+        if tipo_suministro != TIPO_ELECTRICO_CALIFICADO:
             try:
                 from calc.cels import calcular_cels as _calcular_cels
                 calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
@@ -472,7 +470,7 @@ def create_app() -> Flask:
 
         num_cfe_total = cliente["num_cfe"]
         num_gas_total = cliente["num_gas"]
-        num_elec_sel = len(facturas_ppa) if tipo_suministro == "electrico_calificado" else len(facturas_cfe)
+        num_elec_sel = len(facturas_ppa) if tipo_suministro == TIPO_ELECTRICO_CALIFICADO else len(facturas_cfe)
         num_gas_sel = len(facturas_gas)
 
         if num_cfe_total == 0 and num_gas_total == 0:
@@ -578,7 +576,7 @@ def create_app() -> Flask:
         tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
 
         try:
-            if tipo_suministro == "electrico_calificado":
+            if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
                 ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
                 historico = None
                 tablas = {}
@@ -679,7 +677,7 @@ def create_app() -> Flask:
             fe_elec = _D(fe_elec_str) if fe_elec_str else None
             fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
 
-            if tipo_suministro == "electrico_calificado":
+            if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
                 ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
                 r = calcular_cogen_ppa(
                     ppa_invoices, gas_invoices, CoGenParams(),
@@ -705,7 +703,7 @@ def create_app() -> Flask:
 
         # CELs — solo para GDMTH
         cels_resultado = None
-        if tipo_suministro != "electrico_calificado":
+        if tipo_suministro != TIPO_ELECTRICO_CALIFICADO:
             try:
                 from calc.cels import calcular_cels as _calcular_cels
                 calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
@@ -723,7 +721,7 @@ def create_app() -> Flask:
                 logger.error("Error calculando CELs en data endpoint: %s", _e_cels)
 
         # Energía limpia generada — solo para GDMTH
-        if (tipo_suministro != "electrico_calificado"
+        if (tipo_suministro != TIPO_ELECTRICO_CALIFICADO
                 and cels_resultado is not None and cels_resultado.es_eficiente
                 and cels_resultado.cels_mwh_anual is not None
                 and r.kwh_total_anual > 0):
@@ -735,7 +733,7 @@ def create_app() -> Flask:
 
         num_cfe_total = cliente["num_cfe"]
         num_gas_total = cliente["num_gas"]
-        num_elec_sel = len(facturas_ppa) if tipo_suministro == "electrico_calificado" else len(facturas_cfe)
+        num_elec_sel = len(facturas_ppa) if tipo_suministro == TIPO_ELECTRICO_CALIFICADO else len(facturas_cfe)
         num_gas_sel = len(facturas_gas)
 
         if num_cfe_total == 0 and num_gas_total == 0:
