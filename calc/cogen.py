@@ -10,6 +10,7 @@ from decimal import Decimal, ROUND_HALF_UP
 logger = logging.getLogger(__name__)
 
 from models.cfe_invoice import CFEInvoice
+from models.factura_calificado import FacturaCalificado
 from models.gas_invoice import GasInvoice
 from models.cogen_result import CoGenMes, CoGenParams, CoGenResultado
 from calc.periodo import mes_asociado, prorratear_cfe, prorratear_gas
@@ -299,6 +300,197 @@ def calcular_cogen(
         return sum(getattr(m, attr) for m in meses) if meses else Decimal("0")
 
     capacidad_kw = _capacidad_nominal_kw(cfe_invoices)
+    if capacidad_kw is not None and capacidad_kw > 0:
+        inv_usd = (capacidad_kw * _USD_POR_KW).quantize(_CENTAVO, ROUND_HALF_UP)
+        inv_mxn = (inv_usd * tipo_cambio).quantize(_CENTAVO, ROUND_HALF_UP)
+    else:
+        inv_usd = inv_mxn = None
+
+    # ── Huella de carbono ────────────────────────────────────────────────────
+    co2_elec_actual = co2_gas_actual = co2_actual = None
+    co2_elec_proy = co2_gas_proy = co2_proy = None
+    co2_reduccion = co2_reduccion_pct = None
+
+    if factor_emision_elec is not None and factor_emision_gas is not None and meses:
+        kwh_anual        = _sum("kwh_total")
+        kwh_cub_anual    = _sum("kwh_cubiertos")
+        gj_caldera_anual = _sum("gj_consumido")
+        gj_cogen_anual   = _sum("gj_gas_cogen")
+        calor_rec_anual  = _sum("calor_recuperado_gj")
+
+        co2_elec_actual = (kwh_anual * factor_emision_elec).quantize(_CENTAVO, ROUND_HALF_UP)
+        co2_gas_actual  = (gj_caldera_anual * factor_emision_gas).quantize(_CENTAVO, ROUND_HALF_UP)
+        co2_actual      = co2_elec_actual + co2_gas_actual
+
+        co2_elec_proy = ((kwh_anual - kwh_cub_anual) * factor_emision_elec).quantize(_CENTAVO, ROUND_HALF_UP)
+        gj_caldera_con_cogen = max(
+            gj_caldera_anual - (calor_rec_anual / params.eficiencia_caldera),
+            Decimal("0"),
+        )
+        gj_gas_total_proy = gj_cogen_anual + gj_caldera_con_cogen
+        co2_gas_proy = (gj_gas_total_proy * factor_emision_gas).quantize(_CENTAVO, ROUND_HALF_UP)
+        co2_proy     = co2_elec_proy + co2_gas_proy
+
+        co2_reduccion = co2_actual - co2_proy
+        if co2_actual > 0:
+            co2_reduccion_pct = ((co2_reduccion / co2_actual) * 100).quantize(_CENTAVO, ROUND_HALF_UP)
+        else:
+            co2_reduccion_pct = Decimal("0")
+
+    if inv_mxn is not None and inv_mxn > 0:
+        beneficio_fiscal = (inv_mxn * _TASA_ISR).quantize(_CENTAVO, ROUND_HALF_UP)
+        flujo_anio_1_ben = (_sum("ebitda_mes_mxn") + beneficio_fiscal).quantize(_CENTAVO, ROUND_HALF_UP)
+    else:
+        beneficio_fiscal = None
+        flujo_anio_1_ben = None
+
+    return CoGenResultado(
+        params=params,
+        meses=meses,
+        kwh_total_anual=_sum("kwh_total"),
+        kwh_cubiertos_anual=_sum("kwh_cubiertos"),
+        gj_gas_cogen_anual=(_gj_cogen_anual := _sum("gj_gas_cogen")),
+        gj_gas_cogen_pci_anual=(_gj_cogen_anual / _FACTOR_PCI_A_PCS).quantize(_DIEZMILAVO, ROUND_HALF_UP),
+        costo_gas_cogen_anual_mxn=_sum("costo_gas_cogen_mxn"),
+        ahorro_electricidad_anual_mxn=_sum("ahorro_electricidad_mxn"),
+        ahorro_energia_anual_mxn=_sum("ahorro_energia_mes_mxn"),
+        ahorro_capacidad_anual_mxn=_sum("ahorro_capacidad_mes_mxn"),
+        ahorro_distribucion_anual_mxn=_sum("ahorro_distribucion_mes_mxn"),
+        ahorro_caldera_anual_mxn=_sum("ahorro_caldera_mxn"),
+        ebitda_anual_mxn=_sum("ebitda_mes_mxn"),
+        gasto_om_anual_mxn=_sum("gasto_om_mes_mxn"),
+        capacidad_nominal_kw=capacidad_kw,
+        inversion_usd=inv_usd,
+        inversion_mxn=inv_mxn,
+        tipo_cambio_mxn_usd=tipo_cambio,
+        co2_actual_electricidad_kg_anual=co2_elec_actual,
+        co2_actual_gas_kg_anual=co2_gas_actual,
+        co2_actual_total_kg_anual=co2_actual,
+        co2_proyectado_electricidad_kg_anual=co2_elec_proy,
+        co2_proyectado_gas_kg_anual=co2_gas_proy,
+        co2_proyectado_total_kg_anual=co2_proy,
+        co2_reduccion_kg_anual=co2_reduccion,
+        co2_reduccion_porcentaje=co2_reduccion_pct,
+        beneficio_fiscal_anio_1_mxn=beneficio_fiscal,
+        flujo_anio_1_con_beneficio_mxn=flujo_anio_1_ben,
+    )
+
+
+def _capacidad_nominal_kw_ppa(ppa_invoices: list[FacturaCalificado]) -> Decimal | None:
+    """max(consumo_kwh / 720 h) sobre facturas PPA con consumo positivo."""
+    maximos = [ppa.consumo_kwh for ppa in ppa_invoices if ppa.consumo_kwh > 0]
+    if not maximos:
+        return None
+    return Decimal(math.ceil(max(maximos) / _HORAS_MES))
+
+
+def calcular_cogen_ppa(
+    ppa_invoices: list[FacturaCalificado],
+    gas_invoices: list[GasInvoice],
+    params: CoGenParams,
+    tipo_cambio: Decimal = _TC_DEFAULT,
+    factor_emision_elec: Decimal | None = None,
+    factor_emision_gas: Decimal | None = None,
+) -> CoGenResultado:
+    """Calcula el EBITDA mensual para suministro eléctrico calificado (PPA).
+
+    Empareja facturas PPA con facturas de gas por mes asociado.
+    Sin desglose horario: el ahorro eléctrico se calcula como kWh cubiertos × precio promedio.
+    Los campos exclusivos de GDMTH (Capacidad, Distribución, periodos horarios) se fijan en 0.
+    """
+    gas_por_mes: dict[tuple[int, int], GasInvoice] = {
+        mes_asociado(g.periodo_inicio, g.periodo_fin): g
+        for g in gas_invoices
+    }
+
+    meses: list[CoGenMes] = []
+
+    for ppa in sorted(ppa_invoices, key=lambda x: x.periodo_inicio):
+        clave = mes_asociado(ppa.periodo_inicio, ppa.periodo_fin)
+        gas = gas_por_mes.get(clave)
+        if gas is None:
+            logger.warning(
+                "Sin factura de gas para %s (PPA: %s–%s)",
+                clave, ppa.periodo_inicio, ppa.periodo_fin,
+            )
+            continue
+
+        kwh_total = ppa.consumo_kwh
+        if kwh_total == 0:
+            continue
+
+        costo_ppa = ppa.subtotal_mxn
+        costo_prom_kwh = (costo_ppa / kwh_total).quantize(_CENTAVO, ROUND_HALF_UP)
+        costo_unit_gj = gas.costo_unitario_total_gj
+
+        kwh_cubiertos = (kwh_total * params.cobertura_electrica).quantize(_CENTAVO, ROUND_HALF_UP)
+
+        # Ahorro eléctrico simplificado PPA: kWh cubiertos × precio promedio
+        ahorro_electricidad = (kwh_cubiertos * costo_prom_kwh).quantize(_CENTAVO, ROUND_HALF_UP)
+        ahorro_energia = ahorro_electricidad
+        ahorro_capacidad = Decimal("0")
+        ahorro_distribucion = Decimal("0")
+
+        # Gas cogen, caldera, O&M — idéntico a GDMTH
+        gj_gas_cogen = (kwh_cubiertos * _KWH_A_GJ * _FACTOR_PCI_A_PCS / params.rendimiento_electrico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
+        costo_gas_cogen = (gj_gas_cogen * costo_unit_gj).quantize(_CENTAVO, ROUND_HALF_UP)
+        calor_recuperado = (gj_gas_cogen * params.rendimiento_termico).quantize(_DIEZMILAVO, ROUND_HALF_UP)
+        ahorro_caldera = (calor_recuperado / params.eficiencia_caldera * costo_unit_gj).quantize(_CENTAVO, ROUND_HALF_UP)
+        gasto_om = (kwh_cubiertos * _FACTOR_OM).quantize(_CENTAVO, ROUND_HALF_UP)
+        ebitda = ahorro_electricidad + ahorro_caldera - costo_gas_cogen - gasto_om
+
+        dias_orig = (ppa.periodo_fin - ppa.periodo_inicio).days
+
+        mes_anio, mes_mes = clave
+        ultimo_dia = calendar.monthrange(mes_anio, mes_mes)[1]
+
+        meses.append(CoGenMes(
+            periodo_inicio=date(mes_anio, mes_mes, 1),
+            periodo_fin=date(mes_anio, mes_mes, ultimo_dia),
+            kwh_total=kwh_total,
+            costo_cfe_mxn=costo_ppa,
+            costo_promedio_kwh=costo_prom_kwh,
+            gj_consumido=gas.consumo_total_gj,
+            costo_unitario_gj=costo_unit_gj,
+            costo_gas_actual_mxn=gas.subtotal_mxn,
+            kwh_cubiertos=kwh_cubiertos,
+            kwh_punta_cubierto=Decimal("0"),
+            kwh_intermedia_cubierto=Decimal("0"),
+            kwh_base_cubierto=Decimal("0"),
+            ahorro_energia_mes_mxn=ahorro_energia,
+            ahorro_capacidad_mes_mxn=Decimal("0"),
+            ahorro_distribucion_mes_mxn=Decimal("0"),
+            gj_gas_cogen=gj_gas_cogen,
+            costo_gas_cogen_mxn=costo_gas_cogen,
+            ahorro_electricidad_mxn=ahorro_electricidad,
+            calor_recuperado_gj=calor_recuperado,
+            ahorro_caldera_mxn=ahorro_caldera,
+            ebitda_mes_mxn=ebitda,
+            gasto_om_mes_mxn=gasto_om,
+            kwh_punta_total=Decimal("0"),
+            kwh_intermedia_total=Decimal("0"),
+            kwh_base_total=Decimal("0"),
+            cu_punta_kwh=Decimal("0"),
+            cu_intermedia_kwh=Decimal("0"),
+            cu_base_kwh=Decimal("0"),
+            kw_max=Decimal("0"),
+            kw_punta_orig=Decimal("0"),
+            dias_facturados=dias_orig,
+            kwh_total_orig=kwh_total,
+            precio_capacidad_kw=Decimal("0"),
+            precio_distribucion_kw=Decimal("0"),
+            kw_facturado_capacidad=Decimal("0"),
+            kw_facturado_distribucion=Decimal("0"),
+            kw_efectiva_capacidad_post=Decimal("0"),
+            kw_efectiva_distribucion_post=Decimal("0"),
+            prorrateado=False,
+            nota_prorrateo="",
+        ))
+
+    def _sum(attr: str) -> Decimal:
+        return sum(getattr(m, attr) for m in meses) if meses else Decimal("0")
+
+    capacidad_kw = _capacidad_nominal_kw_ppa(ppa_invoices)
     if capacidad_kw is not None and capacidad_kw > 0:
         inv_usd = (capacidad_kw * _USD_POR_KW).quantize(_CENTAVO, ROUND_HALF_UP)
         inv_mxn = (inv_usd * tipo_cambio).quantize(_CENTAVO, ROUND_HALF_UP)
