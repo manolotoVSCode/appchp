@@ -15,13 +15,16 @@ from flask_wtf.csrf import CSRFProtect
 
 from storage.repository import (
     get_facturas_para_dashboard,
+    get_facturas_para_dashboard_calificado,
+    get_meses_seleccionados_por_cliente,
+    get_tipo_suministro_electrico_seleccionado,
     get_contratos_por_cliente,
     get_configuracion,
     get_configuracion_row,
     list_configuracion,
     set_configuracion,
 )
-from calc.cogen import calcular_cogen, calcular_payback, calcular_flujo_acumulado
+from calc.cogen import calcular_cogen, calcular_cogen_ppa, calcular_payback, calcular_flujo_acumulado
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe, calcular_historico_gas
 from calc.nombre_canonico import generar_nombre_canonico
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
@@ -64,7 +67,7 @@ def _verificar_cliente_activo(cliente_id: int):
     return cliente, None
 
 
-def _calcular_periodo_label(cfe_invoices, gas_invoices) -> str:
+def _calcular_periodo_label(cfe_invoices, gas_invoices, ppa_invoices=None) -> str:
     """Retorna etiqueta del periodo cubierto por las facturas seleccionadas."""
     anios: set[int] = set()
     for inv in cfe_invoices:
@@ -73,6 +76,9 @@ def _calcular_periodo_label(cfe_invoices, gas_invoices) -> str:
     for inv in gas_invoices:
         anio, _ = mes_asociado(inv.periodo_inicio, inv.periodo_fin)
         anios.add(anio)
+    if ppa_invoices:
+        for inv in ppa_invoices:
+            anios.add(inv.anio)
     if not anios:
         return ""
     ordenados = sorted(anios)
@@ -116,6 +122,40 @@ def _cargar_facturas_seleccionadas(cliente_id: int):
     ]
 
     return cfe_invoices, gas_invoices, facturas_cfe, facturas_gas
+
+
+def _cargar_facturas_ppa(cliente_id: int):
+    """Carga facturas PPA y gas seleccionadas. Retorna (ppa_invoices, gas_invoices, facturas_ppa, facturas_gas)."""
+    meses_raw = get_meses_seleccionados_por_cliente(cliente_id)
+    _, gas_invoices = get_facturas_para_dashboard(cliente_id)
+    ppa_invoices = get_facturas_para_dashboard_calificado(cliente_id, meses_raw)
+
+    facturas_ppa = [
+        {
+            "nombre_canonico": inv.nombre_canonico or f"CALIFICADO-{inv.anio}-{inv.mes:02d}",
+            "periodo": f"{inv.periodo_inicio.strftime('%d %b %Y')} – {inv.periodo_fin.strftime('%d %b %Y')}",
+            "mes_asociado": date(inv.anio, inv.mes, 1).strftime("%b %Y"),
+            "kwh_total": float(inv.consumo_kwh),
+            "costo_mxn": float(inv.subtotal_mxn),
+            "precio_unitario_mxn_kwh": float(inv.precio_unitario_mxn_kwh),
+            "suministrador": inv.suministrador or "",
+        }
+        for inv in sorted(ppa_invoices, key=lambda x: (x.anio, x.mes))
+    ]
+
+    facturas_gas = [
+        {
+            "nombre_canonico": generar_nombre_canonico(inv),
+            "periodo": f"{inv.periodo_inicio.strftime('%d %b %Y')} – {inv.periodo_fin.strftime('%d %b %Y')}",
+            "mes_asociado": date(*mes_asociado(inv.periodo_inicio, inv.periodo_fin), 1).strftime("%b %Y"),
+            "gj_total": float(inv.consumo_total_gj),
+            "costo_mxn": float(inv.subtotal_mxn),
+            "prorrateado": (inv.periodo_fin - inv.periodo_inicio).days < UMBRAL_PRORRATEO_DIAS,
+        }
+        for inv in sorted(gas_invoices, key=lambda x: x.periodo_inicio)
+    ]
+
+    return ppa_invoices, gas_invoices, facturas_ppa, facturas_gas
 
 
 def _serial(obj):
@@ -280,13 +320,39 @@ def create_app() -> Flask:
         if err:
             return err
 
+        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+
         try:
-            cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
-            historico = calcular_historico_cfe(cfe_invoices)
-            tablas = calcular_tablas_cfe(cfe_invoices)
-            # Datos para gráfica de composición del costo (pie chart)
-            queso = _calcular_queso(tablas)
-            historico_gas = calcular_historico_gas(gas_invoices)
+            if tipo_suministro == "electrico_calificado":
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
+                historico = None
+                tablas = {}
+                queso = None
+                historico_gas = calcular_historico_gas(gas_invoices)
+                kwh_total_periodo = sum(f["kwh_total"] for f in facturas_ppa)
+                costo_total_periodo = sum(f["costo_mxn"] for f in facturas_ppa)
+                costo_unit_promedio = costo_total_periodo / kwh_total_periodo if kwh_total_periodo > 0 else 0.0
+                periodo_label = _calcular_periodo_label([], gas_invoices, ppa_invoices)
+                suministrador_ppa = facturas_ppa[0]["suministrador"] if facturas_ppa else ""
+                num_elec_sel = len(facturas_ppa)
+                num_gas_sel = len(facturas_gas)
+                facturas_cfe_tmpl = facturas_ppa
+            else:
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+                historico = calcular_historico_cfe(cfe_invoices)
+                tablas = calcular_tablas_cfe(cfe_invoices)
+                queso = _calcular_queso(tablas)
+                historico_gas = calcular_historico_gas(gas_invoices)
+                kwh_total_periodo = sum(f["kwh_total"] for f in facturas_cfe)
+                costo_total_periodo = sum(f["costo_mxn"] for f in facturas_cfe)
+                costo_unit_promedio = costo_total_periodo / kwh_total_periodo if kwh_total_periodo > 0 else 0.0
+                periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
+                ppa_invoices = []
+                facturas_ppa = []
+                suministrador_ppa = ""
+                num_elec_sel = len(facturas_cfe)
+                num_gas_sel = len(facturas_gas)
+                facturas_cfe_tmpl = facturas_cfe
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -301,22 +367,15 @@ def create_app() -> Flask:
 
         num_cfe_total = cliente["num_cfe"]
         num_gas_total = cliente["num_gas"]
-        num_cfe_sel = len(facturas_cfe)
-        num_gas_sel = len(facturas_gas)
 
         if num_cfe_total == 0 and num_gas_total == 0:
             aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0, "cliente_id": cliente_id}
-        elif num_cfe_sel == 0 and num_gas_sel == 0:
+        elif num_elec_sel == 0 and num_gas_sel == 0:
             aviso_datos = {"tipo": "sin_seleccion", "cliente_id": cliente_id}
-        elif num_cfe_sel == 0 or num_gas_sel == 0:
-            aviso_datos = {"tipo": "sin_par", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
+        elif num_elec_sel == 0 or num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_par", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
         else:
             aviso_datos = None
-
-        kwh_total_periodo = sum(f["kwh_total"] for f in facturas_cfe)
-        costo_total_periodo = sum(f["costo_mxn"] for f in facturas_cfe)
-        costo_unit_promedio = costo_total_periodo / kwh_total_periodo if kwh_total_periodo > 0 else 0.0
-        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
 
         return render_template(
             "dashboard_contabilidad.html",
@@ -324,17 +383,20 @@ def create_app() -> Flask:
             cliente_id=cliente_id,
             cliente_nombre=cliente["nombre"],
             logo_url=cliente.get("logo_url"),
-            facturas_cfe=facturas_cfe,
+            facturas_cfe=facturas_cfe_tmpl,
             facturas_gas=facturas_gas,
             historico=historico,
             tablas=tablas,
             historico_gas=historico_gas,
             queso=queso,
-            num_meses_analizados=len(facturas_cfe),
+            num_meses_analizados=num_elec_sel,
             kwh_total_periodo=kwh_total_periodo,
             costo_total_periodo=costo_total_periodo,
             costo_unit_promedio=costo_unit_promedio,
             periodo_label=periodo_label,
+            tipo_suministro_electrico=tipo_suministro,
+            suministrador_ppa=suministrador_ppa,
+            facturas_ppa=facturas_ppa,
         )
 
     @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion")
@@ -344,9 +406,10 @@ def create_app() -> Flask:
         if err:
             return err
 
+        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+
         try:
             from decimal import Decimal as _D
-            cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
             _cfg = {r["clave"]: r["valor"] for r in list_configuracion()}
             tc_str = _cfg.get("tipo_cambio_mxn_usd")
             tipo_cambio = _D(tc_str) if tc_str else _D("17.50")
@@ -354,12 +417,27 @@ def create_app() -> Flask:
             fe_gas_str  = _cfg.get("factor_emision_gas_kg_co2_gj")
             fe_elec = _D(fe_elec_str) if fe_elec_str else None
             fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
-            r = calcular_cogen(
-                cfe_invoices, gas_invoices, CoGenParams(),
-                tipo_cambio=tipo_cambio,
-                factor_emision_elec=fe_elec,
-                factor_emision_gas=fe_gas,
-            )
+
+            if tipo_suministro == "electrico_calificado":
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
+                r = calcular_cogen_ppa(
+                    ppa_invoices, gas_invoices, CoGenParams(),
+                    tipo_cambio=tipo_cambio,
+                    factor_emision_elec=fe_elec,
+                    factor_emision_gas=fe_gas,
+                )
+                cfe_invoices = []
+                facturas_cfe = []
+            else:
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+                ppa_invoices = []
+                facturas_ppa = []
+                r = calcular_cogen(
+                    cfe_invoices, gas_invoices, CoGenParams(),
+                    tipo_cambio=tipo_cambio,
+                    factor_emision_elec=fe_elec,
+                    factor_emision_gas=fe_gas,
+                )
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -372,38 +450,39 @@ def create_app() -> Flask:
                 500,
             )
 
-        # ── CELs ─────────────────────────────────────────────────────────────────────
-        try:
-            from calc.cels import calcular_cels as _calcular_cels
-            calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
-            cels_resultado = _calcular_cels(
-                kwh_cubiertos_anual=r.kwh_cubiertos_anual,
-                gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
-                calor_recuperado_gj_anual=calor_recuperado_anual,
-                capacidad_nominal_kw=r.capacidad_nominal_kw,
-                medio_termico=cliente.get("medio_termico"),
-                nivel_tension_kv=cliente.get("nivel_tension_kv"),
-                altitud_msnm=cliente.get("altitud_msnm"),
-                tipo_motor=cliente.get("tipo_motor"),
-            )
-        except Exception as _e_cels:
-            import logging as _logging
-            _logging.getLogger(__name__).error("Error calculando CELs: %s", _e_cels)
-            cels_resultado = None
+        # ── CELs (solo para GDMTH, skip para PPA) ────────────────────────────────
+        cels_resultado = None
+        if tipo_suministro != "electrico_calificado":
+            try:
+                from calc.cels import calcular_cels as _calcular_cels
+                calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
+                cels_resultado = _calcular_cels(
+                    kwh_cubiertos_anual=r.kwh_cubiertos_anual,
+                    gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
+                    calor_recuperado_gj_anual=calor_recuperado_anual,
+                    capacidad_nominal_kw=r.capacidad_nominal_kw,
+                    medio_termico=cliente.get("medio_termico"),
+                    nivel_tension_kv=cliente.get("nivel_tension_kv"),
+                    altitud_msnm=cliente.get("altitud_msnm"),
+                    tipo_motor=cliente.get("tipo_motor"),
+                )
+            except Exception as _e_cels:
+                import logging as _logging
+                _logging.getLogger(__name__).error("Error calculando CELs: %s", _e_cels)
 
         num_cfe_total = cliente["num_cfe"]
         num_gas_total = cliente["num_gas"]
-        num_cfe_sel = len(facturas_cfe)
+        num_elec_sel = len(facturas_ppa) if tipo_suministro == "electrico_calificado" else len(facturas_cfe)
         num_gas_sel = len(facturas_gas)
 
         if num_cfe_total == 0 and num_gas_total == 0:
             aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0, "cliente_id": cliente_id}
-        elif num_cfe_sel == 0 and num_gas_sel == 0:
+        elif num_elec_sel == 0 and num_gas_sel == 0:
             aviso_datos = {"tipo": "sin_seleccion", "cliente_id": cliente_id}
-        elif num_cfe_sel == 0 or num_gas_sel == 0:
-            aviso_datos = {"tipo": "sin_par", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
+        elif num_elec_sel == 0 or num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_par", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
         elif not r.meses:
-            aviso_datos = {"tipo": "sin_pares_mes", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
+            aviso_datos = {"tipo": "sin_pares_mes", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
         else:
             aviso_datos = None
 
@@ -453,7 +532,8 @@ def create_app() -> Flask:
             flujo_acum_15 = []
             flujo_anual_15 = []
 
-        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
+        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices, ppa_invoices if ppa_invoices else None)
+        suministrador_ppa = facturas_ppa[0]["suministrador"] if facturas_ppa else ""
 
         return render_template(
             "dashboard_cogeneracion.html",
@@ -477,6 +557,8 @@ def create_app() -> Flask:
             factor_emision_gas=float(fe_gas)   if fe_gas  is not None else None,
             cels=cels_resultado,
             cliente_ficha_url=url_for("clientes.ficha", cliente_id=cliente_id),
+            tipo_suministro_electrico=tipo_suministro,
+            suministrador_ppa=suministrador_ppa,
         )
 
     # ── Endpoints JSON para dashboards (client-side rendering) ─────────────────
@@ -493,51 +575,83 @@ def create_app() -> Flask:
         if cliente is None:
             return jsonify({"error": "no_encontrado"}), 404
 
+        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+
         try:
-            cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
-            historico = calcular_historico_cfe(cfe_invoices)
-            tablas = calcular_tablas_cfe(cfe_invoices)
-            historico_gas = calcular_historico_gas(gas_invoices)
-            queso = _calcular_queso(tablas)
+            if tipo_suministro == "electrico_calificado":
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
+                historico = None
+                tablas = {}
+                queso = None
+                historico_gas = calcular_historico_gas(gas_invoices)
+                kwh_total = sum(f["kwh_total"] for f in facturas_ppa)
+                costo_total = sum(f["costo_mxn"] for f in facturas_ppa)
+                costo_unit = costo_total / kwh_total if kwh_total > 0 else 0.0
+                periodo_label = _calcular_periodo_label([], gas_invoices, ppa_invoices)
+                num_elec_sel = len(facturas_ppa)
+                num_gas_sel = len(facturas_gas)
+                historico_ppa = [
+                    {
+                        "mes": f["mes_asociado"],
+                        "kwh_total": f["kwh_total"],
+                        "precio_unitario_mxn_kwh": f["precio_unitario_mxn_kwh"],
+                        "costo_mxn": f["costo_mxn"],
+                        "suministrador": f["suministrador"],
+                    }
+                    for f in facturas_ppa
+                ]
+                suministrador_ppa = facturas_ppa[0]["suministrador"] if facturas_ppa else ""
+                facturas_elec = facturas_ppa
+            else:
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+                historico = calcular_historico_cfe(cfe_invoices)
+                tablas = calcular_tablas_cfe(cfe_invoices)
+                historico_gas = calcular_historico_gas(gas_invoices)
+                queso = _calcular_queso(tablas)
+                kwh_total = sum(f["kwh_total"] for f in facturas_cfe)
+                costo_total = sum(f["costo_mxn"] for f in facturas_cfe)
+                costo_unit = costo_total / kwh_total if kwh_total > 0 else 0.0
+                periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
+                num_elec_sel = len(facturas_cfe)
+                num_gas_sel = len(facturas_gas)
+                historico_ppa = []
+                suministrador_ppa = ""
+                facturas_elec = facturas_cfe
         except Exception as _e:
             logger.exception("Error en contabilidad/data: %s", _e)
             return jsonify({"error": "error_calculo", "mensaje": str(_e)}), 500
 
         num_cfe_total = cliente["num_cfe"]
         num_gas_total = cliente["num_gas"]
-        num_cfe_sel = len(facturas_cfe)
-        num_gas_sel = len(facturas_gas)
 
         if num_cfe_total == 0 and num_gas_total == 0:
             aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
-        elif num_cfe_sel == 0 and num_gas_sel == 0:
+        elif num_elec_sel == 0 and num_gas_sel == 0:
             aviso_datos = {"tipo": "sin_seleccion"}
-        elif num_cfe_sel == 0 or num_gas_sel == 0:
-            aviso_datos = {"tipo": "sin_par", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
+        elif num_elec_sel == 0 or num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_par", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
         else:
             aviso_datos = None
 
-        kwh_total = sum(f["kwh_total"] for f in facturas_cfe)
-        costo_total = sum(f["costo_mxn"] for f in facturas_cfe)
-        costo_unit = costo_total / kwh_total if kwh_total > 0 else 0.0
-        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
-
         return jsonify({
             "estado": "ok",
+            "tipo_suministro_electrico": tipo_suministro,
+            "suministrador_ppa": suministrador_ppa,
             "aviso_datos": aviso_datos,
             "cliente": {"id": cliente_id, "nombre": cliente["nombre"], "periodo_label": periodo_label},
             "kpis": {
-                "num_meses": len(facturas_cfe),
+                "num_meses": num_elec_sel,
                 "kwh_total": kwh_total,
                 "costo_total": costo_total,
                 "costo_unit": costo_unit,
             },
-            "facturas_cfe": facturas_cfe,
+            "facturas_cfe": facturas_elec,
             "facturas_gas": facturas_gas,
             "historico": historico,
             "tablas": tablas,
             "queso": queso,
             "historico_gas": historico_gas,
+            "historico_ppa": historico_ppa,
         })
 
     @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion/data")
@@ -554,8 +668,9 @@ def create_app() -> Flask:
         if cliente is None:
             return jsonify({"error": "no_encontrado"}), 404
 
+        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+
         try:
-            cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
             _cfg = {row["clave"]: row["valor"] for row in list_configuracion()}
             tc_str = _cfg.get("tipo_cambio_mxn_usd")
             tipo_cambio = _D(tc_str) if tc_str else _D("17.50")
@@ -563,35 +678,53 @@ def create_app() -> Flask:
             fe_gas_str  = _cfg.get("factor_emision_gas_kg_co2_gj")
             fe_elec = _D(fe_elec_str) if fe_elec_str else None
             fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
-            r = calcular_cogen(
-                cfe_invoices, gas_invoices, CoGenParams(),
-                tipo_cambio=tipo_cambio,
-                factor_emision_elec=fe_elec,
-                factor_emision_gas=fe_gas,
-            )
+
+            if tipo_suministro == "electrico_calificado":
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
+                r = calcular_cogen_ppa(
+                    ppa_invoices, gas_invoices, CoGenParams(),
+                    tipo_cambio=tipo_cambio,
+                    factor_emision_elec=fe_elec,
+                    factor_emision_gas=fe_gas,
+                )
+                cfe_invoices = []
+                facturas_cfe = []
+            else:
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+                ppa_invoices = []
+                facturas_ppa = []
+                r = calcular_cogen(
+                    cfe_invoices, gas_invoices, CoGenParams(),
+                    tipo_cambio=tipo_cambio,
+                    factor_emision_elec=fe_elec,
+                    factor_emision_gas=fe_gas,
+                )
         except Exception as _e:
             logger.exception("Error en cogeneracion/data: %s", _e)
             return jsonify({"error": "error_calculo", "mensaje": str(_e)}), 500
 
-        try:
-            from calc.cels import calcular_cels as _calcular_cels
-            calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
-            cels_resultado = _calcular_cels(
-                kwh_cubiertos_anual=r.kwh_cubiertos_anual,
-                gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
-                calor_recuperado_gj_anual=calor_recuperado_anual,
-                capacidad_nominal_kw=r.capacidad_nominal_kw,
-                medio_termico=cliente.get("medio_termico"),
-                nivel_tension_kv=cliente.get("nivel_tension_kv"),
-                altitud_msnm=cliente.get("altitud_msnm"),
-                tipo_motor=cliente.get("tipo_motor"),
-            )
-        except Exception as _e_cels:
-            logger.error("Error calculando CELs en data endpoint: %s", _e_cels)
-            cels_resultado = None
+        # CELs — solo para GDMTH
+        cels_resultado = None
+        if tipo_suministro != "electrico_calificado":
+            try:
+                from calc.cels import calcular_cels as _calcular_cels
+                calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
+                cels_resultado = _calcular_cels(
+                    kwh_cubiertos_anual=r.kwh_cubiertos_anual,
+                    gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
+                    calor_recuperado_gj_anual=calor_recuperado_anual,
+                    capacidad_nominal_kw=r.capacidad_nominal_kw,
+                    medio_termico=cliente.get("medio_termico"),
+                    nivel_tension_kv=cliente.get("nivel_tension_kv"),
+                    altitud_msnm=cliente.get("altitud_msnm"),
+                    tipo_motor=cliente.get("tipo_motor"),
+                )
+            except Exception as _e_cels:
+                logger.error("Error calculando CELs en data endpoint: %s", _e_cels)
 
-        # Energía limpia generada: % del consumo total cubierto con CELs
-        if (cels_resultado is not None and cels_resultado.es_eficiente
+        # Energía limpia generada — solo para GDMTH
+        if (tipo_suministro != "electrico_calificado"
+                and cels_resultado is not None and cels_resultado.es_eficiente
                 and cels_resultado.cels_mwh_anual is not None
                 and r.kwh_total_anual > 0):
             from decimal import Decimal as _D2, ROUND_HALF_UP as _RHU
@@ -602,17 +735,17 @@ def create_app() -> Flask:
 
         num_cfe_total = cliente["num_cfe"]
         num_gas_total = cliente["num_gas"]
-        num_cfe_sel = len(facturas_cfe)
+        num_elec_sel = len(facturas_ppa) if tipo_suministro == "electrico_calificado" else len(facturas_cfe)
         num_gas_sel = len(facturas_gas)
 
         if num_cfe_total == 0 and num_gas_total == 0:
             aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
-        elif num_cfe_sel == 0 and num_gas_sel == 0:
+        elif num_elec_sel == 0 and num_gas_sel == 0:
             aviso_datos = {"tipo": "sin_seleccion"}
-        elif num_cfe_sel == 0 or num_gas_sel == 0:
-            aviso_datos = {"tipo": "sin_par", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
+        elif num_elec_sel == 0 or num_gas_sel == 0:
+            aviso_datos = {"tipo": "sin_par", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
         elif not r.meses:
-            aviso_datos = {"tipo": "sin_pares_mes", "num_cfe": num_cfe_sel, "num_gas": num_gas_sel}
+            aviso_datos = {"tipo": "sin_pares_mes", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
         else:
             aviso_datos = None
 
@@ -728,10 +861,13 @@ def create_app() -> Flask:
                 "factor_emision_gas": float(fe_gas) if fe_gas else None,
             }
 
-        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
+        periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices, ppa_invoices if ppa_invoices else None)
+        suministrador_ppa = facturas_ppa[0]["suministrador"] if facturas_ppa else ""
 
         return jsonify({
             "estado": "ok",
+            "tipo_suministro_electrico": tipo_suministro,
+            "suministrador_ppa": suministrador_ppa,
             "aviso_datos": aviso_datos,
             "cliente": {"id": cliente_id, "nombre": cliente["nombre"], "periodo_label": periodo_label},
             "kpis": {
