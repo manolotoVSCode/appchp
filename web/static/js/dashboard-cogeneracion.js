@@ -27,6 +27,7 @@
   let tieneInversion = false;
   let co2Datos    = null;       // {actual_total_t, factor_emision_elec, factor_emision_gas}
   let beneficioFiscalAnio1 = 0;   // beneficio fiscal año 1 por depreciación inmediata
+  let esPPA = false;  // true cuando suministro_electrico es 'electrico_calificado'
 
   // ── Instancias Chart.js ───────────────────────────────────────────────────
   let cogenChart     = null;
@@ -117,6 +118,28 @@
     const om         = kwh_cub * 0.3;
     return { ah_elec, ah_energia, ah_cap, ah_dist, ah_caldera, costo_gas, om,
              ahorro_neto: ah_elec + ah_caldera - costo_gas - om };
+  }
+
+  // ── Recalcular mes PPA con parámetros de sliders ──────────────────────────────
+  function recalcularPPA(m, p) {
+    const kwh_cub = m.kwh_total * p.cobertura;
+    // PPA: ahorro = kWh cubiertos × precio unitario PPA (sin desglose horario)
+    const ah_elec = kwh_cub * m.costo_promedio_kwh;
+    const gj_cogen   = kwh_cub * 0.0036 * 1.11 / p.rend_elec;
+    const costo_gas  = gj_cogen * m.costo_unitario_gj;
+    const calor_rec  = gj_cogen * p.rend_term;
+    const ah_caldera = (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
+    const om         = kwh_cub * 0.3;
+    return {
+      ah_elec,
+      ah_energia: ah_elec,
+      ah_cap:  0,
+      ah_dist: 0,
+      ah_caldera,
+      costo_gas,
+      om,
+      ahorro_neto: ah_elec + ah_caldera - costo_gas - om,
+    };
   }
 
   // ── Payback helpers ───────────────────────────────────────────────────────
@@ -389,7 +412,7 @@
     const lChartE = [], lChartC = [], lChartG = [], lChartOM = [], lChartN = [];
 
     meses_raw.forEach(m => {
-      const res = recalcularMes(m, p);
+      const res = esPPA ? recalcularPPA(m, p) : recalcularMes(m, p);
       ahorro_neto_anual += res.ahorro_neto;
       ah_elec   += res.ah_elec;
       ah_caldera += res.ah_caldera;
@@ -541,19 +564,19 @@
       cont.appendChild(_mkAlerta("alert-warning", "No hay datos seleccionados para análisis.",
         " Selecciona meses en el sidebar de los contratos para ver el análisis."));
     } else if (aviso.tipo === "sin_par") {
-      const numCfe = parseInt(aviso.num_cfe, 10) || 0;
-      const numGas = parseInt(aviso.num_gas, 10) || 0;
-      const sCfe = document.createElement("strong");
-      sCfe.textContent = numCfe + " factura" + (numCfe !== 1 ? "s" : "") + " CFE";
+      const numElec = parseInt(aviso.num_cfe, 10) || 0;
+      const numGas  = parseInt(aviso.num_gas, 10) || 0;
+      const sElec = document.createElement("strong");
+      sElec.textContent = numElec + " factura" + (numElec !== 1 ? "s" : "") + " eléctrica" + (numElec !== 1 ? "s" : "");
       const sGas = document.createElement("strong");
       sGas.textContent = numGas + " de gas";
       cont.appendChild(_mkAlerta("alert-info", "Análisis incompleto.",
-        " El análisis de cogeneración requiere facturas tanto de electricidad (CFE) como de gas natural. Hay ", sCfe, " y ", sGas, " seleccionadas."));
+        " El análisis de cogeneración requiere facturas de electricidad y gas natural. Hay ", sElec, " y ", sGas, " seleccionadas."));
     } else if (aviso.tipo === "sin_pares_mes") {
-      const numCfe = parseInt(aviso.num_cfe, 10) || 0;
-      const numGas = parseInt(aviso.num_gas, 10) || 0;
+      const numElec = parseInt(aviso.num_cfe, 10) || 0;
+      const numGas  = parseInt(aviso.num_gas, 10) || 0;
       cont.appendChild(_mkAlerta("alert-warning", "Sin periodos emparejados.",
-        " Hay " + numCfe + " facturas CFE y " + numGas + " de gas, pero ningún mes tiene par CFE-gas en el mismo periodo."));
+        " Hay " + numElec + " facturas eléctricas y " + numGas + " de gas, pero ningún mes tiene par eléctrico-gas en el mismo periodo."));
     }
   }
 
@@ -570,6 +593,21 @@
     const mainSection = document.getElementById("dashboard-main-section");
     if (mainSection) mainSection.style.display = sinDatos ? "none" : "";
     if (sinDatos) return;
+
+    // Detectar tipo de suministro eléctrico
+    esPPA = data.tipo_suministro_electrico === "electrico_calificado";
+
+    // Banner PPA
+    const bannerPpa = document.getElementById("banner-ppa-cogen");
+    if (bannerPpa) {
+      if (esPPA) {
+        const spanSum = document.getElementById("banner-ppa-cogen-suministrador");
+        if (spanSum) spanSum.textContent = data.suministrador_ppa || "";
+        bannerPpa.style.removeProperty("display");
+      } else {
+        bannerPpa.style.setProperty("display", "none", "important");
+      }
+    }
 
     // Guardar datos base para sliders
     meses_raw    = data.meses_raw || [];
@@ -615,9 +653,13 @@
         <div class="kpi-sublabel">No disponible (sin factores de emisión)</div>`;
     }
 
-    // CELs: determinar estado y actualizar card
-    actualizarCELsCard(data.cels, data.cliente_ficha_url);
-    if (data.cels) renderCelsDatosCliente(data.cels);
+    // CELs: no aplica para PPA
+    if (esPPA) {
+      _renderCelsPPA();
+    } else {
+      actualizarCELsCard(data.cels, data.cliente_ficha_url);
+      if (data.cels) renderCelsDatosCliente(data.cels);
+    }
 
     // Tabla mensual
     renderTablaMensual(data.tabla_mensual || [], data.totales || {});
@@ -723,6 +765,27 @@
 
     card.appendChild(icon);
     card.appendChild(inner);
+  }
+
+  function _renderCelsPPA() {
+    const card = document.getElementById("cels-card-body");
+    if (!card) return;
+    card.textContent = "";
+    const icon = document.createElement("i");
+    icon.className = "bi bi-slash-circle kpi-icon";
+    icon.style.cssText = "font-size:2rem;color:var(--color-text-muted,#6c757d)";
+    const inner = document.createElement("div");
+    const lbl = document.createElement("div");
+    lbl.className = "small text-muted mb-1";
+    lbl.textContent = "CELs Generados";
+    const val = document.createElement("div");
+    val.className = "fw-bold text-muted";
+    val.textContent = "N/A";
+    const desc = document.createElement("div");
+    desc.className = "text-muted small mt-1";
+    desc.textContent = "No aplica para suministro calificado (PPA).";
+    inner.append(lbl, val, desc);
+    card.append(icon, inner);
   }
 
   // ── Fetch con AbortController, debounce y timeout 10s ────────────────────
