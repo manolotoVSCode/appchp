@@ -842,6 +842,24 @@ def get_tipos_electricos_con_meses_seleccionados(cliente_id: int) -> list[str]:
     return sorted(tipos_con_meses)
 
 
+def get_tipo_suministro_electrico_seleccionado(cliente_id: int) -> str | None:
+    """
+    Detecta el tipo de suministro eléctrico de los meses seleccionados del cliente.
+
+    Returns:
+        'electrico_basico'    — todos los meses seleccionados son de contratos CFE
+        'electrico_calificado' — todos los meses seleccionados son de contratos PPA
+        None                  — sin meses eléctricos seleccionados (solo gas, o ninguno)
+
+    Nota: el bloqueo de mezcla (Task 22) garantiza que nunca coexistan basico y calificado.
+    Si por algún bug existieran ambos, retorna el primero encontrado.
+    """
+    tipos = get_tipos_electricos_con_meses_seleccionados(cliente_id)
+    if not tipos:
+        return None
+    return tipos[0]  # bloqueo de mezcla garantiza máximo uno; si hay dos, tomar el primero
+
+
 def get_sidebar_data_contrato(contrato_id: int, contrato_tipo: str = "") -> list[dict]:
     """Retorna datos completos del sidebar para un contrato: años con facturas y selección.
 
