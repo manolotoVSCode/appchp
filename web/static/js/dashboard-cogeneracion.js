@@ -202,7 +202,7 @@
 
   // ── CELs reactivos a sliders ──────────────────────────────────────────────
   function recalcularCELs(p) {
-    if (!celsBase) return null;
+    if (!celsBase || esPPA) return null;
     const REFE        = celsBase.RefE;
     const REFH        = celsBase.RefH;
     const REFE_PRIMA  = celsBase.RefE_prima;
@@ -307,7 +307,7 @@
 
     const wfCtx = document.getElementById("waterfallChart");
     if (!wfCtx) return;
-    const wfLabels = ["Ahorro Electricidad", "Ahorro Caldera", "Costo Gas Cogen", "O&M", "Ahorro Neto"];
+    const wfLabels = [esPPA ? "Ahorro Eléctrico (Total)" : "Ahorro Electricidad", "Ahorro Caldera", "Costo Gas Cogen", "O&M", "Ahorro Neto"];
     const wfValues = [ah_elec, ah_caldera, -costo_gas, -om, ahorro_neto];
     const wfColors = [
       "rgba(106,138,154,0.8)",
