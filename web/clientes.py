@@ -893,7 +893,6 @@ def contrato_seleccion_mes(cliente_id: int, contrato_id: int):
                 return jsonify({"error": f"No existe factura para {anio}-{mes:02d} en este contrato"}), 400
 
             # Bloqueo de mezcla: no mezclar basico y calificado
-            from models.contrato import TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
             if contrato.tipo in TIPOS_ELECTRICOS:
                 tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id)
                 tipo_opuesto = TIPO_ELECTRICO_CALIFICADO if contrato.tipo == TIPO_ELECTRICO_BASICO else TIPO_ELECTRICO_BASICO
@@ -937,7 +936,6 @@ def contrato_seleccion_anio(cliente_id: int, contrato_id: int):
 
     try:
         if seleccionado:
-            from models.contrato import TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
             if contrato.tipo in TIPOS_ELECTRICOS:
                 tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id)
                 tipo_opuesto = TIPO_ELECTRICO_CALIFICADO if contrato.tipo == TIPO_ELECTRICO_BASICO else TIPO_ELECTRICO_BASICO
