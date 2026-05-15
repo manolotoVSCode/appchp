@@ -63,6 +63,12 @@
   {# Contenedor de avisos (rellenado por JS) #}
   <div id="aviso-datos-container"></div>
 
+  {# Banner de suministro calificado (hidden until JS shows it) #}
+  <div id="banner-ppa" class="alert alert-info d-flex align-items-center gap-2 mb-3" style="display:none!important" role="alert">
+    <i class="bi bi-lightning-charge-fill"></i>
+    <span>Suministro: <strong>Calificado (PPA)</strong> — <span id="banner-ppa-suministrador"></span></span>
+  </div>
+
   {# Sección principal (ocultada por JS si sin_datos) #}
   <div id="dashboard-main-section">
     <div id="dashboard-main-content">
@@ -74,7 +80,7 @@
             <div class="card-body">
               <div class="text-muted small">Meses analizados</div>
               <div class="fs-4 fw-bold" style="color:var(--color-primary-dark)" id="kpi-num-meses">—</div>
-              <div class="text-muted small">facturas CFE</div>
+              <div class="text-muted small" id="kpi-num-meses-label">facturas CFE</div>
             </div>
           </div>
         </div>
@@ -117,7 +123,7 @@
         </div>
         <div id="facturas-panel" class="collapse">
           <div class="card-body p-0">
-            <div class="px-3 pt-3 pb-1 fw-semibold small text-muted">Electricidad (CFE)</div>
+            <div class="px-3 pt-3 pb-1 fw-semibold small text-muted" id="facturas-elec-label">Electricidad (CFE)</div>
             <table class="table table-sm table-hover mb-0">
               <thead>
                 <tr class="table-primary-header">
@@ -172,6 +178,8 @@
         <h2>Comportamiento energético histórico</h2>
         <hr>
       </div>
+
+      <div id="graficas-gdmth">
 
       <div class="card shadow-sm mb-4">
         <div class="card-body">
@@ -245,6 +253,26 @@
           </div>
           <div style="max-width:420px; margin:0 auto;">
             <canvas id="chartQueso"></canvas>
+          </div>
+        </div>
+      </div>
+
+      </div>{# graficas-gdmth #}
+
+      {# ═══ SECCIÓN PPA (oculta hasta que lleguen datos) ═══ #}
+      <div id="graficas-ppa" style="display:none">
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <h5 class="card-title mb-0">Consumo mensual vs Precio unitario (PPA)</h5>
+            <p class="text-muted small mt-1 mb-0">Barras: kWh (eje izq.) · Línea: MXN/kWh (eje der.)</p>
+            <canvas id="chartPpaConsumo" height="100" class="mt-2"></canvas>
+          </div>
+        </div>
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <h5 class="card-title mb-0">Costo mensual de electricidad (PPA)</h5>
+            <p class="text-muted small mt-1 mb-0">MXN subtotal por mes (pre-IVA)</p>
+            <canvas id="chartPpaCosto" height="100" class="mt-2"></canvas>
           </div>
         </div>
       </div>

@@ -27,6 +27,8 @@
   let quesoChart         = null;
   let chartGasConsumo    = null;
   let chartGasCostos     = null;
+  let chartPpaConsumo    = null;
+  let chartPpaCosto      = null;
 
   let quesoDatos    = null;
   let filtroActivo  = "__todos__";
@@ -389,6 +391,62 @@
     }
   }
 
+  function upsertChartPpaConsumo(historicoP) {
+    const labels = historicoP.map(m => m.mes);
+    const kwh    = historicoP.map(m => m.kwh_total);
+    const precio = historicoP.map(m => m.precio_unitario_mxn_kwh);
+    const datasets = [
+      { label: "Consumo (kWh)", data: kwh, backgroundColor: "rgba(31,122,76,0.70)", yAxisID: "y" },
+      { type: "line", label: "Precio (MXN/kWh)", data: precio,
+        borderColor: "#1A2D3F", backgroundColor: "transparent",
+        borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2", _showLabels: true }
+    ];
+    if (!chartPpaConsumo) {
+      const ctx = document.getElementById("chartPpaConsumo");
+      if (!ctx) return;
+      const opts = opcionesDualEje("kWh", "MXN/kWh");
+      chartPpaConsumo = new Chart(ctx, { type: "bar", data: { labels, datasets }, options: opts });
+    } else {
+      chartPpaConsumo.data.labels = labels;
+      chartPpaConsumo.data.datasets.forEach((ds, i) => { ds.data = datasets[i].data; });
+      chartPpaConsumo.update();
+    }
+  }
+
+  function upsertChartPpaCosto(historicoP) {
+    const labels = historicoP.map(m => m.mes);
+    const costos = historicoP.map(m => m.costo_mxn);
+    if (!chartPpaCosto) {
+      const ctx = document.getElementById("chartPpaCosto");
+      if (!ctx) return;
+      chartPpaCosto = new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: "Costo mensual (MXN)",
+            data: costos,
+            backgroundColor: "rgba(26,45,63,0.75)",
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => "$" + Math.round(ctx.raw).toLocaleString("es-MX") } }
+          },
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: "MXN" }, ticks: { callback: v => "$" + Math.round(v).toLocaleString("en-US") } }
+          }
+        }
+      });
+    } else {
+      chartPpaCosto.data.labels = labels;
+      chartPpaCosto.data.datasets[0].data = costos;
+      chartPpaCosto.update();
+    }
+  }
+
   // ── Render de tablas en panels flotantes ──────────────────────────────────
   function renderConsumosDemandas(filas) {
     const tbody = document.getElementById("tbodyConsumosDemandas");
@@ -476,8 +534,6 @@
         <td class="text-end small pe-3">$${Math.round(f.costo_mxn).toLocaleString("en-US")}</td>
       </tr>`;
     }).join("");
-    const badgeCfe = document.getElementById("badge-num-cfe");
-    if (badgeCfe) badgeCfe.textContent = facturas.length + " CFE";
     const notasProrrateo = document.getElementById("notas-prorrateo-cfe");
     if (notasProrrateo) {
       notasProrrateo.style.display = facturas.some(f => f.prorrateado) ? "" : "none";
@@ -565,11 +621,11 @@
       cont.appendChild(_mkAlerta("alert-warning", "No hay datos seleccionados para análisis.",
         " Selecciona meses en el sidebar de los contratos para ver el análisis."));
     } else if (aviso.tipo === "sin_par") {
-      const nCfe = parseInt(aviso.num_cfe, 10) || 0;
-      const sCfe = document.createElement("strong");
-      sCfe.textContent = nCfe + " factura" + (nCfe !== 1 ? "s" : "") + " CFE";
-      cont.appendChild(_mkAlerta("alert-info", "Sin facturas CFE seleccionadas.",
-        " Hay ", sCfe, " seleccionadas. Carga o selecciona facturas de electricidad para ver el análisis histórico."));
+      const nElec = parseInt(aviso.num_cfe, 10) || 0;
+      const sElec = document.createElement("strong");
+      sElec.textContent = nElec + " factura" + (nElec !== 1 ? "s" : "") + " eléctrica" + (nElec !== 1 ? "s" : "");
+      cont.appendChild(_mkAlerta("alert-info", "Sin facturas eléctricas seleccionadas.",
+        " Hay ", sElec, " seleccionadas. Carga o selecciona facturas de electricidad para ver el análisis histórico."));
     }
   }
 
@@ -600,6 +656,46 @@
     const mainSection = document.getElementById("dashboard-main-section");
     if (mainSection) mainSection.style.display = sinDatos ? "none" : "";
     if (sinDatos) return;
+
+    const esPPA = data.tipo_suministro_electrico === "electrico_calificado";
+
+    // Banner PPA
+    const bannerPpa = document.getElementById("banner-ppa");
+    if (bannerPpa) {
+      if (esPPA && data.suministrador_ppa) {
+        const spanSum = document.getElementById("banner-ppa-suministrador");
+        if (spanSum) spanSum.textContent = data.suministrador_ppa;
+        bannerPpa.style.removeProperty("display");
+      } else {
+        bannerPpa.style.setProperty("display", "none", "important");
+      }
+    }
+
+    // KPI subtitle
+    const kpiLabel = document.getElementById("kpi-num-meses-label");
+    if (kpiLabel) kpiLabel.textContent = esPPA ? "facturas PPA" : "facturas CFE";
+
+    // Etiqueta de facturas eléctricas
+    const facturasLabel = document.getElementById("facturas-elec-label");
+    if (facturasLabel) facturasLabel.textContent = esPPA ? "Electricidad (PPA calificado)" : "Electricidad (CFE)";
+
+    // Badge CFE/PPA
+    const badgeCfe = document.getElementById("badge-num-cfe");
+    if (badgeCfe && data.facturas_cfe) {
+      badgeCfe.textContent = data.facturas_cfe.length + (esPPA ? " PPA" : " CFE");
+    }
+
+    // Secciones GDMTH vs PPA
+    const graficasGdmth = document.getElementById("graficas-gdmth");
+    const graficasPpa   = document.getElementById("graficas-ppa");
+    if (graficasGdmth) graficasGdmth.style.display = esPPA ? "none" : "";
+    if (graficasPpa)   graficasPpa.style.display   = esPPA ? "" : "none";
+
+    // Paneles flotantes GDMTH (ocultar para PPA)
+    ["panelConsumosDemandas","panelCostosDetallados","panelIndicadores"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = esPPA ? "none" : "";
+    });
 
     const k = data.kpis;
     // KPIs
@@ -653,6 +749,12 @@
       renderGasHistorico(data.historico_gas);
     } else {
       if (gasSection) gasSection.style.display = "none";
+    }
+
+    // Gráficas PPA
+    if (esPPA && data.historico_ppa && data.historico_ppa.length) {
+      upsertChartPpaConsumo(data.historico_ppa);
+      upsertChartPpaCosto(data.historico_ppa);
     }
   }
 
