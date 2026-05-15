@@ -11,6 +11,7 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
 from parsers.cfe import get_cfe_parser
 from parsers.gas import get_gas_parser
+from parsers.electricidad_calificado.gin import GINParser
 from storage.repository import (
     get_all_clientes_con_conteos,
     get_cliente_con_conteos,
@@ -1254,6 +1255,111 @@ def factura_calificado_borrar(cliente_id: int, contrato_id: int, factura_id: int
     return redirect(url_for(
         "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
     ))
+
+
+# ── Upload PDF factura calificada (GIN) ────────────────────────────────────────
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/factura_calificado/upload",
+    methods=["GET", "POST"],
+)
+def factura_calificado_upload(cliente_id: int, contrato_id: int):
+    from flask import Response
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado")), 404
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id)), 404
+    if isinstance(resultado, Response):
+        return resultado
+    contrato = resultado
+
+    nav_active = "contrato"
+    contrato_activo_id = contrato_id
+
+    if request.method == "GET":
+        return render_template(
+            "clientes/contratos/factura_calificado_upload.html",
+            cliente=cliente,
+            contrato=contrato,
+            nav_active=nav_active,
+            contrato_activo_id=contrato_activo_id,
+        )
+
+    # POST — procesar archivo
+    file = request.files.get("factura")
+    if not file or not file.filename:
+        return render_template(
+            "clientes/contratos/factura_calificado_upload.html",
+            cliente=cliente,
+            contrato=contrato,
+            nav_active=nav_active,
+            contrato_activo_id=contrato_activo_id,
+            error="No se seleccionó ningún archivo.",
+        )
+
+    if not file.filename.lower().endswith(".pdf"):
+        return render_template(
+            "clientes/contratos/factura_calificado_upload.html",
+            cliente=cliente,
+            contrato=contrato,
+            nav_active=nav_active,
+            contrato_activo_id=contrato_activo_id,
+            error="El archivo debe ser un PDF (.pdf).",
+        )
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            file.save(tmp.name)
+            tmp_path = Path(tmp.name)
+
+        invoice = GINParser().parse(tmp_path)
+
+        form_data = {
+            "suministrador": invoice.suministrador or "",
+            "rpu": invoice.rpu or "",
+            "serie_folio": invoice.serie_folio or "",
+            "periodo_inicio": invoice.periodo_inicio.isoformat(),
+            "periodo_fin": invoice.periodo_fin.isoformat(),
+            "consumo_kwh": str(invoice.consumo_kwh),
+            "precio_unitario_mxn_kwh": str(invoice.precio_unitario_mxn_kwh),
+            "subtotal_mxn": str(invoice.subtotal_mxn),
+            "iva_mxn": str(invoice.iva_mxn) if invoice.iva_mxn is not None else "",
+            "total_mxn": str(invoice.total_mxn) if invoice.total_mxn is not None else "",
+        }
+
+        return render_template(
+            "clientes/contratos/factura_calificado_preview.html",
+            cliente=cliente,
+            contrato=contrato,
+            nav_active=nav_active,
+            contrato_activo_id=contrato_activo_id,
+            invoice=invoice,
+            form_data=form_data,
+        )
+
+    except Exception as exc:
+        logger.error(
+            "Error parseando factura calificada GIN para contrato %d: %s: %s",
+            contrato_id, type(exc).__name__, exc, exc_info=True,
+        )
+        return render_template(
+            "clientes/contratos/factura_calificado_upload.html",
+            cliente=cliente,
+            contrato=contrato,
+            nav_active=nav_active,
+            contrato_activo_id=contrato_activo_id,
+            error=f"No se pudo leer el PDF: {exc}",
+        )
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
 
 
 # ── Datos PPA del cliente ──────────────────────────────────────────────────────

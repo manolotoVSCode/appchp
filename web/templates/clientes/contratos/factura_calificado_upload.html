@@ -1,0 +1,120 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "contrato" %}
+{% set contrato_activo_id = contrato.id %}
+{% block title %}Subir Factura Calificada — {{ contrato.nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+     class="btn btn-sm btn-outline-secondary">← Volver</a>
+  <nav aria-label="breadcrumb" class="mb-0">
+    <ol class="breadcrumb mb-0 small">
+      <li class="breadcrumb-item">
+        <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}">{{ cliente.nombre }}</a>
+      </li>
+      <li class="breadcrumb-item">
+        <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}">{{ contrato.nombre }}</a>
+      </li>
+      <li class="breadcrumb-item active">Subir factura</li>
+    </ol>
+  </nav>
+</div>
+
+<h4 class="fw-bold mb-3" style="color:var(--color-primary-dark)">Subir Factura Calificada</h4>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="card shadow-sm" style="max-width:560px">
+  <div class="card-body">
+    <form id="upload-form"
+          action="{{ url_for('clientes.factura_calificado_upload', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+          method="POST"
+          enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div id="drop-zone"
+           class="border border-2 border-dashed rounded p-5 text-center text-muted mb-3"
+           style="cursor:pointer; border-color:#adb5bd !important;">
+        <div id="drop-label">
+          <div class="mb-2" style="font-size:2rem;">&#128196;</div>
+          Arrastra el PDF aquí o
+          <label for="file-input" class="text-primary-brand fw-semibold" style="cursor:pointer;">
+            selecciona un archivo
+          </label>
+          <input type="file" id="file-input" name="factura" accept=".pdf" class="d-none">
+        </div>
+        <div id="file-selected" class="d-none">
+          <span id="file-name" class="fw-semibold text-dark"></span>
+          <button type="button" id="btn-clear" class="btn btn-sm btn-link text-danger ms-2 p-0">&#x2715;</button>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" id="btn-submit" class="btn btn-primary" disabled>Analizar PDF</button>
+        <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+           class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const dropZone  = document.getElementById("drop-zone");
+  const fileInput = document.getElementById("file-input");
+  const dropLabel = document.getElementById("drop-label");
+  const fileSelected = document.getElementById("file-selected");
+  const fileName  = document.getElementById("file-name");
+  const btnClear  = document.getElementById("btn-clear");
+  const btnSubmit = document.getElementById("btn-submit");
+
+  function setFile(file) {
+    if (!file) return;
+    fileInput.files = file instanceof FileList ? file : (() => {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      return dt.files;
+    })();
+    fileName.textContent = file instanceof File ? file.name : file[0].name;
+    dropLabel.classList.add("d-none");
+    fileSelected.classList.remove("d-none");
+    btnSubmit.disabled = false;
+  }
+
+  function clearFile() {
+    fileInput.value = "";
+    fileName.textContent = "";
+    dropLabel.classList.remove("d-none");
+    fileSelected.classList.add("d-none");
+    btnSubmit.disabled = true;
+  }
+
+  dropZone.addEventListener("dragover", e => {
+    e.preventDefault();
+    dropZone.classList.add("bg-light");
+  });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("bg-light"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropZone.classList.remove("bg-light");
+    const files = e.dataTransfer.files;
+    if (files.length > 0) setFile(files[0]);
+  });
+  dropZone.addEventListener("click", e => {
+    if (e.target === btnClear || btnClear.contains(e.target)) return;
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length > 0) setFile(fileInput.files[0]);
+  });
+  btnClear.addEventListener("click", e => {
+    e.stopPropagation();
+    clearFile();
+  });
+})();
+</script>
+{% endblock %}

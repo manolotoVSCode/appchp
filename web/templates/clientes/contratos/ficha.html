@@ -113,9 +113,11 @@
 {% endif %}
 
 {% if contrato.tipo == "electrico_calificado" %}
-<div class="mt-4">
+<div class="mt-4 d-flex gap-2">
   <a href="{{ url_for('clientes.factura_calificado_crear', cliente_id=cliente.id, contrato_id=contrato.id) }}"
      class="btn btn-primary btn-sm">+ Nueva factura calificada</a>
+  <a href="{{ url_for('clientes.factura_calificado_upload', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+     class="btn btn-outline-info btn-sm">+ Subir factura PPA (PDF)</a>
 </div>
 {% endif %}
 
