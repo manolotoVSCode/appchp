@@ -9,12 +9,19 @@ import pytest
 from parsers.electricidad_calificado.gin import GINParser, GINInvoice
 
 FIXTURE = Path("tests/fixtures/calificado/GIN_2024_09_SEPTIEMBRE.pdf")
+FIXTURE_MAYO = Path("tests/fixtures/calificado/GIN_2024_05_MAYO.pdf")
 
 
 @pytest.fixture
 def invoice() -> GINInvoice:
     parser = GINParser()
     return parser.parse(FIXTURE)
+
+
+@pytest.fixture
+def invoice_mayo() -> GINInvoice:
+    parser = GINParser()
+    return parser.parse(FIXTURE_MAYO)
 
 
 def test_parser_devuelve_gin_invoice(invoice):
@@ -79,3 +86,59 @@ def test_total_mxn(invoice):
 
 def test_sin_advertencias(invoice):
     assert invoice.advertencias == []
+
+
+# ---------------------------------------------------------------------------
+# Tests factura mayo 2024 (unidad E48, RPU con cero inicial)
+# ---------------------------------------------------------------------------
+
+def test_mayo_parser_devuelve_gin_invoice(invoice_mayo):
+    assert isinstance(invoice_mayo, GINInvoice)
+
+
+def test_mayo_rfc_suministrador(invoice_mayo):
+    assert invoice_mayo.rfc_suministrador == "GIN040707G89"
+
+
+def test_mayo_rfc_receptor(invoice_mayo):
+    assert invoice_mayo.rfc_receptor == "ITI170630377"
+
+
+def test_mayo_serie_folio(invoice_mayo):
+    assert invoice_mayo.serie_folio == "GI01 00736"
+
+
+def test_mayo_periodo_inicio(invoice_mayo):
+    assert invoice_mayo.periodo_inicio == date(2024, 5, 1)
+
+
+def test_mayo_periodo_fin(invoice_mayo):
+    assert invoice_mayo.periodo_fin == date(2024, 5, 31)
+
+
+def test_mayo_rpu(invoice_mayo):
+    assert invoice_mayo.rpu == "52200951158"  # normalizado, sin cero inicial
+
+
+def test_mayo_consumo_kwh(invoice_mayo):
+    assert invoice_mayo.consumo_kwh == Decimal("1931576")
+
+
+def test_mayo_precio_unitario(invoice_mayo):
+    assert invoice_mayo.precio_unitario_mxn_kwh == Decimal("1.979800")
+
+
+def test_mayo_subtotal_mxn(invoice_mayo):
+    assert invoice_mayo.subtotal_mxn == Decimal("3824134.16")
+
+
+def test_mayo_iva_mxn(invoice_mayo):
+    assert invoice_mayo.iva_mxn == Decimal("611861.47")
+
+
+def test_mayo_total_mxn(invoice_mayo):
+    assert invoice_mayo.total_mxn == Decimal("4435995.63")
+
+
+def test_mayo_sin_advertencias(invoice_mayo):
+    assert invoice_mayo.advertencias == []

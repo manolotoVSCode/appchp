@@ -56,8 +56,11 @@ RE_PERIODO = re.compile(
 )
 
 # Consumo: "83101800 / FACT-66 2,060,135.000000 KWH Kilowatt hora 2.030600 0.00 4,183,310.13"
+#          "72151500 / FACT-36 1,931,576.000000 E48 Unidad de servicio 1.979800 0.00 3,824,134.16"
+# La unidad puede ser "KWH Kilowatt hora" o "E48 Unidad de servicio" (u otras variantes futuras).
+# Se identifica la línea por estructura: FACT-N + cantidad + 1-4 tokens de unidad + precio unitario + descuento + importe.
 RE_CONSUMO = re.compile(
-    r'FACT-\d+\s+([\d,]+\.?\d*)\s+KWH\s+Kilowatt\s+hora\s+([\d.]+)\s+[\d.]+\s+([\d,]+\.\d{2})',
+    r'FACT-\d+\s+([\d,]+\.?\d*)\s+(?:\S+\s+){1,4}([\d]+\.\d+)\s+[\d.]+\s+([\d,]+\.\d{2})',
     re.IGNORECASE,
 )
 
@@ -200,7 +203,9 @@ class GINParser(InvoiceParser):
         dia_fin = int(m_periodo.group(2))
         mes_str = m_periodo.group(3).lower()
         anio = int(m_periodo.group(4))
-        rpu = m_periodo.group(5)
+        rpu_raw = m_periodo.group(5)
+        # Normalizar: quitar ceros a la izquierda, preservar "0" si fuera todo ceros
+        rpu = rpu_raw.lstrip("0") or rpu_raw
 
         mes = _MESES.get(mes_str)
         if mes is None:
