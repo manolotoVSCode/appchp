@@ -662,9 +662,9 @@
     // Banner PPA
     const bannerPpa = document.getElementById("banner-ppa");
     if (bannerPpa) {
-      if (esPPA && data.suministrador_ppa) {
+      if (esPPA) {
         const spanSum = document.getElementById("banner-ppa-suministrador");
-        if (spanSum) spanSum.textContent = data.suministrador_ppa;
+        if (spanSum) spanSum.textContent = data.suministrador_ppa || "";
         bannerPpa.style.removeProperty("display");
       } else {
         bannerPpa.style.setProperty("display", "none", "important");
@@ -696,6 +696,17 @@
       const el = document.getElementById(id);
       if (el) el.style.display = esPPA ? "none" : "";
     });
+
+    // Limpiar instancias de gráficas del modo opuesto al cambiar de tipo
+    if (esPPA) {
+      if (chartDemanda)       { chartDemanda.destroy();       chartDemanda = null; }
+      if (chartConsumo)       { chartConsumo.destroy();       chartConsumo = null; }
+      if (chartCostoPromedio) { chartCostoPromedio.destroy(); chartCostoPromedio = null; }
+      if (quesoChart)         { quesoChart.destroy();         quesoChart = null; }
+    } else {
+      if (chartPpaConsumo) { chartPpaConsumo.destroy(); chartPpaConsumo = null; }
+      if (chartPpaCosto)   { chartPpaCosto.destroy();   chartPpaCosto = null; }
+    }
 
     const k = data.kpis;
     // KPIs
