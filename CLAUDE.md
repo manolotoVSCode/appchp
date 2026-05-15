@@ -164,6 +164,18 @@ Funciones de repositorio (storage/repository.py): create_factura_calificado, get
 
 Sidebar y selección de meses: get_sidebar_data_contrato y get_meses_con_factura reciben contrato_tipo y despachan a la tabla correcta según sea electrico_basico o electrico_calificado. La selección de meses funciona igual que para contratos CFE.
 
+## Parser de facturas calificadas (GIN)
+
+Módulo `parsers/electricidad_calificado/gin.py`. Clase `GINParser` hereda de `InvoiceParser`. Retorna dataclass `GINInvoice` con 15 campos: suministrador, rfc_suministrador, rfc_receptor, serie_folio, folio_fiscal, fecha_factura (date|None), periodo_inicio (date), periodo_fin (date), rpu, consumo_kwh (Decimal), precio_unitario_mxn_kwh (Decimal), subtotal_mxn (Decimal), iva_mxn (Decimal|None), total_mxn (Decimal|None), advertencias (list[str]). VERSION = "1.0.0". Fixture real: `tests/fixtures/calificado/GIN_2024_09_SEPTIEMBRE.pdf` (septiembre 2024, IBERICA TILES, GIN040707G89). Validado con 16 tests en `tests/parsers/test_gin.py`.
+
+## Upload de PDF calificado
+
+Ruta `GET/POST /<cliente_id>/contratos/<contrato_id>/factura_calificado/upload`. Parsea PDF con `GINParser`, muestra preview de campos editables en template `factura_calificado_preview.html`, usuario confirma y datos se guardan vía POST a endpoint `factura_calificado_crear` (existente). Template `factura_calificado_upload.html` para el formulario de carga. Botón "+ Subir factura PPA (PDF)" añadido a la ficha del contrato calificado.
+
+## Bloqueo de mezcla CFE/PPA
+
+Un cliente no puede tener meses seleccionados de contratos `electrico_basico` y `electrico_calificado` simultáneamente. Validación ocurre en endpoints `POST .../seleccion/mes` y `POST .../seleccion/anio`: si `seleccionado=True` y el tipo opuesto ya tiene meses seleccionados, devuelve HTTP 409 con mensaje descriptivo. Función repositorio: `get_tipos_electricos_con_meses_seleccionados(cliente_id)` → `list[str]` con tipos que tienen meses activos. Tests: `tests/test_seleccion_mezcla.py` (5 tests).
+
 ## Parámetros del motor candidato (configurables, con valores por defecto)
 
 Cobertura objetivo del consumo eléctrico mensual: 75% (rango editable 50% a 95%).

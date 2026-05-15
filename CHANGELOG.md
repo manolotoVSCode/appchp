@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.27.0] — 2026-05-14
+
+### Sub-entregable B completo — Parser GIN, upload PDF, bloqueo de mezcla
+
+- **Parser GIN**: `parsers/electricidad_calificado/gin.py` con `GINParser` (hereda `InvoiceParser`) y `GINInvoice` dataclass. Extrae 15 campos de facturas GIN. Validado contra PDF real IBERICA TILES septiembre 2024 con 16 tests en `tests/parsers/test_gin.py`.
+- **Upload PDF calificado**: Ruta `GET/POST /<cliente_id>/contratos/<contrato_id>/factura_calificado/upload`. Parsea PDF con `GINParser` → preview editable → confirma y guarda vía `factura_calificado_crear` (existente). Templates: `factura_calificado_upload.html`, `factura_calificado_preview.html`. Botón "+ Subir factura PPA (PDF)" en ficha de contrato calificado.
+- **Bloqueo de mezcla CFE/PPA**: Cliente no puede tener meses seleccionados de contratos básico y calificado simultáneamente. HTTP 409 con mensaje descriptivo. Validación en `POST .../seleccion/mes` y `POST .../seleccion/anio`. Función `get_tipos_electricos_con_meses_seleccionados(cliente_id)` → list[str]. Tests: `tests/test_seleccion_mezcla.py` (5 tests).
+- **Fixture test**: `tests/fixtures/calificado/GIN_2024_09_SEPTIEMBRE.pdf`.
+
 ## [2.26.0] - 2026-05-14
 
 ### Añadido (sub-entregable B: facturas de electricidad calificada PPA)
