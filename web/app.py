@@ -448,25 +448,24 @@ def create_app() -> Flask:
                 500,
             )
 
-        # ── CELs (solo para GDMTH, skip para PPA) ────────────────────────────────
+        # ── CELs (aplica igual para GDMTH y PPA — fórmula CRE Caso I) ─────────────
         cels_resultado = None
-        if tipo_suministro != TIPO_ELECTRICO_CALIFICADO:
-            try:
-                from calc.cels import calcular_cels as _calcular_cels
-                calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
-                cels_resultado = _calcular_cels(
-                    kwh_cubiertos_anual=r.kwh_cubiertos_anual,
-                    gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
-                    calor_recuperado_gj_anual=calor_recuperado_anual,
-                    capacidad_nominal_kw=r.capacidad_nominal_kw,
-                    medio_termico=cliente.get("medio_termico"),
-                    nivel_tension_kv=cliente.get("nivel_tension_kv"),
-                    altitud_msnm=cliente.get("altitud_msnm"),
-                    tipo_motor=cliente.get("tipo_motor"),
-                )
-            except Exception as _e_cels:
-                import logging as _logging
-                _logging.getLogger(__name__).error("Error calculando CELs: %s", _e_cels)
+        try:
+            from calc.cels import calcular_cels as _calcular_cels
+            calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
+            cels_resultado = _calcular_cels(
+                kwh_cubiertos_anual=r.kwh_cubiertos_anual,
+                gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
+                calor_recuperado_gj_anual=calor_recuperado_anual,
+                capacidad_nominal_kw=r.capacidad_nominal_kw,
+                medio_termico=cliente.get("medio_termico"),
+                nivel_tension_kv=cliente.get("nivel_tension_kv"),
+                altitud_msnm=cliente.get("altitud_msnm"),
+                tipo_motor=cliente.get("tipo_motor"),
+            )
+        except Exception as _e_cels:
+            import logging as _logging
+            _logging.getLogger(__name__).error("Error calculando CELs: %s", _e_cels)
 
         num_cfe_total = cliente["num_cfe"]
         num_gas_total = cliente["num_gas"]
@@ -701,28 +700,26 @@ def create_app() -> Flask:
             logger.exception("Error en cogeneracion/data: %s", _e)
             return jsonify({"error": "error_calculo", "mensaje": str(_e)}), 500
 
-        # CELs — solo para GDMTH
+        # CELs — aplica igual para GDMTH y PPA (fórmula CRE Caso I independiente del suministro)
         cels_resultado = None
-        if tipo_suministro != TIPO_ELECTRICO_CALIFICADO:
-            try:
-                from calc.cels import calcular_cels as _calcular_cels
-                calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
-                cels_resultado = _calcular_cels(
-                    kwh_cubiertos_anual=r.kwh_cubiertos_anual,
-                    gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
-                    calor_recuperado_gj_anual=calor_recuperado_anual,
-                    capacidad_nominal_kw=r.capacidad_nominal_kw,
-                    medio_termico=cliente.get("medio_termico"),
-                    nivel_tension_kv=cliente.get("nivel_tension_kv"),
-                    altitud_msnm=cliente.get("altitud_msnm"),
-                    tipo_motor=cliente.get("tipo_motor"),
-                )
-            except Exception as _e_cels:
-                logger.error("Error calculando CELs en data endpoint: %s", _e_cels)
+        try:
+            from calc.cels import calcular_cels as _calcular_cels
+            calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
+            cels_resultado = _calcular_cels(
+                kwh_cubiertos_anual=r.kwh_cubiertos_anual,
+                gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
+                calor_recuperado_gj_anual=calor_recuperado_anual,
+                capacidad_nominal_kw=r.capacidad_nominal_kw,
+                medio_termico=cliente.get("medio_termico"),
+                nivel_tension_kv=cliente.get("nivel_tension_kv"),
+                altitud_msnm=cliente.get("altitud_msnm"),
+                tipo_motor=cliente.get("tipo_motor"),
+            )
+        except Exception as _e_cels:
+            logger.error("Error calculando CELs en data endpoint: %s", _e_cels)
 
-        # Energía limpia generada — solo para GDMTH
-        if (tipo_suministro != TIPO_ELECTRICO_CALIFICADO
-                and cels_resultado is not None and cels_resultado.es_eficiente
+        # Energía limpia generada — aplica igual para GDMTH y PPA
+        if (cels_resultado is not None and cels_resultado.es_eficiente
                 and cels_resultado.cels_mwh_anual is not None
                 and r.kwh_total_anual > 0):
             from decimal import Decimal as _D2, ROUND_HALF_UP as _RHU

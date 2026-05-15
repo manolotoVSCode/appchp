@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.28.1] — 2026-05-14
+
+### Fix — CELs para contratos PPA
+
+- **`web/app.py`**: eliminados los guards `if tipo_suministro != TIPO_ELECTRICO_CALIFICADO:` que suprimían el cálculo de CELs y de `energia_limpia_pct` para suministro calificado. Ambas métricas se calculan ahora con la misma función `calcular_cels()` independientemente del tipo de suministro eléctrico.
+- **`web/static/js/dashboard-cogeneracion.js`**: eliminado `|| esPPA` del early-return de `recalcularCELs`; eliminada la rama `if (esPPA) { _renderCelsPPA() }` en `hidratarDashboardCogeneracion`. La caja CELs muestra el valor calculado para GDMTH y PPA por igual.
+- **Fundamento**: los CELs los genera el motor de cogeneración (CRE Caso I) en función de su eficiencia termodinámica, no del tipo de suministro eléctrico del cliente. Suprimir los CELs para PPA era un error de interpretación.
+
 ## [2.28.0] — 2026-05-14
 
 ### Sub-entregable C — Dashboards adaptados al tipo de suministro eléctrico (PPA vs GDMTH)

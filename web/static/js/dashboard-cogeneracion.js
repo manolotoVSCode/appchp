@@ -202,7 +202,7 @@
 
   // ── CELs reactivos a sliders ──────────────────────────────────────────────
   function recalcularCELs(p) {
-    if (!celsBase || esPPA) return null;
+    if (!celsBase) return null;
     const REFE        = celsBase.RefE;
     const REFH        = celsBase.RefH;
     const REFE_PRIMA  = celsBase.RefE_prima;
@@ -653,13 +653,9 @@
         <div class="kpi-sublabel">No disponible (sin factores de emisión)</div>`;
     }
 
-    // CELs: no aplica para PPA
-    if (esPPA) {
-      _renderCelsPPA();
-    } else {
-      actualizarCELsCard(data.cels, data.cliente_ficha_url);
-      if (data.cels) renderCelsDatosCliente(data.cels);
-    }
+    // CELs: aplica igual para GDMTH y PPA
+    actualizarCELsCard(data.cels, data.cliente_ficha_url);
+    if (data.cels) renderCelsDatosCliente(data.cels);
 
     // Tabla mensual
     renderTablaMensual(data.tabla_mensual || [], data.totales || {});
