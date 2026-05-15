@@ -8,7 +8,7 @@ import pytest
 
 from parsers.electricidad_calificado.gin import GINParser, GINInvoice
 
-FIXTURE = Path("Invoices/Calificado/24. 2409F - ENERGIA ELECTRICA sep 24.pdf")
+FIXTURE = Path("tests/fixtures/calificado/GIN_2024_09_SEPTIEMBRE.pdf")
 
 
 @pytest.fixture

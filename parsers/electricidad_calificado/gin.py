@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 import pdfplumber
@@ -26,8 +26,8 @@ _MESES: dict[str, int] = {
 # Emisor RFC — único "RFC:" en el documento corresponde al emisor
 RE_EMISOR_RFC = re.compile(r'RFC:\s*([A-Z&]{3,4}\d{6}[A-Z0-9]{3})')
 
-# Emisor nombre — aparece antes del RFC del emisor
-RE_EMISOR_NOMBRE = re.compile(r'GENERACION\s+INDUSTRIAL', re.IGNORECASE)
+# Emisor nombre — captura todo hasta el fin de línea para no truncar razón social
+RE_EMISOR_NOMBRE = re.compile(r'^(GENERACION\s+INDUSTRIAL[^\n]*)', re.IGNORECASE | re.MULTILINE)
 
 # Receptor RFC — aparece al inicio de línea seguido de " Fecha" (sin prefijo "RFC:")
 # Línea ejemplo: "ITI170630377 Fecha 2024-10-09T00:00:00"
@@ -42,8 +42,12 @@ RE_UUID = re.compile(
     re.IGNORECASE,
 )
 
-# Fecha de emisión ISO: "2024-10-09T00:00:00"
-RE_FECHA = re.compile(r'Fecha\s+(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:\d{2}')
+# Fecha de emisión — el RFC del receptor precede a "Fecha" en la misma línea;
+# anclar con el RFC receptor para no colisionar con otras fechas del documento.
+RE_FECHA = re.compile(
+    r'[A-Z&]{3,4}\d{6}[A-Z0-9]{3}\s+Fecha\s+(\d{4}-\d{2}-\d{2})T',
+    re.IGNORECASE,
+)
 
 # Periodo: "Energía del 01 al 30 de septiembre del 2024 RPU 52200951158"
 RE_PERIODO = re.compile(
@@ -53,7 +57,7 @@ RE_PERIODO = re.compile(
 
 # Consumo: "83101800 / FACT-66 2,060,135.000000 KWH Kilowatt hora 2.030600 0.00 4,183,310.13"
 RE_CONSUMO = re.compile(
-    r'[\w/\s-]+\s+([\d,]+\.\d+)\s+KWH\s+Kilowatt\s+hora\s+([\d.]+)\s+[\d.]+\s+([\d,]+\.\d{2})',
+    r'FACT-\d+\s+([\d,]+\.?\d*)\s+KWH\s+Kilowatt\s+hora\s+([\d.]+)\s+[\d.]+\s+([\d,]+\.\d{2})',
     re.IGNORECASE,
 )
 
@@ -139,7 +143,7 @@ class GINParser(InvoiceParser):
         m_nombre = RE_EMISOR_NOMBRE.search(texto)
         suministrador: str | None = None
         if m_nombre:
-            suministrador = m_nombre.group(0).strip().upper()
+            suministrador = m_nombre.group(1).strip().upper()
             # Normalizar espacios múltiples internos
             suministrador = re.sub(r'\s+', ' ', suministrador)
         else:
@@ -214,8 +218,8 @@ class GINParser(InvoiceParser):
         precio_raw = m_consumo.group(2)         # e.g. "2.030600"
         subtotal_raw = m_consumo.group(3)       # e.g. "4,183,310.13"
 
-        # Consumo: quitar comas, convertir a Decimal (las fracciones .000000 son exactas)
-        consumo_kwh = Decimal(str(int(_clean_decimal(consumo_raw))))
+        # Consumo: redondear al entero más cercano preservando fracciones de kWh
+        consumo_kwh = _clean_decimal(consumo_raw).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
         precio_unitario_mxn_kwh = Decimal(precio_raw)
         subtotal_mxn = _clean_decimal(subtotal_raw)
 
