@@ -817,6 +817,31 @@ def delete_meses_seleccionados_anio(contrato_id: int, anio: int) -> None:
     ).eq("anio", anio).execute()
 
 
+def get_tipos_electricos_con_meses_seleccionados(cliente_id: int) -> list[str]:
+    """
+    Devuelve lista de tipos de contrato eléctrico que tienen al menos un mes
+    seleccionado para el cliente dado.
+
+    Posibles valores de retorno: [], ['electrico_basico'], ['electrico_calificado'],
+    ['electrico_basico', 'electrico_calificado']
+    """
+    from models.contrato import TIPOS_ELECTRICOS
+
+    # Query contratos del cliente que son eléctricos
+    contratos = _supabase.table("contratos").select("id, tipo").eq("cliente_id", cliente_id).in_("tipo", list(TIPOS_ELECTRICOS)).execute()
+
+    tipos_con_meses = set()
+    for contrato in contratos.data:
+        contrato_id = contrato["id"]
+        tipo = contrato["tipo"]
+        # Check if this contrato has any selected months
+        result = _supabase.table("contrato_meses_seleccionados").select("contrato_id").eq("contrato_id", contrato_id).limit(1).execute()
+        if result.data:
+            tipos_con_meses.add(tipo)
+
+    return sorted(tipos_con_meses)
+
+
 def get_sidebar_data_contrato(contrato_id: int, contrato_tipo: str = "") -> list[dict]:
     """Retorna datos completos del sidebar para un contrato: años con facturas y selección.
 

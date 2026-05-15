@@ -151,6 +151,7 @@ def test_seleccion_mes_upsert(app, monkeypatch):
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
     monkeypatch.setattr("web.clientes.get_meses_con_factura", lambda contrato_id, anio, **kwargs: list(range(1, 13)))
+    monkeypatch.setattr("web.clientes.get_tipos_electricos_con_meses_seleccionados", lambda cliente_id: [])
     llamadas = []
     monkeypatch.setattr(
         "web.clientes.upsert_mes_seleccionado",
@@ -229,6 +230,7 @@ def test_seleccion_anio_activa(app, monkeypatch):
     """POST /seleccion/anio con seleccionado=true → llama a upsert_meses_seleccionados_anio."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_ELECTRICO)
+    monkeypatch.setattr("web.clientes.get_tipos_electricos_con_meses_seleccionados", lambda cliente_id: [])
     llamadas = []
     monkeypatch.setattr(
         "web.clientes.upsert_meses_seleccionados_anio",

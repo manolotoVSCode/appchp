@@ -48,6 +48,7 @@ from storage.repository import (
     get_factura_calificado,
     update_factura_calificado,
     delete_factura_calificado,
+    get_tipos_electricos_con_meses_seleccionados,
 )
 
 logger = logging.getLogger(__name__)
@@ -890,6 +891,18 @@ def contrato_seleccion_mes(cliente_id: int, contrato_id: int):
             meses_con_factura = get_meses_con_factura(contrato_id, anio, contrato_tipo=contrato.tipo)
             if mes not in meses_con_factura:
                 return jsonify({"error": f"No existe factura para {anio}-{mes:02d} en este contrato"}), 400
+
+            # Bloqueo de mezcla: no mezclar basico y calificado
+            from models.contrato import TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
+            if contrato.tipo in TIPOS_ELECTRICOS:
+                tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id)
+                tipo_opuesto = TIPO_ELECTRICO_CALIFICADO if contrato.tipo == TIPO_ELECTRICO_BASICO else TIPO_ELECTRICO_BASICO
+                if tipo_opuesto in tipos_existentes:
+                    return jsonify({
+                        "error": "No se puede mezclar suministro básico (CFE) y calificado (PPA). "
+                                 "Deselecciona los meses del otro tipo de contrato primero."
+                    }), 409
+
             upsert_mes_seleccionado(contrato_id, anio, mes)
         else:
             delete_mes_seleccionado(contrato_id, anio, mes)
@@ -912,6 +925,7 @@ def contrato_seleccion_anio(cliente_id: int, contrato_id: int):
         return jsonify({"error": "Contrato no encontrado"}), 404
     if isinstance(resultado, Response):
         return jsonify({"error": "Acceso denegado"}), 403
+    contrato = resultado
 
     data = request.get_json(silent=True) or {}
     anio = data.get("anio")
@@ -923,6 +937,15 @@ def contrato_seleccion_anio(cliente_id: int, contrato_id: int):
 
     try:
         if seleccionado:
+            from models.contrato import TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
+            if contrato.tipo in TIPOS_ELECTRICOS:
+                tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id)
+                tipo_opuesto = TIPO_ELECTRICO_CALIFICADO if contrato.tipo == TIPO_ELECTRICO_BASICO else TIPO_ELECTRICO_BASICO
+                if tipo_opuesto in tipos_existentes:
+                    return jsonify({
+                        "error": "No se puede mezclar suministro básico (CFE) y calificado (PPA). "
+                                 "Deselecciona los meses del otro tipo de contrato primero."
+                    }), 409
             n = upsert_meses_seleccionados_anio(contrato_id, anio)
             return jsonify({"ok": True, "insertados": n})
         else:
@@ -1355,7 +1378,7 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
             contrato=contrato,
             nav_active=nav_active,
             contrato_activo_id=contrato_activo_id,
-            error=f"No se pudo leer el PDF: {exc}",
+            error="No se pudo extraer los datos del PDF. Verifique que el archivo corresponde a una factura GIN válida.",
         )
     finally:
         if tmp_path is not None:
