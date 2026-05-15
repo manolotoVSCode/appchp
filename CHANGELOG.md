@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.28.0] — 2026-05-14
+
+### Sub-entregable C — Dashboards adaptados al tipo de suministro eléctrico (PPA vs GDMTH)
+
+- **Fix doble file picker**: `factura_calificado_upload.html` — reemplazado `<label for="file-input">` por `<span>` para que solo el click handler del drop zone dispare el selector de archivo.
+- **Repository**: `get_tipo_suministro_electrico_seleccionado(cliente_id)` — retorna `'electrico_basico'` | `'electrico_calificado'` | `None` según los meses seleccionados activos.
+- **`calc/cogen.py`**: `calcular_cogen_ppa(ppa_invoices, gas_invoices, params, ...)` — versión simplificada del motor de cogeneración para suministro calificado. Ahorro eléctrico = kWh cubiertos × precio promedio PPA (sin desglose horario, sin Capacidad/Distribución). 7 unit tests en `tests/calc/test_cogen_ppa.py`.
+- **`storage/repository.py`**: `get_facturas_ppa_y_gas_para_dashboard(cliente_id)` — carga facturas PPA y gas en 3 queries con una sola llamada a `get_meses_seleccionados_por_cliente`.
+- **`web/app.py`**: ambos endpoints HTML y ambos endpoints `/data` detectan `tipo_suministro_electrico` y despachan al path PPA (`calcular_cogen_ppa`) o GDMTH (`calcular_cogen`) según corresponda. JSON output incluye `tipo_suministro_electrico`, `suministrador_ppa`, `historico_ppa`.
+- **Dashboard Contabilidad**: banner "Suministro: Calificado (PPA) — {suministrador}", KPIs y badge adaptados, secciones GDMTH (gráficas de demanda/consumo horario, costo unitario por horario, pie chart) se ocultan para PPA y se muestran dos gráficas PPA (consumo mensual vs precio, costo mensual). Destrucción de instancias Chart.js al cambiar modo.
+- **Dashboard Cogeneración**: banner PPA, `recalcularPPA()` para sliders (sin greedy horario ni cálculo Capacidad/Distribución), dispatch `esPPA ? recalcularPPA : recalcularMes`, CELs card muestra "N/A" para PPA, etiqueta cascada adaptativa ("Ahorro Eléctrico (Total)" para PPA).
+- Aviso `sin_par` y `sin_pares_mes` usan lenguaje genérico ("facturas eléctricas") en ambos dashboards.
+
 ## [2.27.0] — 2026-05-14
 
 ### Sub-entregable B completo — Parser GIN, upload PDF, bloqueo de mezcla

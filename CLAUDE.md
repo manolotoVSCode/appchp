@@ -212,6 +212,20 @@ Caja adicional en el bloque 2 del dashboard de Cogeneración. Fórmula: energia_
 
 La Ley del ISR Artículo 34 fracción XIII permite deducción inmediata del 100% para activos de cogeneración eficiente certificada CRE. Cuando el cliente califica como cogeneración eficiente (cumple Caso I de CRE), puede deducir la totalidad de la inversión en el año fiscal 1. Cálculo del beneficio: beneficio_fiscal_anio_1 = inversion_mxn × tasa_ISR, donde tasa_ISR = 30% (constante _TASA_ISR en calc/cogen.py — régimen general personas morales en México). El beneficio se suma al Ahorro Neto del año 1 en la proyección del flujo acumulado a 15 años. Esto reduce significativamente el payback del proyecto. Para IBERICA TILES 2024 con inversión ~$48.1M MXN: beneficio ≈ $14.4M MXN. Si el cliente NO califica como cogeneración eficiente, el beneficio fiscal aún se muestra en la proyección (la ley aplica independientemente de CELs). La app siempre calcula el beneficio cuando hay inversión estimable.
 
+## Dashboard adaptado al tipo de suministro eléctrico
+
+Los dos dashboards (Contabilidad Energética y Proyecto Cogeneración) se comportan de manera diferente según el tipo de suministro eléctrico seleccionado.
+
+La función `get_tipo_suministro_electrico_seleccionado(cliente_id)` en `storage/repository.py` retorna `'electrico_basico'` | `'electrico_calificado'` | `None` leyendo los meses seleccionados activos. El bloqueo de mezcla garantiza que nunca haya ambos tipos activos simultáneamente.
+
+En `web/app.py`, tanto las rutas HTML como los endpoints `/data` detectan el tipo antes de cargar datos. Para `electrico_calificado` cargan `get_facturas_ppa_y_gas_para_dashboard(cliente_id)` y llaman `calcular_cogen_ppa`. Para `electrico_basico` (o None) mantienen el path GDMTH original sin cambios. Los JSON de ambos endpoints incluyen `tipo_suministro_electrico` y `suministrador_ppa`.
+
+Dashboard Contabilidad para PPA: banner "Suministro: Calificado (PPA) — {suministrador}", KPIs adaptados (badge "PPA" en vez de "CFE"), las gráficas GDMTH (demanda/consumo horario, costo unitario por horario, pie chart) se ocultan; se muestran dos gráficas PPA: consumo mensual vs precio, y costo mensual. La detección usa `data.tipo_suministro_electrico === "electrico_calificado"` en JS. Al cambiar modo se destruyen las instancias Chart.js del modo anterior.
+
+Dashboard Cogeneración para PPA: banner, `recalcularPPA(m, p)` que usa `m.costo_promedio_kwh` para `ah_elec` (sin desglose horario ni cálculo Capacidad/Distribución), dispatch `esPPA ? recalcularPPA : recalcularMes` en `actualizarSensibilidad`, CELs card muestra "N/A", etiqueta de cascada "Ahorro Eléctrico (Total)". CO₂ y gas/caldera/O&M se calculan igual que GDMTH.
+
+La función `calcular_cogen_ppa` en `calc/cogen.py` rellena todos los campos de `CoGenMes` con Decimal("0") para los campos exclusivos de GDMTH, por lo que es compatible con el mismo `CoGenResultado` y las mismas rutas de serialización JSON.
+
 ## Restricciones de comunicación
 
 Responder en español.
