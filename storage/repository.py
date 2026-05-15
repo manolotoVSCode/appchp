@@ -621,7 +621,11 @@ def get_contrato_con_conteos(contrato_id: int) -> dict | None:
     row = result.data[0]
     cfe = _supabase.table("cfe_facturas").select("id").eq("contrato_id", contrato_id).execute()
     gas = _supabase.table("gas_facturas").select("id").eq("contrato_id", contrato_id).execute()
-    calificado = _supabase.table("facturas_electricidad_calificado").select("id").eq("contrato_id", contrato_id).execute()
+    try:
+        calificado = _supabase.table("facturas_electricidad_calificado").select("id").eq("contrato_id", contrato_id).execute()
+        num_calificado = len(calificado.data)
+    except Exception:
+        num_calificado = 0
     return {
         "id": row["id"],
         "cliente_id": row["cliente_id"],
@@ -632,7 +636,7 @@ def get_contrato_con_conteos(contrato_id: int) -> dict | None:
         "created_at": row.get("created_at"),
         "num_cfe": len(cfe.data),
         "num_gas": len(gas.data),
-        "num_calificado": len(calificado.data),
+        "num_calificado": num_calificado,
     }
 
 
@@ -886,12 +890,16 @@ def get_sidebar_data_cliente(cliente_id: int) -> dict[int, list[dict]]:
     ).not_.is_("contrato_id", "null").not_.is_("anio", "null").not_.is_("mes", "null").execute()
 
     # Query 3: todos los (contrato_id, anio, mes) calificado del cliente
-    cal = _supabase.table("facturas_electricidad_calificado").select("contrato_id, anio, mes").eq(
-        "cliente_id", cliente_id
-    ).not_.is_("contrato_id", "null").not_.is_("anio", "null").not_.is_("mes", "null").execute()
+    try:
+        cal = _supabase.table("facturas_electricidad_calificado").select("contrato_id, anio, mes").eq(
+            "cliente_id", cliente_id
+        ).not_.is_("contrato_id", "null").not_.is_("anio", "null").not_.is_("mes", "null").execute()
+        cal_data = cal.data
+    except Exception:
+        cal_data = []
 
     # Combinar todas las fuentes para determinar contrato_ids y agrupar meses con factura
-    todas = cfe.data + gas.data + cal.data
+    todas = cfe.data + gas.data + cal_data
     contrato_ids = {r["contrato_id"] for r in todas}
     if not contrato_ids:
         return {}

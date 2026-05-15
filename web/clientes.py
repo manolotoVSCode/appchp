@@ -558,7 +558,10 @@ def contrato_ficha(cliente_id: int, contrato_id: int):
     contrato = get_contrato_con_conteos(contrato_id)
     facturas_cfe = get_cfe_facturas_por_contrato(contrato_id)
     facturas_gas = get_gas_facturas_por_contrato(contrato_id)
-    facturas_calificado = get_facturas_calificado_por_contrato(contrato_id)
+    try:
+        facturas_calificado = get_facturas_calificado_por_contrato(contrato_id)
+    except Exception:
+        facturas_calificado = []
 
     return render_template(
         "clientes/contratos/ficha.html",
