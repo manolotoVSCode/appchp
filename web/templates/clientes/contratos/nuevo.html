@@ -30,7 +30,7 @@
         <select class="form-select" id="tipo" name="tipo" required>
           <option value="electrico_basico" {% if tipo == "electrico_basico" %}selected{% endif %}>Eléctrico básico (CFE GDMTH)</option>
           <option value="electrico_calificado" {% if tipo == "electrico_calificado" %}selected{% endif %}>Eléctrico calificado (PPA)</option>
-          <option value="gas" {% if tipo == "gas" %}selected{% endif %}>Gas natural (ENGIE)</option>
+          <option value="gas" {% if tipo == "gas" %}selected{% endif %}>Gas natural</option>
         </select>
       </div>
 
@@ -38,7 +38,7 @@
         <label for="identificador_real" class="form-label fw-semibold">Identificador real <span class="text-danger">*</span></label>
         <input type="text" class="form-control font-monospace" id="identificador_real" name="identificador_real"
                value="{{ identificador_real }}" required>
-        <div class="form-text">Número de servicio CFE o número de cliente ENGIE tal como aparece en la factura.</div>
+        <div class="form-text">Número de servicio CFE o número de cliente Gas tal como aparece en la factura.</div>
       </div>
 
       <div class="mb-4">

@@ -26,7 +26,7 @@
   let inversionMxn = 0;        // inversión fija
   let tieneInversion = false;
   let co2Datos    = null;       // {actual_total_t, factor_emision_elec, factor_emision_gas}
-  let beneficioFiscalAnio1 = 0;   // beneficio fiscal año 1 por depreciación inmediata
+  let beneficioFiscalAnio1 = 0;   // beneficio fiscal año 1 por depreciación acelerada en primer año de operación
   let esPPA = false;  // true cuando suministro_electrico es 'electrico_calificado'
 
   // ── Instancias Chart.js ───────────────────────────────────────────────────
@@ -466,7 +466,7 @@
       const { texto, clase } = textoPayback(payback);
       const el = document.getElementById("kpi-payback-val");
       if (el) {
-        el.innerHTML = texto + (beneficioFiscalAnio1 > 0 ? ' <span class="asterisco" title="Incluye beneficio fiscal por depreciación inmediata Art. 34 XIII LISR">*</span>' : '');
+        el.innerHTML = texto + (beneficioFiscalAnio1 > 0 ? ' <span class="asterisco" title="Incluye beneficio fiscal por depreciación acelerada en primer año de operación Art. 34 XIII LISR">*</span>' : '');
         el.className = clase;
       }
       actualizarChart15(ahorro_neto_anual, beneficioFiscalAnio1);
