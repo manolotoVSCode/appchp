@@ -420,6 +420,7 @@ async function cargarAnios(item) {
 
 function renderAnios(item, anios, contratoId, clienteId) {
   const body = item.querySelector(".sidebar-contrato-body");
+  body.querySelectorAll("[data-anio]").forEach(el => el.remove()); // idempotente: evita duplicados si se llama más de una vez
   if (!anios || anios.length === 0) {
     const msg = document.createElement("div");
     msg.className = "text-muted";
