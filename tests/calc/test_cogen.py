@@ -350,11 +350,11 @@ def test_totales_anuales_componentes_son_suma_mensual():
 
 def test_capacidad_nominal_kw(resultado_un_mes):
     """capacidad = ceil(kWh_mes / (días × 24 h)).
-    Fixture nov-2023: inicio=11/01, fin=11/30 → (11/30−11/01).days=29 días → 696 h.
-    ceil(1_000_000 / 696) = ceil(1436.78…) = 1437 kW.
+    Fixture nov-2023: inicio=11/01, fin=11/30 → (11/30−11/01).days+1=30 días → 720 h.
+    ceil(1_000_000 / 720) = ceil(1388.88…) = 1389 kW.
     """
-    # dias = (date(2023,11,30) - date(2023,11,1)).days = 29 días → 696 horas
-    dias = (date(2023, 11, 30) - date(2023, 11, 1)).days
+    # dias = (date(2023,11,30) - date(2023,11,1)).days + 1 = 30 días → 720 horas
+    dias = (date(2023, 11, 30) - date(2023, 11, 1)).days + 1
     horas = Decimal(dias * 24)
     esperado = Decimal(math.ceil(KWH / horas))
     assert resultado_un_mes.capacidad_nominal_kw == esperado
@@ -541,7 +541,7 @@ def test_co2_none_sin_factores_emision():
 # ── Tests: horas del mes dinámicas ────────────────────────────────────────────
 
 def test_capacidad_nominal_31_dias():
-    """Enero (31 días): horas = 31×24=744. capacidad = ceil(kWh / 744)."""
+    """Enero: inicio=1/1, fin=1/31 → (fin−inicio).days+1=31 días → 744 h. capacidad = ceil(kWh / 744)."""
     from models.cfe_invoice import CFEConsumoHorario
 
     kwh_jan = Decimal("744000")  # 1000 kWh/h × 744 h
@@ -570,15 +570,15 @@ def test_capacidad_nominal_31_dias():
     )
     gas = [_gas(2024, 1, Decimal("100000"), PRECIO_GJ)]
     r = calcular_cogen([cfe_jan], gas, CoGenParams())
-    # dias = (1/31 - 1/1).days = 30 días → 720 h; ceil(744000/720) = 1033
-    dias = (fin - inicio).days
+    # dias = (1/31 - 1/1).days + 1 = 31 días → 744 h; ceil(744000/744) = 1000
+    dias = (fin - inicio).days + 1
     horas = Decimal(dias * 24)
     esperado = Decimal(math.ceil(kwh_jan / horas))
     assert r.capacidad_nominal_kw == esperado
 
 
 def test_capacidad_nominal_28_dias():
-    """Febrero no bisiesto (28 días): horas = 27×24=648. Menor capacidad que con 720h."""
+    """Febrero no bisiesto: inicio=2/1, fin=2/28 → (fin−inicio).days+1=28 días → 672 h. Menor capacidad que con 720h."""
     from models.cfe_invoice import CFEConsumoHorario
 
     kwh_feb = Decimal("648000")  # 1000 kWh/h × 648 h
@@ -607,7 +607,7 @@ def test_capacidad_nominal_28_dias():
     )
     gas = [_gas(2023, 2, Decimal("50000"), PRECIO_GJ)]
     r = calcular_cogen([cfe_feb], gas, CoGenParams())
-    dias = (fin - inicio).days  # 27 días
+    dias = (fin - inicio).days + 1  # 28 días
     horas = Decimal(dias * 24)
     esperado = Decimal(math.ceil(kwh_feb / horas))
     assert r.capacidad_nominal_kw == esperado

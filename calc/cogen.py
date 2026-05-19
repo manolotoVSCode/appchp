@@ -44,7 +44,7 @@ def _capacidad_nominal_kw(cfe_invoices: list[CFEInvoice]) -> Decimal | None:
         if not _PERIODOS_COMPLETOS.issubset(nombres):
             continue
         kwh = sum(p.consumo_kwh for p in cfe.periodos)
-        dias = (cfe.periodo_fin - cfe.periodo_inicio).days
+        dias = (cfe.periodo_fin - cfe.periodo_inicio).days + 1
         if kwh > 0 and dias > 0:
             horas = Decimal(dias * 24)
             maximos.append(kwh / horas)
@@ -421,7 +421,7 @@ def _capacidad_nominal_kw_ppa(ppa_invoices: list[FacturaCalificado]) -> Decimal 
     maximos: list[Decimal] = []
     for ppa in ppa_invoices:
         if ppa.consumo_kwh > 0:
-            dias = (ppa.periodo_fin - ppa.periodo_inicio).days
+            dias = int(ppa.dias_facturados)
             if dias > 0:
                 horas = Decimal(dias * 24)
                 maximos.append(ppa.consumo_kwh / horas)
