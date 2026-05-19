@@ -82,10 +82,17 @@ def test_calcular_cogen_ppa_ahorro_correcto():
 
 
 def test_calcular_cogen_ppa_capacidad_nominal():
-    """Capacidad nominal = ceil(consumo_kwh / 720)."""
-    r = calcular_cogen_ppa([make_ppa(consumo_kwh="2000000")], [make_gas()], CoGenParams())
+    """Capacidad nominal = ceil(consumo_kwh / (días × 24 h)).
+    make_ppa usa inicio=9/1, fin=9/30 → (9/30−9/1).days=29 días → 696 h.
+    ceil(2_000_000 / 696) = ceil(2873.56…) = 2874 kW.
+    """
     import math
-    expected = Decimal(math.ceil(Decimal("2000000") / Decimal("720")))
+    from datetime import date as _date
+    r = calcular_cogen_ppa([make_ppa(consumo_kwh="2000000")], [make_gas()], CoGenParams())
+    # dias del fixture: (date(2024,9,30) - date(2024,9,1)).days = 29
+    dias = (_date(2024, 9, 30) - _date(2024, 9, 1)).days
+    horas = Decimal(dias * 24)
+    expected = Decimal(math.ceil(Decimal("2000000") / horas))
     assert r.capacidad_nominal_kw == expected
 
 

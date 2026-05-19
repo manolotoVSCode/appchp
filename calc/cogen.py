@@ -21,8 +21,7 @@ _KWH_A_GJ = Decimal("0.0036")
 _FACTOR_PCI_A_PCS = Decimal("1.11")
 # O&M estimado: 0.3 MXN fijos por kWh cubierto (costo de operación y mantenimiento)
 _FACTOR_OM = Decimal("0.3")
-# Dimensionamiento de motor: horas de operación mensual y costo USD/kW instalado
-_HORAS_MES = Decimal("720")
+# Dimensionamiento de motor: costo USD/kW instalado
 _USD_POR_KW = Decimal("1400")
 # Tipo de cambio MXN/USD por defecto (se sobreescribe con valor de BD)
 _TC_DEFAULT = Decimal("17.50")
@@ -38,39 +37,56 @@ _TASA_ISR = Decimal("0.30")
 
 
 def _capacidad_nominal_kw(cfe_invoices: list[CFEInvoice]) -> Decimal | None:
-    """max(kWh_total_mes / 720 h) sobre facturas con los tres horarios completos."""
+    """max(kWh_total_mes / (días × 24 h)) sobre facturas con los tres horarios completos."""
     maximos: list[Decimal] = []
     for cfe in cfe_invoices:
         nombres = {p.periodo for p in cfe.periodos}
         if not _PERIODOS_COMPLETOS.issubset(nombres):
             continue
         kwh = sum(p.consumo_kwh for p in cfe.periodos)
-        if kwh > 0:
-            maximos.append(kwh)
+        dias = (cfe.periodo_fin - cfe.periodo_inicio).days
+        if kwh > 0 and dias > 0:
+            horas = Decimal(dias * 24)
+            maximos.append(kwh / horas)
     if not maximos:
         return None
-    return Decimal(math.ceil(max(maximos) / _HORAS_MES))
+    return Decimal(math.ceil(max(maximos)))
 
 
-def calcular_payback(
+def calcular_payback_decimal(
     inversion_mxn: Decimal,
+    flujo_anio_1: Decimal,
     ahorro_neto_anual: Decimal,
     horizonte: int = 15,
-) -> int | str:
-    """Retorna el primer año donde el flujo acumulado cruza a positivo.
+) -> Decimal | None:
+    """Payback con interpolación lineal entre años, retorna Decimal con 2 decimales.
 
-    - int (1-indexed): año de payback dentro del horizonte.
-    - "no_aplica": ahorro_neto_anual <= 0 o inversión <= 0.
-    - "mayor_horizonte": no se alcanza en el horizonte dado.
+    - Decimal: años de payback (puede ser fraccionario, p.ej. 2.05).
+    - None: no se alcanza en el horizonte dado, o inversión/ahorro inválidos.
+
+    flujo_anio_1 puede incluir beneficio fiscal (año 1 diferente al resto).
+    ahorro_neto_anual se usa para años 2+.
     """
-    if ahorro_neto_anual <= 0 or inversion_mxn <= 0:
-        return "no_aplica"
+    if inversion_mxn <= 0:
+        return Decimal("0")
+    if flujo_anio_1 <= 0 and ahorro_neto_anual <= 0:
+        return None
+
     acumulado = -inversion_mxn
+
     for anio in range(1, horizonte + 1):
-        acumulado += ahorro_neto_anual
-        if acumulado >= 0:
-            return anio
-    return "mayor_horizonte"
+        flujo_anio = flujo_anio_1 if anio == 1 else ahorro_neto_anual
+        if flujo_anio <= 0:
+            # Año sin flujo positivo no puede cruzar
+            continue
+        prev_acumulado = acumulado
+        acumulado += flujo_anio
+
+        if acumulado >= 0 and prev_acumulado < 0:
+            payback = Decimal(anio - 1) + abs(prev_acumulado) / flujo_anio
+            return payback.quantize(Decimal("0.01"))
+
+    return None
 
 
 def calcular_flujo_acumulado(
@@ -223,10 +239,30 @@ def calcular_cogen(
         ahorro_capacidad    = (precio_cap  * reduccion_cap ).quantize(_CENTAVO, ROUND_HALF_UP)
         ahorro_distribucion = (precio_dist * reduccion_dist).quantize(_CENTAVO, ROUND_HALF_UP)
 
-        # Paso 4 — Ahorro eléctrico total
-        ahorro_electricidad = ahorro_energia + ahorro_capacidad + ahorro_distribucion
+        # Paso 4 — Ahorro Otros Servicios: Transmisión + CENACE + SCnMEM
+        # Estos cargos son proporcionales al consumo (kWh), por lo que si la cogeneración
+        # reduce el consumo en X%, estos cargos se reducen en X%.
+        # Se usa importe_mxn (cargo total del período) de cada componente MEM.
+        comp_trans  = next((c for c in cfe_orig.componentes_mem if c.nombre == "Transmisión"), None)
+        comp_cenace = next((c for c in cfe_orig.componentes_mem if c.nombre == "CENACE"), None)
+        comp_scnmem = next((c for c in cfe_orig.componentes_mem if c.nombre == "SCnMEM"), None)
 
-        # Paso 5 — kWh por periodo (para campos informativos)
+        cargo_trans_mxn  = comp_trans.importe_mxn  if comp_trans  else Decimal("0")
+        cargo_cenace_mxn = comp_cenace.importe_mxn if comp_cenace else Decimal("0")
+        cargo_scnmem_mxn = comp_scnmem.importe_mxn if comp_scnmem else Decimal("0")
+        cargo_otros_total = cargo_trans_mxn + cargo_cenace_mxn + cargo_scnmem_mxn
+
+        if kwh_total_orig > 0 and cargo_otros_total > 0:
+            precio_otros_mxn_kwh = (cargo_otros_total / kwh_total_orig).quantize(_DIEZMILAVO, ROUND_HALF_UP)
+            ahorro_otros_servicios = (kwh_cubiertos * precio_otros_mxn_kwh).quantize(_CENTAVO, ROUND_HALF_UP)
+        else:
+            precio_otros_mxn_kwh = Decimal("0")
+            ahorro_otros_servicios = Decimal("0")
+
+        # Paso 5 — Ahorro eléctrico total (4 componentes)
+        ahorro_electricidad = ahorro_energia + ahorro_capacidad + ahorro_distribucion + ahorro_otros_servicios
+
+        # Paso 6 — kWh por periodo (para campos informativos)
         kwh_punta_cubierto = kwh_por_periodo.get("punta", Decimal("0"))
         kwh_intermedia_cubierto = kwh_por_periodo.get("intermedio", Decimal("0"))
         kwh_base_cubierto = kwh_por_periodo.get("base", Decimal("0"))
@@ -268,6 +304,9 @@ def calcular_cogen(
             ahorro_energia_mes_mxn=ahorro_energia,
             ahorro_capacidad_mes_mxn=ahorro_capacidad,
             ahorro_distribucion_mes_mxn=ahorro_distribucion,
+            cargo_otros_total_mxn=cargo_otros_total,
+            precio_otros_mxn_kwh=precio_otros_mxn_kwh,
+            ahorro_otros_servicios_mes_mxn=ahorro_otros_servicios,
             gj_gas_cogen=gj_gas_cogen,
             costo_gas_cogen_mxn=costo_gas_cogen,
             ahorro_electricidad_mxn=ahorro_electricidad,
@@ -356,6 +395,7 @@ def calcular_cogen(
         ahorro_energia_anual_mxn=_sum("ahorro_energia_mes_mxn"),
         ahorro_capacidad_anual_mxn=_sum("ahorro_capacidad_mes_mxn"),
         ahorro_distribucion_anual_mxn=_sum("ahorro_distribucion_mes_mxn"),
+        ahorro_otros_servicios_anual_mxn=_sum("ahorro_otros_servicios_mes_mxn"),
         ahorro_caldera_anual_mxn=_sum("ahorro_caldera_mxn"),
         ebitda_anual_mxn=_sum("ebitda_mes_mxn"),
         gasto_om_anual_mxn=_sum("gasto_om_mes_mxn"),
@@ -377,11 +417,17 @@ def calcular_cogen(
 
 
 def _capacidad_nominal_kw_ppa(ppa_invoices: list[FacturaCalificado]) -> Decimal | None:
-    """max(consumo_kwh / 720 h) sobre facturas PPA con consumo positivo."""
-    maximos = [ppa.consumo_kwh for ppa in ppa_invoices if ppa.consumo_kwh > 0]
+    """max(consumo_kwh / (días × 24 h)) sobre facturas PPA con consumo positivo."""
+    maximos: list[Decimal] = []
+    for ppa in ppa_invoices:
+        if ppa.consumo_kwh > 0:
+            dias = (ppa.periodo_fin - ppa.periodo_inicio).days
+            if dias > 0:
+                horas = Decimal(dias * 24)
+                maximos.append(ppa.consumo_kwh / horas)
     if not maximos:
         return None
-    return Decimal(math.ceil(max(maximos) / _HORAS_MES))
+    return Decimal(math.ceil(max(maximos)))
 
 
 def calcular_cogen_ppa(
@@ -460,6 +506,9 @@ def calcular_cogen_ppa(
             ahorro_energia_mes_mxn=ahorro_energia,
             ahorro_capacidad_mes_mxn=Decimal("0"),
             ahorro_distribucion_mes_mxn=Decimal("0"),
+            cargo_otros_total_mxn=Decimal("0"),
+            precio_otros_mxn_kwh=Decimal("0"),
+            ahorro_otros_servicios_mes_mxn=Decimal("0"),
             gj_gas_cogen=gj_gas_cogen,
             costo_gas_cogen_mxn=costo_gas_cogen,
             ahorro_electricidad_mxn=ahorro_electricidad,
@@ -547,6 +596,7 @@ def calcular_cogen_ppa(
         ahorro_energia_anual_mxn=_sum("ahorro_energia_mes_mxn"),
         ahorro_capacidad_anual_mxn=_sum("ahorro_capacidad_mes_mxn"),
         ahorro_distribucion_anual_mxn=_sum("ahorro_distribucion_mes_mxn"),
+        ahorro_otros_servicios_anual_mxn=Decimal("0"),
         ahorro_caldera_anual_mxn=_sum("ahorro_caldera_mxn"),
         ebitda_anual_mxn=_sum("ebitda_mes_mxn"),
         gasto_om_anual_mxn=_sum("gasto_om_mes_mxn"),

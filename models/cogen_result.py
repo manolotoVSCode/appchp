@@ -61,6 +61,10 @@ class CoGenMes:
     kw_facturado_distribucion: Decimal = Decimal("0")
     kw_efectiva_capacidad_post: Decimal = Decimal("0")
     kw_efectiva_distribucion_post: Decimal = Decimal("0")
+    # Ahorro Otros Servicios: Transmisión + CENACE + SCnMEM (proporcionales al consumo)
+    cargo_otros_total_mxn: Decimal = Decimal("0")
+    precio_otros_mxn_kwh: Decimal = Decimal("0")
+    ahorro_otros_servicios_mes_mxn: Decimal = Decimal("0")
     # Prorrateo (campo informativo, vacío si no se aplicó)
     prorrateado: bool = False
     nota_prorrateo: str = ""
@@ -83,6 +87,7 @@ class CoGenResultado:
     ahorro_energia_anual_mxn: Decimal = Decimal("0")
     ahorro_capacidad_anual_mxn: Decimal = Decimal("0")
     ahorro_distribucion_anual_mxn: Decimal = Decimal("0")
+    ahorro_otros_servicios_anual_mxn: Decimal = Decimal("0")
     gj_gas_cogen_pci_anual: Decimal = Decimal("0")  # GJ en PCI (sin factor 1.11) — para CELs
     # Capacidad e inversión (None si no hay datos CFE suficientes)
     capacidad_nominal_kw: Decimal | None = None

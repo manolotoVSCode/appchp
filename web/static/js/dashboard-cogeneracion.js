@@ -110,13 +110,15 @@
     } else {
         var ah_cap = 0, ah_dist = 0;
     }
-    const ah_elec = ah_energia + ah_cap + ah_dist;
+    // Otros Servicios: Transmisión + CENACE + SCnMEM (proporcionales al consumo)
+    const ah_otros = (m.precio_otros_kwh || 0) > 0 ? kwh_cub * m.precio_otros_kwh : 0;
+    const ah_elec = ah_energia + ah_cap + ah_dist + ah_otros;
     const gj_cogen   = kwh_cub * 0.0036 * 1.11 / p.rend_elec;  // 0.0036 = kWh→GJ; 1.11 = factor PCI→PCS
     const costo_gas  = gj_cogen * m.costo_unitario_gj;
     const calor_rec  = gj_cogen * p.rend_term;
     const ah_caldera = (calor_rec / p.efic_caldera) * m.costo_unitario_gj;
     const om         = kwh_cub * 0.3;
-    return { ah_elec, ah_energia, ah_cap, ah_dist, ah_caldera, costo_gas, om,
+    return { ah_elec, ah_energia, ah_cap, ah_dist, ah_otros, ah_caldera, costo_gas, om,
              ahorro_neto: ah_elec + ah_caldera - costo_gas - om };
   }
 
@@ -133,8 +135,9 @@
     return {
       ah_elec,
       ah_energia: ah_elec,
-      ah_cap:  0,
-      ah_dist: 0,
+      ah_cap:   0,
+      ah_dist:  0,
+      ah_otros: 0,
       ah_caldera,
       costo_gas,
       om,
@@ -144,19 +147,26 @@
 
   // ── Payback helpers ───────────────────────────────────────────────────────
   function calcularPaybackJS(invMxn, ahorroAnual, beneficioFiscal = 0) {
+    // Retorna decimal con interpolación lineal entre años.
+    // beneficioFiscal solo se incluye en el flujo del año 1.
+    // Retorna null si no aplica, -1 si supera el horizonte de 15 años.
     if (ahorroAnual <= 0 || invMxn <= 0) return null;
     let acum = -invMxn;
     for (let i = 1; i <= 15; i++) {
-      acum += ahorroAnual + (i === 1 ? beneficioFiscal : 0);
-      if (acum >= 0) return i;
+      const flujo = ahorroAnual + (i === 1 ? beneficioFiscal : 0);
+      const prevAcum = acum;
+      acum += flujo;
+      if (acum >= 0 && prevAcum < 0) {
+        return (i - 1) + Math.abs(prevAcum) / flujo;
+      }
     }
     return -1;
   }
   function textoPayback(payback) {
     if (payback === null) return { texto: "No aplica", clase: "fs-5 fw-bold text-muted" };
-    if (payback === -1)   return { texto: "> 15 años", clase: "fs-5 fw-bold text-danger" };
+    if (payback === -1)   return { texto: "Sin retorno en 15 años", clase: "fs-5 fw-bold text-danger" };
     const color = payback <= 5 ? "text-success" : payback <= 10 ? "text-warning" : "text-danger";
-    return { texto: payback + " años", clase: "fs-5 fw-bold " + color };
+    return { texto: payback.toFixed(2) + " años", clase: "fs-5 fw-bold " + color };
   }
 
   // ── CO2 reactivo ──────────────────────────────────────────────────────────
@@ -409,6 +419,7 @@
     setText("val-caldera",          Math.round(p.efic_caldera * 100));
 
     let ahorro_neto_anual = 0, ah_elec = 0, ah_caldera = 0, costo_gas = 0, om_anual = 0;
+    let ah_energia_anual = 0, ah_cap_anual = 0, ah_dist_anual = 0, ah_otros_anual = 0;
     const lChartE = [], lChartC = [], lChartG = [], lChartOM = [], lChartN = [];
 
     meses_raw.forEach(m => {
@@ -418,6 +429,10 @@
       ah_caldera += res.ah_caldera;
       costo_gas += res.costo_gas;
       om_anual  += res.om;
+      ah_energia_anual += res.ah_energia;
+      ah_cap_anual     += res.ah_cap;
+      ah_dist_anual    += res.ah_dist;
+      ah_otros_anual   += (res.ah_otros || 0);
       lChartE.push(res.ah_elec);
       lChartC.push(res.ah_caldera);
       lChartG.push(res.costo_gas);
@@ -439,6 +454,11 @@
     setText("kpi-gas-val",            fmt(costo_gas));
     setText("kpi-om-val",             fmt(om_anual));
     setText("kpi-total-gastos-val",   fmt(costo_gas + om_anual));
+    // Desglose 4 componentes del ahorro eléctrico (solo CFE GDMTH)
+    setText("kpi-ah-energia-val",     fmt(ah_energia_anual));
+    setText("kpi-ah-cap-val",         fmt(ah_cap_anual));
+    setText("kpi-ah-dist-val",        fmt(ah_dist_anual));
+    setText("kpi-ah-otros-val",       fmt(ah_otros_anual));
 
     // Payback
     if (tieneInversion) {
@@ -596,6 +616,14 @@
 
     // Detectar tipo de suministro eléctrico
     esPPA = data.tipo_suministro_electrico === "electrico_calificado";
+
+    // Panel detalle Ahorro Eléctrico: solo visible en CFE GDMTH
+    const linkDetalleElec = document.getElementById("link-detalle-elec");
+    const detalleElec = document.getElementById("detalleAhorroElec");
+    if (linkDetalleElec) linkDetalleElec.style.display = esPPA ? "none" : "";
+    if (detalleElec && esPPA) {
+      detalleElec.classList.remove("show");
+    }
 
     // Banner PPA
     const bannerPpa = document.getElementById("banner-ppa-cogen");

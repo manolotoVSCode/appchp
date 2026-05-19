@@ -100,13 +100,15 @@ Cuando se introduzca autenticación de usuarios (entregable separado posterior, 
 
 La capacidad nominal de la cogeneración se calcula como:
 
-capacidad_nominal_kw = math.ceil(max(kwh_total_mes / 720))
+capacidad_nominal_kw = math.ceil(max(kwh_total_mes / (dias_mes × 24)))
 
 Donde:
 - kwh_total_mes es la suma de kWh consumidos por horario (Base + Intermedia + Punta) de cada factura CFE seleccionada.
-- 720 son las horas mensuales estándar (24 × 30).
-- Se toma el mes de mayor consumo entre los meses seleccionados.
+- dias_mes = (periodo_fin - periodo_inicio).days de cada factura (dinámico, no 720 fijo).
+- Se toma el mes con mayor kWh/h entre los meses seleccionados.
 - Se aplica math.ceil para redondear al entero superior, por consistencia con la metodología CFE GDMTH.
+
+Para PPA la misma fórmula aplica usando los días de cada factura de electricidad calificada.
 
 Esta capacidad se usa para:
 - Selección de RefE en tabla CRE (cálculo de CELs).
@@ -196,13 +198,19 @@ Paso 2. Distribución horaria (algoritmo greedy). El consumo cubierto se asigna 
 
 Paso 3. Ahorro eléctrico — 3 componentes GDMTH. La tarifa GDMTH factura la demanda en dos componentes adicionales: Capacidad y Distribución. El precio unitario de cada uno se obtiene dividiendo el cargo de `cargo_demanda_mxn` del componente MEM entre el kW facturado, que CFE deriva como `ceil(kWh_total / (24 × días) / 0.57)` — siempre con redondeo al entero superior (ceiling), nunca normal ni truncado. El kW facturado para Capacidad es `min(kw_punta, ceil(D_actual))` y para Distribución es `min(kw_max, ceil(D_actual))`. La demanda efectiva post-cogeneración también usa ceiling: `ceil((kWh_post / (24 × días)) / 0.57)`. Asunción conservadora: `kw_max` no cambia con cogeneración (paradas mensuales). Implementación en `calc/cogen.py` con `math.ceil()` (Python) y replicado en `dashboard-cogeneracion.js` con `Math.ceil()` (JS). El campo correcto para precio unitario es `cargo_demanda_mxn` de `cfe_mem_componentes`, no `importe_mxn`.
 
-Paso 4. Costo de gas adicional. Energía eléctrica generada dividida entre rendimiento eléctrico, convertida a metros cúbicos usando el poder calorífico real del gas extraído de las facturas (no factor estándar), multiplicado por costo unitario del gas del cliente.
+Paso 4. Ahorro Otros Servicios (solo CFE GDMTH). Transmisión + CENACE + SCnMEM son cargos proporcionales al consumo (kWh). Se obtiene el `importe_mxn` de cada componente MEM (usar nombre exacto: `"Transmisión"`, `"CENACE"`, `"SCnMEM"`). `cargo_otros_total = transmision + cenace + scnmem`. `precio_otros_mxn_kwh = cargo_otros_total / kwh_total_orig`. `ahorro_otros_servicios = kwh_cubiertos × precio_otros_mxn_kwh`. Si algún componente no existe en la factura, se trata como 0. No aplica a PPA.
 
-Paso 5. Aprovechamiento térmico. Energía contenida en gas multiplicada por rendimiento térmico igual calor recuperable. Calor recuperable dividido entre eficiencia de caldera de referencia igual gas que el cliente deja de quemar. Multiplicar por costo unitario del gas. Resultado: ahorro térmico monetizado.
+Ahorro Eléctrico Total CFE GDMTH (4 componentes): ahorro_energia + ahorro_capacidad + ahorro_distribucion + ahorro_otros_servicios.
 
-Paso 6. Costo O&M (Operación y Mantenimiento). 0.3 MXN fijos por cada kWh cubierto por el motor. Es un costo FIJO por kWh generado, no un porcentaje del ahorro eléctrico ni del costo de la electricidad. O&M mensual = 0.3 MXN/kWh × kWh_cubiertos_mes. Constante `_FACTOR_OM = Decimal("0.3")` en `calc/cogen.py`.
+Para PPA el ahorro eléctrico sigue siendo un solo componente: kwh_cubiertos × precio_promedio.
 
-Paso 7. Ahorro neto y EBITDA. Ahorro eléctrico bruto más ahorro térmico menos costo de gas adicional menos O&M. Cálculo mensual sobre las 12 facturas reales (preserva estacionalidad), suma anual.
+Paso 5. Costo de gas adicional. Energía eléctrica generada dividida entre rendimiento eléctrico, convertida a metros cúbicos usando el poder calorífico real del gas extraído de las facturas (no factor estándar), multiplicado por costo unitario del gas del cliente.
+
+Paso 6. Aprovechamiento térmico. Energía contenida en gas multiplicada por rendimiento térmico igual calor recuperable. Calor recuperable dividido entre eficiencia de caldera de referencia igual gas que el cliente deja de quemar. Multiplicar por costo unitario del gas. Resultado: ahorro térmico monetizado.
+
+Paso 7. Costo O&M (Operación y Mantenimiento). 0.3 MXN fijos por cada kWh cubierto por el motor. Es un costo FIJO por kWh generado, no un porcentaje del ahorro eléctrico ni del costo de la electricidad. O&M mensual = 0.3 MXN/kWh × kWh_cubiertos_mes. Constante `_FACTOR_OM = Decimal("0.3")` en `calc/cogen.py`.
+
+Paso 8. Ahorro neto y EBITDA. Ahorro eléctrico bruto más ahorro térmico menos costo de gas adicional menos O&M. Cálculo mensual sobre las 12 facturas reales (preserva estacionalidad), suma anual.
 
 ## Energía Limpia Generada (KPI dashboard)
 
@@ -211,6 +219,8 @@ Caja adicional en el bloque 2 del dashboard de Cogeneración. Fórmula: energia_
 ## Beneficio Fiscal por Depreciación Inmediata
 
 La Ley del ISR Artículo 34 fracción XIII permite deducción inmediata del 100% para activos de cogeneración eficiente certificada CRE. Cuando el cliente califica como cogeneración eficiente (cumple Caso I de CRE), puede deducir la totalidad de la inversión en el año fiscal 1. Cálculo del beneficio: beneficio_fiscal_anio_1 = inversion_mxn × tasa_ISR, donde tasa_ISR = 30% (constante _TASA_ISR en calc/cogen.py — régimen general personas morales en México). El beneficio se suma al Ahorro Neto del año 1 en la proyección del flujo acumulado a 15 años. Esto reduce significativamente el payback del proyecto. Para IBERICA TILES 2024 con inversión ~$48.1M MXN: beneficio ≈ $14.4M MXN. Si el cliente NO califica como cogeneración eficiente, el beneficio fiscal aún se muestra en la proyección (la ley aplica independientemente de CELs). La app siempre calcula el beneficio cuando hay inversión estimable.
+
+El payback se calcula con interpolación lineal entre años (no año entero). Función `calcular_payback_decimal(inversion_mxn, flujo_anio_1, ahorro_neto_anual)` en `calc/cogen.py`. Retorna `Decimal` con 2 decimales, o `None` si no se alcanza en el horizonte de 15 años. Se muestra en la UI como "X.XX años*".
 
 ## Dashboard adaptado al tipo de suministro eléctrico
 

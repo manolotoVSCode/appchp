@@ -24,7 +24,7 @@ from storage.repository import (
     set_configuracion,
 )
 from models.contrato import TIPO_ELECTRICO_CALIFICADO
-from calc.cogen import calcular_cogen, calcular_cogen_ppa, calcular_payback, calcular_flujo_acumulado
+from calc.cogen import calcular_cogen, calcular_cogen_ppa, calcular_payback_decimal, calcular_flujo_acumulado
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe, calcular_historico_gas
 from calc.nombre_canonico import generar_nombre_canonico
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
@@ -515,13 +515,14 @@ def create_app() -> Flask:
                 "precio_distribucion_kw": float(m.precio_distribucion_kw),
                 "kw_facturado_capacidad": float(m.kw_facturado_capacidad),
                 "kw_facturado_distribucion": float(m.kw_facturado_distribucion),
+                "precio_otros_kwh": float(m.precio_otros_mxn_kwh),
             }
             for m in r.meses
         ]
 
         # Payback y flujo a 15 años (solo si hay inversión calculable)
         if r.inversion_mxn is not None and r.inversion_mxn > 0:
-            payback_inicial = calcular_payback(r.inversion_mxn, r.ebitda_anual_mxn)
+            payback_inicial = calcular_payback_decimal(r.inversion_mxn, r.ebitda_anual_mxn, r.ebitda_anual_mxn)
             flujo_acum_15 = [float(v) for v in calcular_flujo_acumulado(r.inversion_mxn, r.ebitda_anual_mxn)]
             flujo_anual_15 = [-float(r.inversion_mxn)] + [float(r.ebitda_anual_mxn)] * 15
         else:
@@ -774,6 +775,7 @@ def create_app() -> Flask:
                 "precio_distribucion_kw": float(m.precio_distribucion_kw),
                 "kw_facturado_capacidad": float(m.kw_facturado_capacidad),
                 "kw_facturado_distribucion": float(m.kw_facturado_distribucion),
+                "precio_otros_kwh": float(m.precio_otros_mxn_kwh),
             }
             for m in r.meses
         ]
@@ -796,6 +798,7 @@ def create_app() -> Flask:
                 "ahorro_energia_mes_mxn": float(m.ahorro_energia_mes_mxn),
                 "ahorro_capacidad_mes_mxn": float(m.ahorro_capacidad_mes_mxn),
                 "ahorro_distribucion_mes_mxn": float(m.ahorro_distribucion_mes_mxn),
+                "ahorro_otros_servicios_mes_mxn": float(m.ahorro_otros_servicios_mes_mxn),
                 "gj_gas_cogen": float(m.gj_gas_cogen),
                 "costo_gas_cogen_mxn": float(m.costo_gas_cogen_mxn),
                 "ahorro_electricidad_mxn": float(m.ahorro_electricidad_mxn),
@@ -808,7 +811,7 @@ def create_app() -> Flask:
         ]
 
         if r.inversion_mxn is not None and r.inversion_mxn > 0:
-            payback_inicial = calcular_payback(r.inversion_mxn, r.ebitda_anual_mxn)
+            payback_inicial = calcular_payback_decimal(r.inversion_mxn, r.ebitda_anual_mxn, r.ebitda_anual_mxn)
             flujo_acum_15   = [float(v) for v in calcular_flujo_acumulado(r.inversion_mxn, r.ebitda_anual_mxn)]
             flujo_anual_15  = [-float(r.inversion_mxn)] + [float(r.ebitda_anual_mxn)] * 15
             # Flujo con beneficio fiscal año 1 (depreciación inmediata Art. 34 XIII LISR)
@@ -822,20 +825,19 @@ def create_app() -> Flask:
                 for v in flujo_anual_15_fiscal:
                     _acum += v
                     flujo_acum_15_fiscal.append(_acum)
-                # Payback con beneficio fiscal
-                _acum2 = -float(r.inversion_mxn)
-                payback_con_beneficio = None
-                for _yr, _v in enumerate(flujo_anual_15_fiscal[1:], start=1):
-                    _acum2 += _v
-                    if _acum2 >= 0:
-                        payback_con_beneficio = _yr
-                        break
+                # Payback con beneficio fiscal (decimal, interpolación lineal)
+                payback_con_beneficio = calcular_payback_decimal(
+                    r.inversion_mxn, r.flujo_anio_1_con_beneficio_mxn, r.ebitda_anual_mxn
+                )
                 if payback_con_beneficio is None:
-                    payback_con_beneficio = -1  # > 15 años
+                    payback_con_beneficio = -1  # > 15 años (sin retorno)
+                else:
+                    payback_con_beneficio = float(payback_con_beneficio)
             else:
                 flujo_anual_15_fiscal = flujo_anual_15
                 flujo_acum_15_fiscal = flujo_acum_15
-                payback_con_beneficio = payback_inicial
+                payback_con_beneficio = float(payback_inicial) if payback_inicial is not None else None
+            payback_inicial = float(payback_inicial) if payback_inicial is not None else None
         else:
             payback_inicial = None
             flujo_acum_15 = []
@@ -881,6 +883,7 @@ def create_app() -> Flask:
                 "ahorro_energia_anual": float(r.ahorro_energia_anual_mxn),
                 "ahorro_capacidad_anual": float(r.ahorro_capacidad_anual_mxn),
                 "ahorro_distribucion_anual": float(r.ahorro_distribucion_anual_mxn),
+                "ahorro_otros_servicios_anual": float(r.ahorro_otros_servicios_anual_mxn),
                 "beneficio_fiscal_anio_1_mxn": float(r.beneficio_fiscal_anio_1_mxn) if r.beneficio_fiscal_anio_1_mxn else None,
                 "energia_limpia_pct": float(r.energia_limpia_pct) if r.energia_limpia_pct else None,
             },
@@ -906,6 +909,7 @@ def create_app() -> Flask:
                 "ahorro_energia_anual_mxn": float(r.ahorro_energia_anual_mxn),
                 "ahorro_capacidad_anual_mxn": float(r.ahorro_capacidad_anual_mxn),
                 "ahorro_distribucion_anual_mxn": float(r.ahorro_distribucion_anual_mxn),
+                "ahorro_otros_servicios_anual_mxn": float(r.ahorro_otros_servicios_anual_mxn),
             },
             "payback_inicial": payback_inicial,
             "flujo_acum_15": flujo_acum_15,

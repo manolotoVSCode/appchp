@@ -1,5 +1,6 @@
 # tests/calc/test_cogen.py
 from __future__ import annotations
+import math
 import pytest
 from decimal import Decimal
 from datetime import date
@@ -7,7 +8,7 @@ from datetime import date
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice, GasConcepto
 from models.cogen_result import CoGenParams, CoGenMes, CoGenResultado
-from calc.cogen import calcular_cogen, calcular_payback, calcular_flujo_acumulado
+from calc.cogen import calcular_cogen, calcular_payback_decimal, calcular_flujo_acumulado
 
 
 # ── Helpers para construir fixtures sintéticos ────────────────────────────────
@@ -114,10 +115,11 @@ def test_costo_gas_cogen(resultado_un_mes):
 
 
 def test_ahorro_electricidad_es_suma_componentes(resultado_un_mes):
-    """ahorro_electricidad = ahorro_energia + ahorro_capacidad + ahorro_distribucion."""
+    """ahorro_electricidad = ahorro_energia + ahorro_capacidad + ahorro_distribucion + ahorro_otros."""
     m = resultado_un_mes.meses[0]
     assert m.ahorro_electricidad_mxn == (
-        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn + m.ahorro_distribucion_mes_mxn
+        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn
+        + m.ahorro_distribucion_mes_mxn + m.ahorro_otros_servicios_mes_mxn
     )
 
 
@@ -237,13 +239,14 @@ def test_ahorro_distribucion_cero():
 
 
 def test_ahorro_electricidad_igual_suma_componentes():
-    """ahorro_electricidad = ahorro_energia + ahorro_capacidad + ahorro_distribucion."""
+    """ahorro_electricidad = suma de los 4 componentes (energía, capacidad, distribución, otros)."""
     cfe = [_cfe(2023, 11, KWH, FACTURACION)]
     gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
     r = calcular_cogen(cfe, gas, CoGenParams())
     m = r.meses[0]
     assert m.ahorro_electricidad_mxn == (
-        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn + m.ahorro_distribucion_mes_mxn
+        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn
+        + m.ahorro_distribucion_mes_mxn + m.ahorro_otros_servicios_mes_mxn
     )
 
 
@@ -316,9 +319,10 @@ def test_ahorro_capacidad_con_componentes_mem():
         f"ahorro_distribucion esperado > 0, obtenido {m.ahorro_distribucion_mes_mxn}"
     )
 
-    # El invariante estructural se mantiene
+    # El invariante estructural se mantiene (4 componentes; ahorro_otros=0 sin Transmisión/CENACE/SCnMEM)
     assert m.ahorro_electricidad_mxn == (
-        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn + m.ahorro_distribucion_mes_mxn
+        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn
+        + m.ahorro_distribucion_mes_mxn + m.ahorro_otros_servicios_mes_mxn
     )
 
     # Verificar rangos razonables:
@@ -332,20 +336,27 @@ def test_ahorro_capacidad_con_componentes_mem():
 
 
 def test_totales_anuales_componentes_son_suma_mensual():
-    """Los totales anuales de los 3 componentes son la suma de los mensuales."""
+    """Los totales anuales de los 4 componentes son la suma de los mensuales."""
     cfe = [_cfe(2023, 11, KWH, FACTURACION), _cfe(2023, 12, KWH * 2, FACTURACION * 2)]
     gas = [_gas(2023, 11, GJ, PRECIO_GJ), _gas(2023, 12, GJ * 2, PRECIO_GJ)]
     r = calcular_cogen(cfe, gas, CoGenParams())
     assert r.ahorro_energia_anual_mxn == sum(m.ahorro_energia_mes_mxn for m in r.meses)
     assert r.ahorro_capacidad_anual_mxn == sum(m.ahorro_capacidad_mes_mxn for m in r.meses)
     assert r.ahorro_distribucion_anual_mxn == sum(m.ahorro_distribucion_mes_mxn for m in r.meses)
+    assert r.ahorro_otros_servicios_anual_mxn == sum(m.ahorro_otros_servicios_mes_mxn for m in r.meses)
 
 
 # ── Tests de capacidad nominal, inversión, payback y flujo ───────────────────
 
 def test_capacidad_nominal_kw(resultado_un_mes):
-    """capacidad = max(kWh_mes) / 720 = 1_000_000 / 720 ≈ 1388.89 kW."""
-    esperado = (KWH / Decimal("720")).quantize(Decimal("0.01"))
+    """capacidad = ceil(kWh_mes / (días × 24 h)).
+    Fixture nov-2023: inicio=11/01, fin=11/30 → (11/30−11/01).days=29 días → 696 h.
+    ceil(1_000_000 / 696) = ceil(1436.78…) = 1437 kW.
+    """
+    # dias = (date(2023,11,30) - date(2023,11,1)).days = 29 días → 696 horas
+    dias = (date(2023, 11, 30) - date(2023, 11, 1)).days
+    horas = Decimal(dias * 24)
+    esperado = Decimal(math.ceil(KWH / horas))
     assert resultado_un_mes.capacidad_nominal_kw == esperado
 
 
@@ -377,24 +388,46 @@ def test_inversion_mxn_tipo_cambio_custom():
     assert r.inversion_mxn == esperado
 
 
-def test_payback_calculado():
-    """Payback con inversión=100 000 y ahorro=30 000/año → año 4."""
-    assert calcular_payback(Decimal("100000"), Decimal("30000")) == 4
+def test_payback_decimal_basico():
+    """Payback decimal: inversión=100 000, ahorro=30 000/año.
+    Año 1: -100k+30k=-70k. Año 2: -70k+30k=-40k. Año 3: -40k+30k=-10k.
+    Año 4: -10k+30k=+20k → payback = 3 + 10000/30000 = 3.33 años.
+    """
+    p = calcular_payback_decimal(Decimal("100000"), Decimal("30000"), Decimal("30000"))
+    assert p == Decimal("3.33")
 
 
-def test_payback_mayor_horizonte():
-    """Con ahorro muy bajo, payback supera los 15 años."""
-    assert calcular_payback(Decimal("1000000"), Decimal("50000")) == "mayor_horizonte"
+def test_payback_decimal_mayor_horizonte():
+    """Con ahorro muy bajo, payback supera los 15 años → retorna None."""
+    assert calcular_payback_decimal(Decimal("1000000"), Decimal("50000"), Decimal("50000")) is None
 
 
-def test_payback_no_aplica_cero():
-    """Ahorro Neto = 0 → no aplica."""
-    assert calcular_payback(Decimal("100000"), Decimal("0")) == "no_aplica"
+def test_payback_decimal_ahorro_cero():
+    """Ahorro Neto = 0 → no aplica (None)."""
+    assert calcular_payback_decimal(Decimal("100000"), Decimal("0"), Decimal("0")) is None
 
 
-def test_payback_no_aplica_negativo():
-    """Ahorro Neto negativo → no aplica."""
-    assert calcular_payback(Decimal("100000"), Decimal("-5000")) == "no_aplica"
+def test_payback_decimal_ahorro_negativo():
+    """Ahorro Neto negativo → no aplica (None)."""
+    assert calcular_payback_decimal(Decimal("100000"), Decimal("-5000"), Decimal("-5000")) is None
+
+
+def test_payback_decimal_con_beneficio_fiscal():
+    """Payback con flujo_anio_1 distinto al ahorro anual (beneficio fiscal).
+    Inversión=70 000 000, flujo_año1=45 000 000, ahorro_anual=24 000 000.
+    Año 1: -70M+45M=-25M. Año 2: -25M+24M=-1M. Año 3: -1M+24M=+23M.
+    Payback = 2 + 1M/24M ≈ 2.04 años.
+    """
+    p = calcular_payback_decimal(
+        Decimal("70000000"), Decimal("45000000"), Decimal("24000000")
+    )
+    assert p is not None
+    assert Decimal("2.00") < p < Decimal("2.10")
+
+
+def test_payback_decimal_inversion_cero():
+    """Inversión = 0 → payback = 0.00."""
+    assert calcular_payback_decimal(Decimal("0"), Decimal("30000"), Decimal("30000")) == Decimal("0")
 
 
 def test_flujo_acumulado_anio_0():
@@ -503,3 +536,181 @@ def test_co2_none_sin_factores_emision():
     assert r.co2_actual_total_kg_anual     is None
     assert r.co2_proyectado_total_kg_anual is None
     assert r.co2_reduccion_kg_anual        is None
+
+
+# ── Tests: horas del mes dinámicas ────────────────────────────────────────────
+
+def test_capacidad_nominal_31_dias():
+    """Enero (31 días): horas = 31×24=744. capacidad = ceil(kWh / 744)."""
+    from models.cfe_invoice import CFEConsumoHorario
+
+    kwh_jan = Decimal("744000")  # 1000 kWh/h × 744 h
+    tercio = kwh_jan / 3
+    inicio = date(2024, 1, 1)
+    fin    = date(2024, 1, 31)   # 30 días de diferencia (fin-inicio)
+    periodos = [
+        CFEConsumoHorario("base",       tercio, Decimal("100"), Decimal("1.00")),
+        CFEConsumoHorario("intermedio", tercio, Decimal("100"), Decimal("1.20")),
+        CFEConsumoHorario("punta",      tercio, Decimal("100"), Decimal("1.50")),
+    ]
+    cfe_jan = CFEInvoice(
+        uuid_cfdi=None, folio="F1", serie=None,
+        fecha_emision=inicio, periodo_inicio=inicio, periodo_fin=fin,
+        fecha_limite_pago=fin, nombre_cliente="TEST", rfc_cliente="TST010101AAA",
+        numero_servicio="12345", rmu=None, tarifa="GDMTH", numero_medidor="M1",
+        multiplicador=1, carga_conectada_kw=Decimal("1000"),
+        demanda_contratada_kw=Decimal("1000"), periodos=periodos,
+        kw_max=Decimal("100"), kvArh=Decimal("0"), factor_potencia_pct=Decimal("90"),
+        componentes_mem=[], cargo_fijo_mxn=Decimal("0"),
+        energia_total_mxn=Decimal("3000000"), cargo_factor_potencia_mxn=Decimal("0"),
+        subtotal_mxn=Decimal("3000000"), iva_mxn=Decimal("0"),
+        facturacion_periodo_mxn=Decimal("3000000"),
+        derecho_alumbrado_publico_mxn=Decimal("0"), credito_aplicado_mxn=Decimal("0"),
+        total_mxn=Decimal("3000000"), pdf_path="test.pdf",
+    )
+    gas = [_gas(2024, 1, Decimal("100000"), PRECIO_GJ)]
+    r = calcular_cogen([cfe_jan], gas, CoGenParams())
+    # dias = (1/31 - 1/1).days = 30 días → 720 h; ceil(744000/720) = 1033
+    dias = (fin - inicio).days
+    horas = Decimal(dias * 24)
+    esperado = Decimal(math.ceil(kwh_jan / horas))
+    assert r.capacidad_nominal_kw == esperado
+
+
+def test_capacidad_nominal_28_dias():
+    """Febrero no bisiesto (28 días): horas = 27×24=648. Menor capacidad que con 720h."""
+    from models.cfe_invoice import CFEConsumoHorario
+
+    kwh_feb = Decimal("648000")  # 1000 kWh/h × 648 h
+    tercio = kwh_feb / 3
+    inicio = date(2023, 2, 1)
+    fin    = date(2023, 2, 28)   # 27 días de diferencia
+    periodos = [
+        CFEConsumoHorario("base",       tercio, Decimal("100"), Decimal("1.00")),
+        CFEConsumoHorario("intermedio", tercio, Decimal("100"), Decimal("1.20")),
+        CFEConsumoHorario("punta",      tercio, Decimal("100"), Decimal("1.50")),
+    ]
+    cfe_feb = CFEInvoice(
+        uuid_cfdi=None, folio="F1", serie=None,
+        fecha_emision=inicio, periodo_inicio=inicio, periodo_fin=fin,
+        fecha_limite_pago=fin, nombre_cliente="TEST", rfc_cliente="TST010101AAA",
+        numero_servicio="12345", rmu=None, tarifa="GDMTH", numero_medidor="M1",
+        multiplicador=1, carga_conectada_kw=Decimal("1000"),
+        demanda_contratada_kw=Decimal("1000"), periodos=periodos,
+        kw_max=Decimal("100"), kvArh=Decimal("0"), factor_potencia_pct=Decimal("90"),
+        componentes_mem=[], cargo_fijo_mxn=Decimal("0"),
+        energia_total_mxn=Decimal("2000000"), cargo_factor_potencia_mxn=Decimal("0"),
+        subtotal_mxn=Decimal("2000000"), iva_mxn=Decimal("0"),
+        facturacion_periodo_mxn=Decimal("2000000"),
+        derecho_alumbrado_publico_mxn=Decimal("0"), credito_aplicado_mxn=Decimal("0"),
+        total_mxn=Decimal("2000000"), pdf_path="test.pdf",
+    )
+    gas = [_gas(2023, 2, Decimal("50000"), PRECIO_GJ)]
+    r = calcular_cogen([cfe_feb], gas, CoGenParams())
+    dias = (fin - inicio).days  # 27 días
+    horas = Decimal(dias * 24)
+    esperado = Decimal(math.ceil(kwh_feb / horas))
+    assert r.capacidad_nominal_kw == esperado
+
+
+# ── Tests: Ahorro Otros Servicios (4to componente GDMTH) ─────────────────────
+
+def test_ahorro_otros_servicios_con_componentes_mem():
+    """Con Transmisión + CENACE + SCnMEM en la factura, ahorro_otros_servicios > 0."""
+    from models.cfe_invoice import MEMComponente
+
+    # Transmisión=50000, CENACE=20000, SCnMEM=10000 → cargo_otros=80000
+    # kwh_total_orig = KWH = 1_000_000
+    # precio_otros = 80000 / 1000000 = 0.08 MXN/kWh
+    # kwh_cubiertos = 750000 (cobertura 75%)
+    # ahorro_otros = 750000 × 0.08 = 60000 MXN
+    tercio = KWH / 3
+    periodos = [
+        CFEConsumoHorario("base",       tercio, Decimal("100"), Decimal("1.00")),
+        CFEConsumoHorario("intermedio", tercio, Decimal("100"), Decimal("1.20")),
+        CFEConsumoHorario("punta",      tercio, Decimal("100"), Decimal("1.50")),
+    ]
+    inicio = date(2023, 11, 1)
+    fin    = date(2023, 11, 30)
+    cfe_con_otros = CFEInvoice(
+        uuid_cfdi=None, folio="F1", serie=None,
+        fecha_emision=inicio, periodo_inicio=inicio, periodo_fin=fin,
+        fecha_limite_pago=fin, nombre_cliente="TEST", rfc_cliente="TST010101AAA",
+        numero_servicio="12345", rmu=None, tarifa="GDMTH", numero_medidor="M1",
+        multiplicador=1, carga_conectada_kw=Decimal("1000"),
+        demanda_contratada_kw=Decimal("1000"), periodos=periodos,
+        kw_max=Decimal("100"), kvArh=Decimal("0"), factor_potencia_pct=Decimal("90"),
+        componentes_mem=[
+            MEMComponente("Transmisión", Decimal("0"), Decimal("0"), Decimal("50000"), Decimal("50000")),
+            MEMComponente("CENACE",      Decimal("0"), Decimal("0"), Decimal("20000"), Decimal("20000")),
+            MEMComponente("SCnMEM",      Decimal("0"), Decimal("0"), Decimal("10000"), Decimal("10000")),
+        ],
+        cargo_fijo_mxn=Decimal("0"), energia_total_mxn=FACTURACION,
+        cargo_factor_potencia_mxn=Decimal("0"), subtotal_mxn=FACTURACION,
+        iva_mxn=Decimal("0"), facturacion_periodo_mxn=FACTURACION,
+        derecho_alumbrado_publico_mxn=Decimal("0"), credito_aplicado_mxn=Decimal("0"),
+        total_mxn=FACTURACION, pdf_path="test.pdf",
+    )
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen([cfe_con_otros], gas, CoGenParams())
+    m = r.meses[0]
+
+    assert m.cargo_otros_total_mxn == Decimal("80000")
+    assert m.precio_otros_mxn_kwh  == Decimal("0.0800")  # 80000/1000000
+    assert m.ahorro_otros_servicios_mes_mxn == Decimal("60000.00")  # 750000 × 0.08
+    assert r.ahorro_otros_servicios_anual_mxn == m.ahorro_otros_servicios_mes_mxn
+
+
+def test_ahorro_otros_servicios_cero_sin_componentes():
+    """Sin Transmisión/CENACE/SCnMEM en la factura, ahorro_otros_servicios = 0."""
+    cfe = [_cfe(2023, 11, KWH, FACTURACION)]
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen(cfe, gas, CoGenParams())
+    m = r.meses[0]
+
+    assert m.cargo_otros_total_mxn == Decimal("0")
+    assert m.precio_otros_mxn_kwh  == Decimal("0")
+    assert m.ahorro_otros_servicios_mes_mxn == Decimal("0")
+
+
+def test_ahorro_otros_servicios_incluido_en_total():
+    """Ahorro eléctrico total incluye Ahorro Otros Servicios."""
+    from models.cfe_invoice import MEMComponente
+
+    tercio = KWH / 3
+    periodos = [
+        CFEConsumoHorario("base",       tercio, Decimal("100"), Decimal("1.00")),
+        CFEConsumoHorario("intermedio", tercio, Decimal("100"), Decimal("1.20")),
+        CFEConsumoHorario("punta",      tercio, Decimal("100"), Decimal("1.50")),
+    ]
+    inicio = date(2023, 11, 1)
+    fin    = date(2023, 11, 30)
+    cfe_con_otros = CFEInvoice(
+        uuid_cfdi=None, folio="F1", serie=None,
+        fecha_emision=inicio, periodo_inicio=inicio, periodo_fin=fin,
+        fecha_limite_pago=fin, nombre_cliente="TEST", rfc_cliente="TST010101AAA",
+        numero_servicio="12345", rmu=None, tarifa="GDMTH", numero_medidor="M1",
+        multiplicador=1, carga_conectada_kw=Decimal("1000"),
+        demanda_contratada_kw=Decimal("1000"), periodos=periodos,
+        kw_max=Decimal("100"), kvArh=Decimal("0"), factor_potencia_pct=Decimal("90"),
+        componentes_mem=[
+            MEMComponente("Transmisión", Decimal("0"), Decimal("0"), Decimal("40000"), Decimal("40000")),
+            MEMComponente("CENACE",      Decimal("0"), Decimal("0"), Decimal("15000"), Decimal("15000")),
+        ],
+        cargo_fijo_mxn=Decimal("0"), energia_total_mxn=FACTURACION,
+        cargo_factor_potencia_mxn=Decimal("0"), subtotal_mxn=FACTURACION,
+        iva_mxn=Decimal("0"), facturacion_periodo_mxn=FACTURACION,
+        derecho_alumbrado_publico_mxn=Decimal("0"), credito_aplicado_mxn=Decimal("0"),
+        total_mxn=FACTURACION, pdf_path="test.pdf",
+    )
+    gas = [_gas(2023, 11, GJ, PRECIO_GJ)]
+    r = calcular_cogen([cfe_con_otros], gas, CoGenParams())
+    m = r.meses[0]
+
+    # Invariante: ahorro_electricidad = suma de los 4 componentes
+    assert m.ahorro_electricidad_mxn == (
+        m.ahorro_energia_mes_mxn + m.ahorro_capacidad_mes_mxn
+        + m.ahorro_distribucion_mes_mxn + m.ahorro_otros_servicios_mes_mxn
+    )
+    # Ahorro otros > 0 porque hay Transmisión y CENACE
+    assert m.ahorro_otros_servicios_mes_mxn > Decimal("0")
