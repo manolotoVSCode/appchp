@@ -92,9 +92,10 @@ def _get_user_profile(user_id: str) -> dict | None:
         sb = _get_supabase()
         res = sb.table("user_profiles").select("*").eq("id", user_id).limit(1).execute()
         rows = res.data or []
+        logger.info("user_profiles query user_id=%s → %s filas: %s", user_id, len(rows), rows)
         return rows[0] if rows else None
     except Exception as exc:
-        logger.error("Error leyendo user_profiles id=%s: %s", user_id, exc)
+        logger.error("EXCEPCION user_profiles user_id=%s: %s [%s]", user_id, exc, type(exc).__name__)
         return None
 
 
@@ -163,18 +164,19 @@ def _handle_login(email: str, password: str, remember: bool) -> str | None:
         if "invalid" in msg or "credentials" in msg or "email" in msg:
             return "Correo o contraseña incorrectos."
         logger.error("Error en sign_in_with_password para %s: %s", email, exc)
-        return "Error al iniciar sesión. Intenta nuevamente."
+        return f"Error sign_in: {exc}"
 
     if not res or not res.session:
         return "Correo o contraseña incorrectos."
 
     user_id = res.user.id
     access_token = res.session.access_token
+    logger.info("sign_in OK: user_id=%s", user_id)
 
     profile = _get_user_profile(user_id)
     if profile is None:
-        logger.warning("Login sin perfil: user_id=%s email=%s", user_id, email)
-        return "Tu cuenta no tiene perfil de acceso. Contacta al administrador."
+        logger.warning("Perfil no encontrado: user_id=%s", user_id)
+        return f"Sin perfil. user_id={user_id}"
 
     if not profile.get("activo", True):
         return "Tu cuenta está desactivada. Contacta al administrador."
