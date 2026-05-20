@@ -92,10 +92,9 @@ def _get_user_profile(user_id: str) -> dict | None:
         sb = _get_supabase()
         res = sb.table("user_profiles").select("*").eq("id", user_id).limit(1).execute()
         rows = res.data or []
-        logger.info("user_profiles query user_id=%s → %s filas: %s", user_id, len(rows), rows)
         return rows[0] if rows else None
     except Exception as exc:
-        logger.error("EXCEPCION user_profiles user_id=%s: %s [%s]", user_id, exc, type(exc).__name__)
+        logger.error("Error leyendo user_profiles id=%s: %s", user_id, exc)
         return None
 
 
@@ -171,12 +170,20 @@ def _handle_login(email: str, password: str, remember: bool) -> str | None:
 
     user_id = res.user.id
     access_token = res.session.access_token
-    logger.info("sign_in OK: user_id=%s", user_id)
+
+    # sign_in_with_password cambia el Authorization del cliente compartido al JWT del
+    # usuario (authenticated). Resetear a service_role para que _get_user_profile
+    # pueda leer user_profiles sin depender de GRANTs a authenticated.
+    import os
+    try:
+        sb.postgrest.auth(os.environ["SUPABASE_KEY"])
+    except Exception:
+        pass
 
     profile = _get_user_profile(user_id)
     if profile is None:
         logger.warning("Perfil no encontrado: user_id=%s", user_id)
-        return f"Sin perfil. user_id={user_id}"
+        return "Tu cuenta no tiene perfil de acceso. Contacta al administrador."
 
     if not profile.get("activo", True):
         return "Tu cuenta está desactivada. Contacta al administrador."
