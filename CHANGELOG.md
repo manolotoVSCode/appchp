@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.30.0] — 2026-05-20
+
+### Añadido — Medio térmico con mezcla configurable y RefH ponderado
+
+- **UI ficha/editar/nuevo cliente**: dropdown de medio térmico ampliado a 4 opciones (sin especificar, vapor o agua caliente, gases de combustión directos, mezcla). Cuando se selecciona "Mezcla", aparece campo editable "% Vapor" (entero 0-100, default 50). JS oculta/muestra el campo según la selección.
+- **BD**: columna `medio_termico_vapor_pct` (INTEGER 0-100) en tabla `clientes`. Migración: `storage/migrations/202605_medio_termico_mezcla.sql`.
+- **`calc/cels.py`**: constantes `REFH_VAPOR = 0.90` y `REFH_GASES = 0.82`. Función `_calcular_ref_h(pct)` que pondera ambos medios. `calcular_cels` acepta `medio_termico_vapor_pct: int | None`; None → sin especificar → no calcula CELs.
+- `storage/repository.py`: `create_cliente` y `update_cliente` persisten `medio_termico_vapor_pct`.
+
+### Migración requerida
+
+Ejecutar `storage/migrations/202605_medio_termico_mezcla.sql` manualmente en Supabase SQL Editor. Convierte clientes existentes con `vapor_agua` → `vapor_o_agua` (string) y `vapor_pct = 100`; `gases_combustion` → `vapor_pct = 0`.
+
 ## [2.28.1] — 2026-05-14
 
 ### Fix — CELs para contratos PPA

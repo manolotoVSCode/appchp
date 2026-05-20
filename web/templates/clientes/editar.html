@@ -173,12 +173,32 @@
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label fw-semibold">Medio térmico de cogeneración</label>
-              <select name="medio_termico" class="form-select">
+              <select name="medio_termico" id="medio_termico_sel" class="form-select" onchange="toggleVaporPct(this.value)">
                 <option value="">— Sin especificar —</option>
-                <option value="vapor_agua"{% if medio_termico == 'vapor_agua' %} selected{% endif %}>Vapor o agua caliente</option>
+                <option value="vapor_o_agua"{% if medio_termico in ('vapor_o_agua', 'vapor_agua') %} selected{% endif %}>Vapor o agua caliente</option>
                 <option value="gases_combustion"{% if medio_termico == 'gases_combustion' %} selected{% endif %}>Gases de combustión directos</option>
+                <option value="mezcla"{% if medio_termico == 'mezcla' %} selected{% endif %}>Mezcla</option>
               </select>
+              <div id="vapor_pct_row" class="mt-2{% if medio_termico != 'mezcla' %} d-none{% endif %}">
+                <label class="form-label fw-semibold">% Vapor o agua caliente</label>
+                <input type="number" class="form-control" name="medio_termico_vapor_pct" id="vapor_pct_input"
+                       min="0" max="100" step="1"
+                       value="{{ medio_termico_vapor_pct if medio_termico_vapor_pct is not none else 50 }}">
+                <div class="form-text">Resto (% gases combustión) = 100 − valor.</div>
+              </div>
             </div>
+            <script>
+            function toggleVaporPct(val) {
+              const row = document.getElementById('vapor_pct_row');
+              const inp = document.getElementById('vapor_pct_input');
+              if (val === 'mezcla') {
+                if (!inp.value) inp.value = 50;
+                row.classList.remove('d-none');
+              } else {
+                row.classList.add('d-none');
+              }
+            }
+            </script>
             <div class="col-md-6">
               <label class="form-label fw-semibold">Nivel de tensión de interconexión</label>
               <select name="nivel_tension_kv" class="form-select">

@@ -160,8 +160,9 @@
           <div class="col-md-3">
             <div class="text-muted mb-1">Medio térmico</div>
             <div class="fw-semibold">
-              {% if cliente.medio_termico == 'vapor_agua' %}Vapor o agua caliente
+              {% if cliente.medio_termico in ('vapor_o_agua', 'vapor_agua') %}Vapor o agua caliente
               {% elif cliente.medio_termico == 'gases_combustion' %}Gases de combustión directos
+              {% elif cliente.medio_termico == 'mezcla' %}Mezcla ({{ cliente.medio_termico_vapor_pct }}% vapor / {{ 100 - cliente.medio_termico_vapor_pct }}% gases)
               {% else %}—{% endif %}
             </div>
           </div>

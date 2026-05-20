@@ -52,7 +52,7 @@ Los campos numéricos en Supabase están tipados como text para preservar exacti
 
 ## Schema de Supabase (tablas existentes)
 
-clientes: id, nombre, rfc (único), notas, created_at, sector_industrial, contacto_nombre, contacto_cargo, contacto_email, contacto_telefono, direccion, estado, codigo_postal, tarifa_cfe, capacidad_instalada_kw, demanda_contratada_kw, anio_inicio_operacion, regimen_operacion, consumo_anual_estimado_mwh, logo_url, medio_termico, nivel_tension_kv, altitud_msnm, tipo_motor.
+clientes: id, nombre, rfc (único), notas, created_at, sector_industrial, contacto_nombre, contacto_cargo, contacto_email, contacto_telefono, direccion, estado, codigo_postal, tarifa_cfe, capacidad_instalada_kw, demanda_contratada_kw, anio_inicio_operacion, regimen_operacion, consumo_anual_estimado_mwh, logo_url, medio_termico, medio_termico_vapor_pct (INTEGER 0-100), nivel_tension_kv, altitud_msnm, tipo_motor.
 
 contratos: id, cliente_id (FK clientes ON DELETE CASCADE), nombre, tipo ('electrico'|'gas'), identificador_real, notas, created_at.
 
@@ -211,6 +211,22 @@ Paso 6. Aprovechamiento térmico. Energía contenida en gas multiplicada por ren
 Paso 7. Costo O&M (Operación y Mantenimiento). 0.3 MXN fijos por cada kWh cubierto por el motor. Es un costo FIJO por kWh generado, no un porcentaje del ahorro eléctrico ni del costo de la electricidad. O&M mensual = 0.3 MXN/kWh × kWh_cubiertos_mes. Constante `_FACTOR_OM = Decimal("0.3")` en `calc/cogen.py`.
 
 Paso 8. Ahorro neto y EBITDA. Ahorro eléctrico bruto más ahorro térmico menos costo de gas adicional menos O&M. Cálculo mensual sobre las 12 facturas reales (preserva estacionalidad), suma anual.
+
+## Medio térmico recuperado y RefH ponderado
+
+La cogeneración puede recuperar calor en forma de vapor/agua caliente o gases de combustión directos. La CRE asigna distinto RefH a cada uno (vapor: 0.90, gases: 0.82). Cuando la cogeneración recupera ambos medios, el RefH se calcula ponderado por el porcentaje de cada uno.
+
+Campo en BD: `medio_termico_vapor_pct` (INTEGER 0-100). Define el porcentaje de vapor. El porcentaje de gases = 100 - vapor_pct.
+
+Fórmula RefH ponderado: RefH = (vapor_pct / 100) × 0.90 + ((100 - vapor_pct) / 100) × 0.82
+
+Ejemplos: 100% vapor → RefH = 0.90. 0% vapor (100% gases) → RefH = 0.82. 50/50 → RefH = 0.86. 30/70 (30 vapor, 70 gases) → RefH = 0.844.
+
+UI: dropdown en ficha/editar con cuatro opciones: sin especificar (value=""), vapor o agua caliente (value="vapor_o_agua", pct=100 fijo), gases de combustión directos (value="gases_combustion", pct=0 fijo), mezcla (value="mezcla", pct editable por operador). Campo % Vapor visible solo cuando se selecciona "mezcla".
+
+Implementación: `REFH_VAPOR`, `REFH_GASES` y `_calcular_ref_h(pct)` en `calc/cels.py`. La función `calcular_cels` recibe `medio_termico_vapor_pct: int | None`; None → devuelve None (sin especificar). El campo `medio_termico` (string) se mantiene para etiqueta/display pero ya no determina el RefH.
+
+Migración: `storage/migrations/202605_medio_termico_mezcla.sql`. Incluye ALTER TABLE + UPDATE para poblar `medio_termico_vapor_pct` en clientes existentes y normalizar `vapor_agua` → `vapor_o_agua`.
 
 ## Energía Limpia Generada (KPI dashboard)
 

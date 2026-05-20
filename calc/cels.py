@@ -37,10 +37,14 @@ _REFE_TABLA_ALTITUD = [
 
 _REFE_ALTITUD_MOTORES = {"combustion_interna", "turbina_gas"}
 
-_REFH = {
-    "vapor_agua":        Decimal("0.90"),
-    "gases_combustion":  Decimal("0.82"),
-}
+REFH_VAPOR = Decimal("0.90")
+REFH_GASES = Decimal("0.82")
+
+
+def _calcular_ref_h(medio_termico_vapor_pct: int) -> Decimal:
+    """RefH ponderado según porcentaje de vapor (0-100) vs gases de combustión."""
+    pct = Decimal(medio_termico_vapor_pct) / Decimal("100")
+    return pct * REFH_VAPOR + (Decimal("1") - pct) * REFH_GASES
 
 _FP = {
     "lt_1":    Decimal("0.91"),
@@ -74,7 +78,7 @@ class CELsResultado:
     capacidad_kw: Decimal
     capacidad_es_estimada: bool  # Siempre True: la capacidad usada es la calculada de facturas
     # Datos del cliente usados
-    medio_termico: str
+    medio_termico: str | None
     nivel_tension_kv: str
     altitud_msnm: int
     tipo_motor: str
@@ -110,14 +114,18 @@ def calcular_cels(
     nivel_tension_kv: str | None,
     altitud_msnm: int | None,
     tipo_motor: str | None,
+    medio_termico_vapor_pct: int | None = None,
 ) -> CELsResultado | None:
     """Calcula CELs según CRE Caso I. Devuelve None si faltan datos del cliente.
 
     La capacidad usada es capacidad_nominal_kw (calculada con ceil desde facturas históricas).
-    Si no está disponible, devuelve None.
+    medio_termico_vapor_pct (0-100) define el mix de medios: RefH ponderado entre vapor (0.90)
+    y gases de combustión (0.82). None → sin especificar → devuelve None.
     """
     # Validar que todos los campos del cliente estén presentes
-    if any(v is None for v in [medio_termico, nivel_tension_kv, altitud_msnm, tipo_motor]):
+    if any(v is None for v in [nivel_tension_kv, altitud_msnm, tipo_motor]):
+        return None
+    if medio_termico_vapor_pct is None:
         return None
 
     # Determinar capacidad a usar
@@ -126,9 +134,9 @@ def calcular_cels(
     capacidad_kw = capacidad_nominal_kw
     capacidad_es_estimada = True
 
-    refh = _REFH.get(medio_termico)
+    refh = _calcular_ref_h(medio_termico_vapor_pct)
     fp = _FP.get(nivel_tension_kv)
-    if refh is None or fp is None:
+    if fp is None:
         return None
 
     ref_e = _refe(capacidad_kw, altitud_msnm, tipo_motor)

@@ -13,7 +13,8 @@ def _base_args(**overrides):
         "gj_gas_cogen_pci_anual": Decimal("32_400"),   # GJ PCI
         "calor_recuperado_gj_anual": Decimal("9_000"), # GJ calor recuperado
         "capacidad_nominal_kw": Decimal("5000"),       # 5 MW
-        "medio_termico": "vapor_agua",
+        "medio_termico": "vapor_o_agua",
+        "medio_termico_vapor_pct": 100,
         "nivel_tension_kv": "1_34",
         "altitud_msnm": 340,
         "tipo_motor": "combustion_interna",
@@ -25,13 +26,14 @@ def _base_args(**overrides):
 # ── Test: cliente con campos incompletos ─────────────────────────────────────
 
 def test_campos_vacios_devuelve_none():
-    """Si cualquier campo del cliente es None, devuelve None."""
+    """Si medio_termico_vapor_pct es None (sin especificar), devuelve None."""
     result = calcular_cels(
         kwh_cubiertos_anual=Decimal("1000000"),
         gj_gas_cogen_pci_anual=Decimal("10000"),
         calor_recuperado_gj_anual=Decimal("2000"),
         capacidad_nominal_kw=Decimal("5000"),
         medio_termico=None,
+        medio_termico_vapor_pct=None,
         nivel_tension_kv="1_34",
         altitud_msnm=500,
         tipo_motor="combustion_interna",
@@ -85,18 +87,41 @@ def test_refe_tabla_principal_turbina_baja_altitud():
     assert result.RefE == Decimal("0.47")
 
 
-# ── Test: RefH según medio_termico ───────────────────────────────────────────
+# ── Test: RefH ponderado según medio_termico_vapor_pct ───────────────────────
 
-def test_refh_vapor_agua():
-    result = calcular_cels(**_base_args(medio_termico="vapor_agua"))
+def test_refh_vapor_pct_100():
+    """100% vapor → RefH = 0.90"""
+    result = calcular_cels(**_base_args(medio_termico_vapor_pct=100))
     assert result is not None
     assert result.RefH == Decimal("0.90")
 
 
-def test_refh_gases_combustion():
-    result = calcular_cels(**_base_args(medio_termico="gases_combustion"))
+def test_refh_gases_pct_0():
+    """0% vapor (100% gases) → RefH = 0.82"""
+    result = calcular_cels(**_base_args(medio_termico_vapor_pct=0))
     assert result is not None
     assert result.RefH == Decimal("0.82")
+
+
+def test_refh_mezcla_50():
+    """50% vapor / 50% gases → RefH = 0.86"""
+    result = calcular_cels(**_base_args(medio_termico_vapor_pct=50))
+    assert result is not None
+    assert result.RefH == Decimal("0.86")
+
+
+def test_refh_mezcla_30():
+    """30% vapor / 70% gases → RefH = 0.82 + 0.30 × (0.90 − 0.82) = 0.844"""
+    result = calcular_cels(**_base_args(medio_termico_vapor_pct=30))
+    assert result is not None
+    expected = Decimal("0.30") * Decimal("0.90") + Decimal("0.70") * Decimal("0.82")
+    assert result.RefH == expected
+
+
+def test_refh_pct_none_devuelve_none():
+    """Sin especificar (pct=None) → None."""
+    result = calcular_cels(**_base_args(medio_termico_vapor_pct=None))
+    assert result is None
 
 
 # ── Test: fp según nivel_tension_kv ─────────────────────────────────────────

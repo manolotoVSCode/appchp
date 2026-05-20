@@ -87,6 +87,25 @@ def _sanitizar_texto(valor: str) -> str | None:
     return resultado or None
 
 
+def _extraer_vapor_pct(form) -> int | None:
+    """Deriva medio_termico_vapor_pct a partir del tipo de medio térmico seleccionado."""
+    tipo = form.get("medio_termico", "").strip()
+    if tipo == "vapor_o_agua":
+        return 100
+    if tipo == "gases_combustion":
+        return 0
+    if tipo == "mezcla":
+        v = form.get("medio_termico_vapor_pct", "").strip()
+        try:
+            pct = int(v)
+            if 0 <= pct <= 100:
+                return pct
+        except (ValueError, TypeError):
+            pass
+        return 50
+    return None
+
+
 def _validar_campos_extendidos(form) -> str | None:
     """Valida los campos opcionales del formulario de cliente. Devuelve mensaje de error o None."""
     from datetime import date as _date
@@ -121,6 +140,15 @@ def _validar_campos_extendidos(form) -> str | None:
                 return "La altitud debe estar entre 0 y 5000 msnm."
         except ValueError:
             return "La altitud debe ser un número entero."
+    if form.get("medio_termico", "").strip() == "mezcla":
+        v = form.get("medio_termico_vapor_pct", "").strip()
+        if v:
+            try:
+                pct = int(v)
+                if not (0 <= pct <= 100):
+                    return "El % Vapor debe estar entre 0 y 100."
+            except ValueError:
+                return "El % Vapor debe ser un número entero."
     return None
 
 
@@ -156,6 +184,7 @@ def _extraer_campos_extendidos(form) -> dict:
         "regimen_operacion": form.get("regimen_operacion", "").strip() or None,
         "consumo_anual_estimado_mwh": _opt_float("consumo_anual_estimado_mwh"),
         "medio_termico": form.get("medio_termico", "").strip() or None,
+        "medio_termico_vapor_pct": _extraer_vapor_pct(form),
         "nivel_tension_kv": form.get("nivel_tension_kv", "").strip() or None,
         "altitud_msnm": _opt_int("altitud_msnm"),
         "tipo_motor": form.get("tipo_motor", "").strip() or None,
@@ -366,6 +395,7 @@ def editar(cliente_id: int):
         regimen_operacion=cliente.get("regimen_operacion"),
         consumo_anual_estimado_mwh=cliente.get("consumo_anual_estimado_mwh"),
         medio_termico=cliente.get("medio_termico"),
+        medio_termico_vapor_pct=cliente.get("medio_termico_vapor_pct"),
         nivel_tension_kv=cliente.get("nivel_tension_kv"),
         altitud_msnm=cliente.get("altitud_msnm"),
         tipo_motor=cliente.get("tipo_motor"),

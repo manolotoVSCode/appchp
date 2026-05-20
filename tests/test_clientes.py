@@ -429,7 +429,7 @@ def test_nuevo_cliente_con_campos_extendidos(auth_client, monkeypatch):
         "capacidad_instalada_kw": "500",
         "anio_inicio_operacion": "2010",
         "regimen_operacion": "24/7 continuo",
-        "medio_termico": "vapor_agua",
+        "medio_termico": "vapor_o_agua",
         "nivel_tension_kv": "1_34",
         "altitud_msnm": "1600",
         "tipo_motor": "combustion_interna",
@@ -441,7 +441,8 @@ def test_nuevo_cliente_con_campos_extendidos(auth_client, monkeypatch):
     assert llamadas[0]["estado"] == "Nuevo León"
     assert llamadas[0]["capacidad_instalada_kw"] == 500.0
     assert llamadas[0]["anio_inicio_operacion"] == 2010
-    assert llamadas[0]["medio_termico"] == "vapor_agua"
+    assert llamadas[0]["medio_termico"] == "vapor_o_agua"
+    assert llamadas[0]["medio_termico_vapor_pct"] == 100
     assert llamadas[0]["nivel_tension_kv"] == "1_34"
     assert llamadas[0]["altitud_msnm"] == 1600
     assert llamadas[0]["tipo_motor"] == "combustion_interna"

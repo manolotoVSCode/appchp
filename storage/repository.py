@@ -317,7 +317,7 @@ _CLIENTE_CAMPOS_EXTENDIDOS = (
     "direccion, estado, codigo_postal, tarifa_cfe, "
     "capacidad_instalada_kw, demanda_contratada_kw, anio_inicio_operacion, "
     "regimen_operacion, consumo_anual_estimado_mwh, logo_url, "
-    "medio_termico, nivel_tension_kv, altitud_msnm, tipo_motor, "
+    "medio_termico, medio_termico_vapor_pct, nivel_tension_kv, altitud_msnm, tipo_motor, "
     "ppa_suministrador, ppa_rfc_suministrador, ppa_precio_fijo_usd_mwh, "
     "ppa_fecha_inicio_suministro, ppa_energia_contratada_mwh_anual, ppa_capacidad_maxima_kw, "
     "ppa_margen_reserva_cenace_pct, ppa_zona_carga, ppa_rpu, ppa_division, "
@@ -348,6 +348,7 @@ def _row_to_cliente_dict(row: dict) -> dict:
         "regimen_operacion": row.get("regimen_operacion"),
         "consumo_anual_estimado_mwh": row.get("consumo_anual_estimado_mwh"),
         "medio_termico": row.get("medio_termico"),
+        "medio_termico_vapor_pct": row.get("medio_termico_vapor_pct"),
         "nivel_tension_kv": row.get("nivel_tension_kv"),
         "altitud_msnm": row.get("altitud_msnm"),
         "tipo_motor": row.get("tipo_motor"),
@@ -407,6 +408,7 @@ def create_cliente(
     regimen_operacion: str | None = None,
     consumo_anual_estimado_mwh: float | None = None,
     medio_termico: str | None = None,
+    medio_termico_vapor_pct: int | None = None,
     nivel_tension_kv: str | None = None,
     altitud_msnm: int | None = None,
     tipo_motor: str | None = None,
@@ -431,6 +433,7 @@ def create_cliente(
         "regimen_operacion": regimen_operacion,
         "consumo_anual_estimado_mwh": consumo_anual_estimado_mwh,
         "medio_termico": medio_termico,
+        "medio_termico_vapor_pct": medio_termico_vapor_pct,
         "nivel_tension_kv": nivel_tension_kv,
         "altitud_msnm": altitud_msnm,
         "tipo_motor": tipo_motor,
@@ -459,6 +462,7 @@ def update_cliente(
     regimen_operacion: str | None = None,
     consumo_anual_estimado_mwh: float | None = None,
     medio_termico: str | None = None,
+    medio_termico_vapor_pct: int | None = None,
     nivel_tension_kv: str | None = None,
     altitud_msnm: int | None = None,
     tipo_motor: str | None = None,
@@ -482,6 +486,7 @@ def update_cliente(
         "regimen_operacion": regimen_operacion,
         "consumo_anual_estimado_mwh": consumo_anual_estimado_mwh,
         "medio_termico": medio_termico,
+        "medio_termico_vapor_pct": medio_termico_vapor_pct,
         "nivel_tension_kv": nivel_tension_kv,
         "altitud_msnm": altitud_msnm,
         "tipo_motor": tipo_motor,
