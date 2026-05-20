@@ -90,8 +90,9 @@ def _get_user_profile(user_id: str) -> dict | None:
     """Obtiene perfil desde user_profiles."""
     try:
         sb = _get_supabase()
-        res = sb.table("user_profiles").select("*").eq("id", user_id).maybe_single().execute()
-        return res.data
+        res = sb.table("user_profiles").select("*").eq("id", user_id).limit(1).execute()
+        rows = res.data or []
+        return rows[0] if rows else None
     except Exception as exc:
         logger.error("Error leyendo user_profiles id=%s: %s", user_id, exc)
         return None
