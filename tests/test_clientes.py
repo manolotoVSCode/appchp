@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import io
 import pytest
-from werkzeug.security import generate_password_hash
 from models.contrato import Contrato
-
-_HASH = generate_password_hash("test_pass", method="pbkdf2:sha256")
 
 _CLIENTE_BASE = {
     "id": 1,
@@ -59,8 +56,6 @@ _CONTRATO_BASE_DICT = {
 
 @pytest.fixture()
 def app(monkeypatch):
-    monkeypatch.setenv("APP_USER", "operador")
-    monkeypatch.setenv("APP_PASSWORD_HASH", _HASH)
     monkeypatch.setenv("SUPABASE_URL", "https://fake.supabase.co")
     monkeypatch.setenv("SUPABASE_KEY", "fake_key")
     monkeypatch.setenv("SECRET_KEY", "test-secret-key")
@@ -79,13 +74,17 @@ def client(app):
 
 @pytest.fixture()
 def auth_client(app, monkeypatch):
-    """Cliente autenticado con repositorio de clientes mockeado."""
+    """Cliente autenticado vía sesión Flask (sin llamar a Supabase)."""
     monkeypatch.setattr(
         "web.clientes.get_all_clientes_con_conteos",
         lambda: [_CLIENTE_BASE],
     )
     c = app.test_client()
-    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    with c.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "operador@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = None
     return c
 
 
@@ -101,10 +100,10 @@ def test_raiz_redirige_a_clientes(auth_client):
 # ── Listado de clientes ───────────────────────────────────────────────────────
 
 def test_listado_requiere_autenticacion(client):
-    """GET /clientes sin sesión → redirige a /login."""
+    """GET /clientes sin sesión → redirige a /auth/login."""
     resp = client.get("/clientes/", follow_redirects=False)
     assert resp.status_code == 302
-    assert "/login" in resp.headers["Location"]
+    assert "/auth/login" in resp.headers["Location"]
 
 
 def test_listado_muestra_clientes(auth_client, monkeypatch):
@@ -568,7 +567,11 @@ def test_activar_cliente_establece_sesion(app, monkeypatch):
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     c = app.test_client()
-    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    with c.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "operador@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = None
 
     resp = c.post("/clientes/1/activar")
     assert resp.status_code == 200
@@ -585,7 +588,11 @@ def test_activar_otro_cliente_reemplaza_activo(app, monkeypatch):
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE, cliente2])
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: cliente2 if id == 2 else _CLIENTE_BASE)
     c = app.test_client()
-    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    with c.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "operador@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = None
 
     with c.session_transaction() as sess:
         sess["cliente_activo_id"] = 1
@@ -604,7 +611,11 @@ def test_desactivar_cliente_limpia_sesion(app, monkeypatch):
     """POST /clientes/desactivar → elimina cliente activo de sesión."""
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
     c = app.test_client()
-    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    with c.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "operador@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = None
 
     with c.session_transaction() as sess:
         sess["cliente_activo_id"] = 1
@@ -626,7 +637,11 @@ def test_ficha_get_no_activa_cliente(app, monkeypatch):
     monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
     monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [])
     c = app.test_client()
-    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    with c.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "operador@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = None
 
     resp = c.get("/clientes/1", follow_redirects=False)
     assert resp.status_code == 200
@@ -639,7 +654,11 @@ def test_sidebar_sin_cliente_activo_solo_listado(app, monkeypatch):
     """Sin cliente activo en sesión, el sidebar muestra solo Listado clientes bajo CLIENTES."""
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
     c = app.test_client()
-    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    with c.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "operador@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = None
 
     resp = c.get("/clientes/", follow_redirects=False)
     assert resp.status_code == 200
@@ -655,7 +674,11 @@ def test_sidebar_con_cliente_activo_muestra_estructura(app, monkeypatch):
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [_CONTRATO_BASE])
     c = app.test_client()
-    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    with c.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "operador@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = None
 
     with c.session_transaction() as sess:
         sess["cliente_activo_id"] = 1
@@ -675,7 +698,11 @@ def test_dashboard_redirige_a_contabilidad(app, monkeypatch):
     """GET /clientes/1/dashboard → 302 a /clientes/1/dashboard/contabilidad."""
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
     c = app.test_client()
-    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    with c.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "operador@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = None
 
     with c.session_transaction() as sess:
         sess["cliente_activo_id"] = 1

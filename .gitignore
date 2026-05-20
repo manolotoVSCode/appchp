@@ -42,3 +42,6 @@ htmlcov/
 *.tmp
 *.log
 tmp/
+
+# Claude Code local config (puede contener claves)
+.claude/

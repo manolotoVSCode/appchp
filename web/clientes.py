@@ -8,6 +8,8 @@ import unicodedata
 from pathlib import Path
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from web.auth import get_current_user as _get_current_user
+from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario
 from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
 from parsers.cfe import get_cfe_parser
 from parsers.gas import get_gas_parser
@@ -237,11 +239,18 @@ def _validar_campos(nombre: str, rfc: str) -> str | None:
 @clientes_bp.route("/")
 def listado():
     clientes = get_all_clientes_con_conteos()
+    user = _get_current_user()
+    if user:
+        clientes = filtrar_empresas_para_usuario(clientes, user)
     return render_template("clientes/list.html", clientes=clientes)
 
 
 @clientes_bp.route("/nuevo", methods=["GET", "POST"])
 def nuevo():
+    user = _get_current_user()
+    if not usuario_puede_crear(user or {}):
+        flash("No tienes permisos para crear clientes.", "danger")
+        return redirect(url_for("clientes.listado"))
     if request.method == "POST":
         nombre = request.form.get("nombre", "").strip()
         rfc = _sanitizar(request.form.get("rfc", ""))
@@ -405,6 +414,10 @@ def editar(cliente_id: int):
 
 @clientes_bp.route("/<int:cliente_id>/borrar", methods=["POST"])
 def borrar(cliente_id: int):
+    user = _get_current_user()
+    if not usuario_puede_borrar(user or {}):
+        flash("No tienes permisos para borrar clientes.", "danger")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:
         flash("El cliente solicitado no existe.", "warning")
@@ -674,6 +687,10 @@ def contrato_editar(cliente_id: int, contrato_id: int):
 
 @clientes_bp.route("/<int:cliente_id>/contratos/<int:contrato_id>/borrar", methods=["POST"])
 def contrato_borrar(cliente_id: int, contrato_id: int):
+    user = _get_current_user()
+    if not usuario_puede_borrar(user or {}):
+        flash("No tienes permisos para borrar contratos.", "danger")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:
         flash("El cliente solicitado no existe.", "warning")
@@ -826,6 +843,11 @@ def contrato_upload(cliente_id: int, contrato_id: int):
 )
 def contrato_factura_borrar(cliente_id: int, contrato_id: int, factura_id: int):
     from flask import Response, jsonify
+
+    user = _get_current_user()
+    if not usuario_puede_borrar(user or {}):
+        flash("No tienes permisos para borrar facturas.", "danger")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
 
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:
@@ -1267,6 +1289,11 @@ def factura_calificado_editar(cliente_id: int, contrato_id: int, factura_id: int
 )
 def factura_calificado_borrar(cliente_id: int, contrato_id: int, factura_id: int):
     from flask import Response
+
+    user = _get_current_user()
+    if not usuario_puede_borrar(user or {}):
+        flash("No tienes permisos para borrar facturas.", "danger")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
 
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:

@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.31.0] — 2026-05-20
+
+### Añadido — Sistema multi-usuario con Supabase Auth
+
+- **Autenticación**: reemplazo completo del sistema de usuario único (APP_USER/APP_PASSWORD_HASH) por Supabase Auth. Login por email + contraseña. Variables de entorno `APP_USER` y `APP_PASSWORD_HASH` eliminadas.
+- **Roles**: tres niveles — `master_admin` (gestión completa + usuarios), `admin` (acceso completo a todos los clientes), `usuario_normal` (solo lectura de su empresa asignada).
+- **BD**: tabla `user_profiles` (id UUID → auth.users, email, rol, empresa_id, activo). Migración: `storage/migrations/202606_multiusuario.sql`.
+- **Flujo de invitación**: master_admin invita desde `/admin/usuarios` → Supabase envía email → usuario activa cuenta con contraseña propia en `/auth/aceptar-invitacion`.
+- **Flujo reset password**: `/auth/reset-password` → email con link → nueva contraseña en `/auth/reset-password/nuevo`.
+- **`web/auth.py`**: reescrito. Blueprint `auth_bp` con prefijo `/auth`. Helpers `set_user_session`, `clear_user_session`, `get_current_user`, `is_authenticated`. JWT decode sin PyJWT.
+- **`web/auth_permissions.py`**: nuevo módulo con `usuario_puede_borrar`, `usuario_puede_crear`, `filtrar_empresas_para_usuario`, `validar_borrar_usuario`.
+- **`web/app.py`**: `before_request` usa `is_authenticated()` (sin flask-login). `context_processor` inyecta `current_user_data`. Rutas `/admin/usuarios`, `/admin/usuarios/invitar`, `/admin/usuarios/<id>/borrar`, `/admin/usuarios/<id>/desactivar`. Endpoint `/health` añadido.
+- **`web/clientes.py`**: `listado()` filtra por empresa para `usuario_normal`. `nuevo()` y `borrar()` verifican permisos.
+- **Templates**: `auth/login.html` (email-based), `auth/reset_password.html`, `auth/reset_password_nuevo.html`, `auth/aceptar_invitacion.html` (JS extrae token del hash URL). `admin/usuarios.html` con tabla + modal de invitación. Sidebar muestra email, rol y link "Usuarios" para master_admin.
+- **Tests**: `test_auth.py` reescrito; fixtures de todos los tests actualizados para inyectar sesión directamente (sin llamar a Supabase).
+
+### Migración requerida
+
+Ejecutar `storage/migrations/202606_multiusuario.sql` en Supabase SQL Editor. Luego crear el primer usuario `master_admin` directamente en Supabase Dashboard > Authentication > Users, e insertar su fila en `user_profiles` con `rol = 'master_admin'`.
+
 ## [2.30.0] — 2026-05-20
 
 ### Añadido — Medio térmico con mezcla configurable y RefH ponderado

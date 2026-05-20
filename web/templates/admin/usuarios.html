@@ -1,0 +1,155 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "usuarios" %}
+
+{% block title %}Gestión de usuarios — CHP App{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <h1 class="h3 mb-0">Gestión de usuarios</h1>
+  <button class="btn btn-sm btn-success ms-auto"
+          data-bs-toggle="modal" data-bs-target="#modalInvitar">
+    <i class="bi bi-person-plus"></i> Invitar usuario
+  </button>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card shadow-sm">
+  <div class="card-header fw-semibold text-muted small py-2">Usuarios registrados</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th style="width:30%">Correo</th>
+          <th style="width:15%">Rol</th>
+          <th style="width:25%">Empresa asignada</th>
+          <th style="width:10%">Estado</th>
+          <th style="width:10%">Alta</th>
+          <th style="width:10%"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td>
+            <span class="font-monospace" style="font-size:.82rem">{{ u.email }}</span>
+            {% if u.id == current_user_data.user_id %}
+              <span class="badge bg-secondary ms-1" style="font-size:.65rem">Tú</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.rol == 'master_admin' %}
+              <span class="badge bg-danger">master_admin</span>
+            {% elif u.rol == 'admin' %}
+              <span class="badge bg-primary">admin</span>
+            {% else %}
+              <span class="badge bg-secondary">usuario_normal</span>
+            {% endif %}
+          </td>
+          <td style="font-size:.82rem">
+            {% if u.empresa_nombre %}{{ u.empresa_nombre }}{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% if u.activo %}
+              <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Activo</span>
+            {% else %}
+              <span class="badge bg-secondary-subtle text-secondary-emphasis border">Inactivo</span>
+            {% endif %}
+          </td>
+          <td style="font-size:.75rem;color:#888">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+          <td class="text-end">
+            {% if u.id != current_user_data.user_id and u.rol != 'master_admin' %}
+            <div class="d-flex gap-1 justify-content-end">
+              <form method="POST" action="{{ url_for('admin_usuarios_desactivar', user_id=u.id) }}"
+                    style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-secondary"
+                        title="{{ 'Desactivar' if u.activo else 'Activar' }}"
+                        onclick="return confirm('¿{{ 'Desactivar' if u.activo else 'Activar' }} a {{ u.email }}?')">
+                  <i class="bi bi-{{ 'pause-circle' if u.activo else 'play-circle' }}"></i>
+                </button>
+              </form>
+              <form method="POST" action="{{ url_for('admin_usuarios_borrar', user_id=u.id) }}"
+                    style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger"
+                        title="Borrar usuario"
+                        onclick="return confirm('¿Borrar permanentemente a {{ u.email }}? Esta acción no se puede deshacer.')">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </form>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-4">No hay usuarios registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Invitar usuario -->
+<div class="modal fade" id="modalInvitar" tabindex="-1" aria-labelledby="modalInvitarLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('admin_usuarios_invitar') }}" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalInvitarLabel">Invitar nuevo usuario</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="inv_email" class="form-label fw-semibold">Correo electrónico</label>
+            <input type="email" id="inv_email" name="email" class="form-control" required autofocus>
+          </div>
+          <div class="mb-3">
+            <label for="inv_rol" class="form-label fw-semibold">Rol</label>
+            <select id="inv_rol" name="rol" class="form-select" onchange="toggleEmpresaField(this.value)">
+              <option value="admin">admin</option>
+              <option value="usuario_normal">usuario_normal</option>
+            </select>
+            <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve su empresa asignada.</div>
+          </div>
+          <div class="mb-3" id="empresa-field" style="display:none">
+            <label for="inv_empresa" class="form-label fw-semibold">Empresa asignada</label>
+            <select id="inv_empresa" name="empresa_id" class="form-select">
+              <option value="">— Sin empresa asignada —</option>
+              {% for c in clientes %}
+              <option value="{{ c.id }}">{{ c.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Enviar invitación</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleEmpresaField(rol) {
+  document.getElementById('empresa-field').style.display = (rol === 'usuario_normal') ? '' : 'none';
+}
+// Mostrar modal si hubo error en el POST de invitación
+{% if show_invite_modal %}
+document.addEventListener('DOMContentLoaded', function() {
+  new bootstrap.Modal(document.getElementById('modalInvitar')).show();
+});
+{% endif %}
+</script>
+{% endblock %}

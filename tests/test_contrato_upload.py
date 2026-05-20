@@ -7,11 +7,7 @@ import logging
 
 import pytest
 from unittest.mock import MagicMock
-from werkzeug.security import generate_password_hash
-
 from models.contrato import Contrato
-
-_HASH = generate_password_hash("test_pass", method="pbkdf2:sha256")
 
 _CLIENTE = {
     "id": 1,
@@ -61,8 +57,6 @@ _CONTRATO_GAS = Contrato(
 
 @pytest.fixture()
 def app(monkeypatch):
-    monkeypatch.setenv("APP_USER", "operador")
-    monkeypatch.setenv("APP_PASSWORD_HASH", _HASH)
     monkeypatch.setenv("SUPABASE_URL", "https://fake.supabase.co")
     monkeypatch.setenv("SUPABASE_KEY", "fake_key")
     monkeypatch.setenv("SECRET_KEY", "test-secret-key")
@@ -77,7 +71,11 @@ def app(monkeypatch):
 def auth_client(app, monkeypatch):
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE])
     c = app.test_client()
-    c.post("/login", data={"username": "operador", "password": "test_pass"})
+    with c.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "operador@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = None
     return c
 
 

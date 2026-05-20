@@ -323,8 +323,28 @@
      class="sidebar-link{% if nav_active == 'configuracion' %} active{% endif %}">
     <i class="bi bi-gear"></i>Configuración
   </a>
+  {% if current_user_data and current_user_data.rol == 'master_admin' %}
+  <a href="{{ url_for('admin_usuarios') }}"
+     class="sidebar-link{% if nav_active == 'usuarios' %} active{% endif %}">
+    <i class="bi bi-people-fill"></i>Usuarios
+  </a>
+  {% endif %}
 
   <div class="sidebar-bottom">
+    {% if current_user_data %}
+    <div style="padding:.4rem .75rem .6rem;font-size:.72rem;color:#8A9BB0;line-height:1.4;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:.5rem">
+      <div style="font-weight:600;color:#C5D0DC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ current_user_data.email }}">{{ current_user_data.email }}</div>
+      <div>
+        {% if current_user_data.rol == 'master_admin' %}
+          <span style="color:#F48FB1">master_admin</span>
+        {% elif current_user_data.rol == 'admin' %}
+          <span style="color:#81D4FA">admin</span>
+        {% else %}
+          <span style="color:#A5D6A7">usuario</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
     <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-secondary w-100">
       <i class="bi bi-box-arrow-right"></i>Cerrar sesión
     </a>

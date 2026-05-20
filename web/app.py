@@ -10,7 +10,6 @@ from pathlib import Path
 from time import time
 
 from flask import Flask, flash, redirect, render_template, request, send_file, session, url_for
-from flask_login import current_user
 from flask_wtf.csrf import CSRFProtect
 
 from storage.repository import (
@@ -245,43 +244,62 @@ def create_app() -> Flask:
 
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32))
 
-    app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)
-    app.config["REMEMBER_COOKIE_HTTPONLY"] = True
-    app.config["REMEMBER_COOKIE_SECURE"] = not app.debug
-    app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SECURE"] = not app.debug
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-    # Autenticación, CSRF y blueprint de clientes
-    from web.auth import init_auth
+    # Autenticación, CSRF y blueprints
+    from web.auth import init_auth, get_current_user, is_authenticated
     from web.clientes import clientes_bp
     init_auth(app)
     csrf.init_app(app)
     app.register_blueprint(clientes_bp)
 
     # Rutas exentas de autenticación
-    _PUBLIC = {"/login", "/healthz"}
+    _PUBLIC_PREFIXES = ("/auth/", "/static")
+    _PUBLIC_EXACT = {"/healthz", "/health"}
 
     @app.before_request
     def _require_login():
-        if request.path in _PUBLIC or request.path.startswith("/static"):
+        path = request.path
+        if path in _PUBLIC_EXACT:
             return None
-        if not current_user.is_authenticated:
-            return redirect(url_for("auth.login", next=request.path))
+        for prefix in _PUBLIC_PREFIXES:
+            if path.startswith(prefix):
+                return None
+        if not is_authenticated():
+            return redirect(url_for("auth.login", next=path))
+        # usuario_normal solo puede ver su empresa asignada
+        user = get_current_user()
+        if user and user["rol"] == "usuario_normal":
+            from web.auth_permissions import usuario_puede_ver_empresa
+            empresa_id = user.get("empresa_id")
+            # Bloquear acceso a rutas de clientes que no sean su empresa
+            import re as _re
+            m = _re.match(r"^/clientes/(\d+)", path)
+            if m:
+                cid = int(m.group(1))
+                if not usuario_puede_ver_empresa(cid, user):
+                    flash("No tienes acceso a ese cliente.", "danger")
+                    return redirect(url_for("clientes.listado"))
 
     @app.context_processor
     def _inject_globals():
         from storage.repository import get_cliente_con_conteos as _get_cliente
+        current_user_data = get_current_user()
         id_ = session.get("cliente_activo_id")
+        base = {
+            "current_user_data": current_user_data,
+            "app_version": _APP_VERSION,
+        }
         if not id_:
-            return {"cliente_activo": None, "app_version": _APP_VERSION}
+            return {**base, "cliente_activo": None}
 
         # Usar valor cacheado si es fresco (TTL 60s) y corresponde al mismo cliente
         cached = session.get("_cp_cache")
         if (cached and cached.get("id") == id_
                 and time() - cached.get("ts", 0) < 60):
-            return {"cliente_activo": cached["data"], "app_version": _APP_VERSION}
+            return {**base, "cliente_activo": cached["data"]}
 
         # Cache miss: consultar BD
         cliente = _get_cliente(id_)
@@ -290,7 +308,7 @@ def create_app() -> Flask:
             session.pop("cliente_activo_nombre", None)
             session.pop("cliente_activo_logo_url", None)
             session.pop("_cp_cache", None)
-            return {"cliente_activo": None, "app_version": _APP_VERSION}
+            return {**base, "cliente_activo": None}
         contratos = [asdict(c) for c in get_contratos_por_cliente(id_)]
         data = {
             "id": id_,
@@ -299,7 +317,7 @@ def create_app() -> Flask:
             "logo_url": cliente.get("logo_url"),
         }
         session["_cp_cache"] = {"id": id_, "ts": time(), "data": data}
-        return {"cliente_activo": data, "app_version": _APP_VERSION}
+        return {**base, "cliente_activo": data}
 
     @app.route("/")
     def dashboard():
@@ -1157,6 +1175,121 @@ def create_app() -> Flask:
     @app.route("/healthz")
     def healthz():
         return "ok", 200
+
+    @app.route("/health")
+    def health():
+        return "ok", 200
+
+    @app.route("/admin/usuarios", methods=["GET"])
+    def admin_usuarios():
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        user = _gcu()
+        if not user or user["rol"] != ROL_MASTER_ADMIN:
+            flash("Acceso restringido al master_admin.", "danger")
+            return redirect(url_for("dashboard"))
+        from storage.repository import _supabase, get_all_clientes_con_conteos
+        # Obtener perfiles
+        res = _supabase.table("user_profiles").select("*").order("email").execute()
+        perfiles = res.data or []
+        # Enriquecer con nombre de empresa
+        clientes_list = get_all_clientes_con_conteos()
+        empresa_map = {c["id"]: c["nombre"] for c in clientes_list}
+        for p in perfiles:
+            p["empresa_nombre"] = empresa_map.get(p.get("empresa_id"), "")
+        return render_template(
+            "admin/usuarios.html",
+            usuarios=perfiles,
+            clientes=clientes_list,
+        )
+
+    @app.route("/admin/usuarios/invitar", methods=["POST"])
+    def admin_usuarios_invitar():
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROLES_VALIDOS
+        user = _gcu()
+        if not user or user["rol"] != ROL_MASTER_ADMIN:
+            flash("Acceso restringido al master_admin.", "danger")
+            return redirect(url_for("dashboard"))
+
+        email = request.form.get("email", "").strip().lower()
+        rol = request.form.get("rol", "").strip()
+        empresa_id_raw = request.form.get("empresa_id", "").strip()
+        empresa_id = int(empresa_id_raw) if empresa_id_raw.isdigit() else None
+
+        if not email or rol not in (ROLES_VALIDOS - {ROL_MASTER_ADMIN}):
+            flash("Correo o rol inválido.", "danger")
+            return redirect(url_for("admin_usuarios"))
+
+        from storage.repository import _supabase
+        try:
+            res = _supabase.auth.admin.invite_user_by_email(
+                email,
+                {"options": {"redirect_to": url_for("auth.aceptar_invitacion", _external=True)}},
+            )
+            user_id = res.user.id
+            _supabase.table("user_profiles").upsert({
+                "id": user_id,
+                "email": email,
+                "rol": rol,
+                "empresa_id": empresa_id,
+                "activo": True,
+            }).execute()
+            flash(f"Invitación enviada a {email}.", "success")
+        except Exception as exc:
+            logger.error("Error invitando %s: %s", email, exc)
+            flash(f"Error al enviar la invitación: {exc}", "danger")
+        return redirect(url_for("admin_usuarios"))
+
+    @app.route("/admin/usuarios/<user_id>/borrar", methods=["POST"])
+    def admin_usuarios_borrar(user_id: str):
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        from web.auth_permissions import validar_borrar_usuario
+        actor = _gcu()
+        if not actor or actor["rol"] != ROL_MASTER_ADMIN:
+            flash("Acceso restringido al master_admin.", "danger")
+            return redirect(url_for("dashboard"))
+        from storage.repository import _supabase
+        try:
+            res = _supabase.table("user_profiles").select("id,email,rol").eq("id", user_id).maybe_single().execute()
+            target = res.data
+        except Exception:
+            target = None
+        if not target:
+            flash("Usuario no encontrado.", "warning")
+            return redirect(url_for("admin_usuarios"))
+        err = validar_borrar_usuario(actor, target)
+        if err:
+            flash(err, "danger")
+            return redirect(url_for("admin_usuarios"))
+        try:
+            _supabase.auth.admin.delete_user(user_id)
+            flash(f"Usuario {target['email']} eliminado.", "success")
+        except Exception as exc:
+            logger.error("Error borrando usuario %s: %s", user_id, exc)
+            flash(f"Error al borrar el usuario: {exc}", "danger")
+        return redirect(url_for("admin_usuarios"))
+
+    @app.route("/admin/usuarios/<user_id>/desactivar", methods=["POST"])
+    def admin_usuarios_desactivar(user_id: str):
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        actor = _gcu()
+        if not actor or actor["rol"] != ROL_MASTER_ADMIN:
+            flash("Acceso restringido al master_admin.", "danger")
+            return redirect(url_for("dashboard"))
+        from storage.repository import _supabase
+        try:
+            res = _supabase.table("user_profiles").select("activo,email").eq("id", user_id).maybe_single().execute()
+            perfil = res.data
+            if not perfil:
+                flash("Usuario no encontrado.", "warning")
+                return redirect(url_for("admin_usuarios"))
+            nuevo_activo = not perfil.get("activo", True)
+            _supabase.table("user_profiles").update({"activo": nuevo_activo}).eq("id", user_id).execute()
+            accion = "activado" if nuevo_activo else "desactivado"
+            flash(f"Usuario {perfil['email']} {accion}.", "success")
+        except Exception as exc:
+            logger.error("Error desactivando usuario %s: %s", user_id, exc)
+            flash(f"Error al actualizar el usuario: {exc}", "danger")
+        return redirect(url_for("admin_usuarios"))
 
     @app.route("/upload", methods=["POST"])
     def upload_facturas():

@@ -70,6 +70,8 @@ contrato_meses_seleccionados: PK(contrato_id, anio, mes). FK contrato_id → con
 
 configuracion: clave (PK), valor, descripcion, updated_at. Claves activas: tipo_cambio_mxn_usd, factor_emision_electricidad_kg_co2_kwh, factor_emision_gas_kg_co2_gj.
 
+user_profiles: id (UUID PK → auth.users), email (TEXT), rol (TEXT: master_admin|admin|usuario_normal), empresa_id (INT NULL → clientes), activo (BOOL), created_at.
+
 ## Arquitectura de contratos y selección de meses
 
 Un cliente puede tener múltiples contratos (`contratos`), cada uno de tipo 'electrico' o 'gas'. Las facturas CFE y de gas se vinculan a un contrato mediante `contrato_id`. Los dashboards filtran por meses seleccionados en la tabla `contrato_meses_seleccionados` (combinación única contrato_id + anio + mes). La selección se gestiona desde el sidebar expandible en la ficha del cliente: fetch AJAX al endpoint `GET /<cliente_id>/contratos/<contrato_id>/seleccion`, toggle individual vía `POST .../seleccion/mes`, selección masiva por año vía `POST .../seleccion/anio`. Solo se puede seleccionar un mes si existe al menos una factura (CFE o gas) para ese contrato/año/mes.
@@ -83,18 +85,37 @@ Parámetros globales editables en `/admin/configuracion` (requiere autenticació
 SUPABASE_URL: URL del proyecto Supabase.
 SUPABASE_KEY: clave service_role del proyecto. Ver sección de seguridad y deuda técnica.
 SECRET_KEY: clave secreta de Flask para firmar cookies de sesión. Generar con `python3 -c "import secrets; print(secrets.token_hex(32))"`. Obligatoria en producción; si se omite, la app regenera una clave en cada reinicio invalidando todas las sesiones.
-APP_USER: nombre de usuario del operador (texto plano). Ejemplo: `operador`.
-APP_PASSWORD_HASH: hash de la contraseña generado con werkzeug. Generar así:
-  `python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('mi_password', method='pbkdf2:sha256'))"`
-  El hash resultante (formato `pbkdf2:sha256:...`) se pega directamente como valor de la variable. Nunca guardar la contraseña en texto plano. Para cambiar la contraseña, regenerar el hash y actualizar la variable de entorno en Render; reiniciar el servicio.
+
+APP_USER y APP_PASSWORD_HASH fueron eliminadas en v2.31.0. La autenticación ahora usa Supabase Auth con email + contraseña. Los usuarios se gestionan desde `/admin/usuarios` (solo master_admin).
+
+## Autenticación y roles (desde v2.31.0)
+
+La app usa Supabase Auth (email + contraseña). No hay credenciales en variables de entorno.
+
+Roles disponibles en `user_profiles.rol`:
+- master_admin: acceso completo + gestión de usuarios en `/admin/usuarios`. No puede borrarse a sí mismo.
+- admin: acceso completo a todos los clientes y facturas. No puede gestionar usuarios.
+- usuario_normal: acceso de solo lectura a la empresa asignada (`empresa_id`). No puede borrar ni crear clientes.
+
+Flujos de autenticación:
+- Login: POST `/auth/login` con email + contraseña → `supabase.auth.sign_in_with_password` → sesión Flask.
+- Logout: GET `/auth/logout` → limpia sesión Flask.
+- Invitación: master_admin invita desde `/admin/usuarios` → Supabase envía email con link `#access_token=...&type=invite` → usuario activa cuenta en `/auth/aceptar-invitacion`.
+- Reset password: GET `/auth/reset-password` → `supabase.auth.reset_password_for_email` → email con link → nueva contraseña en `/auth/reset-password/nuevo`.
+
+Archivos clave:
+- `web/auth.py`: Blueprint `auth_bp` (prefijo `/auth`), helpers `set_user_session`, `clear_user_session`, `get_current_user`, `is_authenticated`.
+- `web/auth_permissions.py`: `usuario_puede_borrar`, `usuario_puede_crear`, `filtrar_empresas_para_usuario`, `validar_borrar_usuario`.
+- Sesión Flask: claves `_user_id`, `_user_email`, `_user_rol`, `_empresa_id`, `_access_token`.
+- Rutas públicas: `/auth/*`, `/healthz`, `/health`, `/static/*`.
+
+Tests: sesión se inyecta directamente con `client.session_transaction()` (no llamar a Supabase). Ver `tests/test_auth.py`.
 
 ## Seguridad y deuda técnica reconocida
 
-La aplicación usa la clave service_role de Supabase, que bypasea Row Level Security. Esto es deuda técnica explícita y aceptada para fase 1, justificada porque no hay autenticación de usuarios y el acceso es exclusivamente desde el backend bajo control del operador.
+La aplicación usa la clave service_role de Supabase, que bypasea Row Level Security. Esto es deuda técnica explícita y aceptada para fase 1. La clave service_role debe vivir exclusivamente en variables de entorno del servidor backend.
 
-La clave service_role debe vivir exclusivamente en variables de entorno del servidor backend. Nunca en código fuente, nunca en frontend, nunca en repositorio público.
-
-Cuando se introduzca autenticación de usuarios (entregable separado posterior, no parte de esta fase), se migrará al uso de la clave anon con políticas Row Level Security configuradas por usuario y por tenant. Esta migración es trabajo conocido y planeado.
+La migración a clave anon con RLS por usuario/tenant es trabajo planeado para fases posteriores.
 
 ## Capacidad nominal del proyecto
 
