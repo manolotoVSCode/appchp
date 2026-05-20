@@ -55,16 +55,23 @@ def test_login_page_accesible_sin_autenticacion(client):
     assert b"Correo electr" in resp.data
 
 
-def test_reset_password_accesible_sin_autenticacion(client):
-    """GET /auth/reset-password sin sesión → 200."""
+def test_reset_password_ruta_eliminada(client):
+    """GET /auth/reset-password → 404 (ruta eliminada en v2.32.0)."""
     resp = client.get("/auth/reset-password", follow_redirects=False)
-    assert resp.status_code == 200
+    assert resp.status_code == 404
 
 
-def test_aceptar_invitacion_accesible_sin_autenticacion(client):
-    """GET /auth/aceptar-invitacion sin sesión → 200."""
+def test_aceptar_invitacion_ruta_eliminada(client):
+    """GET /auth/aceptar-invitacion → 404 (ruta eliminada en v2.32.0)."""
     resp = client.get("/auth/aceptar-invitacion", follow_redirects=False)
-    assert resp.status_code == 200
+    assert resp.status_code == 404
+
+
+def test_mi_perfil_requiere_autenticacion(client):
+    """GET /mi-perfil sin sesión → 302 a /auth/login."""
+    resp = client.get("/mi-perfil", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/auth/login" in resp.headers["Location"]
 
 
 # ── Tests con sesión inyectada ────────────────────────────────────────────────

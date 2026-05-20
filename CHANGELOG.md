@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.32.0] — 2026-05-20
+
+### Cambiado — Gestión de usuarios: creación directa en lugar de invitación por email
+
+- **Flujo eliminado**: invitación por email (`/admin/usuarios/invitar`), activación de cuenta (`/auth/aceptar-invitacion`), reset password por email (`/auth/reset-password`, `/auth/reset-password/nuevo`).
+- **Nuevo endpoint `POST /admin/usuarios/crear`**: master_admin crea usuario con contraseña manual o generada automáticamente. Supabase confirma el email automáticamente (`email_confirm: True`). Si la contraseña se genera, se muestra una sola vez con alerta amarilla.
+- **Nuevo endpoint `POST /admin/usuarios/<id>/cambiar-password`**: master_admin puede cambiar contraseña de admin o usuario_normal; admin solo puede cambiar la de usuario_normal y la propia.
+- **Nuevo endpoint `GET /mi-perfil`** y **`POST /mi-perfil/cambiar-password`**: cualquier usuario autenticado puede ver su información y cambiar su propia contraseña.
+- **Templates**: `admin/usuarios.html` reescrito con modal "Crear usuario" (reemplaza "Invitar") y modal "Cambiar contraseña" por fila. `mi_perfil.html` nuevo. `auth/login.html` elimina el link "¿Olvidaste tu contraseña?" y agrega aviso de contactar al administrador.
+- **Sidebar**: link "Mi Perfil" añadido en la sección inferior para todos los usuarios autenticados.
+- **Templates eliminados**: `auth/aceptar_invitacion.html`, `auth/reset_password.html`.
+- **Tests**: `test_reset_password_ruta_eliminada`, `test_aceptar_invitacion_ruta_eliminada`, `test_mi_perfil_requiere_autenticacion` añadidos.
+
 ## [2.31.0] — 2026-05-20
 
 ### Añadido — Sistema multi-usuario con Supabase Auth

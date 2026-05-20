@@ -7,17 +7,24 @@
 <div class="d-flex align-items-center mb-4 gap-3">
   <h1 class="h3 mb-0">Gestión de usuarios</h1>
   <button class="btn btn-sm btn-success ms-auto"
-          data-bs-toggle="modal" data-bs-target="#modalInvitar">
-    <i class="bi bi-person-plus"></i> Invitar usuario
+          data-bs-toggle="modal" data-bs-target="#modalCrear">
+    <i class="bi bi-person-plus"></i> Crear usuario
   </button>
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% for category, message in messages %}
+  {% if category == 'password_generada' %}
+  <div class="alert alert-warning alert-dismissible fade show mb-3 border border-warning" role="alert">
+    <i class="bi bi-key-fill me-2"></i><strong>Contraseña generada:</strong> {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+  </div>
+  {% else %}
   <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
     {{ message }}
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
   </div>
+  {% endif %}
   {% endfor %}
 {% endwith %}
 
@@ -27,12 +34,12 @@
     <table class="table table-sm mb-0 align-middle">
       <thead class="table-light">
         <tr>
-          <th style="width:30%">Correo</th>
-          <th style="width:15%">Rol</th>
-          <th style="width:25%">Empresa asignada</th>
-          <th style="width:10%">Estado</th>
-          <th style="width:10%">Alta</th>
-          <th style="width:10%"></th>
+          <th style="width:28%">Correo</th>
+          <th style="width:13%">Rol</th>
+          <th style="width:22%">Empresa asignada</th>
+          <th style="width:9%">Estado</th>
+          <th style="width:9%">Alta</th>
+          <th style="width:19%"></th>
         </tr>
       </thead>
       <tbody>
@@ -65,8 +72,30 @@
           </td>
           <td style="font-size:.75rem;color:#888">{{ u.created_at[:10] if u.created_at else '—' }}</td>
           <td class="text-end">
-            {% if u.id != current_user_data.user_id and u.rol != 'master_admin' %}
             <div class="d-flex gap-1 justify-content-end">
+              {# Botón cambiar contraseña: master_admin puede cambiar a cualquiera excepto otro master_admin que no sea él mismo;
+                 admin solo puede cambiar a usuario_normal y a sí mismo #}
+              {% set puede_cambiar_pw = false %}
+              {% if current_user_data.rol == 'master_admin' %}
+                {% if u.rol != 'master_admin' or u.id == current_user_data.user_id %}
+                  {% set puede_cambiar_pw = true %}
+                {% endif %}
+              {% elif current_user_data.rol == 'admin' %}
+                {% if u.rol == 'usuario_normal' or u.id == current_user_data.user_id %}
+                  {% set puede_cambiar_pw = true %}
+                {% endif %}
+              {% endif %}
+
+              {% if puede_cambiar_pw %}
+              <button type="button" class="btn btn-sm btn-outline-primary"
+                      title="Cambiar contraseña"
+                      onclick="abrirModalPassword('{{ u.id }}', '{{ u.email }}')">
+                <i class="bi bi-key"></i>
+              </button>
+              {% endif %}
+
+              {# Activar/Desactivar y Borrar: solo master_admin, no sobre sí mismo ni sobre otro master_admin #}
+              {% if current_user_data.rol == 'master_admin' and u.id != current_user_data.user_id and u.rol != 'master_admin' %}
               <form method="POST" action="{{ url_for('admin_usuarios_desactivar', user_id=u.id) }}"
                     style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -85,8 +114,8 @@
                   <i class="bi bi-trash3"></i>
                 </button>
               </form>
+              {% endif %}
             </div>
-            {% endif %}
           </td>
         </tr>
         {% else %}
@@ -99,42 +128,90 @@
   </div>
 </div>
 
-<!-- Modal: Invitar usuario -->
-<div class="modal fade" id="modalInvitar" tabindex="-1" aria-labelledby="modalInvitarLabel" aria-hidden="true">
+<!-- Modal: Crear usuario -->
+<div class="modal fade" id="modalCrear" tabindex="-1" aria-labelledby="modalCrearLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form method="POST" action="{{ url_for('admin_usuarios_invitar') }}" novalidate>
+      <form method="POST" action="{{ url_for('admin_usuarios_crear') }}" novalidate>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="modal-header">
-          <h5 class="modal-title" id="modalInvitarLabel">Invitar nuevo usuario</h5>
+          <h5 class="modal-title" id="modalCrearLabel">Crear nuevo usuario</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
           <div class="mb-3">
-            <label for="inv_email" class="form-label fw-semibold">Correo electrónico</label>
-            <input type="email" id="inv_email" name="email" class="form-control" required autofocus>
+            <label for="cr_email" class="form-label fw-semibold">Correo electrónico</label>
+            <input type="email" id="cr_email" name="email" class="form-control" required autofocus>
           </div>
           <div class="mb-3">
-            <label for="inv_rol" class="form-label fw-semibold">Rol</label>
-            <select id="inv_rol" name="rol" class="form-select" onchange="toggleEmpresaField(this.value)">
+            <label for="cr_rol" class="form-label fw-semibold">Rol</label>
+            <select id="cr_rol" name="rol" class="form-select" onchange="toggleEmpresaField(this.value)">
               <option value="admin">admin</option>
               <option value="usuario_normal">usuario_normal</option>
             </select>
             <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve su empresa asignada.</div>
           </div>
           <div class="mb-3" id="empresa-field" style="display:none">
-            <label for="inv_empresa" class="form-label fw-semibold">Empresa asignada</label>
-            <select id="inv_empresa" name="empresa_id" class="form-select">
+            <label for="cr_empresa" class="form-label fw-semibold">Empresa asignada</label>
+            <select id="cr_empresa" name="empresa_id" class="form-select">
               <option value="">— Sin empresa asignada —</option>
               {% for c in clientes %}
               <option value="{{ c.id }}">{{ c.nombre }}</option>
               {% endfor %}
             </select>
           </div>
+          <div class="mb-3">
+            <label for="cr_password" class="form-label fw-semibold">Contraseña</label>
+            <input type="password" id="cr_password" name="password" class="form-control"
+                   disabled placeholder="Se generará automáticamente">
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="cr_generar" name="generar_password"
+                     value="on" checked onchange="togglePasswordField(!this.checked)">
+              <label class="form-check-label" for="cr_generar" style="font-size:.85rem">
+                Generar contraseña automáticamente
+              </label>
+            </div>
+            <div class="form-text">Si se genera automáticamente, se mostrará una sola vez al crear el usuario.</div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-success">Enviar invitación</button>
+          <button type="submit" class="btn btn-success">Crear usuario</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Cambiar contraseña -->
+<div class="modal fade" id="modalPassword" tabindex="-1" aria-labelledby="modalPasswordLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" id="formPassword" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalPasswordLabel">Cambiar contraseña</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">Usuario: <strong id="pw_email_label"></strong></p>
+          <div class="mb-3">
+            <label for="pw_password" class="form-label fw-semibold">Nueva contraseña</label>
+            <input type="password" id="pw_password" name="password" class="form-control"
+                   disabled placeholder="Se generará automáticamente">
+            <div class="form-check mt-2">
+              <input class="form-check-input" type="checkbox" id="pw_generar" name="generar_password"
+                     value="on" checked onchange="togglePasswordFieldPw(!this.checked)">
+              <label class="form-check-label" for="pw_generar" style="font-size:.85rem">
+                Generar contraseña automáticamente
+              </label>
+            </div>
+            <div class="form-text">Si se genera automáticamente, se mostrará una sola vez al guardar.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar contraseña</button>
         </div>
       </form>
     </div>
@@ -145,11 +222,27 @@
 function toggleEmpresaField(rol) {
   document.getElementById('empresa-field').style.display = (rol === 'usuario_normal') ? '' : 'none';
 }
-// Mostrar modal si hubo error en el POST de invitación
-{% if show_invite_modal %}
-document.addEventListener('DOMContentLoaded', function() {
-  new bootstrap.Modal(document.getElementById('modalInvitar')).show();
-});
-{% endif %}
+
+function togglePasswordField(showField) {
+  const field = document.getElementById('cr_password');
+  field.disabled = !showField;
+  if (!showField) field.value = '';
+}
+
+function togglePasswordFieldPw(showField) {
+  const field = document.getElementById('pw_password');
+  field.disabled = !showField;
+  if (!showField) field.value = '';
+}
+
+function abrirModalPassword(userId, email) {
+  document.getElementById('pw_email_label').textContent = email;
+  document.getElementById('formPassword').action = '/admin/usuarios/' + userId + '/cambiar-password';
+  // Reset state
+  document.getElementById('pw_generar').checked = true;
+  document.getElementById('pw_password').disabled = true;
+  document.getElementById('pw_password').value = '';
+  new bootstrap.Modal(document.getElementById('modalPassword')).show();
+}
 </script>
 {% endblock %}

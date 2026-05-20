@@ -78,15 +78,18 @@
           <input type="password" id="password" name="password" class="form-control"
                  autocomplete="current-password" required>
         </div>
-        <div class="mb-4 d-flex align-items-center justify-content-between">
+        <div class="mb-4">
           <div class="form-check" style="margin:0">
             <input class="form-check-input" type="checkbox" id="remember" name="remember" value="1">
             <label class="form-check-label" for="remember" style="font-size:.85rem;color:#5A5A5A">Mantener sesión</label>
           </div>
-          <a href="{{ url_for('auth.reset_password') }}" style="font-size:.82rem;color:var(--color-primary);text-decoration:none;">¿Olvidaste tu contraseña?</a>
         </div>
         <button type="submit" class="btn-login">Iniciar sesión</button>
       </form>
+
+      <p style="font-size:.78rem;color:#888;margin-top:1rem;line-height:1.5">
+        Si olvidaste tu contraseña, contacta a tu administrador para que te asigne una nueva.
+      </p>
 
       <div class="login-footer mt-4">
         CHP México &copy; 2025 &nbsp;&middot;&nbsp; Uso interno

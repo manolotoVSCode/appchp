@@ -1202,41 +1202,159 @@ def create_app() -> Flask:
             clientes=clientes_list,
         )
 
-    @app.route("/admin/usuarios/invitar", methods=["POST"])
-    def admin_usuarios_invitar():
-        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROLES_VALIDOS
+    @app.route("/admin/usuarios/crear", methods=["POST"])
+    def admin_usuarios_crear():
+        import secrets
+        import string
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
         user = _gcu()
         if not user or user["rol"] != ROL_MASTER_ADMIN:
             flash("Acceso restringido al master_admin.", "danger")
             return redirect(url_for("dashboard"))
 
+        from storage.repository import _supabase
+
         email = request.form.get("email", "").strip().lower()
         rol = request.form.get("rol", "").strip()
         empresa_id_raw = request.form.get("empresa_id", "").strip()
         empresa_id = int(empresa_id_raw) if empresa_id_raw.isdigit() else None
+        password_input = request.form.get("password", "").strip()
+        generar = request.form.get("generar_password") == "on"
 
-        if not email or rol not in (ROLES_VALIDOS - {ROL_MASTER_ADMIN}):
-            flash("Correo o rol inválido.", "danger")
+        # Validaciones
+        if not email or "@" not in email:
+            flash("Email inválido.", "danger")
+            return redirect(url_for("admin_usuarios"))
+        if rol not in ("admin", "usuario_normal"):
+            flash("Rol no válido.", "danger")
+            return redirect(url_for("admin_usuarios"))
+        if rol == "usuario_normal" and not empresa_id:
+            flash("Usuario normal requiere empresa asignada.", "danger")
             return redirect(url_for("admin_usuarios"))
 
-        from storage.repository import _supabase
+        # Verificar duplicado
         try:
-            res = _supabase.auth.admin.invite_user_by_email(
-                email,
-                {"options": {"redirect_to": url_for("auth.aceptar_invitacion", _external=True)}},
-            )
+            _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
+            dup = _supabase.table("user_profiles").select("id").eq("email", email).limit(1).execute()
+            if dup.data:
+                flash(f"El email {email} ya está registrado.", "danger")
+                return redirect(url_for("admin_usuarios"))
+        except Exception:
+            pass
+
+        # Determinar contraseña
+        if generar or not password_input:
+            alfabeto = string.ascii_letters + string.digits + "!@#$%^&*"
+            password = "".join(secrets.choice(alfabeto) for _ in range(12))
+            password_generada = True
+        else:
+            if len(password_input) < 8:
+                flash("La contraseña debe tener al menos 8 caracteres.", "danger")
+                return redirect(url_for("admin_usuarios"))
+            password = password_input
+            password_generada = False
+
+        # Crear usuario en Supabase Auth
+        try:
+            res = _supabase.auth.admin.create_user({
+                "email": email,
+                "password": password,
+                "email_confirm": True,
+            })
             user_id = res.user.id
-            _supabase.table("user_profiles").upsert({
+        except Exception as exc:
+            logger.error("Error creando usuario auth %s: %s", email, exc)
+            flash(f"Error creando usuario: {exc}", "danger")
+            return redirect(url_for("admin_usuarios"))
+
+        # Crear perfil
+        try:
+            _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
+            _supabase.table("user_profiles").insert({
                 "id": user_id,
                 "email": email,
                 "rol": rol,
                 "empresa_id": empresa_id,
                 "activo": True,
             }).execute()
-            flash(f"Invitación enviada a {email}.", "success")
         except Exception as exc:
-            logger.error("Error invitando %s: %s", email, exc)
-            flash(f"Error al enviar la invitación: {exc}", "danger")
+            logger.error("Error creando perfil %s: %s", email, exc)
+            try:
+                _supabase.auth.admin.delete_user(user_id)
+            except Exception:
+                pass
+            flash(f"Error creando perfil: {exc}", "danger")
+            return redirect(url_for("admin_usuarios"))
+
+        if password_generada:
+            flash(
+                f"Usuario {email} creado. Contraseña generada: {password}. "
+                f"Copia esta contraseña ahora — no se mostrará de nuevo.",
+                "password_generada",
+            )
+        else:
+            flash(f"Usuario {email} creado correctamente.", "success")
+        return redirect(url_for("admin_usuarios"))
+
+    @app.route("/admin/usuarios/<user_id>/cambiar-password", methods=["POST"])
+    def admin_usuarios_cambiar_password(user_id: str):
+        import secrets
+        import string
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROL_ADMIN
+
+        actor = _gcu()
+        if not actor or actor["rol"] not in (ROL_MASTER_ADMIN, ROL_ADMIN):
+            flash("Acceso no autorizado.", "danger")
+            return redirect(url_for("dashboard"))
+
+        from storage.repository import _supabase
+        try:
+            _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
+            res = _supabase.table("user_profiles").select("*").eq("id", user_id).limit(1).execute()
+            target = res.data[0] if res.data else None
+        except Exception:
+            target = None
+
+        if not target:
+            flash("Usuario no encontrado.", "warning")
+            return redirect(url_for("admin_usuarios"))
+
+        # Validar matriz de permisos
+        if target["rol"] == ROL_MASTER_ADMIN and target["id"] != actor["user_id"]:
+            flash("No puedes cambiar la contraseña del Master Admin.", "danger")
+            return redirect(url_for("admin_usuarios"))
+        if target["rol"] == ROL_ADMIN and actor["rol"] == ROL_ADMIN and target["id"] != actor["user_id"]:
+            flash("No puedes cambiar la contraseña de otro Admin.", "danger")
+            return redirect(url_for("admin_usuarios"))
+
+        nueva_password = request.form.get("password", "").strip()
+        generar = request.form.get("generar_password") == "on"
+
+        if generar or not nueva_password:
+            alfabeto = string.ascii_letters + string.digits + "!@#$%^&*"
+            nueva_password = "".join(secrets.choice(alfabeto) for _ in range(12))
+            password_generada = True
+        else:
+            if len(nueva_password) < 8:
+                flash("Contraseña mínimo 8 caracteres.", "danger")
+                return redirect(url_for("admin_usuarios"))
+            password_generada = False
+
+        try:
+            _supabase.auth.admin.update_user_by_id(user_id, {"password": nueva_password})
+        except Exception as exc:
+            logger.error("Error cambiando password %s: %s", user_id, exc)
+            flash(f"Error cambiando contraseña: {exc}", "danger")
+            return redirect(url_for("admin_usuarios"))
+
+        if password_generada:
+            flash(
+                f"Contraseña actualizada para {target['email']}. Nueva contraseña: {nueva_password}. "
+                f"Copia esta contraseña ahora — no se mostrará de nuevo.",
+                "password_generada",
+            )
+        else:
+            flash(f"Contraseña actualizada para {target['email']}.", "success")
         return redirect(url_for("admin_usuarios"))
 
     @app.route("/admin/usuarios/<user_id>/borrar", methods=["POST"])
@@ -1290,6 +1408,46 @@ def create_app() -> Flask:
             logger.error("Error desactivando usuario %s: %s", user_id, exc)
             flash(f"Error al actualizar el usuario: {exc}", "danger")
         return redirect(url_for("admin_usuarios"))
+
+    @app.route("/mi-perfil")
+    def mi_perfil():
+        from web.auth import get_current_user as _gcu, is_authenticated as _ia
+        if not _ia():
+            return redirect(url_for("auth.login"))
+        user = _gcu()
+        from storage.repository import _supabase
+        empresa_nombre = None
+        if user and user.get("empresa_id"):
+            try:
+                _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
+                res = _supabase.table("clientes").select("nombre").eq("id", user["empresa_id"]).limit(1).execute()
+                if res.data:
+                    empresa_nombre = res.data[0]["nombre"]
+            except Exception:
+                pass
+        return render_template("mi_perfil.html", user=user, empresa_nombre=empresa_nombre)
+
+    @app.route("/mi-perfil/cambiar-password", methods=["POST"])
+    def mi_perfil_cambiar_password():
+        from web.auth import get_current_user as _gcu, is_authenticated as _ia
+        if not _ia():
+            return redirect(url_for("auth.login"))
+        user = _gcu()
+        nueva = request.form.get("password", "").strip()
+        confirmar = request.form.get("confirmar", "").strip()
+        if len(nueva) < 8:
+            flash("La contraseña debe tener al menos 8 caracteres.", "danger")
+            return redirect(url_for("mi_perfil"))
+        if nueva != confirmar:
+            flash("Las contraseñas no coinciden.", "danger")
+            return redirect(url_for("mi_perfil"))
+        from storage.repository import _supabase
+        try:
+            _supabase.auth.admin.update_user_by_id(user["user_id"], {"password": nueva})
+            flash("Contraseña actualizada correctamente.", "success")
+        except Exception as exc:
+            flash(f"Error: {exc}", "danger")
+        return redirect(url_for("mi_perfil"))
 
     @app.route("/upload", methods=["POST"])
     def upload_facturas():

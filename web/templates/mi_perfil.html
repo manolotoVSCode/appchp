@@ -1,0 +1,75 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "mi_perfil" %}
+
+{% block title %}Mi Perfil — CHP App{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="h3 mb-0">Mi Perfil</h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="row g-4" style="max-width:680px">
+  <!-- Información de la cuenta -->
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold text-muted small py-2">Información de la cuenta</div>
+      <div class="card-body">
+        <dl class="row mb-0" style="font-size:.9rem">
+          <dt class="col-sm-4 text-muted">Correo electrónico</dt>
+          <dd class="col-sm-8 font-monospace">{{ user.email }}</dd>
+
+          <dt class="col-sm-4 text-muted">Rol</dt>
+          <dd class="col-sm-8">
+            {% if user.rol == 'master_admin' %}
+              <span class="badge bg-danger">master_admin</span>
+            {% elif user.rol == 'admin' %}
+              <span class="badge bg-primary">admin</span>
+            {% else %}
+              <span class="badge bg-secondary">usuario_normal</span>
+            {% endif %}
+          </dd>
+
+          {% if empresa_nombre %}
+          <dt class="col-sm-4 text-muted">Empresa asignada</dt>
+          <dd class="col-sm-8">{{ empresa_nombre }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cambiar contraseña -->
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold text-muted small py-2">Cambiar contraseña</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('mi_perfil_cambiar_password') }}" novalidate style="max-width:400px">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label for="nueva_password" class="form-label fw-semibold" style="font-size:.9rem">Nueva contraseña</label>
+            <input type="password" id="nueva_password" name="password" class="form-control"
+                   autocomplete="new-password" required minlength="8"
+                   placeholder="Mínimo 8 caracteres">
+          </div>
+          <div class="mb-4">
+            <label for="confirmar_password" class="form-label fw-semibold" style="font-size:.9rem">Confirmar contraseña</label>
+            <input type="password" id="confirmar_password" name="confirmar" class="form-control"
+                   autocomplete="new-password" required minlength="8"
+                   placeholder="Repite la contraseña">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Actualizar contraseña</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -88,7 +88,7 @@ SECRET_KEY: clave secreta de Flask para firmar cookies de sesión. Generar con `
 
 APP_USER y APP_PASSWORD_HASH fueron eliminadas en v2.31.0. La autenticación ahora usa Supabase Auth con email + contraseña. Los usuarios se gestionan desde `/admin/usuarios` (solo master_admin).
 
-## Autenticación y roles (desde v2.31.0)
+## Autenticación y roles (desde v2.32.0)
 
 La app usa Supabase Auth (email + contraseña). No hay credenciales en variables de entorno.
 
@@ -100,8 +100,10 @@ Roles disponibles en `user_profiles.rol`:
 Flujos de autenticación:
 - Login: POST `/auth/login` con email + contraseña → `supabase.auth.sign_in_with_password` → sesión Flask.
 - Logout: GET `/auth/logout` → limpia sesión Flask.
-- Invitación: master_admin invita desde `/admin/usuarios` → Supabase envía email con link `#access_token=...&type=invite` → usuario activa cuenta en `/auth/aceptar-invitacion`.
-- Reset password: GET `/auth/reset-password` → `supabase.auth.reset_password_for_email` → email con link → nueva contraseña en `/auth/reset-password/nuevo`.
+- Crear usuario: master_admin crea directamente desde `/admin/usuarios` (modal) → POST `/admin/usuarios/crear` → Supabase crea usuario con `email_confirm: True` y contraseña manual o generada. La contraseña se muestra una sola vez con alerta amarilla.
+- Cambiar contraseña (admin): POST `/admin/usuarios/<id>/cambiar-password` → master_admin puede cambiar a cualquiera excepto otro master_admin; admin solo a usuario_normal y a sí mismo.
+- Cambiar contraseña (propio): GET `/mi-perfil` → POST `/mi-perfil/cambiar-password`.
+- Flujos eliminados en v2.32.0: invitación por email (`/auth/aceptar-invitacion`), reset password por email (`/auth/reset-password`).
 
 Archivos clave:
 - `web/auth.py`: Blueprint `auth_bp` (prefijo `/auth`), helpers `set_user_session`, `clear_user_session`, `get_current_user`, `is_authenticated`.
