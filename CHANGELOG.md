@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.38.0] — 2026-05-21
+
+### Corregido
+- Dashboard Proyecto Cogeneración: ya no suma todos los meses seleccionados en el sidebar. Ahora usa siempre las últimas 12 facturas disponibles en BD (ordenadas por `periodo_inicio DESC`), independientemente de la selección del sidebar. El sidebar sigue controlando el Dashboard de Contabilidad Energética sin cambios.
+
+### Añadido
+- Etiqueta de rango de meses analizados en Dashboard Cogeneración: "Cálculo basado en los últimos 12 meses: junio 2024 a mayo 2025" (visible cuando hay datos suficientes).
+- Nuevas funciones de repositorio: `get_ultimas_cfe_invoices`, `get_ultimas_gas_invoices`, `get_ultimas_ppa_invoices` — consultan las últimas N facturas directamente sin filtro de selección.
+- Helpers `_cargar_ultimas_facturas_cogen` y `_cargar_ultimas_ppa_cogen` en `web/app.py`.
+- Función `_calcular_rango_cogen` que produce la etiqueta legible del rango de meses.
+
+### Cambiado
+- Aviso "Datos insuficientes" en Dashboard Cogeneración: ya no menciona seleccionar meses en el sidebar; indica subir más facturas desde la ficha del cliente.
+- Aviso "sin_seleccion" eliminado del flujo GDMTH en Dashboard Cogeneración (ya no aplica al no depender del sidebar).
+
 ## [2.36.0] — 2026-05-21
 
 ### Eliminado

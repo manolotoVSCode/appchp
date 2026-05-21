@@ -600,11 +600,11 @@
     } else if (aviso.tipo === "insuficiente_elec") {
       const n = parseInt(aviso.n_elec, 10) || 0;
       cont.appendChild(_mkAlerta("alert-warning", "Datos insuficientes.",
-        " El análisis de cogeneración requiere 12 facturas eléctricas seleccionadas. Hay " + n + " seleccionada" + (n !== 1 ? "s" : "") + ". Selecciona 12 meses en el sidebar."));
+        " El análisis de cogeneración requiere 12 facturas eléctricas. Solo hay " + n + " disponible" + (n !== 1 ? "s" : "") + ". Sube más facturas desde la ficha del cliente."));
     } else if (aviso.tipo === "insuficiente_gas") {
       const n = parseInt(aviso.n_gas, 10) || 0;
       cont.appendChild(_mkAlerta("alert-warning", "Datos insuficientes.",
-        " El análisis de cogeneración requiere 12 facturas de gas seleccionadas. Hay " + n + " seleccionada" + (n !== 1 ? "s" : "") + ". Selecciona 12 meses de gas, o configura un precio de gas manual en la ficha del cliente."));
+        " El análisis de cogeneración requiere 12 facturas de gas. Solo hay " + n + " disponible" + (n !== 1 ? "s" : "") + ". Sube más facturas o configura un precio de gas manual en la ficha del cliente."));
     } else if (aviso.tipo === "meses_no_coinciden") {
       const nPares = parseInt(aviso.n_pares, 10) || 0;
       cont.appendChild(_mkAlerta("alert-info", "Periodos incompletos.",
@@ -621,10 +621,23 @@
     actualizarAviso(data.aviso_datos);
 
     const tipo = data.aviso_datos ? data.aviso_datos.tipo : null;
-    const tiposBloqueo = ["sin_seleccion", "insuficiente_elec", "insuficiente_gas"];
+    const tiposBloqueo = ["insuficiente_elec", "insuficiente_gas"];
     const sinDatos = tiposBloqueo.includes(tipo);
     const mainSection = document.getElementById("dashboard-main-section");
     if (mainSection) mainSection.style.display = sinDatos ? "none" : "";
+
+    // Rango de meses analizados
+    const rangoEl = document.getElementById("rango-cogen-label");
+    const rangoTxt = document.getElementById("rango-cogen-texto");
+    if (rangoEl && rangoTxt) {
+      if (data.rango_cogen && !sinDatos) {
+        rangoTxt.textContent = data.rango_cogen;
+        rangoEl.style.display = "";
+      } else {
+        rangoEl.style.display = "none";
+      }
+    }
+
     if (sinDatos) return;
 
     // Detectar tipo de suministro eléctrico

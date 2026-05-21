@@ -1056,6 +1056,41 @@ def delete_gas_factura(factura_id: int) -> None:
     _supabase.table("gas_facturas").delete().eq("id", factura_id).execute()
 
 
+def get_ultimas_cfe_invoices(cliente_id: int, n: int = 12) -> list[CFEInvoice]:
+    """Retorna las n facturas CFE más recientes del cliente, sin filtrar por meses seleccionados.
+
+    Ordenadas por periodo_inicio DESC y devueltas ya en orden ASC (cronológico).
+    Usado por el dashboard de Cogeneración (regla: siempre últimas 12).
+    """
+    result = _supabase.table("cfe_facturas").select(
+        "*, clientes(nombre, rfc), cfe_periodos(*), cfe_mem_componentes(*)"
+    ).eq("cliente_id", cliente_id).order("periodo_inicio", desc=True).limit(n).execute()
+    return [_row_to_cfe_invoice(row) for row in result.data]
+
+
+def get_ultimas_gas_invoices(cliente_id: int, n: int = 12) -> list[GasInvoice]:
+    """Retorna las n facturas de gas más recientes del cliente, sin filtrar por meses seleccionados.
+
+    Ordenadas por periodo_inicio DESC y devueltas ya en orden ASC (cronológico).
+    Usado por el dashboard de Cogeneración (regla: siempre últimas 12).
+    """
+    result = _supabase.table("gas_facturas").select(
+        "*, clientes(nombre, rfc), gas_conceptos(*)"
+    ).eq("cliente_id", cliente_id).order("periodo_inicio", desc=True).limit(n).execute()
+    return [_row_to_gas_invoice(row) for row in result.data]
+
+
+def get_ultimas_ppa_invoices(cliente_id: int, n: int = 12) -> list["FacturaCalificado"]:
+    """Retorna las n facturas PPA más recientes del cliente, sin filtrar por meses seleccionados.
+
+    Usado por el dashboard de Cogeneración (regla: siempre últimas 12).
+    """
+    result = _supabase.table("facturas_electricidad_calificado").select("*").eq(
+        "cliente_id", cliente_id
+    ).order("periodo_inicio", desc=True).limit(n).execute()
+    return [_row_to_factura_calificado(row) for row in result.data]
+
+
 # ── Facturas electricidad calificado (suministro calificado / PPA) ─────────────
 
 def _row_to_factura_calificado(row: dict) -> FacturaCalificado:
