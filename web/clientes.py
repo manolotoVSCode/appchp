@@ -788,29 +788,14 @@ def contrato_upload(cliente_id: int, contrato_id: int):
                 invoice = parser.parse(tmp_path)
                 identificador_factura = invoice.cuenta_contrato
 
-            rfc_factura = (invoice.rfc_cliente or "").strip()
-            rfc_cliente_real = (cliente.get("rfc") or "").strip()
-
             id_discrepante = identificador_factura != contrato.identificador_real
-            if rfc_factura:
-                rfc_discrepante = rfc_factura != rfc_cliente_real
-            else:
-                logger.warning(
-                    "RFC vacío en factura '%s' (contrato_id=%d, cliente_id=%d) — "
-                    "no se puede verificar RFC; se asocia al cliente del contrato.",
-                    nombre, contrato_id, cliente_id,
-                )
-                rfc_discrepante = False
 
-            if (id_discrepante or rfc_discrepante) and nombre not in confirmados:
-                pendiente: dict = {"nombre": nombre}
-                if id_discrepante:
-                    pendiente["identificador_factura"] = identificador_factura
-                    pendiente["identificador_contrato"] = contrato.identificador_real
-                if rfc_discrepante:
-                    pendiente["rfc_factura"] = rfc_factura
-                    pendiente["rfc_cliente"] = rfc_cliente_real
-                pendientes_confirmacion.append(pendiente)
+            if id_discrepante and nombre not in confirmados:
+                pendientes_confirmacion.append({
+                    "nombre": nombre,
+                    "identificador_factura": identificador_factura,
+                    "identificador_contrato": contrato.identificador_real,
+                })
                 continue
 
             if tipo == "cfe":

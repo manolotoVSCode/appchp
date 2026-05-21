@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.36.0] — 2026-05-21
+
+### Eliminado
+- Validación "RFC discrepante" en flujo de carga de facturas (CFE y Gas). Tras v2.35.0 (RFC sin unicidad ni obligatoriedad), comparar el RFC de la factura con el del cliente perdió sentido. La factura se guarda directamente sin modal ni confirmación cuando el RFC difiere.
+
+### Corregido
+- Bug en upload masivo: el flujo de carga de múltiples PDFs ya no se detiene al encontrar un RFC distinto al del cliente. Ahora procesa todos los PDFs del batch sin interrupciones.
+
+### Cambiado
+- `contrato_upload` en `clientes.py`: el bloque `pendientes_confirmacion` ya solo aplica a discrepancia de **identificador** (numero de servicio CFE / cuenta contrato gas vs el identificador registrado en el contrato). RFC ignorado.
+- `mostrarDiscrepancia()` en `contratos/ficha.html`: ya no muestra el ítem RFC en el modal de discrepancia.
+
 ## [2.35.0] — 2026-05-21
 
 ### Cambiado

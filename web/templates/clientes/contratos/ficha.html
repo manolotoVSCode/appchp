@@ -428,9 +428,6 @@ function mostrarDiscrepancia(p) {
   if (p.identificador_factura !== undefined) {
     html += `<li>Identificador de la factura: <code>${p.identificador_factura}</code> — contrato: <code>${p.identificador_contrato}</code></li>`;
   }
-  if (p.rfc_factura !== undefined) {
-    html += `<li>RFC de la factura: <code>${p.rfc_factura}</code> — cliente: <code>${p.rfc_cliente}</code></li>`;
-  }
   html += "</ul>";
   document.getElementById("discrepancia-mensaje").innerHTML = html;
   const modal = new bootstrap.Modal(document.getElementById("modalDiscrepancia"));
