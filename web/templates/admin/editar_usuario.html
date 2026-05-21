@@ -21,6 +21,7 @@
         <div class="form-text">El email no se puede modificar.</div>
       </div>
 
+      {% if actor_puede_cambiar_rol %}
       <div class="mb-3">
         <label for="ed_rol" class="form-label fw-semibold">Rol</label>
         <select id="ed_rol" name="rol" class="form-select" onchange="toggleEmpresaField(this.value)">
@@ -29,6 +30,14 @@
         </select>
         <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve su empresa asignada.</div>
       </div>
+      {% else %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Rol</label>
+        <input type="hidden" name="rol" value="{{ form_rol }}">
+        <input type="text" class="form-control" value="{{ form_rol|label_rol }}" disabled>
+        <div class="form-text">El rol no puede modificarse.</div>
+      </div>
+      {% endif %}
 
       <div class="mb-3" id="empresa-field" style="{{ '' if form_rol == 'usuario_normal' else 'display:none' }}">
         <label for="ed_empresa" class="form-label fw-semibold">Empresa asignada</label>

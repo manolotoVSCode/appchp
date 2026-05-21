@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.34.0] — 2026-05-21
+
+### Añadido
+- **Gestión de usuarios para rol Administrador**: el rol `admin` ahora accede a `/admin/usuarios` y puede crear, editar, cambiar contraseña, activar/desactivar y borrar usuarios con rol `usuario_normal`. Los usuarios `master_admin` son invisibles para el admin. El admin no puede modificar ni ver a otros administradores (solo aparece "—" en su fila). El dropdown de rol en "Crear usuario" solo muestra "Cliente" cuando el actor es `admin`. El campo de rol en "Editar usuario" es de solo lectura para `admin` (se envía como campo oculto).
+- Enlace "Gestión de Usuarios" en el sidebar ahora visible también para `admin` (antes solo para `master_admin`).
+
+### Corregido
+- `validar_borrar_usuario` en `auth_permissions.py` extendida: `admin` puede borrar `usuario_normal`; ninguno puede borrar `master_admin` ni otro `admin`.
+- Rutas `admin_usuarios_borrar` y `admin_usuarios_desactivar` actualizadas para aceptar `admin` además de `master_admin`, con las validaciones de rol correspondientes.
+
 ## [2.33.4] — 2026-05-21
 
 ### Añadido

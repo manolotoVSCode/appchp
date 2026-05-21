@@ -1295,15 +1295,18 @@ def create_app() -> Flask:
 
     @app.route("/admin/usuarios", methods=["GET"])
     def admin_usuarios():
-        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROL_ADMIN
         user = _gcu()
-        if not user or user["rol"] != ROL_MASTER_ADMIN:
-            flash("Acceso restringido al master_admin.", "danger")
+        if not user or user["rol"] not in (ROL_MASTER_ADMIN, ROL_ADMIN):
+            flash("Acceso no autorizado.", "danger")
             return redirect(url_for("dashboard"))
         from storage.repository import _supabase, get_all_clientes_con_conteos
         # Obtener perfiles
         res = _supabase.table("user_profiles").select("*").order("email").execute()
         perfiles = res.data or []
+        # admin no ve al master_admin
+        if user["rol"] == ROL_ADMIN:
+            perfiles = [p for p in perfiles if p.get("rol") != ROL_MASTER_ADMIN]
         # Enriquecer con nombre de empresa
         clientes_list = get_all_clientes_con_conteos()
         empresa_map = {c["id"]: c["nombre"] for c in clientes_list}
@@ -1319,10 +1322,10 @@ def create_app() -> Flask:
     def admin_usuarios_crear():
         import secrets
         import string
-        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROL_ADMIN
         user = _gcu()
-        if not user or user["rol"] != ROL_MASTER_ADMIN:
-            flash("Acceso restringido al master_admin.", "danger")
+        if not user or user["rol"] not in (ROL_MASTER_ADMIN, ROL_ADMIN):
+            flash("Acceso no autorizado.", "danger")
             return redirect(url_for("dashboard"))
 
         from storage.repository import _supabase
@@ -1342,6 +1345,10 @@ def create_app() -> Flask:
             return redirect(url_for("admin_usuarios"))
         if rol not in ("admin", "usuario_normal"):
             flash("Rol no válido.", "danger")
+            return redirect(url_for("admin_usuarios"))
+        # admin solo puede crear usuario_normal
+        if user["rol"] == ROL_ADMIN and rol != "usuario_normal":
+            flash("Solo puedes crear usuarios de tipo Cliente.", "danger")
             return redirect(url_for("admin_usuarios"))
         if rol == "usuario_normal" and not empresa_id:
             flash("Usuario normal requiere empresa asignada.", "danger")
@@ -1476,10 +1483,10 @@ def create_app() -> Flask:
 
     @app.route("/admin/usuarios/<user_id>/editar", methods=["GET", "POST"])
     def admin_usuarios_editar(user_id: str):
-        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROL_ADMIN
         actor = _gcu()
-        if not actor or actor["rol"] != ROL_MASTER_ADMIN:
-            flash("Acceso restringido al master_admin.", "danger")
+        if not actor or actor["rol"] not in (ROL_MASTER_ADMIN, ROL_ADMIN):
+            flash("Acceso no autorizado.", "danger")
             return redirect(url_for("dashboard"))
         from storage.repository import _supabase, get_all_clientes_con_conteos
         try:
@@ -1492,24 +1499,35 @@ def create_app() -> Flask:
             flash("Usuario no encontrado.", "warning")
             return redirect(url_for("admin_usuarios"))
         if target["rol"] == ROL_MASTER_ADMIN:
-            flash("No se puede editar al Master Admin desde la UI.", "warning")
+            flash("No se puede editar al Master Admin.", "warning")
+            return redirect(url_for("admin_usuarios"))
+        # admin no puede editar a otro admin (solo a sí mismo o a usuario_normal)
+        if actor["rol"] == ROL_ADMIN and target["rol"] == ROL_ADMIN and target["id"] != actor["user_id"]:
+            flash("No puedes editar a otro Administrador.", "danger")
             return redirect(url_for("admin_usuarios"))
 
+        # admin no puede cambiar el rol del target
+        actor_puede_cambiar_rol = (actor["rol"] == ROL_MASTER_ADMIN)
+
         if request.method == "POST":
-            rol = request.form.get("rol", "").strip()
+            if actor_puede_cambiar_rol:
+                rol = request.form.get("rol", "").strip()
+                if rol not in ("admin", "usuario_normal"):
+                    flash("Rol no válido.", "danger")
+                    return redirect(url_for("admin_usuarios_editar", user_id=user_id))
+            else:
+                rol = target["rol"]  # mantener el rol actual
             empresa_id = request.form.get("empresa_id", "").strip() or None
             nombre_ed = request.form.get("nombre", "").strip() or None
             apellido_ed = request.form.get("apellido", "").strip() or None
-            if rol not in ("admin", "usuario_normal"):
-                flash("Rol no válido.", "danger")
-                return redirect(url_for("admin_usuarios_editar", user_id=user_id))
             if rol == "usuario_normal" and not empresa_id:
                 flash("El rol usuario_normal requiere empresa asignada.", "danger")
                 clientes_list = get_all_clientes_con_conteos()
                 return render_template("admin/editar_usuario.html",
                                        target=target, clientes=clientes_list,
                                        form_rol=rol, form_empresa_id=empresa_id,
-                                       form_nombre=nombre_ed, form_apellido=apellido_ed)
+                                       form_nombre=nombre_ed, form_apellido=apellido_ed,
+                                       actor_puede_cambiar_rol=actor_puede_cambiar_rol)
             if rol == "admin":
                 empresa_id = None
             try:
@@ -1532,15 +1550,16 @@ def create_app() -> Flask:
                                form_rol=target["rol"],
                                form_empresa_id=target.get("empresa_id"),
                                form_nombre=target.get("nombre"),
-                               form_apellido=target.get("apellido"))
+                               form_apellido=target.get("apellido"),
+                               actor_puede_cambiar_rol=actor_puede_cambiar_rol)
 
     @app.route("/admin/usuarios/<user_id>/borrar", methods=["POST"])
     def admin_usuarios_borrar(user_id: str):
-        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROL_ADMIN
         from web.auth_permissions import validar_borrar_usuario
         actor = _gcu()
-        if not actor or actor["rol"] != ROL_MASTER_ADMIN:
-            flash("Acceso restringido al master_admin.", "danger")
+        if not actor or actor["rol"] not in (ROL_MASTER_ADMIN, ROL_ADMIN):
+            flash("Acceso restringido.", "danger")
             return redirect(url_for("dashboard"))
         from storage.repository import _supabase
         try:
@@ -1565,17 +1584,23 @@ def create_app() -> Flask:
 
     @app.route("/admin/usuarios/<user_id>/desactivar", methods=["POST"])
     def admin_usuarios_desactivar(user_id: str):
-        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROL_ADMIN
         actor = _gcu()
-        if not actor or actor["rol"] != ROL_MASTER_ADMIN:
-            flash("Acceso restringido al master_admin.", "danger")
+        if not actor or actor["rol"] not in (ROL_MASTER_ADMIN, ROL_ADMIN):
+            flash("Acceso restringido.", "danger")
             return redirect(url_for("dashboard"))
         from storage.repository import _supabase
         try:
-            res = _supabase.table("user_profiles").select("activo,email").eq("id", user_id).maybe_single().execute()
+            res = _supabase.table("user_profiles").select("activo,email,rol").eq("id", user_id).maybe_single().execute()
             perfil = res.data
             if not perfil:
                 flash("Usuario no encontrado.", "warning")
+                return redirect(url_for("admin_usuarios"))
+            if perfil.get("rol") == ROL_MASTER_ADMIN:
+                flash("No se puede modificar al Master Admin.", "danger")
+                return redirect(url_for("admin_usuarios"))
+            if actor["rol"] == ROL_ADMIN and perfil.get("rol") == ROL_ADMIN:
+                flash("No puedes desactivar a otro Administrador.", "danger")
                 return redirect(url_for("admin_usuarios"))
             nuevo_activo = not perfil.get("activo", True)
             _supabase.table("user_profiles").update({"activo": nuevo_activo}).eq("id", user_id).execute()

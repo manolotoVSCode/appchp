@@ -89,8 +89,14 @@ def validar_borrar_usuario(actor: dict, target: dict) -> str | None:
     Valida si actor puede borrar a target.
     Retorna mensaje de error o None si la operación es válida.
     """
-    if actor.get("rol") != ROL_MASTER_ADMIN:
-        return "Solo el master_admin puede borrar usuarios."
+    actor_rol = actor.get("rol")
+    target_rol = target.get("rol")
+    if actor_rol not in (ROL_MASTER_ADMIN, ROL_ADMIN):
+        return "No tienes permiso para borrar usuarios."
     if actor.get("user_id") == target.get("id"):
         return "No puedes borrar tu propia cuenta."
+    if target_rol == ROL_MASTER_ADMIN:
+        return "No se puede borrar al Master Admin."
+    if actor_rol == ROL_ADMIN and target_rol == ROL_ADMIN:
+        return "No puedes borrar a otro Administrador."
     return None

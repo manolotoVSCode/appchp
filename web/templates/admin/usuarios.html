@@ -81,11 +81,14 @@
                 {% endif %}
               {% endif %}
 
-              {% if current_user_data.rol == 'master_admin' and u.rol != 'master_admin' %}
+              {% if (current_user_data.rol == 'master_admin' and u.rol != 'master_admin') or
+                    (current_user_data.rol == 'admin' and u.rol == 'usuario_normal') %}
               <a href="{{ url_for('admin_usuarios_editar', user_id=u.id) }}"
                  class="btn btn-sm btn-outline-secondary" title="Editar usuario">
                 <i class="bi bi-pencil"></i>
               </a>
+              {% elif current_user_data.rol == 'admin' and u.rol == 'admin' and u.id != current_user_data.user_id %}
+              <span class="text-muted small" title="Sin acceso de gestión">—</span>
               {% endif %}
 
               {% if puede_cambiar_pw %}
@@ -96,8 +99,9 @@
               </button>
               {% endif %}
 
-              {# Activar/Desactivar y Borrar: solo master_admin, no sobre sí mismo ni sobre otro master_admin #}
-              {% if current_user_data.rol == 'master_admin' and u.id != current_user_data.user_id and u.rol != 'master_admin' %}
+              {# Activar/Desactivar y Borrar: master_admin sobre cualquier no-master; admin solo sobre usuario_normal #}
+              {% if (current_user_data.rol == 'master_admin' and u.id != current_user_data.user_id and u.rol != 'master_admin') or
+                   (current_user_data.rol == 'admin' and u.rol == 'usuario_normal') %}
               <form method="POST" action="{{ url_for('admin_usuarios_desactivar', user_id=u.id) }}"
                     style="display:inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -158,7 +162,9 @@
           <div class="mb-3">
             <label for="cr_rol" class="form-label fw-semibold">Rol</label>
             <select id="cr_rol" name="rol" class="form-select" onchange="toggleEmpresaField(this.value)">
+              {% if current_user_data.rol == 'master_admin' %}
               <option value="admin">Administrador</option>
+              {% endif %}
               <option value="usuario_normal">Cliente</option>
             </select>
             <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve su empresa asignada.</div>
