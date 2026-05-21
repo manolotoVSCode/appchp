@@ -7,7 +7,7 @@ import tempfile
 import unicodedata
 from pathlib import Path
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from web.auth import get_current_user as _get_current_user
 from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario
 from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
@@ -313,7 +313,13 @@ def ficha(cliente_id: int):
             ppa_bloques.setdefault(b["anio"], {})[b["mes"]] = b["bloque_contratado_mwh"]
     except Exception:
         pass
-    return render_template("clientes/ficha.html", cliente=cliente, contratos=contratos, ppa_bloques=ppa_bloques)
+    user = _get_current_user()
+    resp = make_response(render_template("clientes/ficha.html", cliente=cliente, contratos=contratos, ppa_bloques=ppa_bloques))
+    if user and user.get("rol") in ("master_admin", "admin"):
+        resp.set_cookie("last_cliente_id", str(cliente_id),
+                        max_age=30 * 24 * 3600, samesite="Lax",
+                        httponly=True, secure=not current_app.debug)
+    return resp
 
 
 @clientes_bp.route("/<int:cliente_id>/activar", methods=["POST"])

@@ -292,8 +292,10 @@
   <hr class="sidebar-divider mx-3">
   <div class="sidebar-section d-flex align-items-center justify-content-between pe-2">
     <span class="text-truncate me-2">{{ cliente_activo.nombre }}</span>
+    {% if current_user_data.rol != 'usuario_normal' %}
     <a href="{{ url_for('clientes.ficha', cliente_id=cliente_activo.id) }}"
        class="btn btn-sm btn-outline-secondary flex-shrink-0" style="font-size:.65rem;padding:.15rem .45rem;line-height:1.4">Detalles</a>
+    {% endif %}
   </div>
   <div class="sidebar-sub-header">Dashboard</div>
   <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id) }}"
@@ -349,13 +351,19 @@
   <div class="sidebar-bottom">
     {% if current_user_data %}
     <div style="padding:.4rem .75rem .6rem;font-size:.72rem;color:#8A9BB0;line-height:1.4;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:.5rem">
-      <div style="font-weight:600;color:#C5D0DC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ current_user_data.email }}">{{ current_user_data.email }}</div>
+      {% set _nombre_display = ((current_user_data.nombre or '') ~ ' ' ~ (current_user_data.apellido or ''))|trim %}
+      <div style="font-weight:600;color:#C5D0DC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ current_user_data.email }}">
+        {{ _nombre_display if _nombre_display else current_user_data.email }}
+      </div>
+      {% if _nombre_display %}
+      <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ current_user_data.email }}</div>
+      {% endif %}
       {% if current_user_data.rol != 'usuario_normal' %}
       <div>
         {% if current_user_data.rol == 'master_admin' %}
-          <span style="color:#F48FB1">master_admin</span>
+          <span style="color:#F48FB1">{{ current_user_data.rol|label_rol }}</span>
         {% elif current_user_data.rol == 'admin' %}
-          <span style="color:#81D4FA">admin</span>
+          <span style="color:#81D4FA">{{ current_user_data.rol|label_rol }}</span>
         {% endif %}
       </div>
       {% endif %}

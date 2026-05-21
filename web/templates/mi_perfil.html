@@ -4,8 +4,9 @@
 {% block title %}Mi Perfil — CHP App{% endblock %}
 
 {% block content %}
+{% set _nombre_display = ((user.nombre or '') ~ ' ' ~ (user.apellido or ''))|trim %}
 <div class="mb-4">
-  <h1 class="h3 mb-0">Mi Perfil</h1>
+  <h1 class="h3 mb-0">{% if _nombre_display %}Hola, {{ _nombre_display }}{% else %}Mi Perfil{% endif %}</h1>
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -30,11 +31,11 @@
           <dt class="col-sm-4 text-muted">Rol</dt>
           <dd class="col-sm-8">
             {% if user.rol == 'master_admin' %}
-              <span class="badge bg-danger">master_admin</span>
+              <span class="badge bg-danger">{{ user.rol|label_rol }}</span>
             {% elif user.rol == 'admin' %}
-              <span class="badge bg-primary">admin</span>
+              <span class="badge bg-primary">{{ user.rol|label_rol }}</span>
             {% else %}
-              <span class="badge bg-secondary">usuario_normal</span>
+              <span class="badge bg-secondary">{{ user.rol|label_rol }}</span>
             {% endif %}
           </dd>
 
@@ -43,6 +44,31 @@
           <dd class="col-sm-8">{{ empresa_nombre }}</dd>
           {% endif %}
         </dl>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nombre y apellido -->
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold text-muted small py-2">Datos personales</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('mi_perfil_cambiar_datos') }}" novalidate style="max-width:400px">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label for="dp_nombre" class="form-label fw-semibold" style="font-size:.9rem">Nombre</label>
+              <input type="text" id="dp_nombre" name="nombre" class="form-control"
+                     value="{{ user.nombre or '' }}" placeholder="Opcional">
+            </div>
+            <div class="col">
+              <label for="dp_apellido" class="form-label fw-semibold" style="font-size:.9rem">Apellido</label>
+              <input type="text" id="dp_apellido" name="apellido" class="form-control"
+                     value="{{ user.apellido or '' }}" placeholder="Opcional">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Guardar datos</button>
+        </form>
       </div>
     </div>
   </div>

@@ -53,11 +53,11 @@
           </td>
           <td>
             {% if u.rol == 'master_admin' %}
-              <span class="badge bg-danger">master_admin</span>
+              <span class="badge bg-danger">{{ u.rol|label_rol }}</span>
             {% elif u.rol == 'admin' %}
-              <span class="badge bg-primary">admin</span>
+              <span class="badge bg-primary">{{ u.rol|label_rol }}</span>
             {% else %}
-              <span class="badge bg-secondary">usuario_normal</span>
+              <span class="badge bg-secondary">{{ u.rol|label_rol }}</span>
             {% endif %}
           </td>
           <td style="font-size:.82rem">
@@ -146,6 +146,16 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label for="cr_nombre" class="form-label fw-semibold">Nombre</label>
+              <input type="text" id="cr_nombre" name="nombre" class="form-control" placeholder="Opcional">
+            </div>
+            <div class="col">
+              <label for="cr_apellido" class="form-label fw-semibold">Apellido</label>
+              <input type="text" id="cr_apellido" name="apellido" class="form-control" placeholder="Opcional">
+            </div>
+          </div>
           <div class="mb-3">
             <label for="cr_email" class="form-label fw-semibold">Correo electrónico</label>
             <input type="email" id="cr_email" name="email" class="form-control" required autofocus>
@@ -153,8 +163,8 @@
           <div class="mb-3">
             <label for="cr_rol" class="form-label fw-semibold">Rol</label>
             <select id="cr_rol" name="rol" class="form-select" onchange="toggleEmpresaField(this.value)">
-              <option value="admin">admin</option>
-              <option value="usuario_normal">usuario_normal</option>
+              <option value="admin">Administrador</option>
+              <option value="usuario_normal">Cliente</option>
             </select>
             <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve su empresa asignada.</div>
           </div>

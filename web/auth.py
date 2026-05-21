@@ -10,7 +10,9 @@ from functools import wraps
 
 from flask import (
     Blueprint,
+    current_app,
     flash,
+    make_response,
     redirect,
     render_template,
     request,
@@ -34,19 +36,23 @@ ROLES_VALIDOS = {ROL_MASTER_ADMIN, ROL_ADMIN, ROL_USUARIO_NORMAL}
 
 def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
                      access_token: str, remember: bool = False,
-                     empresa_nombre: str | None = None) -> None:
+                     empresa_nombre: str | None = None,
+                     nombre: str | None = None,
+                     apellido: str | None = None) -> None:
     session.permanent = remember
     session["_user_id"] = user_id
     session["_user_email"] = email
     session["_user_rol"] = rol
     session["_empresa_id"] = empresa_id
     session["_empresa_nombre"] = empresa_nombre
+    session["_nombre"] = nombre
+    session["_apellido"] = apellido
     session["_access_token"] = access_token
 
 
 def clear_user_session() -> None:
     for key in ("_user_id", "_user_email", "_user_rol", "_empresa_id", "_empresa_nombre",
-                "_access_token", "_cp_cache", "cliente_activo_id",
+                "_nombre", "_apellido", "_access_token", "_cp_cache", "cliente_activo_id",
                 "cliente_activo_nombre", "cliente_activo_logo_url"):
         session.pop(key, None)
 
@@ -62,6 +68,8 @@ def get_current_user() -> dict | None:
         "rol": session.get("_user_rol", ""),
         "empresa_id": session.get("_empresa_id"),
         "empresa_nombre": session.get("_empresa_nombre"),
+        "nombre": session.get("_nombre"),
+        "apellido": session.get("_apellido"),
     }
 
 
@@ -138,8 +146,14 @@ def login():
                         error="Sin empresa asignada. Contacta al administrador.",
                     )
                 raw_next = request.args.get("next", "")
-                next_url = raw_next if _es_url_segura(raw_next) else url_for("clientes.listado")
-                return redirect(next_url)
+                if _es_url_segura(raw_next):
+                    return redirect(raw_next)
+                last_id = request.cookies.get("last_cliente_id", "").strip()
+                if last_id and last_id.isdigit():
+                    fallback = url_for("clientes.ficha", cliente_id=int(last_id))
+                else:
+                    fallback = url_for("clientes.listado")
+                return redirect(fallback)
 
     return render_template("auth/login.html", error=error)
 
@@ -197,6 +211,8 @@ def _handle_login(email: str, password: str, remember: bool) -> str | None:
         access_token=access_token,
         remember=remember,
         empresa_nombre=empresa_nombre,
+        nombre=profile.get("nombre"),
+        apellido=profile.get("apellido"),
     )
     logger.info("Login exitoso: email=%s rol=%s", email, profile["rol"])
     return None

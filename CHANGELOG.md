@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.33.2] — 2026-05-20
+
+### Cambiado
+- Sidebar inferior: muestra nombre y apellido del usuario (si existen) en lugar del email; el email pasa a línea secundaria. Fallback a email si no hay nombre.
+- Labels de rol en toda la UI: `master_admin` → "Super Admin", `admin` → "Administrador", `usuario_normal` → "Cliente". Implementado vía filtro Jinja2 `label_rol`.
+- Botón "Detalles" del sidebar: oculto para `usuario_normal` (no tiene acceso a la ficha).
+- Dropdowns de rol en crear/editar usuario: muestran "Administrador"/"Cliente" en lugar de strings internos.
+
+### Añadido
+- Campos `nombre` y `apellido` en `user_profiles` (migración `storage/migrations/202605_nombre_apellido.sql`).
+- Formulario "Datos personales" en `/mi-perfil` para que cada usuario edite su nombre/apellido.
+- Campos nombre/apellido en modal "Crear usuario" y en pantalla "Editar usuario".
+- Cookie `last_cliente_id` (30 días): se guarda cuando admin/master_admin visita la ficha de un cliente. Al iniciar sesión, redirige al último cliente visitado si no hay parámetro `next`.
+- Endpoint `POST /mi-perfil/cambiar-datos`: actualiza nombre/apellido en BD y en sesión Flask.
+
 ## [2.33.1] — 2026-05-21
 
 ### Corregido

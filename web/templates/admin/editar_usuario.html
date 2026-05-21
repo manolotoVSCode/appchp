@@ -24,8 +24,8 @@
       <div class="mb-3">
         <label for="ed_rol" class="form-label fw-semibold">Rol</label>
         <select id="ed_rol" name="rol" class="form-select" onchange="toggleEmpresaField(this.value)">
-          <option value="admin" {% if form_rol == 'admin' %}selected{% endif %}>admin</option>
-          <option value="usuario_normal" {% if form_rol == 'usuario_normal' %}selected{% endif %}>usuario_normal</option>
+          <option value="admin" {% if form_rol == 'admin' %}selected{% endif %}>Administrador</option>
+          <option value="usuario_normal" {% if form_rol == 'usuario_normal' %}selected{% endif %}>Cliente</option>
         </select>
         <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve su empresa asignada.</div>
       </div>
@@ -38,6 +38,19 @@
           <option value="{{ c.id }}" {% if form_empresa_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
           {% endfor %}
         </select>
+      </div>
+
+      <div class="row g-2 mb-3">
+        <div class="col">
+          <label for="ed_nombre" class="form-label fw-semibold">Nombre</label>
+          <input type="text" id="ed_nombre" name="nombre" class="form-control"
+                 value="{{ form_nombre or '' }}" placeholder="Opcional">
+        </div>
+        <div class="col">
+          <label for="ed_apellido" class="form-label fw-semibold">Apellido</label>
+          <input type="text" id="ed_apellido" name="apellido" class="form-control"
+                 value="{{ form_apellido or '' }}" placeholder="Opcional">
+        </div>
       </div>
 
       <div class="d-flex gap-2 mt-4">

@@ -255,6 +255,10 @@ def create_app() -> Flask:
     csrf.init_app(app)
     app.register_blueprint(clientes_bp)
 
+    @app.template_filter("label_rol")
+    def _label_rol(rol: str) -> str:
+        return {"master_admin": "Super Admin", "admin": "Administrador", "usuario_normal": "Cliente"}.get(rol, rol)
+
     # Rutas exentas de autenticación
     _PUBLIC_PREFIXES = ("/auth/", "/static")
     _PUBLIC_EXACT = {"/healthz", "/health"}
@@ -1220,6 +1224,8 @@ def create_app() -> Flask:
         empresa_id = int(empresa_id_raw) if empresa_id_raw.isdigit() else None
         password_input = request.form.get("password", "").strip()
         generar = request.form.get("generar_password") == "on"
+        nombre_nuevo = request.form.get("nombre", "").strip() or None
+        apellido_nuevo = request.form.get("apellido", "").strip() or None
 
         # Validaciones
         if not email or "@" not in email:
@@ -1276,6 +1282,8 @@ def create_app() -> Flask:
                 "rol": rol,
                 "empresa_id": empresa_id,
                 "activo": True,
+                "nombre": nombre_nuevo,
+                "apellido": apellido_nuevo,
             }).execute()
         except Exception as exc:
             logger.error("Error creando perfil %s: %s", email, exc)
@@ -1381,6 +1389,8 @@ def create_app() -> Flask:
         if request.method == "POST":
             rol = request.form.get("rol", "").strip()
             empresa_id = request.form.get("empresa_id", "").strip() or None
+            nombre_ed = request.form.get("nombre", "").strip() or None
+            apellido_ed = request.form.get("apellido", "").strip() or None
             if rol not in ("admin", "usuario_normal"):
                 flash("Rol no válido.", "danger")
                 return redirect(url_for("admin_usuarios_editar", user_id=user_id))
@@ -1389,7 +1399,8 @@ def create_app() -> Flask:
                 clientes_list = get_all_clientes_con_conteos()
                 return render_template("admin/editar_usuario.html",
                                        target=target, clientes=clientes_list,
-                                       form_rol=rol, form_empresa_id=empresa_id)
+                                       form_rol=rol, form_empresa_id=empresa_id,
+                                       form_nombre=nombre_ed, form_apellido=apellido_ed)
             if rol == "admin":
                 empresa_id = None
             try:
@@ -1397,6 +1408,8 @@ def create_app() -> Flask:
                 _supabase.table("user_profiles").update({
                     "rol": rol,
                     "empresa_id": int(empresa_id) if empresa_id else None,
+                    "nombre": nombre_ed,
+                    "apellido": apellido_ed,
                 }).eq("id", user_id).execute()
                 flash(f"Usuario {target['email']} actualizado correctamente.", "success")
             except Exception as exc:
@@ -1408,7 +1421,9 @@ def create_app() -> Flask:
         return render_template("admin/editar_usuario.html",
                                target=target, clientes=clientes_list,
                                form_rol=target["rol"],
-                               form_empresa_id=target.get("empresa_id"))
+                               form_empresa_id=target.get("empresa_id"),
+                               form_nombre=target.get("nombre"),
+                               form_apellido=target.get("apellido"))
 
     @app.route("/admin/usuarios/<user_id>/borrar", methods=["POST"])
     def admin_usuarios_borrar(user_id: str):
@@ -1498,6 +1513,29 @@ def create_app() -> Flask:
         try:
             _supabase.auth.admin.update_user_by_id(user["user_id"], {"password": nueva})
             flash("Contraseña actualizada correctamente.", "success")
+        except Exception as exc:
+            flash(f"Error: {exc}", "danger")
+        return redirect(url_for("mi_perfil"))
+
+    @app.route("/mi-perfil/cambiar-datos", methods=["POST"])
+    def mi_perfil_cambiar_datos():
+        from web.auth import get_current_user as _gcu, is_authenticated as _ia
+        if not _ia():
+            return redirect(url_for("auth.login"))
+        user = _gcu()
+        nombre_val = request.form.get("nombre", "").strip() or None
+        apellido_val = request.form.get("apellido", "").strip() or None
+        from storage.repository import _supabase
+        try:
+            _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
+            _supabase.table("user_profiles").update({
+                "nombre": nombre_val,
+                "apellido": apellido_val,
+            }).eq("id", user["user_id"]).execute()
+            from flask import session as _sess
+            _sess["_nombre"] = nombre_val
+            _sess["_apellido"] = apellido_val
+            flash("Datos actualizados correctamente.", "success")
         except Exception as exc:
             flash(f"Error: {exc}", "danger")
         return redirect(url_for("mi_perfil"))
