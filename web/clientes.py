@@ -55,6 +55,8 @@ from storage.repository import (
     delete_factura_calificado,
     get_tipos_electricos_con_meses_seleccionados,
     update_precio_gas_manual,
+    get_ultimas_cfe_invoices,
+    get_ultimas_ppa_invoices,
 )
 
 logger = logging.getLogger(__name__)
@@ -412,6 +414,61 @@ def nuevo():
     )
 
 
+def _calcular_cre_params(cliente: dict) -> dict | None:
+    """Calcula parámetros estáticos CRE para mostrar en la ficha.
+    Requiere datos completos del cliente (nivel_tension_kv, altitud_msnm, tipo_motor,
+    medio_termico_vapor_pct). Devuelve None si faltan datos.
+    Carga las últimas 12 facturas para derivar la capacidad nominal.
+    """
+    from calc.cels import _calcular_ref_h, _FP, _refe
+    from calc.cogen import _capacidad_nominal_kw, _capacidad_nominal_kw_ppa
+
+    nivel = cliente.get("nivel_tension_kv")
+    altitud = cliente.get("altitud_msnm")
+    tipo_motor = cliente.get("tipo_motor")
+    vapor_pct = cliente.get("medio_termico_vapor_pct")
+
+    if any(v is None for v in [nivel, altitud, tipo_motor, vapor_pct]):
+        return None
+
+    fp = _FP.get(nivel)
+    if fp is None:
+        return None
+
+    refh = _calcular_ref_h(int(vapor_pct))
+
+    # Capacidad nominal: intentar CFE básico, luego PPA
+    cap_kw = None
+    try:
+        cfe_inv = get_ultimas_cfe_invoices(cliente["id"], n=12)
+        if cfe_inv:
+            cap_kw = _capacidad_nominal_kw(cfe_inv)
+    except Exception:
+        pass
+    if cap_kw is None:
+        try:
+            ppa_inv = get_ultimas_ppa_invoices(cliente["id"], n=12)
+            if ppa_inv:
+                cap_kw = _capacidad_nominal_kw_ppa(ppa_inv)
+        except Exception:
+            pass
+
+    ref_e = _refe(cap_kw, int(altitud), tipo_motor) if cap_kw else None
+    ref_e_prima = (ref_e * fp).quantize(Decimal("0.0001")) if ref_e else None
+
+    return {
+        "ref_h": refh,
+        "fp": fp,
+        "ref_e": ref_e,
+        "ref_e_prima": ref_e_prima,
+        "capacidad_nominal_kw": cap_kw,
+        "nivel_tension_kv": nivel,
+        "altitud_msnm": altitud,
+        "tipo_motor": tipo_motor,
+        "medio_termico_vapor_pct": int(vapor_pct),
+    }
+
+
 @clientes_bp.route("/<int:cliente_id>")
 def ficha(cliente_id: int):
     from storage.repository import get_ppa_bloques_mensuales
@@ -433,7 +490,20 @@ def ficha(cliente_id: int):
     except Exception:
         pass
     user = _get_current_user()
-    resp = make_response(render_template("clientes/ficha.html", cliente=cliente, contratos=contratos, ppa_bloques=ppa_bloques))
+    # Parámetros CRE: solo para admin/master_admin
+    cre_params = None
+    if user and user.get("rol") in ("master_admin", "admin"):
+        try:
+            cre_params = _calcular_cre_params(cliente)
+        except Exception:
+            pass
+    resp = make_response(render_template(
+        "clientes/ficha.html",
+        cliente=cliente,
+        contratos=contratos,
+        ppa_bloques=ppa_bloques,
+        cre_params=cre_params,
+    ))
     if user and user.get("rol") in ("master_admin", "admin"):
         resp.set_cookie("last_cliente_id", str(cliente_id),
                         max_age=30 * 24 * 3600, samesite="Lax",

@@ -31,7 +31,7 @@ RE_KWH_PUNTA   = re.compile(r'kWh\s+punta\s+([\d,]+)')
 RE_KW_BASE     = re.compile(r'kW\s+base\s+([\d,]+)')
 RE_KW_INTER    = re.compile(r'kW\s+intermedia\s+([\d,]+)')
 RE_KW_PUNTA    = re.compile(r'kW\s+punta\s+([\d,]+)')
-RE_KW_MAX      = re.compile(r'[Kk][Ww][Mm]ax\s+([\d,]+)')
+RE_KW_MAX      = re.compile(r'[Kk][Ww]\s*[Mm]ax\s+([\d,]+)')
 RE_KVARH       = re.compile(r'kVArh\s+([\d,]+)')
 RE_FP          = re.compile(r'Factor\s+de\s+potencia\s+%\s+([\d.]+)')
 
@@ -188,6 +188,13 @@ class GDMTHParser(CFEParser):
         kw_inter  = _d(_req(texto, RE_KW_INTER,  "kW intermedia", advertencias))
         kw_punta  = _d(_req(texto, RE_KW_PUNTA,  "kW punta",      advertencias))
 
+        # kWMax: si el regex no encuentra el campo, derivar como max de demandas por horario
+        _kw_max_raw = _req(texto, RE_KW_MAX, "kWMax", advertencias)
+        _kw_max_val = _d(_kw_max_raw)
+        if _kw_max_val == Decimal("0") and (kw_base > 0 or kw_inter > 0 or kw_punta > 0):
+            _kw_max_val = max(kw_base, kw_inter, kw_punta)
+            advertencias.append("kWMax derivado de max(kW base, kW intermedia, kW punta)")
+
         # --- MEM ---
         componentes = [
             _parse_mem_row(texto, RE_MEM_SUMINISTRO,   "Suministro",   advertencias),
@@ -260,7 +267,7 @@ class GDMTHParser(CFEParser):
             carga_conectada_kw=_d(carga_raw),
             demanda_contratada_kw=_d(demanda_c_raw),
             periodos=periodos,
-            kw_max=_d(_req(texto, RE_KW_MAX,  "kWMax",  advertencias)),
+            kw_max=_kw_max_val,
             kvArh=_d(_req(texto, RE_KVARH,    "kVArh",  advertencias)),
             factor_potencia_pct=_d(_req(texto, RE_FP,   "factor_potencia", advertencias)),
             componentes_mem=componentes,

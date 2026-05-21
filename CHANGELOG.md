@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.39.0] — 2026-05-21
+
+### Corregido
+- Parser CFE GDMTH (`parsers/cfe/gdmth.py`): regex `RE_KW_MAX` ahora acepta "kW Max" con espacio entre "kW" y "Max" (`[Kk][Ww]\s*[Mm]ax`), presente en facturas 2019-era de INDUSTRIAS EUREKA (cliente 39) y probablemente otros clientes con PDFs antiguos.
+- Parser CFE GDMTH: si el campo `kWMax` no se encuentra en el PDF (regex sin coincidencia), el parser deriva el valor como `max(kW base, kW intermedia, kW punta)` y agrega advertencia descriptiva. Elimina los `kw_max = 0` silenciosos en facturas donde el campo existe en formato distinto.
+
+### Añadido
+- Tarjeta de solo lectura "Parámetros CRE (cogeneración eficiente)" en la ficha del cliente, visible únicamente para roles `admin` y `master_admin`. Muestra capacidad nominal derivada de las últimas facturas disponibles, RefH (ponderado por mezcla de medios térmicos), fp (factor de planta por nivel de tensión), RefE y RefE′ según tabla CRE RES/1838/2016.
+- `storage/migrations/202605_eureka_kw_max_correccion.sql`: corrección idempotente de `kw_max` en las 12 facturas históricas de EUREKA (facturas con kw_max NULL o "0") usando `MAX(kW base, kW intermedia, kW punta)` de `cfe_periodos`. Incluye diagnóstico de otros clientes con el mismo defecto.
+- `storage/migrations/202605_tipos_correctos.sql`: migración manual para cambiar columnas de tipo TEXT a NUMERIC/DATE/INTEGER en las tablas `cfe_facturas`, `cfe_periodos`, `cfe_mem_componentes`, `gas_facturas`, `gas_conceptos` y `facturas_electricidad_calificado`. Incluye pre-validación comentada para verificar valores convertibles antes de aplicar. No se ejecuta automáticamente.
+- `storage/migrations/202605_tipos_correctos_rollback.sql`: rollback idempotente de la migración de tipos, devuelve todas las columnas a TEXT.
+- `storage/migrations/202605_eureka_mem_cargos_correccion.sql`: corrección de asignación de tipo de cargo en componentes MEM de todas las facturas de EUREKA. Rederiva `cargo_fijo_mxn`, `cargo_demanda_mxn` y `cargo_energia_mxn` desde `importe_mxn` según el tipo de componente (regla determinista: Suministro→fijo, Distribución/Capacidad→demanda, demás→energía). Incluye diagnóstico previo con RAISE NOTICE por componente inconsistente.
+
+### Tests
+- `tests/parsers/test_gdmth.py`: 2 tests nuevos — `test_kw_max_regex_acepta_espacio` (verifica que el regex captura kWMax, kW Max, KW Max, kwmax) y `test_kw_max_fallback_desde_periodos` (verifica que el parser deriva kw_max desde las demandas horarias cuando el campo no está en el PDF, usando mock de pdfplumber).
+
 ## [2.38.2] — 2026-05-21
 
 ### Corregido

@@ -147,6 +147,75 @@ def test_sin_errores_de_validacion(invoice):
     errores = parser.validate(invoice)
     assert errores == [], f"Errores encontrados: {errores}"
 
+# --- kWMax: regex y fallback ---
+def test_kw_max_regex_acepta_espacio():
+    """RE_KW_MAX debe capturar tanto 'kWMax' como 'kW Max' (layout antiguo)."""
+    from parsers.cfe.gdmth import RE_KW_MAX
+    assert RE_KW_MAX.search("kWMax 1,232") is not None
+    assert RE_KW_MAX.search("kW Max 1,232") is not None
+    assert RE_KW_MAX.search("KW Max 1,232") is not None
+    assert RE_KW_MAX.search("kwmax 1,232") is not None
+
+
+def test_kw_max_fallback_desde_periodos(tmp_path):
+    """Si el PDF no tiene kWMax, el parser lo deriva del máximo de las demandas horarias."""
+    from unittest.mock import patch, MagicMock
+
+    texto_sin_kwmax = (
+        "NO. DE SERVICIO : 123456789\n"
+        "TARIFA: GDMTH\n"
+        "PERIODO FACTURADO: 01 ENE 2019 - 31 ENE 2019\n"
+        "CARGA CONECTADA kW:1500 DEMANDA CONTRATADA kW: 1500\n"
+        "MULTIPLICADOR: 100\n"
+        "NO. MEDIDOR: ABC123\n"
+        "kWh base 50,000\n"
+        "kWh intermedia 80,000\n"
+        "kWh punta 10,000\n"
+        "kW base 900\n"
+        "kW intermedia 1,100\n"
+        "kW punta 950\n"
+        # kWMax ausente deliberadamente
+        "kVArh 5,000\n"
+        "Factor de potencia % 92.50\n"
+        "Suministro 100.00 0.00 0.00 100.00\n"
+        "Distribución 0.00 8000.00 0.00 8000.00\n"
+        "Transmisión 0.00 0.00 3000.00 3000.00\n"
+        "CENACE 0.00 0.00 500.00 500.00\n"
+        "Generación B 0.00 0.00 10000.00 10000.00\n"
+        "Generación I 0.00 0.00 20000.00 20000.00\n"
+        "Generación P 0.00 0.00 5000.00 5000.00\n"
+        "Capacidad 0.00 15000.00 0.00 15000.00\n"
+        "SCnMEM 0.00 0.00 200.00 200.00\n"
+        "Cargo Fijo 100.00\n"
+        "Energía 38200.00\n"
+        "Cargo Factor de Potencia 0.00\n"
+        "Subtotal 38300.00\n"
+        "IVA 16 % 6128.00\n"
+        "Facturación del Periodo 44428.00\n"
+        "Derecho de Alumbrado Público 50.00\n"
+        "Total 44478.00\n"
+    )
+
+    mock_page1 = MagicMock()
+    mock_page1.extract_text.return_value = texto_sin_kwmax
+    mock_page2 = MagicMock()
+    mock_page2.extract_text.return_value = ""
+    mock_pdf = MagicMock()
+    mock_pdf.__enter__ = MagicMock(return_value=mock_pdf)
+    mock_pdf.__exit__ = MagicMock(return_value=False)
+    mock_pdf.pages = [mock_page1, mock_page2]
+
+    dummy_pdf = tmp_path / "dummy.pdf"
+    dummy_pdf.write_bytes(b"")
+
+    with patch("pdfplumber.open", return_value=mock_pdf):
+        inv = GDMTHParser().parse(dummy_pdf)
+
+    # fallback: max(900, 1100, 950) = 1100
+    assert inv.kw_max == Decimal("1100")
+    assert any("derivado" in a for a in inv.advertencias)
+
+
 # --- Factory ---
 def test_factory_devuelve_gdmth_parser():
     parser = get_cfe_parser("GDMTH")
