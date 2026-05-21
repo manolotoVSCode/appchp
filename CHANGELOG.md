@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.33.0] — 2026-05-20
+
+### Cambiado
+- Redirect post-login para `usuario_normal`: ahora va DIRECTO a la ficha de su empresa, no pasa por listado.
+- Sidebar del `usuario_normal`: muestra nombre de su empresa como único elemento de navegación. No muestra "Listado de Clientes", "Gestión de Usuarios" ni "Configuración".
+- Badge de rol en sidebar inferior: oculto para `usuario_normal`. `master_admin` y `admin` siguen mostrándolo.
+- Endpoint `GET /clientes/`: redirect transparente a `/clientes/<empresa_id>` cuando el usuario es `usuario_normal` con empresa asignada.
+
+### Añadido
+- Plantilla `error_sin_empresa.html` para caso edge donde `usuario_normal` no tiene empresa asignada (403, con botones Mi Perfil y Cerrar sesión).
+- `empresa_nombre` almacenado en sesión Flask al login (consultado una sola vez desde BD). Disponible en `current_user_data.empresa_nombre` en templates.
+
 ## [2.32.0] — 2026-05-20
 
 ### Cambiado — Gestión de usuarios: creación directa en lugar de invitación por email

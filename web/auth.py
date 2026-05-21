@@ -33,24 +33,26 @@ ROLES_VALIDOS = {ROL_MASTER_ADMIN, ROL_ADMIN, ROL_USUARIO_NORMAL}
 # ── Helpers de sesión ─────────────────────────────────────────────────────────
 
 def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
-                     access_token: str, remember: bool = False) -> None:
+                     access_token: str, remember: bool = False,
+                     empresa_nombre: str | None = None) -> None:
     session.permanent = remember
     session["_user_id"] = user_id
     session["_user_email"] = email
     session["_user_rol"] = rol
     session["_empresa_id"] = empresa_id
+    session["_empresa_nombre"] = empresa_nombre
     session["_access_token"] = access_token
 
 
 def clear_user_session() -> None:
-    for key in ("_user_id", "_user_email", "_user_rol", "_empresa_id",
+    for key in ("_user_id", "_user_email", "_user_rol", "_empresa_id", "_empresa_nombre",
                 "_access_token", "_cp_cache", "cliente_activo_id",
                 "cliente_activo_nombre", "cliente_activo_logo_url"):
         session.pop(key, None)
 
 
 def get_current_user() -> dict | None:
-    """Retorna dict con user_id, email, rol, empresa_id o None si no autenticado."""
+    """Retorna dict con user_id, email, rol, empresa_id, empresa_nombre o None si no autenticado."""
     user_id = session.get("_user_id")
     if not user_id:
         return None
@@ -59,6 +61,7 @@ def get_current_user() -> dict | None:
         "email": session.get("_user_email", ""),
         "rol": session.get("_user_rol", ""),
         "empresa_id": session.get("_empresa_id"),
+        "empresa_nombre": session.get("_empresa_nombre"),
     }
 
 
@@ -125,8 +128,17 @@ def login():
         else:
             error = _handle_login(email, password, remember)
             if error is None:
+                user = get_current_user()
+                if user and user["rol"] == ROL_USUARIO_NORMAL:
+                    empresa_id = user.get("empresa_id")
+                    if empresa_id:
+                        return redirect(url_for("clientes.ficha", cliente_id=empresa_id))
+                    return render_template(
+                        "auth/login.html",
+                        error="Sin empresa asignada. Contacta al administrador.",
+                    )
                 raw_next = request.args.get("next", "")
-                next_url = raw_next if _es_url_segura(raw_next) else url_for("dashboard")
+                next_url = raw_next if _es_url_segura(raw_next) else url_for("clientes.listado")
                 return redirect(next_url)
 
     return render_template("auth/login.html", error=error)
@@ -167,6 +179,16 @@ def _handle_login(email: str, password: str, remember: bool) -> str | None:
     if not profile.get("activo", True):
         return "Tu cuenta está desactivada. Contacta al administrador."
 
+    empresa_nombre = None
+    if profile["rol"] == ROL_USUARIO_NORMAL and profile.get("empresa_id"):
+        try:
+            from storage.repository import get_cliente_con_conteos as _gcc
+            empresa = _gcc(profile["empresa_id"])
+            if empresa:
+                empresa_nombre = empresa.get("nombre")
+        except Exception:
+            pass
+
     set_user_session(
         user_id=user_id,
         email=profile.get("email", email),
@@ -174,6 +196,7 @@ def _handle_login(email: str, password: str, remember: bool) -> str | None:
         empresa_id=profile.get("empresa_id"),
         access_token=access_token,
         remember=remember,
+        empresa_nombre=empresa_nombre,
     )
     logger.info("Login exitoso: email=%s rol=%s", email, profile["rol"])
     return None

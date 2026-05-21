@@ -23,13 +23,14 @@ def client(app):
     return app.test_client()
 
 
-def _inject_session(client, rol="admin"):
+def _inject_session(client, rol="admin", empresa_id=None, empresa_nombre=None):
     """Inyecta sesión de usuario autenticado directamente (sin llamar a Supabase)."""
     with client.session_transaction() as sess:
         sess["_user_id"] = "test-user-uuid"
         sess["_user_email"] = "operador@test.com"
         sess["_user_rol"] = rol
-        sess["_empresa_id"] = None
+        sess["_empresa_id"] = empresa_id
+        sess["_empresa_nombre"] = empresa_nombre
 
 
 # ── Tests de acceso sin autenticación ─────────────────────────────────────────
@@ -127,4 +128,31 @@ def test_healthz_sin_autenticacion(client):
 def test_health_sin_autenticacion(client):
     """GET /health → 200 sin autenticación."""
     resp = client.get("/health")
+    assert resp.status_code == 200
+
+
+# ── Tests de comportamiento por rol ───────────────────────────────────────────
+
+def test_listado_usuario_normal_con_empresa_redirige_a_ficha(client, monkeypatch):
+    """/clientes/ con usuario_normal y empresa_id → 302 a /clientes/<id>."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [])
+    _inject_session(client, rol="usuario_normal", empresa_id=42)
+    resp = client.get("/clientes/", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes/42" in resp.headers["Location"]
+
+
+def test_listado_usuario_normal_sin_empresa_403(client, monkeypatch):
+    """/clientes/ con usuario_normal sin empresa → 403 (error_sin_empresa)."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [])
+    _inject_session(client, rol="usuario_normal", empresa_id=None)
+    resp = client.get("/clientes/", follow_redirects=False)
+    assert resp.status_code == 403
+
+
+def test_listado_admin_no_redirige(client, monkeypatch):
+    """/clientes/ con admin → 200 (listado normal, sin redirect)."""
+    monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [])
+    _inject_session(client, rol="admin")
+    resp = client.get("/clientes/", follow_redirects=False)
     assert resp.status_code == 200

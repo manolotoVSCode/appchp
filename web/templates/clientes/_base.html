@@ -268,11 +268,25 @@
     <div class="sidebar-brand-sub">Análisis Energético</div>
   </div>
 
+  {% if current_user_data and current_user_data.rol == 'usuario_normal' %}
+  <div class="sidebar-section">Mi empresa</div>
+  {% if current_user_data.empresa_id %}
+  <a href="{{ url_for('clientes.ficha', cliente_id=current_user_data.empresa_id) }}"
+     class="sidebar-link{% if nav_active == 'clientes' %} active{% endif %}">
+    <i class="bi bi-building"></i>{{ current_user_data.empresa_nombre or 'Mi empresa' }}
+  </a>
+  {% else %}
+  <span class="sidebar-link" style="color:#8A9BB0;cursor:default">
+    <i class="bi bi-building"></i>Sin empresa asignada
+  </span>
+  {% endif %}
+  {% else %}
   <div class="sidebar-section">Clientes</div>
   <a href="{{ url_for('clientes.listado') }}"
      class="sidebar-link{% if nav_active == 'clientes' %} active{% endif %}">
     <i class="bi bi-people"></i>Listado clientes
   </a>
+  {% endif %}
 
   {% if cliente_activo %}
   <hr class="sidebar-divider mx-3">
@@ -317,6 +331,7 @@
   {% endif %}
   {% endif %}
 
+  {% if not current_user_data or current_user_data.rol != 'usuario_normal' %}
   <hr class="sidebar-divider mx-3">
   <div class="sidebar-section">Administración</div>
   <a href="{{ url_for('admin_configuracion') }}"
@@ -329,20 +344,21 @@
     <i class="bi bi-people-fill"></i>Usuarios
   </a>
   {% endif %}
+  {% endif %}
 
   <div class="sidebar-bottom">
     {% if current_user_data %}
     <div style="padding:.4rem .75rem .6rem;font-size:.72rem;color:#8A9BB0;line-height:1.4;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:.5rem">
       <div style="font-weight:600;color:#C5D0DC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ current_user_data.email }}">{{ current_user_data.email }}</div>
+      {% if current_user_data.rol != 'usuario_normal' %}
       <div>
         {% if current_user_data.rol == 'master_admin' %}
           <span style="color:#F48FB1">master_admin</span>
         {% elif current_user_data.rol == 'admin' %}
           <span style="color:#81D4FA">admin</span>
-        {% else %}
-          <span style="color:#A5D6A7">usuario</span>
         {% endif %}
       </div>
+      {% endif %}
     </div>
     <a href="{{ url_for('mi_perfil') }}"
        class="btn btn-sm btn-outline-secondary w-100 mb-1{% if nav_active == 'mi_perfil' %} active{% endif %}">
@@ -369,10 +385,12 @@
 <div id="main-content">
 
   {% for category, message in get_flashed_messages(with_categories=true) %}
+  {% if category != 'password_generada' %}
   <div class="alert alert-{{ 'success' if category == 'success' else 'warning' if category == 'warning' else 'danger' }} alert-dismissible fade show mb-3" role="alert">
     {{ message }}
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
   </div>
+  {% endif %}
   {% endfor %}
 
   {% block content %}{% endblock %}

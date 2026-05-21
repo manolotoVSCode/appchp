@@ -238,8 +238,12 @@ def _validar_campos(nombre: str, rfc: str) -> str | None:
 
 @clientes_bp.route("/")
 def listado():
-    clientes = get_all_clientes_con_conteos()
     user = _get_current_user()
+    if user and user.get("rol") == "usuario_normal":
+        if user.get("empresa_id"):
+            return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
+        return render_template("error_sin_empresa.html"), 403
+    clientes = get_all_clientes_con_conteos()
     if user:
         clientes = filtrar_empresas_para_usuario(clientes, user)
     return render_template("clientes/list.html", clientes=clientes)

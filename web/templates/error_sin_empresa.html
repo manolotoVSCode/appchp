@@ -1,0 +1,28 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "" %}
+
+{% block title %}Sin empresa asignada — CHP App{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="min-height:60vh">
+  <div class="text-center" style="max-width:480px">
+    <div style="font-size:2.5rem;margin-bottom:1rem">&#9888;</div>
+    <h2 class="h4 fw-bold mb-3">Sin empresa asignada</h2>
+    <p class="text-muted mb-2">
+      No tienes una empresa asignada. Esto es un error de configuración.
+    </p>
+    <p class="text-muted mb-4">
+      Por favor contacta a tu administrador para que te asigne una empresa.
+      Mientras tanto, puedes cambiar tu contraseña desde Mi Perfil.
+    </p>
+    <div class="d-flex gap-2 justify-content-center">
+      <a href="{{ url_for('mi_perfil') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-person-circle"></i> Mi Perfil
+      </a>
+      <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
