@@ -532,6 +532,23 @@ def test_upload_manual_exitoso(auth_client, monkeypatch):
         return (99, "2024 ENE CFE 812990300016")
     monkeypatch.setattr("web.clientes.save_cfe_invoice", _fake_save)
 
+    import json as _json
+    _periodos = _json.dumps([
+        {"periodo": "base",       "consumo_kwh": "11530", "demanda_kw": "68", "costo_unitario_kwh": None},
+        {"periodo": "intermedio", "consumo_kwh": "25106", "demanda_kw": "99", "costo_unitario_kwh": None},
+        {"periodo": "punta",      "consumo_kwh": "2281",  "demanda_kw": "81", "costo_unitario_kwh": None},
+    ])
+    _componentes = _json.dumps([
+        {"nombre": "Suministro",   "cargo_fijo_mxn": "441.87",  "cargo_demanda_mxn": "0",        "cargo_energia_mxn": "0",        "importe_mxn": "441.87"},
+        {"nombre": "Distribución", "cargo_fijo_mxn": "0",       "cargo_demanda_mxn": "8780.48",  "cargo_energia_mxn": "0",        "importe_mxn": "8780.48"},
+        {"nombre": "Transmisión",  "cargo_fijo_mxn": "0",       "cargo_demanda_mxn": "0",        "cargo_energia_mxn": "6884.42",  "importe_mxn": "6884.42"},
+        {"nombre": "CENACE",       "cargo_fijo_mxn": "0",       "cargo_demanda_mxn": "0",        "cargo_energia_mxn": "252.97",   "importe_mxn": "252.97"},
+        {"nombre": "Generación B", "cargo_fijo_mxn": "0",       "cargo_demanda_mxn": "0",        "cargo_energia_mxn": "12846.73", "importe_mxn": "12846.73"},
+        {"nombre": "Generación I", "cargo_fijo_mxn": "0",       "cargo_demanda_mxn": "0",        "cargo_energia_mxn": "50668.93", "importe_mxn": "50668.93"},
+        {"nombre": "Generación P", "cargo_fijo_mxn": "0",       "cargo_demanda_mxn": "0",        "cargo_energia_mxn": "5191.78",  "importe_mxn": "5191.78"},
+        {"nombre": "Capacidad",    "cargo_fijo_mxn": "0",       "cargo_demanda_mxn": "34021.62", "cargo_energia_mxn": "0",        "importe_mxn": "34021.62"},
+        {"nombre": "SCnMEM",       "cargo_fijo_mxn": "0",       "cargo_demanda_mxn": "0",        "cargo_energia_mxn": "241.29",   "importe_mxn": "241.29"},
+    ])
     resp = auth_client.post(
         "/clientes/1/contratos/10/upload/manual",
         data={
@@ -544,8 +561,10 @@ def test_upload_manual_exitoso(auth_client, monkeypatch):
             "total_mxn": "50000.00",
             "motivo_captura_manual": "texto_cifrado",
             "tarifa": "GDMTH",
-            "periodos_json": "[]",
-            "componentes_mem_json": "[]",
+            "kw_max": "99",
+            "factor_potencia_pct": "91.20",
+            "periodos_json": _periodos,
+            "componentes_mem_json": _componentes,
         },
         content_type="multipart/form-data",
     )
@@ -592,3 +611,51 @@ def test_upload_manual_sin_periodo_falla(auth_client, monkeypatch):
     assert resp.status_code == 400
     data = resp.get_json()
     assert "periodo_inicio" in data["error"]
+
+
+def test_upload_manual_sin_consumos_falla(auth_client, monkeypatch):
+    """POST a /upload/manual con periodos_json vacío → 400 solicitando datos de consumo."""
+    _setup_electrico(monkeypatch)
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload/manual",
+        data={
+            "numero_servicio": "812990300016",
+            "periodo_inicio": "2024-01-01",
+            "periodo_fin": "2024-01-31",
+            "motivo_captura_manual": "texto_cifrado",
+            "periodos_json": "[]",
+            "componentes_mem_json": "[]",
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert "consumo" in data["error"].lower()
+
+
+def test_upload_manual_sin_mem_falla(auth_client, monkeypatch):
+    """POST a /upload/manual con periodos correctos pero sin MEM → 400."""
+    import json as _json
+    _setup_electrico(monkeypatch)
+    _periodos = _json.dumps([
+        {"periodo": "base",       "consumo_kwh": "11530", "demanda_kw": "68", "costo_unitario_kwh": None},
+        {"periodo": "intermedio", "consumo_kwh": "25106", "demanda_kw": "99", "costo_unitario_kwh": None},
+        {"periodo": "punta",      "consumo_kwh": "2281",  "demanda_kw": "81", "costo_unitario_kwh": None},
+    ])
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload/manual",
+        data={
+            "numero_servicio": "812990300016",
+            "periodo_inicio": "2024-01-01",
+            "periodo_fin": "2024-01-31",
+            "motivo_captura_manual": "texto_cifrado",
+            "periodos_json": _periodos,
+            "componentes_mem_json": "[]",
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert "mem" in data["error"].lower()

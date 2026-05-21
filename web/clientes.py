@@ -1075,6 +1075,19 @@ def contrato_upload_manual(cliente_id: int, contrato_id: int):
     except Exception:
         componentes_mem = []
 
+    # Validar campos críticos de consumo: deben existir los 3 periodos con kWh > 0
+    periodos_con_consumo = [p for p in periodos if p.consumo_kwh is not None and p.consumo_kwh > 0]
+    if len(periodos_con_consumo) < 3:
+        return jsonify({
+            "error": "Faltan datos de consumo. Se requieren los kWh de los tres horarios (base, intermedio, punta). Completa la sección Consumos del formulario."
+        }), 400
+
+    # Validar componentes MEM: deben existir los 9 componentes estándar GDMTH
+    if len(componentes_mem) < 9:
+        return jsonify({
+            "error": f"Faltan componentes MEM. Se requieren 9 (Suministro, Distribución, Transmisión, CENACE, Generación B/I/P, Capacidad, SCnMEM). Se recibieron {len(componentes_mem)}. Completa la sección MEM del formulario."
+        }), 400
+
     # PDF: guardar en temp para pdf_path
     pdf_file = request.files.get("pdf")
     tmp_path = None

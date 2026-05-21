@@ -247,77 +247,227 @@
       </div>
       <div class="modal-body p-0" style="height:calc(100% - 120px); overflow:hidden">
         <div class="d-flex h-100">
-          <!-- Columna izquierda: formulario -->
+          <!-- Columna izquierda: formulario con tabs -->
           <div class="col-6 border-end overflow-auto p-3" style="max-height:75vh">
-            <p class="text-muted small mb-3">
+            <p class="text-muted small mb-2">
               El parser no pudo extraer todos los datos de <strong id="captura-archivo-nombre"></strong>.
-              Completa los campos faltantes revisando el PDF a la derecha.
+              Completa los campos marcados con <span class="text-danger fw-bold">*</span> revisando el PDF.
             </p>
             <form id="formCapturaManual" novalidate>
-              <div class="row g-2">
-                <div class="col-6">
-                  <label class="form-label form-label-sm fw-semibold">Período inicio <span class="text-danger">*</span></label>
-                  <input type="date" class="form-control form-control-sm" id="cm-periodo-inicio" name="periodo_inicio" required>
+              <!-- Tabs de navegación -->
+              <ul class="nav nav-tabs mb-3" id="cmTabs" role="tablist" style="font-size:.8rem">
+                <li class="nav-item">
+                  <a class="nav-link active py-1 px-2" id="cm-tab-id" data-bs-toggle="tab" href="#cm-pane-id" role="tab">Identificación</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link py-1 px-2" id="cm-tab-totales" data-bs-toggle="tab" href="#cm-pane-totales" role="tab">Totales</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link py-1 px-2" id="cm-tab-consumos" data-bs-toggle="tab" href="#cm-pane-consumos" role="tab">Consumos <span id="cm-badge-consumos" class="badge bg-danger ms-1" style="display:none;font-size:.65rem">!</span></a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link py-1 px-2" id="cm-tab-mem" data-bs-toggle="tab" href="#cm-pane-mem" role="tab">MEM <span id="cm-badge-mem" class="badge bg-danger ms-1" style="display:none;font-size:.65rem">!</span></a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link py-1 px-2" id="cm-tab-motivo" data-bs-toggle="tab" href="#cm-pane-motivo" role="tab">Motivo <span id="cm-badge-motivo" class="badge bg-danger ms-1" style="display:none;font-size:.65rem">!</span></a>
+                </li>
+              </ul>
+              <div class="tab-content">
+
+                <!-- TAB 1: Identificación -->
+                <div class="tab-pane fade show active" id="cm-pane-id" role="tabpanel">
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Período inicio <span class="text-danger">*</span></label>
+                      <input type="date" class="form-control form-control-sm" id="cm-periodo-inicio" name="periodo_inicio" required>
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Período fin <span class="text-danger">*</span></label>
+                      <input type="date" class="form-control form-control-sm" id="cm-periodo-fin" name="periodo_fin" required>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label form-label-sm fw-semibold">Número de servicio <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-numero-servicio" name="numero_servicio" required placeholder="12 dígitos CFE">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">RMU</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-rmu" name="rmu">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Folio</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-folio" name="folio">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Fecha emisión</label>
+                      <input type="date" class="form-control form-control-sm" id="cm-fecha-emision" name="fecha_emision">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Fecha límite pago</label>
+                      <input type="date" class="form-control form-control-sm" id="cm-fecha-limite" name="fecha_limite_pago">
+                    </div>
+                  </div>
                 </div>
-                <div class="col-6">
-                  <label class="form-label form-label-sm fw-semibold">Período fin <span class="text-danger">*</span></label>
-                  <input type="date" class="form-control form-control-sm" id="cm-periodo-fin" name="periodo_fin" required>
+
+                <!-- TAB 2: Totales -->
+                <div class="tab-pane fade" id="cm-pane-totales" role="tabpanel">
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Total a pagar MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-total" name="total_mxn" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Subtotal MXN</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-subtotal" name="subtotal_mxn" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">IVA MXN</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-iva" name="iva_mxn" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Cargo fijo MXN</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-cargo-fijo" name="cargo_fijo_mxn" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Energía total MXN</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-energia-total" name="energia_total_mxn" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Bonif. factor potencia MXN</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-cargo-fp" name="cargo_factor_potencia_mxn" placeholder="negativo si bonificación">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Facturación período MXN</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-facturacion-periodo" name="facturacion_periodo_mxn" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Der. alumbrado público MXN</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-dap" name="derecho_alumbrado_publico_mxn" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm">Crédito aplicado MXN</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-credito" name="credito_aplicado_mxn" placeholder="negativo si crédito">
+                    </div>
+                  </div>
                 </div>
-                <div class="col-12">
-                  <label class="form-label form-label-sm fw-semibold">Número de servicio <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control form-control-sm" id="cm-numero-servicio" name="numero_servicio" required placeholder="12 dígitos CFE">
+
+                <!-- TAB 3: Consumos y demanda -->
+                <div class="tab-pane fade" id="cm-pane-consumos" role="tabpanel">
+                  <div class="row g-2">
+                    <div class="col-12 mt-1"><small class="fw-semibold text-muted text-uppercase" style="font-size:.7rem;letter-spacing:.04em">Consumos kWh por horario</small></div>
+                    <div class="col-4">
+                      <label class="form-label form-label-sm fw-semibold">Base kWh <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-kwh-base" placeholder="0">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label form-label-sm fw-semibold">Intermedia kWh <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-kwh-intermedia" placeholder="0">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label form-label-sm fw-semibold">Punta kWh <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-kwh-punta" placeholder="0">
+                    </div>
+                    <div class="col-12 mt-2"><small class="fw-semibold text-muted text-uppercase" style="font-size:.7rem;letter-spacing:.04em">Demanda kW por horario</small></div>
+                    <div class="col-4">
+                      <label class="form-label form-label-sm fw-semibold">Base kW <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-kw-base" placeholder="0">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label form-label-sm fw-semibold">Intermedia kW <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-kw-intermedia" placeholder="0">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label form-label-sm fw-semibold">Punta kW <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-kw-punta" placeholder="0">
+                    </div>
+                    <div class="col-12 mt-2"><small class="fw-semibold text-muted text-uppercase" style="font-size:.7rem;letter-spacing:.04em">Otros valores</small></div>
+                    <div class="col-4">
+                      <label class="form-label form-label-sm fw-semibold">kW máx <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-kwmax" placeholder="0">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label form-label-sm">kVArh</label>
+                      <input type="text" class="form-control form-control-sm" id="cm-kvarh" name="kvarh" placeholder="0">
+                    </div>
+                    <div class="col-4">
+                      <label class="form-label form-label-sm fw-semibold">Factor potencia % <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-factor-potencia" placeholder="0–100">
+                    </div>
+                  </div>
                 </div>
-                <div class="col-6">
-                  <label class="form-label form-label-sm">Folio</label>
-                  <input type="text" class="form-control form-control-sm" id="cm-folio" name="folio">
+
+                <!-- TAB 4: Componentes MEM -->
+                <div class="tab-pane fade" id="cm-pane-mem" role="tabpanel">
+                  <p class="text-muted small mb-2">Importe total de cada componente tal como aparece en la factura (columna Importe).</p>
+                  <div class="row g-2">
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Suministro MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-mem-suministro" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Distribución MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-mem-distribucion" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Transmisión MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-mem-transmision" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">CENACE MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-mem-cenace" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Generación B MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-mem-gen-b" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Generación I MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-mem-gen-i" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Generación P MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-mem-gen-p" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">Capacidad MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-mem-capacidad" placeholder="0.00">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label form-label-sm fw-semibold">SCnMEM MXN <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="cm-mem-scnmem" placeholder="0.00">
+                    </div>
+                  </div>
                 </div>
-                <div class="col-6">
-                  <label class="form-label form-label-sm">Fecha emisión</label>
-                  <input type="date" class="form-control form-control-sm" id="cm-fecha-emision" name="fecha_emision">
+
+                <!-- TAB 5: Motivo -->
+                <div class="tab-pane fade" id="cm-pane-motivo" role="tabpanel">
+                  <div class="row g-2 mt-1">
+                    <div class="col-12">
+                      <label class="form-label form-label-sm fw-semibold">Motivo de captura manual <span class="text-danger">*</span></label>
+                      <select class="form-select form-select-sm" id="cm-motivo" name="motivo_captura_manual" required>
+                        <option value="">— Selecciona —</option>
+                        <option value="texto_cifrado">Texto cifrado en PDF (no seleccionable)</option>
+                        <option value="campos_ilegibles">Campos ilegibles o dañados</option>
+                        <option value="pdf_escaneado">PDF escaneado (imagen)</option>
+                        <option value="otro">Otro</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
-                <div class="col-6">
-                  <label class="form-label form-label-sm">Fecha límite pago</label>
-                  <input type="date" class="form-control form-control-sm" id="cm-fecha-limite" name="fecha_limite_pago">
-                </div>
-                <div class="col-6">
-                  <label class="form-label form-label-sm">Total MXN</label>
-                  <input type="text" class="form-control form-control-sm" id="cm-total" name="total_mxn">
-                </div>
-                <div class="col-12">
-                  <label class="form-label form-label-sm fw-semibold">Motivo de captura manual <span class="text-danger">*</span></label>
-                  <select class="form-select form-select-sm" id="cm-motivo" name="motivo_captura_manual" required>
-                    <option value="">— Selecciona —</option>
-                    <option value="texto_cifrado">Texto cifrado en PDF (no seleccionable)</option>
-                    <option value="campos_ilegibles">Campos ilegibles o dañados</option>
-                    <option value="pdf_escaneado">PDF escaneado (imagen)</option>
-                    <option value="otro">Otro</option>
-                  </select>
-                </div>
-                <!-- Campos ocultos con datos extraídos por el parser -->
-                <input type="hidden" id="cm-uuid-cfdi" name="uuid_cfdi">
-                <input type="hidden" id="cm-serie" name="serie">
-                <input type="hidden" id="cm-rmu" name="rmu">
-                <input type="hidden" id="cm-nombre-cliente" name="nombre_cliente">
-                <input type="hidden" id="cm-rfc-cliente" name="rfc_cliente">
-                <input type="hidden" id="cm-tarifa" name="tarifa">
-                <input type="hidden" id="cm-numero-medidor" name="numero_medidor">
-                <input type="hidden" id="cm-multiplicador" name="multiplicador">
-                <input type="hidden" id="cm-carga-conectada" name="carga_conectada_kw">
-                <input type="hidden" id="cm-demanda-contratada" name="demanda_contratada_kw">
-                <input type="hidden" id="cm-kw-max" name="kw_max">
-                <input type="hidden" id="cm-kvarh" name="kvarh">
-                <input type="hidden" id="cm-fp" name="factor_potencia_pct">
-                <input type="hidden" id="cm-cargo-fijo" name="cargo_fijo_mxn">
-                <input type="hidden" id="cm-energia-total" name="energia_total_mxn">
-                <input type="hidden" id="cm-cargo-fp" name="cargo_factor_potencia_mxn">
-                <input type="hidden" id="cm-subtotal" name="subtotal_mxn">
-                <input type="hidden" id="cm-iva" name="iva_mxn">
-                <input type="hidden" id="cm-facturacion-periodo" name="facturacion_periodo_mxn">
-                <input type="hidden" id="cm-dap" name="derecho_alumbrado_publico_mxn">
-                <input type="hidden" id="cm-credito" name="credito_aplicado_mxn">
-                <input type="hidden" id="cm-periodos-json" name="periodos_json">
-                <input type="hidden" id="cm-componentes-json" name="componentes_mem_json">
-              </div>
+
+              </div><!-- /.tab-content -->
+
+              <!-- Campos ocultos auxiliares -->
+              <input type="hidden" id="cm-uuid-cfdi" name="uuid_cfdi">
+              <input type="hidden" id="cm-serie" name="serie">
+              <input type="hidden" id="cm-nombre-cliente" name="nombre_cliente">
+              <input type="hidden" id="cm-rfc-cliente" name="rfc_cliente">
+              <input type="hidden" id="cm-tarifa" name="tarifa">
+              <input type="hidden" id="cm-numero-medidor" name="numero_medidor">
+              <input type="hidden" id="cm-multiplicador" name="multiplicador">
+              <input type="hidden" id="cm-carga-conectada" name="carga_conectada_kw">
+              <input type="hidden" id="cm-demanda-contratada" name="demanda_contratada_kw">
+              <input type="hidden" id="cm-periodos-json" name="periodos_json">
+              <input type="hidden" id="cm-componentes-json" name="componentes_mem_json">
             </form>
           </div>
           <!-- Columna derecha: visor PDF -->
@@ -328,6 +478,7 @@
       </div>
       <div class="modal-footer">
         <div id="captura-manual-error" class="text-danger small me-auto" style="display:none"></div>
+        <small class="text-muted me-2" id="cm-campos-faltantes-msg" style="display:none">Completa todos los campos <span class="text-danger">*</span> (revisa cada tab)</small>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-warning" id="btnGuardarCapturaManual" disabled>
           Guardar factura
@@ -554,89 +705,194 @@ function mostrarDiscrepancia(p) {
 
 // ── Captura manual ────────────────────────────────────────────────────────────
 const manualUrl = "{{ url_for('clientes.contrato_upload_manual', cliente_id=cliente.id, contrato_id=contrato.id) }}";
-let _capturaManualPendientes = [];  // queue: [{file, info}]
+let _capturaManualPendientes = [];
 let _capturaManualBlobUrl = null;
 
 function _setInputVal(id, val) {
   const el = document.getElementById(id);
-  if (el && val !== null && val !== undefined) el.value = val;
+  if (el && val !== null && val !== undefined && val !== "") el.value = val;
+}
+
+function _getInputVal(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : "";
+}
+
+// IDs de todos los campos obligatorios del modal
+const _cmRequeridos = [
+  "cm-periodo-inicio", "cm-periodo-fin", "cm-numero-servicio",
+  "cm-total",
+  "cm-kwh-base", "cm-kwh-intermedia", "cm-kwh-punta",
+  "cm-kw-base", "cm-kw-intermedia", "cm-kw-punta",
+  "cm-kwmax", "cm-factor-potencia",
+  "cm-mem-suministro", "cm-mem-distribucion", "cm-mem-transmision",
+  "cm-mem-cenace", "cm-mem-gen-b", "cm-mem-gen-i", "cm-mem-gen-p",
+  "cm-mem-capacidad", "cm-mem-scnmem",
+  "cm-motivo",
+];
+
+// Campos por tab (para badges de indicador)
+const _cmTabCampos = {
+  "cm-pane-consumos": ["cm-kwh-base", "cm-kwh-intermedia", "cm-kwh-punta",
+                       "cm-kw-base", "cm-kw-intermedia", "cm-kw-punta",
+                       "cm-kwmax", "cm-factor-potencia"],
+  "cm-pane-mem":      ["cm-mem-suministro", "cm-mem-distribucion", "cm-mem-transmision",
+                       "cm-mem-cenace", "cm-mem-gen-b", "cm-mem-gen-i", "cm-mem-gen-p",
+                       "cm-mem-capacidad", "cm-mem-scnmem"],
+  "cm-pane-motivo":   ["cm-motivo"],
+};
+
+const _cmBadgeMap = {
+  "cm-pane-consumos": "cm-badge-consumos",
+  "cm-pane-mem":      "cm-badge-mem",
+  "cm-pane-motivo":   "cm-badge-motivo",
+};
+
+function _checkCapturaManualRequeridos() {
+  const faltantes = _cmRequeridos.filter(id => !_getInputVal(id));
+  const ok = faltantes.length === 0;
+  const btn = document.getElementById("btnGuardarCapturaManual");
+  if (btn) btn.disabled = !ok;
+  const msgEl = document.getElementById("cm-campos-faltantes-msg");
+  if (msgEl) msgEl.style.display = ok ? "none" : "";
+  // Actualizar badges por tab
+  for (const [paneId, campos] of Object.entries(_cmTabCampos)) {
+    const faltantesTab = campos.filter(id => !_getInputVal(id));
+    const badge = document.getElementById(_cmBadgeMap[paneId]);
+    if (badge) badge.style.display = faltantesTab.length > 0 ? "" : "none";
+  }
 }
 
 function mostrarCapturaManual(item) {
   const { archivo, campos_extraidos: ex, campos_faltantes } = item;
   const file = item._file;
 
-  // Pre-fill form from campos_extraidos
+  // Pre-fill identificación
   _setInputVal("cm-periodo-inicio", ex.periodo_inicio || "");
   _setInputVal("cm-periodo-fin", ex.periodo_fin || "");
   _setInputVal("cm-numero-servicio", ex.numero_servicio || "");
+  _setInputVal("cm-rmu", ex.rmu || "");
   _setInputVal("cm-folio", ex.folio || "");
   _setInputVal("cm-fecha-emision", ex.fecha_emision || "");
   _setInputVal("cm-fecha-limite", ex.fecha_limite_pago || "");
+
+  // Pre-fill totales
   _setInputVal("cm-total", ex.total_mxn || "");
-  _setInputVal("cm-uuid-cfdi", ex.uuid_cfdi || "");
-  _setInputVal("cm-serie", ex.serie || "");
-  _setInputVal("cm-rmu", ex.rmu || "");
-  _setInputVal("cm-nombre-cliente", ex.nombre_cliente || "");
-  _setInputVal("cm-rfc-cliente", ex.rfc_cliente || "");
-  _setInputVal("cm-tarifa", ex.tarifa || "GDMTH");
-  _setInputVal("cm-numero-medidor", ex.numero_medidor || "");
-  _setInputVal("cm-multiplicador", ex.multiplicador || 1);
-  _setInputVal("cm-carga-conectada", ex.carga_conectada_kw || "");
-  _setInputVal("cm-demanda-contratada", ex.demanda_contratada_kw || "");
-  _setInputVal("cm-kw-max", ex.kw_max || "");
-  _setInputVal("cm-kvarh", ex.kvarh || "");
-  _setInputVal("cm-fp", ex.factor_potencia_pct || "");
+  _setInputVal("cm-subtotal", ex.subtotal_mxn || "");
+  _setInputVal("cm-iva", ex.iva_mxn || "");
   _setInputVal("cm-cargo-fijo", ex.cargo_fijo_mxn || "");
   _setInputVal("cm-energia-total", ex.energia_total_mxn || "");
   _setInputVal("cm-cargo-fp", ex.cargo_factor_potencia_mxn || "");
-  _setInputVal("cm-subtotal", ex.subtotal_mxn || "");
-  _setInputVal("cm-iva", ex.iva_mxn || "");
   _setInputVal("cm-facturacion-periodo", ex.facturacion_periodo_mxn || "");
   _setInputVal("cm-dap", ex.derecho_alumbrado_publico_mxn || "");
   _setInputVal("cm-credito", ex.credito_aplicado_mxn || "");
-  _setInputVal("cm-periodos-json", JSON.stringify(ex.periodos || []));
-  _setInputVal("cm-componentes-json", JSON.stringify(ex.componentes_mem || []));
+
+  // Pre-fill consumos desde periodos extraídos
+  const periodos = ex.periodos || [];
+  const base = periodos.find(p => p.periodo === "base") || {};
+  const inter = periodos.find(p => p.periodo === "intermedio") || {};
+  const punta = periodos.find(p => p.periodo === "punta") || {};
+  _setInputVal("cm-kwh-base",       base.consumo_kwh  || "");
+  _setInputVal("cm-kw-base",        base.demanda_kw   || "");
+  _setInputVal("cm-kwh-intermedia", inter.consumo_kwh  || "");
+  _setInputVal("cm-kw-intermedia",  inter.demanda_kw   || "");
+  _setInputVal("cm-kwh-punta",      punta.consumo_kwh  || "");
+  _setInputVal("cm-kw-punta",       punta.demanda_kw   || "");
+  _setInputVal("cm-kwmax",          ex.kw_max || "");
+  _setInputVal("cm-kvarh",          ex.kvarh  || "");
+  _setInputVal("cm-factor-potencia", ex.factor_potencia_pct || "");
+
+  // Pre-fill componentes MEM
+  const mems = ex.componentes_mem || [];
+  const memMap = {};
+  mems.forEach(m => { memMap[m.nombre] = m; });
+  const _memVal = (nombre, campo1, campo2) => {
+    const m = memMap[nombre];
+    if (!m) return "";
+    return m[campo1] || m[campo2] || "";
+  };
+  _setInputVal("cm-mem-suministro",  _memVal("Suministro",   "importe_mxn", "cargo_fijo_mxn"));
+  _setInputVal("cm-mem-distribucion",_memVal("Distribución", "importe_mxn", "cargo_demanda_mxn"));
+  _setInputVal("cm-mem-transmision", _memVal("Transmisión",  "importe_mxn", "cargo_energia_mxn"));
+  _setInputVal("cm-mem-cenace",      _memVal("CENACE",       "importe_mxn", "cargo_energia_mxn"));
+  _setInputVal("cm-mem-gen-b",       _memVal("Generación B", "importe_mxn", "cargo_energia_mxn"));
+  _setInputVal("cm-mem-gen-i",       _memVal("Generación I", "importe_mxn", "cargo_energia_mxn"));
+  _setInputVal("cm-mem-gen-p",       _memVal("Generación P", "importe_mxn", "cargo_energia_mxn"));
+  _setInputVal("cm-mem-capacidad",   _memVal("Capacidad",    "importe_mxn", "cargo_demanda_mxn"));
+  _setInputVal("cm-mem-scnmem",      _memVal("SCnMEM",       "importe_mxn", "cargo_energia_mxn"));
+
+  // Campos hidden auxiliares
+  _setInputVal("cm-uuid-cfdi",       ex.uuid_cfdi || "");
+  _setInputVal("cm-serie",           ex.serie || "");
+  _setInputVal("cm-nombre-cliente",  ex.nombre_cliente || "");
+  _setInputVal("cm-rfc-cliente",     ex.rfc_cliente || "");
+  _setInputVal("cm-tarifa",          ex.tarifa || "GDMTH");
+  _setInputVal("cm-numero-medidor",  ex.numero_medidor || "");
+  _setInputVal("cm-multiplicador",   ex.multiplicador || 1);
+  _setInputVal("cm-carga-conectada", ex.carga_conectada_kw || "");
+  _setInputVal("cm-demanda-contratada", ex.demanda_contratada_kw || "");
 
   document.getElementById("captura-archivo-nombre").textContent = archivo;
   document.getElementById("cm-motivo").value = "";
-  document.getElementById("btnGuardarCapturaManual").disabled = true;
   document.getElementById("captura-manual-error").style.display = "none";
 
-  // Highlight faltantes
+  // Marcar campos faltantes en rojo y navegar a su tab
   campos_faltantes.forEach(campo => {
     const mapeo = { "numero_servicio": "cm-numero-servicio", "periodo_inicio": "cm-periodo-inicio", "periodo_fin": "cm-periodo-fin" };
     const el = document.getElementById(mapeo[campo]);
-    if (el) { el.classList.add("border-danger"); el.focus(); }
+    if (el) el.classList.add("border-danger");
   });
 
-  // PDF viewer via Blob URL
+  // PDF viewer
   if (_capturaManualBlobUrl) URL.revokeObjectURL(_capturaManualBlobUrl);
   if (file) {
     _capturaManualBlobUrl = URL.createObjectURL(file);
     document.getElementById("captura-pdf-viewer").src = _capturaManualBlobUrl;
   }
 
+  // Activar primera tab
+  const firstTab = document.getElementById("cm-tab-id");
+  if (firstTab) { try { new bootstrap.Tab(firstTab).show(); } catch(e) {} }
+
   const modal = new bootstrap.Modal(document.getElementById("modalCapturaManual"));
   modal.show();
 
-  // Enable save button when required fields are filled
-  const requeridos = ["cm-periodo-inicio", "cm-periodo-fin", "cm-numero-servicio", "cm-motivo"];
-  const checkRequeridos = () => {
-    const ok = requeridos.every(id => {
-      const el = document.getElementById(id);
-      return el && el.value.trim() !== "";
-    });
-    document.getElementById("btnGuardarCapturaManual").disabled = !ok;
-  };
-  requeridos.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener("input", checkRequeridos);
-    if (el) el.addEventListener("change", checkRequeridos);
+  // Escuchar cambios en todos los campos del formulario
+  document.querySelectorAll("#formCapturaManual input, #formCapturaManual select").forEach(el => {
+    el.addEventListener("input", _checkCapturaManualRequeridos);
+    el.addEventListener("change", _checkCapturaManualRequeridos);
   });
+  _checkCapturaManualRequeridos();
 
   document.getElementById("btnGuardarCapturaManual").onclick = async function () {
     const fd = new FormData(document.getElementById("formCapturaManual"));
+
+    // Construir periodos_json desde campos individuales
+    const periodosData = [
+      { periodo: "base",       consumo_kwh: _getInputVal("cm-kwh-base"),       demanda_kw: _getInputVal("cm-kw-base"),       costo_unitario_kwh: null },
+      { periodo: "intermedio", consumo_kwh: _getInputVal("cm-kwh-intermedia"), demanda_kw: _getInputVal("cm-kw-intermedia"), costo_unitario_kwh: null },
+      { periodo: "punta",      consumo_kwh: _getInputVal("cm-kwh-punta"),      demanda_kw: _getInputVal("cm-kw-punta"),      costo_unitario_kwh: null },
+    ];
+    fd.set("periodos_json", JSON.stringify(periodosData));
+
+    // Construir componentes_mem_json con asignación correcta de cargo por tipo
+    const componentesMem = [
+      { nombre: "Suministro",   cargo_fijo_mxn: _getInputVal("cm-mem-suministro"),   cargo_demanda_mxn: "0", cargo_energia_mxn: "0", importe_mxn: _getInputVal("cm-mem-suministro") },
+      { nombre: "Distribución", cargo_fijo_mxn: "0", cargo_demanda_mxn: _getInputVal("cm-mem-distribucion"), cargo_energia_mxn: "0", importe_mxn: _getInputVal("cm-mem-distribucion") },
+      { nombre: "Transmisión",  cargo_fijo_mxn: "0", cargo_demanda_mxn: "0", cargo_energia_mxn: _getInputVal("cm-mem-transmision"),  importe_mxn: _getInputVal("cm-mem-transmision") },
+      { nombre: "CENACE",       cargo_fijo_mxn: "0", cargo_demanda_mxn: "0", cargo_energia_mxn: _getInputVal("cm-mem-cenace"),       importe_mxn: _getInputVal("cm-mem-cenace") },
+      { nombre: "Generación B", cargo_fijo_mxn: "0", cargo_demanda_mxn: "0", cargo_energia_mxn: _getInputVal("cm-mem-gen-b"),        importe_mxn: _getInputVal("cm-mem-gen-b") },
+      { nombre: "Generación I", cargo_fijo_mxn: "0", cargo_demanda_mxn: "0", cargo_energia_mxn: _getInputVal("cm-mem-gen-i"),        importe_mxn: _getInputVal("cm-mem-gen-i") },
+      { nombre: "Generación P", cargo_fijo_mxn: "0", cargo_demanda_mxn: "0", cargo_energia_mxn: _getInputVal("cm-mem-gen-p"),        importe_mxn: _getInputVal("cm-mem-gen-p") },
+      { nombre: "Capacidad",    cargo_fijo_mxn: "0", cargo_demanda_mxn: _getInputVal("cm-mem-capacidad"),    cargo_energia_mxn: "0", importe_mxn: _getInputVal("cm-mem-capacidad") },
+      { nombre: "SCnMEM",       cargo_fijo_mxn: "0", cargo_demanda_mxn: "0", cargo_energia_mxn: _getInputVal("cm-mem-scnmem"),       importe_mxn: _getInputVal("cm-mem-scnmem") },
+    ];
+    fd.set("componentes_mem_json", JSON.stringify(componentesMem));
+
+    // Campos que no tienen name en el form
+    fd.set("kw_max", _getInputVal("cm-kwmax"));
+    fd.set("factor_potencia_pct", _getInputVal("cm-factor-potencia"));
+
     if (file) fd.append("pdf", file, file.name);
     fd.append("csrf_token", csrfToken);
 

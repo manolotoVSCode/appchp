@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.38.1] — 2026-05-21
+
+### Corregido
+- Modal de captura manual de facturas CFE: ahora incluye TODOS los campos críticos (consumos kWh, demanda kW, factor de potencia, componentes MEM), organizados en 5 tabs (Identificación, Totales, Consumos, MEM, Motivo). Las facturas guardadas por captura manual ya no se almacenan con periodos y componentes vacíos.
+- Endpoint POST `/upload/manual`: valida en backend que los 3 horarios de consumo (base/intermedio/punta con kWh > 0) y los 9 componentes MEM estén presentes antes de persistir. Retorna HTTP 400 con mensaje descriptivo si faltan.
+- Factura julio 2024 del cliente MASPESCA: script SQL de corrección generado en `storage/migrations/202605_maspesca_julio2024_correccion.sql` (requiere ejecución manual en Supabase).
+
+### Cambiado
+- Modal de captura manual: campos reorganizados en 5 secciones tipo tab para facilitar la captura. Badges rojos por tab indican qué secciones tienen campos incompletos. Botón "Guardar factura" permanece desactivado hasta que todos los campos obligatorios estén completos.
+- JS de captura manual: construye `periodos_json` y `componentes_mem_json` con asignación correcta de tipo de cargo por componente MEM (cargo_fijo, cargo_demanda, cargo_energia) antes del submit.
+
 ## [2.38.0] — 2026-05-21
 
 ### Corregido
