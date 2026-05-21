@@ -290,13 +290,13 @@
 
   {% if cliente_activo %}
   <hr class="sidebar-divider mx-3">
+  {% if current_user_data.rol != 'usuario_normal' %}
   <div class="sidebar-section d-flex align-items-center justify-content-between pe-2">
     <span class="text-truncate me-2">{{ cliente_activo.nombre }}</span>
-    {% if current_user_data.rol != 'usuario_normal' %}
     <a href="{{ url_for('clientes.ficha', cliente_id=cliente_activo.id) }}"
        class="btn btn-sm btn-outline-secondary flex-shrink-0" style="font-size:.65rem;padding:.15rem .45rem;line-height:1.4">Detalles</a>
-    {% endif %}
   </div>
+  {% endif %}
   <div class="sidebar-sub-header">Dashboard</div>
   <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id) }}"
      class="sidebar-link-contrato{% if nav_active == 'contabilidad' %} active{% endif %}">

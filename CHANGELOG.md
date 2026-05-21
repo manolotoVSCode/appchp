@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.33.3] — 2026-05-21
+
+### Corregido
+- Bug: doble mensaje flash en editar usuario, cambiar contraseña y configuración. Causa: `get_flashed_messages()` está cacheado en el request context de Flask, por lo que `_base.html` y los templates hijos recibían la misma lista y la renderizaban dos veces. Fix: `usuarios.html` solo renderiza la categoría especial `password_generada`; `configuracion.html` y `mi_perfil.html` eliminan su bloque flash local (delegan todo a `_base.html`).
+- Bug: nombre de empresa duplicado en sidebar para `usuario_normal`. La sección `sidebar-section` con `cliente_activo.nombre` (con botón "Detalles") aparecía también para `usuario_normal`, que ya ve el nombre en la sección "Mi empresa". Fix: ese bloque queda dentro de `{% if current_user_data.rol != 'usuario_normal' %}`, consolidando también el botón Detalles en el mismo condicional.
+
 ## [2.33.2] — 2026-05-20
 
 ### Cambiado

@@ -9,14 +9,6 @@
   <span class="text-muted small">Parámetros generales</span>
 </div>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for category, message in messages %}
-  <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert" style="max-width:600px;">
-    {{ message }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-  </div>
-  {% endfor %}
-{% endwith %}
 
 <div class="card shadow-sm mb-4" style="max-width: 680px;">
   <div class="card-header fw-semibold text-muted small py-2">Parámetros generales</div>

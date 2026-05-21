@@ -9,14 +9,6 @@
   <h1 class="h3 mb-0">{% if _nombre_display %}Hola, {{ _nombre_display }}{% else %}Mi Perfil{% endif %}</h1>
 </div>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for category, message in messages %}
-  <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
-    {{ message }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-  </div>
-  {% endfor %}
-{% endwith %}
 
 <div class="row g-4" style="max-width:680px">
   <!-- Información de la cuenta -->
