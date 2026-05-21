@@ -136,28 +136,36 @@ def test_nuevo_cliente_get(auth_client):
 
 
 def test_nuevo_cliente_rfc_invalido(auth_client, monkeypatch):
-    """POST /clientes/nuevo con RFC inválido → 200 con error."""
-    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    """POST /clientes/nuevo con RFC de longitud incorrecta → 200 con error."""
     resp = auth_client.post("/clientes/nuevo", data={
         "nombre": "Test SA", "rfc": "CORTO", "notas": "",
     })
     assert resp.status_code == 200
-    assert b"RFC inv" in resp.data
+    assert b"RFC" in resp.data
 
 
-def test_nuevo_cliente_rfc_duplicado(auth_client, monkeypatch):
-    """POST /clientes/nuevo con RFC ya existente → error de duplicado."""
-    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: True)
+def test_nuevo_cliente_rfc_duplicado_permitido(auth_client, monkeypatch):
+    """POST /clientes/nuevo con RFC duplicado → se crea sin error (duplicados permitidos)."""
+    monkeypatch.setattr("web.clientes.create_cliente", lambda *a, **kw: 99)
     resp = auth_client.post("/clientes/nuevo", data={
         "nombre": "Otro SA", "rfc": "ITI930101AAA", "notas": "",
-    })
-    assert resp.status_code == 200
-    assert b"Ya existe" in resp.data
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes/99" in resp.headers["Location"]
+
+
+def test_nuevo_cliente_sin_rfc(auth_client, monkeypatch):
+    """POST /clientes/nuevo sin RFC → cliente creado correctamente (RFC opcional)."""
+    monkeypatch.setattr("web.clientes.create_cliente", lambda *a, **kw: 99)
+    resp = auth_client.post("/clientes/nuevo", data={
+        "nombre": "Solo Nombre SA", "rfc": "", "notas": "",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/clientes/99" in resp.headers["Location"]
 
 
 def test_nuevo_cliente_exitoso(auth_client, monkeypatch):
     """POST /clientes/nuevo válido → redirige a ficha del cliente."""
-    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
     monkeypatch.setattr("web.clientes.create_cliente", lambda *a, **kw: 99)
     resp = auth_client.post("/clientes/nuevo", data={
         "nombre": "Nueva SA", "rfc": "NUE930101ABC", "notas": "notas",
@@ -171,12 +179,28 @@ def test_nuevo_cliente_exitoso(auth_client, monkeypatch):
 def test_ficha_cliente_existente(auth_client, monkeypatch):
     """GET /clientes/1 → 200 con datos del cliente."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
     monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [])
+    monkeypatch.setattr("storage.repository.get_ppa_bloques_mensuales", lambda id: [])
     resp = auth_client.get("/clientes/1")
     assert resp.status_code == 200
     assert b"IBERICA TILES" in resp.data
     assert b"ITI930101AAA" in resp.data
+
+
+def test_ficha_cliente_rfc_nulo_muestra_guion(auth_client, monkeypatch):
+    """GET /clientes/1 con RFC=None → ficha muestra '—' en lugar de 'None'."""
+    cliente_sin_rfc = {**_CLIENTE_BASE, "rfc": None}
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: cliente_sin_rfc)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: cliente_sin_rfc)
+    monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
+    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [])
+    monkeypatch.setattr("storage.repository.get_ppa_bloques_mensuales", lambda id: [])
+    resp = auth_client.get("/clientes/1")
+    assert resp.status_code == 200
+    assert b"None" not in resp.data
+    assert "—".encode() in resp.data
 
 
 def test_ficha_cliente_inexistente(auth_client, monkeypatch):
@@ -189,38 +213,39 @@ def test_ficha_cliente_inexistente(auth_client, monkeypatch):
 
 # ── Editar cliente ────────────────────────────────────────────────────────────
 
-def test_editar_get_sin_facturas(auth_client, monkeypatch):
-    """GET /clientes/1/editar sin facturas → RFC editable."""
-    cliente_sin_facturas = {**_CLIENTE_BASE, "num_cfe": 0, "num_gas": 0}
-    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: cliente_sin_facturas)
-    monkeypatch.setattr("web.clientes.cliente_tiene_facturas", lambda id: False)
-    resp = auth_client.get("/clientes/1/editar")
-    assert resp.status_code == 200
-    # Campo RFC no debe estar deshabilitado
-    assert b'disabled' not in resp.data or b'name="rfc"' in resp.data
-
-
-def test_editar_get_con_facturas_rfc_deshabilitado(auth_client, monkeypatch):
-    """GET /clientes/1/editar con facturas → RFC deshabilitado con leyenda."""
+def test_editar_get(auth_client, monkeypatch):
+    """GET /clientes/1/editar → RFC siempre editable (sin aviso de 'no puede modificarse')."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
-    monkeypatch.setattr("web.clientes.cliente_tiene_facturas", lambda id: True)
     resp = auth_client.get("/clientes/1/editar")
     assert resp.status_code == 200
-    assert b"disabled" in resp.data
-    assert b"facturas cargadas" in resp.data
+    assert b'name="rfc"' in resp.data
+    # El aviso específico del RFC ya no debe aparecer
+    assert b"RFC no puede modificarse" not in resp.data
 
 
 def test_editar_post_exitoso(auth_client, monkeypatch):
     """POST /clientes/1/editar válido → redirige a ficha."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
-    monkeypatch.setattr("web.clientes.cliente_tiene_facturas", lambda id: False)
-    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
     monkeypatch.setattr("web.clientes.update_cliente", lambda *a, **kw: None)
     resp = auth_client.post("/clientes/1/editar", data={
         "nombre": "IBERICA TILES SA", "rfc": "ITI930101AAA", "notas": "actualizado",
     }, follow_redirects=False)
     assert resp.status_code == 302
     assert "/clientes/1" in resp.headers["Location"]
+
+
+def test_editar_post_rfc_vacio(auth_client, monkeypatch):
+    """POST /clientes/1/editar borrando RFC → guarda NULL, sin error."""
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    llamadas = []
+    def _update(cliente_id, **kwargs):
+        llamadas.append(kwargs)
+    monkeypatch.setattr("web.clientes.update_cliente", _update)
+    resp = auth_client.post("/clientes/1/editar", data={
+        "nombre": "IBERICA TILES", "rfc": "", "notas": "",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert llamadas[0]["rfc"] is None
 
 
 # ── Borrar cliente ────────────────────────────────────────────────────────────
@@ -410,7 +435,6 @@ def test_contrato_borrar_confirmacion_correcta(auth_client, monkeypatch):
 
 def test_nuevo_cliente_con_campos_extendidos(auth_client, monkeypatch):
     """POST /clientes/nuevo con todos los campos nuevos → create_cliente recibe los campos."""
-    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
     llamadas = []
     def _create(nombre, rfc, notas, **kwargs):
         llamadas.append(kwargs)
@@ -448,15 +472,14 @@ def test_nuevo_cliente_con_campos_extendidos(auth_client, monkeypatch):
 
 
 def test_nuevo_cliente_solo_campos_requeridos(auth_client, monkeypatch):
-    """POST /clientes/nuevo solo nombre + RFC → campos extendidos en None."""
-    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
+    """POST /clientes/nuevo solo nombre → campos extendidos en None."""
     llamadas = []
     def _create(nombre, rfc, notas, **kwargs):
         llamadas.append(kwargs)
         return 99
     monkeypatch.setattr("web.clientes.create_cliente", _create)
     resp = auth_client.post("/clientes/nuevo", data={
-        "nombre": "Mínimo SA", "rfc": "MIN930101ABC", "notas": "",
+        "nombre": "Mínimo SA", "rfc": "", "notas": "",
     }, follow_redirects=False)
     assert resp.status_code == 302
     assert llamadas[0]["sector_industrial"] is None
@@ -466,9 +489,8 @@ def test_nuevo_cliente_solo_campos_requeridos(auth_client, monkeypatch):
 
 def test_nuevo_cliente_email_invalido(auth_client, monkeypatch):
     """POST /clientes/nuevo con email mal formado → 200 con error de validación."""
-    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
     resp = auth_client.post("/clientes/nuevo", data={
-        "nombre": "Test SA", "rfc": "TST930101ABC", "notas": "",
+        "nombre": "Test SA", "rfc": "", "notas": "",
         "contacto_email": "no-es-un-email",
     })
     assert resp.status_code == 200
@@ -477,9 +499,8 @@ def test_nuevo_cliente_email_invalido(auth_client, monkeypatch):
 
 def test_nuevo_cliente_codigo_postal_invalido(auth_client, monkeypatch):
     """POST /clientes/nuevo con CP de 4 dígitos → 200 con error de validación."""
-    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
     resp = auth_client.post("/clientes/nuevo", data={
-        "nombre": "Test SA", "rfc": "TST930101ABC", "notas": "",
+        "nombre": "Test SA", "rfc": "", "notas": "",
         "codigo_postal": "6400",
     })
     assert resp.status_code == 200
@@ -488,9 +509,8 @@ def test_nuevo_cliente_codigo_postal_invalido(auth_client, monkeypatch):
 
 def test_nuevo_cliente_capacidad_negativa(auth_client, monkeypatch):
     """POST /clientes/nuevo con capacidad instalada negativa → 200 con error de validación."""
-    monkeypatch.setattr("web.clientes.rfc_existe", lambda *a, **kw: False)
     resp = auth_client.post("/clientes/nuevo", data={
-        "nombre": "Test SA", "rfc": "TST930101ABC", "notas": "",
+        "nombre": "Test SA", "rfc": "", "notas": "",
         "capacidad_instalada_kw": "-100",
     })
     assert resp.status_code == 200
@@ -630,12 +650,14 @@ def test_desactivar_cliente_limpia_sesion(app, monkeypatch):
         assert sess.get("cliente_activo_nombre") is None
 
 
-def test_ficha_get_no_activa_cliente(app, monkeypatch):
-    """GET /clientes/1 → la sesión NO queda con cliente_activo_id (activación es por AJAX)."""
+def test_ficha_get_activa_cliente_en_sesion(app, monkeypatch):
+    """GET /clientes/1 → establece cliente_activo_id en sesión (ficha activa al cliente)."""
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
     monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [])
+    monkeypatch.setattr("storage.repository.get_ppa_bloques_mensuales", lambda id: [])
     c = app.test_client()
     with c.session_transaction() as sess:
         sess["_user_id"] = "test-user-uuid"
@@ -647,7 +669,7 @@ def test_ficha_get_no_activa_cliente(app, monkeypatch):
     assert resp.status_code == 200
 
     with c.session_transaction() as sess:
-        assert sess.get("cliente_activo_id") is None
+        assert sess.get("cliente_activo_id") == 1
 
 
 def test_sidebar_sin_cliente_activo_solo_listado(app, monkeypatch):

@@ -28,7 +28,7 @@
           <dd class="col-sm-8 fw-semibold mb-2">{{ cliente.nombre }}</dd>
 
           <dt class="col-sm-4 text-muted">RFC</dt>
-          <dd class="col-sm-8 font-monospace mb-2">{{ cliente.rfc }}</dd>
+          <dd class="col-sm-8 font-monospace mb-2">{{ cliente.rfc or "—" }}</dd>
 
           <dt class="col-sm-4 text-muted">Sector</dt>
           <dd class="col-sm-8 mb-2">{{ cliente.sector_industrial or "—" }}</dd>

@@ -22,8 +22,6 @@ from storage.repository import (
     delete_cliente,
     upload_logo,
     delete_logo,
-    rfc_existe,
-    cliente_tiene_facturas,
     get_contratos_por_cliente,
     get_contrato,
     get_contrato_con_conteos,
@@ -59,7 +57,10 @@ logger = logging.getLogger(__name__)
 _RFC_RE = re.compile(r'^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$')
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
-_SECTORES = ["Hotelero", "Manufactura", "Alimentos y bebidas", "Químico", "Textil", "Otro"]
+_SECTORES = [
+    "Hotelero", "Manufactura", "Alimentos y bebidas", "Químico", "Textil",
+    "Pesquero", "Forestal", "Cerámico", "Plásticos", "Metalúrgico", "Otro",
+]
 _ESTADOS = [
     "Aguascalientes", "Baja California", "Baja California Sur", "Campeche",
     "Chiapas", "Chihuahua", "Ciudad de México", "Coahuila", "Colima",
@@ -131,8 +132,8 @@ def _validar_campos_extendidos(form) -> str | None:
         try:
             anio_int = int(anio)
             current_year = _date.today().year
-            if not (1900 <= anio_int <= current_year + 1):
-                return f"El año de inicio debe estar entre 1900 y {current_year + 1}."
+            if not (1900 <= anio_int <= current_year + 5):
+                return f"El año de inicio debe estar entre 1900 y {current_year + 5}."
         except ValueError:
             return "El año de inicio de operación debe ser un número entero."
     altitud = form.get("altitud_msnm", "").strip()
@@ -221,18 +222,13 @@ clientes_bp = Blueprint("clientes", __name__, url_prefix="/clientes")
 
 # ── Helpers de validación ─────────────────────────────────────────────────────
 
-def _validar_rfc(rfc: str) -> str | None:
-    if not _RFC_RE.match(rfc):
-        return "RFC inválido. Debe tener 12 o 13 caracteres con formato mexicano (3-4 letras, 6 dígitos de fecha, 3 de homoclave)."
-    return None
-
-
-def _validar_campos(nombre: str, rfc: str) -> str | None:
-    if not nombre:
-        return "El nombre del cliente es obligatorio."
+def _validar_rfc_formato(rfc: str) -> str | None:
+    """Valida longitud del RFC SOLO si está lleno. Vacío es válido."""
     if not rfc:
-        return "El RFC es obligatorio."
-    return _validar_rfc(rfc)
+        return None
+    if len(rfc) not in (12, 13):
+        return "RFC debe tener 12 o 13 caracteres."
+    return None
 
 
 # ── Rutas ─────────────────────────────────────────────────────────────────────
@@ -258,18 +254,20 @@ def nuevo():
         return redirect(url_for("clientes.listado"))
     if request.method == "POST":
         nombre = request.form.get("nombre", "").strip()
-        rfc = _sanitizar(request.form.get("rfc", ""))
+        rfc_raw = _sanitizar(request.form.get("rfc", ""))
+        rfc = rfc_raw or None  # vacío → NULL en BD
         notas = request.form.get("notas", "").strip() or None
         campos = _extraer_campos_extendidos(request.form)
 
-        error = _validar_campos(nombre, rfc) or _validar_campos_extendidos(request.form)
-        if error is None and rfc_existe(rfc):
-            error = f"Ya existe un cliente con RFC {rfc}."
+        if not nombre:
+            error = "El nombre del cliente es obligatorio."
+        else:
+            error = _validar_rfc_formato(rfc_raw) or _validar_campos_extendidos(request.form)
 
         if error:
             return render_template(
                 "clientes/nuevo.html",
-                error=error, nombre=nombre, rfc=rfc, notas=notas or "",
+                error=error, nombre=nombre, rfc=rfc_raw, notas=notas or "",
                 **_FORM_SELECTS, **campos,
             )
 
@@ -283,7 +281,7 @@ def nuevo():
             return render_template(
                 "clientes/nuevo.html",
                 error=f"Error al crear el cliente: {exc}",
-                nombre=nombre, rfc=rfc, notas=notas or "",
+                nombre=nombre, rfc=rfc_raw, notas=notas or "",
                 **_FORM_SELECTS, **campos,
             )
 
@@ -352,38 +350,28 @@ def editar(cliente_id: int):
         flash("El cliente solicitado no existe.", "warning")
         return redirect(url_for("clientes.listado"))
 
-    tiene_facturas = cliente_tiene_facturas(cliente_id)
-
     if request.method == "POST":
         nombre = request.form.get("nombre", "").strip()
-        rfc_form = request.form.get("rfc", "").strip().upper()
+        rfc_raw = request.form.get("rfc", "").strip().upper()
+        rfc = rfc_raw or None  # vacío → NULL en BD
         notas = request.form.get("notas", "").strip() or None
         campos = _extraer_campos_extendidos(request.form)
 
-        error = None
         if not nombre:
             error = "El nombre del cliente es obligatorio."
-        elif not tiene_facturas:
-            error = _validar_rfc(rfc_form)
-            if error is None and rfc_form != cliente["rfc"] and rfc_existe(rfc_form, exclude_id=cliente_id):
-                error = f"Ya existe un cliente con RFC {rfc_form}."
-        if error is None:
-            error = _validar_campos_extendidos(request.form)
-
-        rfc_a_guardar = None if tiene_facturas else rfc_form
+        else:
+            error = _validar_rfc_formato(rfc_raw) or _validar_campos_extendidos(request.form)
 
         if error:
             return render_template(
                 "clientes/editar.html",
-                cliente=cliente, tiene_facturas=tiene_facturas,
-                error=error, nombre=nombre,
-                rfc=cliente["rfc"] if tiene_facturas else rfc_form,
-                notas=notas or "",
+                cliente=cliente,
+                error=error, nombre=nombre, rfc=rfc_raw, notas=notas or "",
                 **_FORM_SELECTS, **campos,
             )
 
         try:
-            update_cliente(cliente_id, nombre=nombre, notas=notas, rfc=rfc_a_guardar, **campos)
+            update_cliente(cliente_id, nombre=nombre, notas=notas, rfc=rfc, **campos)
             logger.info("Cliente actualizado: id=%d, nombre='%s'", cliente_id, nombre)
             if session.get("cliente_activo_id") == cliente_id:
                 session["cliente_activo_nombre"] = nombre
@@ -393,18 +381,16 @@ def editar(cliente_id: int):
             logger.error("Error actualizando cliente id=%d: %s", cliente_id, exc)
             return render_template(
                 "clientes/editar.html",
-                cliente=cliente, tiene_facturas=tiene_facturas,
-                error=f"Error al guardar: {exc}", nombre=nombre,
-                rfc=cliente["rfc"] if tiene_facturas else rfc_form,
-                notas=notas or "",
+                cliente=cliente,
+                error=f"Error al guardar: {exc}", nombre=nombre, rfc=rfc_raw, notas=notas or "",
                 **_FORM_SELECTS, **campos,
             )
 
     return render_template(
         "clientes/editar.html",
-        cliente=cliente, tiene_facturas=tiene_facturas,
+        cliente=cliente,
         error=None, nombre=cliente["nombre"],
-        rfc=cliente["rfc"], notas=cliente.get("notas") or "",
+        rfc=cliente.get("rfc") or "", notas=cliente.get("notas") or "",
         sector_industrial=cliente.get("sector_industrial"),
         contacto_nombre=cliente.get("contacto_nombre") or "",
         contacto_cargo=cliente.get("contacto_cargo") or "",

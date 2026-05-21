@@ -28,18 +28,11 @@
               <input type="text" name="nombre" class="form-control" value="{{ nombre }}" required autofocus>
             </div>
             <div class="col-md-5">
-              <label class="form-label fw-semibold">RFC <span class="text-danger">*</span></label>
-              {% if tiene_facturas %}
+              <label class="form-label fw-semibold">RFC</label>
               <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
-                     value="{{ rfc }}" disabled style="letter-spacing:.05em">
-              <div class="form-text text-warning">
-                El RFC no puede modificarse porque el cliente tiene facturas cargadas.
-              </div>
-              {% else %}
-              <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
-                     value="{{ rfc }}" required maxlength="13" style="letter-spacing:.05em">
-              <div class="form-text">12 o 13 caracteres.</div>
-              {% endif %}
+                     value="{{ rfc }}" maxlength="13" placeholder="RFC123456ABC (opcional)"
+                     style="letter-spacing:.05em">
+              <div class="form-text">12 o 13 caracteres si se llena. Opcional.</div>
             </div>
             <div class="col-md-6">
               <label class="form-label fw-semibold">Sector industrial</label>

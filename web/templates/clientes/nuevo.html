@@ -28,11 +28,11 @@
                      placeholder="Razón social o nombre del cliente">
             </div>
             <div class="col-md-5">
-              <label class="form-label fw-semibold">RFC <span class="text-danger">*</span></label>
+              <label class="form-label fw-semibold">RFC</label>
               <input type="text" name="rfc" class="form-control font-monospace text-uppercase"
-                     value="{{ rfc }}" required maxlength="13" placeholder="RFC123456ABC"
+                     value="{{ rfc }}" maxlength="13" placeholder="RFC123456ABC (opcional)"
                      style="letter-spacing:.05em">
-              <div class="form-text">12 o 13 caracteres.</div>
+              <div class="form-text">12 o 13 caracteres si se llena. Opcional.</div>
             </div>
             <div class="col-md-6">
               <label class="form-label fw-semibold">Sector industrial</label>

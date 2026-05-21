@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.35.0] — 2026-05-21
+
+### Cambiado
+- Creación y edición de cliente: solo **Nombre** es obligatorio. Todos los demás campos son opcionales.
+- **RFC ya no es obligatorio** ni único. Puede estar vacío o duplicarse entre clientes. Si se llena, debe tener 12 o 13 caracteres.
+- Eliminada validación de unicidad de RFC en backend y en BD (ver migración). Eliminada condición que impedía editar el RFC de un cliente con facturas cargadas.
+- Validaciones de formato (email, código postal 5 dígitos, año de inicio) solo se aplican cuando el campo contiene valor. El campo vacío siempre es aceptado.
+- Año de inicio de operación: límite superior extendido a `año actual + 5` (era `+ 1`).
+- En la ficha del cliente, el campo RFC muestra "—" cuando está vacío/null (antes mostraba "None").
+
+### Añadido
+- Cinco nuevos sectores industriales en el dropdown: **Pesquero, Forestal, Cerámico, Plásticos, Metalúrgico** (se añaden tras los existentes, antes de "Otro").
+- Migración `storage/migrations/202605_eliminar_unique_rfc.sql` (ejecutar manualmente en Supabase).
+- Tests: `test_nuevo_cliente_sin_rfc`, `test_nuevo_cliente_rfc_duplicado_permitido`, `test_ficha_cliente_rfc_nulo_muestra_guion`, `test_editar_post_rfc_vacio`. Corrección de mocks preexistentes en tests de ficha que hacían conexiones reales a Supabase.
+
+### Migración requerida
+- Ejecutar `storage/migrations/202605_eliminar_unique_rfc.sql` en Supabase antes de desplegar.
+
 ## [2.34.0] — 2026-05-21
 
 ### Añadido
