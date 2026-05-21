@@ -2,12 +2,41 @@
 -- Capturada manualmente en v2.37.0 sin campos de consumo ni MEM.
 -- Ejecutar manualmente en la consola de Supabase SQL Editor.
 -- Idempotente: usa UPDATE y DELETE+INSERT con WHERE específico.
--- Versión: v2.38.1 / 2026-05-21
+-- Versión: v2.38.2 / 2026-05-21
 
 DO $$
 DECLARE
-  v_factura_id INT;
+  v_factura_id  INT;
+
+  -- Consumos por horario (kWh)
+  v_kwh_base    NUMERIC := 11530;
+  v_kwh_inter   NUMERIC := 25106;
+  v_kwh_punta   NUMERIC := 2281;
+  v_kwh_total   NUMERIC;
+
+  -- Componentes MEM relevantes para costo unitario (MXN)
+  v_gen_b       NUMERIC := 12846.73;
+  v_gen_i       NUMERIC := 50668.93;
+  v_gen_p       NUMERIC :=  5191.78;
+  v_transmision NUMERIC :=  6884.42;
+  v_cenace      NUMERIC :=   252.97;
+  v_scnmem      NUMERIC :=   241.29;
+
+  -- Costo unitario derivado (MXN/kWh)
+  -- Fórmula: shared = (transmision + cenace + scnmem) / kwh_total
+  --          costo_h = gen_h / kwh_h + shared
+  v_shared      NUMERIC;
+  v_cu_base     NUMERIC;
+  v_cu_inter    NUMERIC;
+  v_cu_punta    NUMERIC;
 BEGIN
+  -- Calcular costo_unitario_kwh (campo derivado, no viene del PDF)
+  v_kwh_total := v_kwh_base + v_kwh_inter + v_kwh_punta;
+  v_shared    := (v_transmision + v_cenace + v_scnmem) / v_kwh_total;
+  v_cu_base   := ROUND(v_gen_b / v_kwh_base  + v_shared, 6);
+  v_cu_inter  := ROUND(v_gen_i / v_kwh_inter + v_shared, 6);
+  v_cu_punta  := ROUND(v_gen_p / v_kwh_punta + v_shared, 6);
+
   -- Obtener el ID de la factura de julio 2024 del cliente MASPESCA
   SELECT id INTO v_factura_id
   FROM cfe_facturas
@@ -43,16 +72,16 @@ BEGIN
     total_mxn                  = '138067.22'
   WHERE id = v_factura_id;
 
-  -- Reinsertar periodos (consumo y demanda por horario)
+  -- Reinsertar periodos con costo_unitario_kwh calculado
   DELETE FROM cfe_periodos WHERE factura_id = v_factura_id;
   INSERT INTO cfe_periodos (factura_id, periodo, consumo_kwh, demanda_kw, costo_unitario_kwh)
   VALUES
-    (v_factura_id, 'base',       '11530', '68', NULL),
-    (v_factura_id, 'intermedio', '25106', '99', NULL),
-    (v_factura_id, 'punta',       '2281', '81', NULL);
+    (v_factura_id, 'base',       v_kwh_base::TEXT,  '68', v_cu_base::TEXT),
+    (v_factura_id, 'intermedio', v_kwh_inter::TEXT, '99', v_cu_inter::TEXT),
+    (v_factura_id, 'punta',      v_kwh_punta::TEXT, '81', v_cu_punta::TEXT);
 
   -- Reinsertar componentes MEM con asignación correcta de tipo de cargo
-  -- Suministro  → cargo_fijo_mxn
+  -- Suministro             → cargo_fijo_mxn
   -- Distribución, Capacidad → cargo_demanda_mxn
   -- Transmisión, CENACE, Generación B/I/P, SCnMEM → cargo_energia_mxn
   DELETE FROM cfe_mem_componentes WHERE factura_id = v_factura_id;
@@ -68,6 +97,7 @@ BEGIN
     (v_factura_id, 'Capacidad',     '0',      '34021.62',    '0',        '34021.62'),
     (v_factura_id, 'SCnMEM',        '0',       '0',          '241.29',    '241.29');
 
-  RAISE NOTICE 'OK: factura id=% (MASPESCA julio 2024) corregida.', v_factura_id;
+  RAISE NOTICE 'OK: factura id=% (MASPESCA julio 2024) corregida. cu_base=%, cu_inter=%, cu_punta=%',
+    v_factura_id, v_cu_base, v_cu_inter, v_cu_punta;
 END;
 $$;

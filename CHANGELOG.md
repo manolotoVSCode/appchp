@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.38.2] — 2026-05-21
+
+### Corregido
+- Script SQL de corrección de la factura de julio 2024 de MASPESCA: calcula `costo_unitario_kwh` dentro del bloque DO con la misma fórmula del parser (`gen_h / kwh_h + shared_kwh`) en lugar de pasar NULL, que violaba la restricción NOT NULL de `cfe_periodos`.
+- Endpoint POST `/upload/manual`: calcula automáticamente `costo_unitario_kwh` para cada periodo usando la función `calcular_costos_unitarios_kwh` de `calc/cfe_util.py`. Las facturas guardadas por captura manual ya tienen los costos unitarios correctos sin pedírselos al operador.
+
+### Añadido
+- `calc/cfe_util.py`: función `calcular_costos_unitarios_kwh(kwh_base, kwh_inter, kwh_punta, gen_b, gen_i, gen_p, transmision, cenace, scnmem)` — lógica extraída como utilidad reutilizable. El parser `gdmth.py` mantiene su implementación inline sin cambios.
+
+### Cambiado
+- Modal de captura manual: confirmado que no incluye ningún campo derivado (`costo_unitario_kwh`, `nombre_canonico`, `anio`, `mes`). El operador solo captura campos que aparecen impresos en el PDF.
+
 ## [2.38.1] — 2026-05-21
 
 ### Corregido

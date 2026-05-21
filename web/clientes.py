@@ -1088,6 +1088,33 @@ def contrato_upload_manual(cliente_id: int, contrato_id: int):
             "error": f"Faltan componentes MEM. Se requieren 9 (Suministro, Distribución, Transmisión, CENACE, Generación B/I/P, Capacidad, SCnMEM). Se recibieron {len(componentes_mem)}. Completa la sección MEM del formulario."
         }), 400
 
+    # Calcular costo_unitario_kwh automáticamente (campo derivado, no viene del operador)
+    try:
+        from calc.cfe_util import calcular_costos_unitarios_kwh as _calc_cu
+        _mem = {c.nombre: c for c in componentes_mem}
+        _D0 = Decimal("0")
+        _kwh_base  = next((p.consumo_kwh for p in periodos if p.periodo == "base"),       _D0)
+        _kwh_inter = next((p.consumo_kwh for p in periodos if p.periodo == "intermedio"), _D0)
+        _kwh_punta = next((p.consumo_kwh for p in periodos if p.periodo == "punta"),      _D0)
+        _cu_base, _cu_inter, _cu_punta = _calc_cu(
+            kwh_base=_kwh_base, kwh_inter=_kwh_inter, kwh_punta=_kwh_punta,
+            gen_b_mxn=_mem.get("Generación B", MEMComponente("", _D0, _D0, _D0, _D0)).importe_mxn or _D0,
+            gen_i_mxn=_mem.get("Generación I", MEMComponente("", _D0, _D0, _D0, _D0)).importe_mxn or _D0,
+            gen_p_mxn=_mem.get("Generación P", MEMComponente("", _D0, _D0, _D0, _D0)).importe_mxn or _D0,
+            transmision_mxn=_mem.get("Transmisión", MEMComponente("", _D0, _D0, _D0, _D0)).importe_mxn or _D0,
+            cenace_mxn=_mem.get("CENACE",       MEMComponente("", _D0, _D0, _D0, _D0)).importe_mxn or _D0,
+            scnmem_mxn=_mem.get("SCnMEM",       MEMComponente("", _D0, _D0, _D0, _D0)).importe_mxn or _D0,
+        )
+        from dataclasses import replace as _replace
+        periodos = [
+            _replace(p, costo_unitario_kwh=_cu_base)  if p.periodo == "base"       else
+            _replace(p, costo_unitario_kwh=_cu_inter) if p.periodo == "intermedio" else
+            _replace(p, costo_unitario_kwh=_cu_punta) if p.periodo == "punta"      else p
+            for p in periodos
+        ]
+    except Exception as _e_cu:
+        logger.warning("No se pudo calcular costo_unitario_kwh en captura manual: %s", _e_cu)
+
     # PDF: guardar en temp para pdf_path
     pdf_file = request.files.get("pdf")
     tmp_path = None

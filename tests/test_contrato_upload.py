@@ -523,12 +523,14 @@ def test_upload_ambas_fechas_nulas_requiere_captura_manual(auth_client, monkeypa
 
 
 def test_upload_manual_exitoso(auth_client, monkeypatch):
-    """POST a /upload/manual con datos completos → guarda con validacion_manual=True."""
+    """POST a /upload/manual con datos completos → guarda con validacion_manual=True y costo_unitario calculado."""
     import datetime
     _setup_electrico(monkeypatch)
     guardado_kwargs = {}
+    guardado_invoice = {}
     def _fake_save(inv, cliente_id=None, contrato_id=None, **kwargs):
         guardado_kwargs.update(kwargs)
+        guardado_invoice["inv"] = inv
         return (99, "2024 ENE CFE 812990300016")
     monkeypatch.setattr("web.clientes.save_cfe_invoice", _fake_save)
 
@@ -573,6 +575,15 @@ def test_upload_manual_exitoso(auth_client, monkeypatch):
     assert data["procesados"] == 1
     assert guardado_kwargs.get("validacion_manual") is True
     assert guardado_kwargs.get("motivo_captura_manual") == "texto_cifrado"
+    # costo_unitario_kwh debe estar calculado, no ser None ni 0
+    inv = guardado_invoice.get("inv")
+    assert inv is not None
+    periodos_guardados = {p.periodo: p for p in inv.periodos}
+    assert "base" in periodos_guardados
+    assert periodos_guardados["base"].costo_unitario_kwh is not None
+    assert periodos_guardados["base"].costo_unitario_kwh > 0
+    assert periodos_guardados["intermedio"].costo_unitario_kwh > 0
+    assert periodos_guardados["punta"].costo_unitario_kwh > 0
 
 
 def test_upload_manual_sin_numero_servicio_falla(auth_client, monkeypatch):
