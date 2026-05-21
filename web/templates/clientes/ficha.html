@@ -327,6 +327,37 @@
   </div>
 </div>
 
+{% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
+<!-- Configuración de gas (proyección) — solo admin/master_admin -->
+<div class="mt-4">
+  <div class="card shadow-sm">
+    <div class="card-header fw-semibold text-muted small py-2">Configuración de gas (proyección)</div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">
+        Precio de gas manual en MXN/GJ PCS. Se usa como fallback en el dashboard de Cogeneración
+        cuando hay 12 o más facturas eléctricas seleccionadas pero menos de 12 facturas de gas.
+      </p>
+      <form method="POST" action="{{ url_for('clientes.cliente_gas_manual_actualizar', cliente_id=cliente.id) }}" novalidate style="max-width:380px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="mb-3">
+          <label for="precio_gas_manual" class="form-label fw-semibold" style="font-size:.9rem">
+            Precio gas manual <span class="text-muted fw-normal">(MXN/GJ PCS)</span>
+          </label>
+          <input type="number" id="precio_gas_manual" name="precio_gas_manual_mxn_gj_pcs"
+                 class="form-control form-control-sm" step="0.0001" min="0"
+                 value="{{ cliente.precio_gas_manual_mxn_gj_pcs or '' }}"
+                 placeholder="Dejar vacío para eliminar">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+        {% if cliente.precio_gas_manual_mxn_gj_pcs %}
+        <span class="ms-3 text-muted small">Precio actual: <strong>{{ cliente.precio_gas_manual_mxn_gj_pcs }} MXN/GJ</strong></span>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Acciones cliente -->
 <div class="d-flex gap-2 mt-4">
   <a href="{{ url_for('clientes.editar', cliente_id=cliente.id) }}" class="btn btn-outline-primary btn-sm">Editar ficha</a>

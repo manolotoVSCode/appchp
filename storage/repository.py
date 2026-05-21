@@ -321,7 +321,8 @@ _CLIENTE_CAMPOS_EXTENDIDOS = (
     "ppa_suministrador, ppa_rfc_suministrador, ppa_precio_fijo_usd_mwh, "
     "ppa_fecha_inicio_suministro, ppa_energia_contratada_mwh_anual, ppa_capacidad_maxima_kw, "
     "ppa_margen_reserva_cenace_pct, ppa_zona_carga, ppa_rpu, ppa_division, "
-    "ppa_pdf_contrato_url, ppa_notas"
+    "ppa_pdf_contrato_url, ppa_notas, "
+    "precio_gas_manual_mxn_gj_pcs"
 )
 
 
@@ -365,6 +366,7 @@ def _row_to_cliente_dict(row: dict) -> dict:
         "ppa_division": row.get("ppa_division"),
         "ppa_pdf_contrato_url": row.get("ppa_pdf_contrato_url"),
         "ppa_notas": row.get("ppa_notas"),
+        "precio_gas_manual_mxn_gj_pcs": row.get("precio_gas_manual_mxn_gj_pcs"),
         "num_cfe": len(row.get("cfe_facturas") or []),
         "num_gas": len(row.get("gas_facturas") or []),
     }
@@ -551,6 +553,13 @@ def update_cliente_ppa_datos(cliente_id: int, datos: dict) -> None:
     if not safe:
         return
     _supabase.table("clientes").update(safe).eq("id", cliente_id).execute()
+
+
+def update_precio_gas_manual(cliente_id: int, precio: Decimal | None) -> None:
+    """Actualiza el precio de gas manual (MXN/GJ PCS) del cliente. None lo borra."""
+    _supabase.table("clientes").update({
+        "precio_gas_manual_mxn_gj_pcs": str(precio) if precio is not None else None,
+    }).eq("id", cliente_id).execute()
 
 
 def get_ppa_bloques_mensuales(cliente_id: int, anio: int | None = None) -> list[dict]:

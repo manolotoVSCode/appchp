@@ -94,6 +94,12 @@
   <span>Suministro: <strong>Calificado (PPA)</strong> — <span id="banner-ppa-cogen-suministrador"></span></span>
 </div>
 
+{# Banner precio gas manual (JS controla visibilidad) #}
+<div id="banner-gas-manual" class="alert alert-warning d-flex align-items-center gap-2 mb-3" style="display:none!important" role="alert">
+  <i class="bi bi-exclamation-triangle-fill"></i>
+  <span>Proyección calculada con <strong>precio de gas manual</strong>. Las facturas de gas seleccionadas son insuficientes para el período; se usa el precio de referencia configurado en la ficha del cliente.</span>
+</div>
+
 <!-- Sección principal (JS oculta si sin_seleccion) -->
 <div id="dashboard-main-section">
 <div id="dashboard-main-content">

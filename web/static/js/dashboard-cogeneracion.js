@@ -597,6 +597,18 @@
       const numGas  = parseInt(aviso.num_gas, 10) || 0;
       cont.appendChild(_mkAlerta("alert-warning", "Sin periodos emparejados.",
         " Hay " + numElec + " facturas eléctricas y " + numGas + " de gas, pero ningún mes tiene par eléctrico-gas en el mismo periodo."));
+    } else if (aviso.tipo === "insuficiente_elec") {
+      const n = parseInt(aviso.n_elec, 10) || 0;
+      cont.appendChild(_mkAlerta("alert-warning", "Datos insuficientes.",
+        " El análisis de cogeneración requiere 12 facturas eléctricas seleccionadas. Hay " + n + " seleccionada" + (n !== 1 ? "s" : "") + ". Selecciona 12 meses en el sidebar."));
+    } else if (aviso.tipo === "insuficiente_gas") {
+      const n = parseInt(aviso.n_gas, 10) || 0;
+      cont.appendChild(_mkAlerta("alert-warning", "Datos insuficientes.",
+        " El análisis de cogeneración requiere 12 facturas de gas seleccionadas. Hay " + n + " seleccionada" + (n !== 1 ? "s" : "") + ". Selecciona 12 meses de gas, o configura un precio de gas manual en la ficha del cliente."));
+    } else if (aviso.tipo === "meses_no_coinciden") {
+      const nPares = parseInt(aviso.n_pares, 10) || 0;
+      cont.appendChild(_mkAlerta("alert-info", "Periodos incompletos.",
+        " Solo hay " + nPares + " de 12 pares eléctrico-gas coincidentes. El análisis muestra únicamente los meses con ambas facturas disponibles."));
     }
   }
 
@@ -609,7 +621,8 @@
     actualizarAviso(data.aviso_datos);
 
     const tipo = data.aviso_datos ? data.aviso_datos.tipo : null;
-    const sinDatos = tipo === "sin_seleccion";
+    const tiposBloqueo = ["sin_seleccion", "insuficiente_elec", "insuficiente_gas"];
+    const sinDatos = tiposBloqueo.includes(tipo);
     const mainSection = document.getElementById("dashboard-main-section");
     if (mainSection) mainSection.style.display = sinDatos ? "none" : "";
     if (sinDatos) return;
@@ -634,6 +647,16 @@
         bannerPpa.style.removeProperty("display");
       } else {
         bannerPpa.style.setProperty("display", "none", "important");
+      }
+    }
+
+    // Indicador fuente de precio de gas
+    const bannerGasManual = document.getElementById("banner-gas-manual");
+    if (bannerGasManual) {
+      if (data.precio_gas_fuente === "manual") {
+        bannerGasManual.style.removeProperty("display");
+      } else {
+        bannerGasManual.style.setProperty("display", "none", "important");
       }
     }
 

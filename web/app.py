@@ -23,7 +23,7 @@ from storage.repository import (
     set_configuracion,
 )
 from models.contrato import TIPO_ELECTRICO_CALIFICADO
-from calc.cogen import calcular_cogen, calcular_cogen_ppa, calcular_payback_decimal, calcular_flujo_acumulado
+from calc.cogen import calcular_cogen, calcular_cogen_ppa, calcular_cogen_precio_manual, calcular_payback_decimal, calcular_flujo_acumulado
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe, calcular_historico_gas
 from calc.nombre_canonico import generar_nombre_canonico
 from calc.periodo import mes_asociado, UMBRAL_PRORRATEO_DIAS
@@ -64,6 +64,57 @@ def _verificar_cliente_activo(cliente_id: int):
         return None, redirect(url_for("clientes.listado"))
 
     return cliente, None
+
+
+_MESES_ES = {
+    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+    7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre",
+}
+
+
+def _formatear_meses(meses: list[tuple[int, int]]) -> str:
+    """Formatea lista de (anio, mes) en string descriptivo en español."""
+    if not meses:
+        return ""
+    ms = sorted(set(meses))
+    if len(ms) == 1:
+        a, m = ms[0]
+        return f"{_MESES_ES[m]} {a}"
+    indices = [a * 12 + m for a, m in ms]
+    consecutive = all(indices[i + 1] == indices[i] + 1 for i in range(len(indices) - 1))
+    anios = {a for a, _ in ms}
+    if consecutive:
+        a1, m1 = ms[0]
+        a2, m2 = ms[-1]
+        if a1 == a2:
+            return f"{_MESES_ES[m1]} a {_MESES_ES[m2].lower()} {a1}"
+        return f"{_MESES_ES[m1]} {a1} a {_MESES_ES[m2].lower()} {a2}"
+    if len(anios) == 1:
+        anio = next(iter(anios))
+        nombres = [_MESES_ES[m].lower() for _, m in ms]
+        nombres[0] = nombres[0].capitalize()
+        return ", ".join(nombres) + f" {anio}"
+    return ", ".join(f"{_MESES_ES[m]} {a}" for a, m in ms)
+
+
+def _describir_periodo_contabilidad(cfe_invoices, gas_invoices, ppa_invoices, tipo_suministro) -> str:
+    """Descripción detallada del período para el header del dashboard Contabilidad."""
+    elec_meses: list[tuple[int, int]] = []
+    if ppa_invoices:
+        for inv in ppa_invoices:
+            elec_meses.append((inv.anio, inv.mes))
+        tipo_label = "[PPA Calificado]"
+    else:
+        for inv in cfe_invoices:
+            elec_meses.append(mes_asociado(inv.periodo_inicio, inv.periodo_fin))
+        tipo_label = "[CFE GDMTH]"
+    gas_meses = [mes_asociado(inv.periodo_inicio, inv.periodo_fin) for inv in gas_invoices]
+    partes = []
+    if elec_meses:
+        partes.append(f"{_formatear_meses(elec_meses)} {tipo_label}")
+    if gas_meses:
+        partes.append(f"{_formatear_meses(gas_meses)} [Gas]")
+    return " + ".join(partes)
 
 
 def _calcular_periodo_label(cfe_invoices, gas_invoices, ppa_invoices=None) -> str:
@@ -448,16 +499,29 @@ def create_app() -> Flask:
                 )
                 cfe_invoices = []
                 facturas_cfe = []
+                precio_gas_fuente = "ppa"
             else:
                 cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
                 ppa_invoices = []
                 facturas_ppa = []
-                r = calcular_cogen(
-                    cfe_invoices, gas_invoices, CoGenParams(),
-                    tipo_cambio=tipo_cambio,
-                    factor_emision_elec=fe_elec,
-                    factor_emision_gas=fe_gas,
-                )
+                _precio_manual_str = cliente.get("precio_gas_manual_mxn_gj_pcs")
+                _precio_manual = _D(_precio_manual_str) if _precio_manual_str else None
+                if len(cfe_invoices) >= 12 and len(gas_invoices) < 12 and _precio_manual:
+                    r = calcular_cogen_precio_manual(
+                        cfe_invoices, _precio_manual, CoGenParams(),
+                        tipo_cambio=tipo_cambio,
+                        factor_emision_elec=fe_elec,
+                        factor_emision_gas=fe_gas,
+                    )
+                    precio_gas_fuente = "manual"
+                else:
+                    r = calcular_cogen(
+                        cfe_invoices, gas_invoices, CoGenParams(),
+                        tipo_cambio=tipo_cambio,
+                        factor_emision_elec=fe_elec,
+                        factor_emision_gas=fe_gas,
+                    )
+                    precio_gas_fuente = "real"
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -495,7 +559,22 @@ def create_app() -> Flask:
         num_elec_sel = len(facturas_ppa) if tipo_suministro == TIPO_ELECTRICO_CALIFICADO else len(facturas_cfe)
         num_gas_sel = len(facturas_gas)
 
-        if num_cfe_total == 0 and num_gas_total == 0:
+        # Validación 12 meses (solo aplica para suministro básico GDMTH)
+        if tipo_suministro != TIPO_ELECTRICO_CALIFICADO:
+            _precio_manual_str = cliente.get("precio_gas_manual_mxn_gj_pcs")
+            _precio_manual = _D(_precio_manual_str) if _precio_manual_str else None
+            if num_elec_sel == 0 and num_gas_sel == 0:
+                aviso_datos = {"tipo": "sin_seleccion", "cliente_id": cliente_id}
+            elif num_elec_sel < 12:
+                aviso_datos = {"tipo": "insuficiente_elec", "n_elec": num_elec_sel, "cliente_id": cliente_id}
+            elif num_gas_sel < 12 and not _precio_manual:
+                aviso_datos = {"tipo": "insuficiente_gas", "n_gas": num_gas_sel, "cliente_id": cliente_id}
+            elif len(r.meses) < 12:
+                aviso_datos = {"tipo": "meses_no_coinciden", "n_pares": len(r.meses),
+                               "n_elec": num_elec_sel, "n_gas": num_gas_sel}
+            else:
+                aviso_datos = None
+        elif num_cfe_total == 0 and num_gas_total == 0:
             aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0, "cliente_id": cliente_id}
         elif num_elec_sel == 0 and num_gas_sel == 0:
             aviso_datos = {"tipo": "sin_seleccion", "cliente_id": cliente_id}
@@ -580,6 +659,7 @@ def create_app() -> Flask:
             cliente_ficha_url=url_for("clientes.ficha", cliente_id=cliente_id),
             tipo_suministro_electrico=tipo_suministro,
             suministrador_ppa=suministrador_ppa,
+            precio_gas_fuente=precio_gas_fuente,
         )
 
     # ── Endpoints JSON para dashboards (client-side rendering) ─────────────────
@@ -608,7 +688,7 @@ def create_app() -> Flask:
                 kwh_total = sum(f["kwh_total"] for f in facturas_ppa)
                 costo_total = sum(f["costo_mxn"] for f in facturas_ppa)
                 costo_unit = costo_total / kwh_total if kwh_total > 0 else 0.0
-                periodo_label = _calcular_periodo_label([], gas_invoices, ppa_invoices)
+                periodo_label = _describir_periodo_contabilidad([], gas_invoices, ppa_invoices, tipo_suministro)
                 num_elec_sel = len(facturas_ppa)
                 num_gas_sel = len(facturas_gas)
                 historico_ppa = [
@@ -632,7 +712,7 @@ def create_app() -> Flask:
                 kwh_total = sum(f["kwh_total"] for f in facturas_cfe)
                 costo_total = sum(f["costo_mxn"] for f in facturas_cfe)
                 costo_unit = costo_total / kwh_total if kwh_total > 0 else 0.0
-                periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices)
+                periodo_label = _describir_periodo_contabilidad(cfe_invoices, gas_invoices, [], tipo_suministro)
                 num_elec_sel = len(facturas_cfe)
                 num_gas_sel = len(facturas_gas)
                 historico_ppa = []
@@ -710,16 +790,29 @@ def create_app() -> Flask:
                 )
                 cfe_invoices = []
                 facturas_cfe = []
+                precio_gas_fuente = "ppa"
             else:
                 cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
                 ppa_invoices = []
                 facturas_ppa = []
-                r = calcular_cogen(
-                    cfe_invoices, gas_invoices, CoGenParams(),
-                    tipo_cambio=tipo_cambio,
-                    factor_emision_elec=fe_elec,
-                    factor_emision_gas=fe_gas,
-                )
+                _precio_manual_str = cliente.get("precio_gas_manual_mxn_gj_pcs")
+                _precio_manual = _D(_precio_manual_str) if _precio_manual_str else None
+                if len(cfe_invoices) >= 12 and len(gas_invoices) < 12 and _precio_manual:
+                    r = calcular_cogen_precio_manual(
+                        cfe_invoices, _precio_manual, CoGenParams(),
+                        tipo_cambio=tipo_cambio,
+                        factor_emision_elec=fe_elec,
+                        factor_emision_gas=fe_gas,
+                    )
+                    precio_gas_fuente = "manual"
+                else:
+                    r = calcular_cogen(
+                        cfe_invoices, gas_invoices, CoGenParams(),
+                        tipo_cambio=tipo_cambio,
+                        factor_emision_elec=fe_elec,
+                        factor_emision_gas=fe_gas,
+                    )
+                    precio_gas_fuente = "real"
         except Exception as _e:
             logger.exception("Error en cogeneracion/data: %s", _e)
             return jsonify({"error": "error_calculo", "mensaje": str(_e)}), 500
@@ -758,7 +851,22 @@ def create_app() -> Flask:
         num_elec_sel = len(facturas_ppa) if tipo_suministro == TIPO_ELECTRICO_CALIFICADO else len(facturas_cfe)
         num_gas_sel = len(facturas_gas)
 
-        if num_cfe_total == 0 and num_gas_total == 0:
+        # Validación 12 meses (solo aplica para suministro básico GDMTH)
+        if tipo_suministro != TIPO_ELECTRICO_CALIFICADO:
+            _precio_manual_str = cliente.get("precio_gas_manual_mxn_gj_pcs")
+            _precio_manual = _D(_precio_manual_str) if _precio_manual_str else None
+            if num_elec_sel == 0 and num_gas_sel == 0:
+                aviso_datos = {"tipo": "sin_seleccion"}
+            elif num_elec_sel < 12:
+                aviso_datos = {"tipo": "insuficiente_elec", "n_elec": num_elec_sel}
+            elif num_gas_sel < 12 and not _precio_manual:
+                aviso_datos = {"tipo": "insuficiente_gas", "n_gas": num_gas_sel}
+            elif len(r.meses) < 12:
+                aviso_datos = {"tipo": "meses_no_coinciden", "n_pares": len(r.meses),
+                               "n_elec": num_elec_sel, "n_gas": num_gas_sel}
+            else:
+                aviso_datos = None
+        elif num_cfe_total == 0 and num_gas_total == 0:
             aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
         elif num_elec_sel == 0 and num_gas_sel == 0:
             aviso_datos = {"tipo": "sin_seleccion"}
@@ -889,6 +997,7 @@ def create_app() -> Flask:
             "estado": "ok",
             "tipo_suministro_electrico": tipo_suministro,
             "suministrador_ppa": suministrador_ppa,
+            "precio_gas_fuente": precio_gas_fuente,
             "aviso_datos": aviso_datos,
             "cliente": {"id": cliente_id, "nombre": cliente["nombre"], "periodo_label": periodo_label},
             "kpis": {

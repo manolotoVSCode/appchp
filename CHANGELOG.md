@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.33.4] — 2026-05-21
+
+### Añadido
+- **Sidebar scroll indicator**: gradiente + flecha visible sobre el footer cuando el contenido del sidebar desborda. El footer es ahora verdaderamente fijo (el área scrollable es `#sidebar-content`; el footer no scrollea). Footer reducido en tamaño de tipografía y padding.
+- **Etiqueta de período en Contabilidad Energética**: el encabezado muestra ahora "Septiembre 2024 [CFE GDMTH] + Septiembre 2024 [Gas]" (o rango: "Enero a diciembre 2024 [CFE GDMTH]") en lugar del año genérico.
+- **Precio de gas manual** (`precio_gas_manual_mxn_gj_pcs NUMERIC(10,4)` en tabla `clientes`): permite configurar un precio de gas de referencia (MXN/GJ PCS) por cliente. Visible y editable en ficha del cliente solo para admin/master_admin. Endpoint `POST /<cliente_id>/gas-manual`.
+- Función `calcular_cogen_precio_manual()` en `calc/cogen.py`: calcula EBITDA con 12+ facturas CFE GDMTH y precio de gas manual, sin requerir facturas de gas emparejadas.
+- **Validación 12 meses en dashboard Cogeneración** (solo suministro básico GDMTH): avisos `insuficiente_elec` (< 12 facturas eléctricas), `insuficiente_gas` (< 12 facturas gas sin precio manual), `meses_no_coinciden` (pares < 12). Los dos primeros bloquean el dashboard; el tercero muestra advertencia sin bloquear.
+- **Fallback precio gas manual**: cuando hay ≥ 12 facturas CFE y < 12 facturas gas pero hay precio manual configurado, el dashboard usa `calcular_cogen_precio_manual` y muestra banner de advertencia "precio de gas manual".
+- **Migración** `storage/migrations/202605_precio_gas_manual.sql`.
+
+### Corregido
+- Mensajes de error mezcla CFE/PPA más descriptivos: indican el tipo actualmente seleccionado y qué deseleccionar primero.
+- Campo `precio_gas_fuente` (`"real"` | `"manual"` | `"ppa"`) incluido en el JSON del endpoint `/dashboard/cogeneracion/data`.
+
 ## [2.33.3] — 2026-05-21
 
 ### Corregido

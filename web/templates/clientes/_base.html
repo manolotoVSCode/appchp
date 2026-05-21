@@ -20,7 +20,20 @@
       background: var(--color-bg-sidebar);
       border-right: 1px solid var(--color-border-sidebar);
       display: flex; flex-direction: column;
-      z-index: 100; overflow-y: auto;
+      z-index: 100; overflow: hidden;
+    }
+
+    /* Área scrollable del sidebar (todo excepto brand y footer) */
+    #sidebar-content {
+      flex: 1; overflow-y: auto; min-height: 0; position: relative;
+    }
+
+    /* Indicador de contenido oculto debajo */
+    #sidebar-scroll-indicator {
+      position: sticky; bottom: 0; left: 0; right: 0;
+      height: 28px; pointer-events: none;
+      background: linear-gradient(to bottom, transparent, var(--color-bg-sidebar, #1E2A35));
+      display: none;
     }
 
     /* Brand */
@@ -155,15 +168,16 @@
     }
     .sidebar-ver-mas:hover { text-decoration: underline; }
 
-    /* Bottom */
+    /* Bottom (fijo, tamaño reducido) */
     .sidebar-bottom {
-      margin-top: auto; padding: 1rem 1.25rem;
+      padding: .4rem .75rem .45rem;
       border-top: 1px solid var(--color-border-sidebar);
+      flex-shrink: 0;
     }
-    .sidebar-bottom a.btn { font-size: .8rem; }
+    .sidebar-bottom a.btn { font-size: .75rem; padding: .2rem .5rem; }
     .sidebar-footer-meta {
-      margin-top: .75rem; font-size: .7rem;
-      color: var(--color-text-sidebar-muted); line-height: 1.5;
+      margin-top: .3rem; font-size: .62rem;
+      color: var(--color-text-sidebar-muted); line-height: 1.4;
     }
     .sidebar-footer-meta a {
       color: var(--color-text-sidebar-muted); text-decoration: none;
@@ -268,6 +282,8 @@
     <div class="sidebar-brand-sub">Análisis Energético</div>
   </div>
 
+  <div id="sidebar-content">
+
   {% if current_user_data and current_user_data.rol == 'usuario_normal' %}
   <div class="sidebar-section">Mi empresa</div>
   {% if current_user_data.empresa_id %}
@@ -348,6 +364,9 @@
   {% endif %}
   {% endif %}
 
+  <div id="sidebar-scroll-indicator"></div>
+  </div>{# /sidebar-content #}
+
   <div class="sidebar-bottom">
     {% if current_user_data %}
     <div style="padding:.4rem .75rem .6rem;font-size:.72rem;color:#8A9BB0;line-height:1.4;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:.5rem">
@@ -378,8 +397,7 @@
     </a>
     <div class="sidebar-footer-meta">
       {% if app_version %}<span>v{{ app_version }}</span> &middot; {% endif %}
-      <a href="{{ url_for('changelog') }}">Changelog</a><br>
-      <span>CHP México &copy; {{ 2025 }}</span>
+      <a href="{{ url_for('changelog') }}">Changelog</a>
     </div>
   </div>
 </nav>
@@ -731,6 +749,20 @@ document.addEventListener("DOMContentLoaded", async function () {
   btn.addEventListener("click", function () {
     aplicarEstado(!document.body.classList.contains("sidebar-desktop-collapsed"));
   });
+})();
+</script>
+<script>
+// ── Indicador de scroll en sidebar ───────────────────────────────────────────
+(function () {
+  const sc  = document.getElementById("sidebar-content");
+  const ind = document.getElementById("sidebar-scroll-indicator");
+  if (!sc || !ind) return;
+  function _upd() {
+    ind.style.display = (sc.scrollTop + sc.clientHeight < sc.scrollHeight - 8) ? "block" : "none";
+  }
+  sc.addEventListener("scroll", _upd, { passive: true });
+  window.addEventListener("resize", _upd);
+  _upd();
 })();
 </script>
 {% block scripts %}{% endblock %}

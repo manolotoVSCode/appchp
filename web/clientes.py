@@ -51,6 +51,7 @@ from storage.repository import (
     update_factura_calificado,
     delete_factura_calificado,
     get_tipos_electricos_con_meses_seleccionados,
+    update_precio_gas_manual,
 )
 
 logger = logging.getLogger(__name__)
@@ -964,10 +965,13 @@ def contrato_seleccion_mes(cliente_id: int, contrato_id: int):
                 tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id)
                 tipo_opuesto = TIPO_ELECTRICO_CALIFICADO if contrato.tipo == TIPO_ELECTRICO_BASICO else TIPO_ELECTRICO_BASICO
                 if tipo_opuesto in tipos_existentes:
-                    return jsonify({
-                        "error": "No se puede mezclar suministro básico (CFE) y calificado (PPA). "
-                                 "Deselecciona los meses del otro tipo de contrato primero."
-                    }), 409
+                    if tipo_opuesto == TIPO_ELECTRICO_BASICO:
+                        msg = ("Hay meses de facturas CFE GDMTH seleccionados. "
+                               "Deselecciona primero todos los meses de los contratos CFE antes de activar suministro calificado (PPA).")
+                    else:
+                        msg = ("Hay meses de facturas calificadas (PPA) seleccionados. "
+                               "Deselecciona primero todos los meses de los contratos PPA antes de activar suministro CFE GDMTH.")
+                    return jsonify({"error": msg}), 409
 
             upsert_mes_seleccionado(contrato_id, anio, mes)
         else:
@@ -1007,10 +1011,13 @@ def contrato_seleccion_anio(cliente_id: int, contrato_id: int):
                 tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id)
                 tipo_opuesto = TIPO_ELECTRICO_CALIFICADO if contrato.tipo == TIPO_ELECTRICO_BASICO else TIPO_ELECTRICO_BASICO
                 if tipo_opuesto in tipos_existentes:
-                    return jsonify({
-                        "error": "No se puede mezclar suministro básico (CFE) y calificado (PPA). "
-                                 "Deselecciona los meses del otro tipo de contrato primero."
-                    }), 409
+                    if tipo_opuesto == TIPO_ELECTRICO_BASICO:
+                        msg = ("Hay meses de facturas CFE GDMTH seleccionados. "
+                               "Deselecciona primero todos los meses de los contratos CFE antes de activar suministro calificado (PPA).")
+                    else:
+                        msg = ("Hay meses de facturas calificadas (PPA) seleccionados. "
+                               "Deselecciona primero todos los meses de los contratos PPA antes de activar suministro CFE GDMTH.")
+                    return jsonify({"error": msg}), 409
             n = upsert_meses_seleccionados_anio(contrato_id, anio)
             return jsonify({"ok": True, "insertados": n})
         else:
@@ -1547,4 +1554,35 @@ def cliente_ppa_bloques_actualizar(cliente_id: int):
         flash(f"Se guardaron los bloques con {errores} error(es). Verifica los valores numéricos.", "warning")
     else:
         flash(f"Bloques mensuales {anio} actualizados.", "success")
+    return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+
+@clientes_bp.route("/<int:cliente_id>/gas-manual", methods=["POST"])
+def cliente_gas_manual_actualizar(cliente_id: int):
+    """Guarda o borra el precio de gas manual (MXN/GJ PCS) del cliente."""
+    from decimal import Decimal, InvalidOperation
+
+    user = _get_current_user()
+    if not user or user.get("rol") not in ("master_admin", "admin"):
+        flash("No tienes permiso para esta acción.", "danger")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    val = request.form.get("precio_gas_manual_mxn_gj_pcs", "").strip()
+    if not val:
+        update_precio_gas_manual(cliente_id, None)
+        flash("Precio de gas manual eliminado.", "success")
+    else:
+        try:
+            precio = Decimal(val)
+            if precio <= 0:
+                raise ValueError("El precio debe ser positivo.")
+            update_precio_gas_manual(cliente_id, precio)
+            flash(f"Precio de gas manual actualizado: {precio} MXN/GJ.", "success")
+        except (InvalidOperation, ValueError) as exc:
+            flash(f"Valor inválido para precio de gas: {exc}", "danger")
     return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
