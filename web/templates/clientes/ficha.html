@@ -5,7 +5,9 @@
 
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-3">
+  {% if current_user_data and current_user_data.rol != 'usuario_normal' %}
   <a href="{{ url_for('clientes.listado') }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
+  {% endif %}
   <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">{{ cliente.nombre }}</h4>
 </div>
 

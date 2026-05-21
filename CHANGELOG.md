@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.33.1] — 2026-05-21
+
+### Corregido
+- Bug: usuario_normal no veía contratos desplegables ni dashboards en el sidebar de su ficha. Causa: `ficha()` no seteaba `cliente_activo_id` en sesión (solo lo hacía el JS del listado, que usuario_normal nunca visita). Ahora `ficha()` activa el cliente en sesión directamente.
+- Bug: botón "← Volver" aparecía para usuario_normal aunque no tiene listado de clientes. Ahora oculto para `usuario_normal`.
+
+### Añadido
+- Funcionalidad "Editar usuario" (`GET/POST /admin/usuarios/<id>/editar`). Master Admin puede modificar rol y empresa de cualquier usuario que no sea master_admin. Si el rol cambia a `admin`, empresa se limpia a NULL. Template `admin/editar_usuario.html`.
+- Botón "Editar" (lápiz) por fila en `/admin/usuarios`, visible solo para master_admin en usuarios no master_admin.
+
 ## [2.33.0] — 2026-05-20
 
 ### Cambiado

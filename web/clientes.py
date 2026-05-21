@@ -300,6 +300,11 @@ def ficha(cliente_id: int):
     if cliente is None:
         flash("El cliente solicitado no existe.", "warning")
         return redirect(url_for("clientes.listado"))
+    # Activar cliente en sesión: sin esto el sidebar no muestra dashboard ni contratos
+    session["cliente_activo_id"] = cliente_id
+    session["cliente_activo_nombre"] = cliente["nombre"]
+    session["cliente_activo_logo_url"] = cliente.get("logo_url")
+    session.pop("_cp_cache", None)
     contratos = get_contratos_por_cliente(cliente_id)
     # PPA bloques para precarga: {anio: {mes: mwh_str}}
     ppa_bloques: dict[int, dict[int, str]] = {}

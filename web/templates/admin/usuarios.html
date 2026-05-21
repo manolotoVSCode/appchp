@@ -86,6 +86,13 @@
                 {% endif %}
               {% endif %}
 
+              {% if current_user_data.rol == 'master_admin' and u.rol != 'master_admin' %}
+              <a href="{{ url_for('admin_usuarios_editar', user_id=u.id) }}"
+                 class="btn btn-sm btn-outline-secondary" title="Editar usuario">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% endif %}
+
               {% if puede_cambiar_pw %}
               <button type="button" class="btn btn-sm btn-outline-primary"
                       title="Cambiar contraseña"

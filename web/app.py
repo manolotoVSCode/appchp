@@ -1357,6 +1357,59 @@ def create_app() -> Flask:
             flash(f"Contraseña actualizada para {target['email']}.", "success")
         return redirect(url_for("admin_usuarios"))
 
+    @app.route("/admin/usuarios/<user_id>/editar", methods=["GET", "POST"])
+    def admin_usuarios_editar(user_id: str):
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        actor = _gcu()
+        if not actor or actor["rol"] != ROL_MASTER_ADMIN:
+            flash("Acceso restringido al master_admin.", "danger")
+            return redirect(url_for("dashboard"))
+        from storage.repository import _supabase, get_all_clientes_con_conteos
+        try:
+            _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
+            res = _supabase.table("user_profiles").select("*").eq("id", user_id).limit(1).execute()
+            target = res.data[0] if res.data else None
+        except Exception:
+            target = None
+        if not target:
+            flash("Usuario no encontrado.", "warning")
+            return redirect(url_for("admin_usuarios"))
+        if target["rol"] == ROL_MASTER_ADMIN:
+            flash("No se puede editar al Master Admin desde la UI.", "warning")
+            return redirect(url_for("admin_usuarios"))
+
+        if request.method == "POST":
+            rol = request.form.get("rol", "").strip()
+            empresa_id = request.form.get("empresa_id", "").strip() or None
+            if rol not in ("admin", "usuario_normal"):
+                flash("Rol no válido.", "danger")
+                return redirect(url_for("admin_usuarios_editar", user_id=user_id))
+            if rol == "usuario_normal" and not empresa_id:
+                flash("El rol usuario_normal requiere empresa asignada.", "danger")
+                clientes_list = get_all_clientes_con_conteos()
+                return render_template("admin/editar_usuario.html",
+                                       target=target, clientes=clientes_list,
+                                       form_rol=rol, form_empresa_id=empresa_id)
+            if rol == "admin":
+                empresa_id = None
+            try:
+                _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
+                _supabase.table("user_profiles").update({
+                    "rol": rol,
+                    "empresa_id": int(empresa_id) if empresa_id else None,
+                }).eq("id", user_id).execute()
+                flash(f"Usuario {target['email']} actualizado correctamente.", "success")
+            except Exception as exc:
+                logger.error("Error actualizando usuario %s: %s", user_id, exc)
+                flash(f"Error actualizando usuario: {exc}", "danger")
+            return redirect(url_for("admin_usuarios"))
+
+        clientes_list = get_all_clientes_con_conteos()
+        return render_template("admin/editar_usuario.html",
+                               target=target, clientes=clientes_list,
+                               form_rol=target["rol"],
+                               form_empresa_id=target.get("empresa_id"))
+
     @app.route("/admin/usuarios/<user_id>/borrar", methods=["POST"])
     def admin_usuarios_borrar(user_id: str):
         from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
