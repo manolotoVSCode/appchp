@@ -8,6 +8,7 @@ from decimal import Decimal
 
 import pytest
 
+from calc.excepciones import PeriodoIncompletoError
 from calc.periodo import mes_asociado, prorratear_cfe, prorratear_gas, UMBRAL_PRORRATEO_DIAS
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario
 from models.gas_invoice import GasInvoice, GasConcepto
@@ -108,6 +109,38 @@ def test_mes_asociado_empate_real_asigna_posterior():
 def test_mes_asociado_patron_cfe_tipico():
     """Oct 31 a Nov 30 (patrón típico CFE): Oct 1 día, Nov 30 días → noviembre."""
     assert mes_asociado(date(2023, 10, 31), date(2023, 11, 30)) == (2023, 11)
+
+
+# ── Tests: mes_asociado con entradas inválidas ────────────────────────────────
+
+def test_mes_asociado_periodo_inicio_none():
+    """periodo_inicio=None → PeriodoIncompletoError."""
+    with pytest.raises(PeriodoIncompletoError, match="None"):
+        mes_asociado(None, date(2024, 1, 31))
+
+
+def test_mes_asociado_periodo_fin_none():
+    """periodo_fin=None → PeriodoIncompletoError."""
+    with pytest.raises(PeriodoIncompletoError, match="None"):
+        mes_asociado(date(2024, 1, 1), None)
+
+
+def test_mes_asociado_ambos_none():
+    """Ambos None → PeriodoIncompletoError."""
+    with pytest.raises(PeriodoIncompletoError):
+        mes_asociado(None, None)
+
+
+def test_mes_asociado_periodo_fin_igual_inicio():
+    """periodo_fin == periodo_inicio → período de 0 días → PeriodoIncompletoError."""
+    with pytest.raises(PeriodoIncompletoError, match="posterior"):
+        mes_asociado(date(2024, 1, 15), date(2024, 1, 15))
+
+
+def test_mes_asociado_periodo_fin_anterior_inicio():
+    """periodo_fin < periodo_inicio → PeriodoIncompletoError."""
+    with pytest.raises(PeriodoIncompletoError, match="posterior"):
+        mes_asociado(date(2024, 1, 31), date(2024, 1, 1))
 
 
 # ── Tests: prorratear_cfe ─────────────────────────────────────────────────────

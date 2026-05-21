@@ -29,7 +29,15 @@ _supabase: Client = create_client(
 
 # ── CFE invoices ──────────────────────────────────────────────────────────────
 
-def save_cfe_invoice(invoice: CFEInvoice, cliente_id: int, contrato_id: int | None = None) -> tuple[int, str]:
+def save_cfe_invoice(
+    invoice: CFEInvoice,
+    cliente_id: int,
+    contrato_id: int | None = None,
+    *,
+    validacion_manual: bool = False,
+    validado_por: str | None = None,
+    motivo_captura_manual: str | None = None,
+) -> tuple[int, str]:
     """Persiste un CFEInvoice completo. Devuelve (id de cfe_facturas, nombre_canonico)."""
     nombre_canonico = generar_nombre_canonico(invoice)
 
@@ -65,6 +73,9 @@ def save_cfe_invoice(invoice: CFEInvoice, cliente_id: int, contrato_id: int | No
         "pdf_path": invoice.pdf_path,
         "nombre_canonico": nombre_canonico,
         "advertencias": json.dumps(invoice.advertencias, ensure_ascii=False),
+        "validacion_manual": validacion_manual,
+        "validado_por": validado_por,
+        "motivo_captura_manual": motivo_captura_manual,
     }
     _anio, _mes = _mes_asociado(invoice.periodo_inicio, invoice.periodo_fin)
     row["anio"] = _anio

@@ -18,7 +18,21 @@ def mes_asociado(periodo_inicio: date, periodo_fin: date) -> tuple[int, int]:
     """Devuelve (año, mes) del mes calendario con más días facturados.
 
     En empate exacto se asigna al mes posterior (mayor (año, mes)).
+
+    Raises:
+        PeriodoIncompletoError: si periodo_inicio o periodo_fin son None,
+            o si periodo_fin no es posterior a periodo_inicio.
     """
+    from calc.excepciones import PeriodoIncompletoError
+    if periodo_inicio is None or periodo_fin is None:
+        raise PeriodoIncompletoError(
+            f"periodo_inicio={periodo_inicio!r}, periodo_fin={periodo_fin!r}: "
+            "ambos deben ser fechas válidas (no None)."
+        )
+    if periodo_fin <= periodo_inicio:
+        raise PeriodoIncompletoError(
+            f"periodo_fin ({periodo_fin}) debe ser posterior a periodo_inicio ({periodo_inicio})."
+        )
     dias_por_mes: dict[tuple[int, int], int] = {}
     current = periodo_inicio
     while current < periodo_fin:

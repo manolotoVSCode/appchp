@@ -237,6 +237,106 @@
 </div>
 {% endif %}
 
+<!-- Modal captura manual de factura CFE -->
+<div class="modal fade" id="modalCapturaManual" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-xl modal-fullscreen-lg-down">
+    <div class="modal-content" style="min-height:85vh">
+      <div class="modal-header border-warning bg-warning bg-opacity-10">
+        <h5 class="modal-title text-warning fw-bold">&#9888; Captura manual requerida</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body p-0" style="height:calc(100% - 120px); overflow:hidden">
+        <div class="d-flex h-100">
+          <!-- Columna izquierda: formulario -->
+          <div class="col-6 border-end overflow-auto p-3" style="max-height:75vh">
+            <p class="text-muted small mb-3">
+              El parser no pudo extraer todos los datos de <strong id="captura-archivo-nombre"></strong>.
+              Completa los campos faltantes revisando el PDF a la derecha.
+            </p>
+            <form id="formCapturaManual" novalidate>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label form-label-sm fw-semibold">Período inicio <span class="text-danger">*</span></label>
+                  <input type="date" class="form-control form-control-sm" id="cm-periodo-inicio" name="periodo_inicio" required>
+                </div>
+                <div class="col-6">
+                  <label class="form-label form-label-sm fw-semibold">Período fin <span class="text-danger">*</span></label>
+                  <input type="date" class="form-control form-control-sm" id="cm-periodo-fin" name="periodo_fin" required>
+                </div>
+                <div class="col-12">
+                  <label class="form-label form-label-sm fw-semibold">Número de servicio <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control form-control-sm" id="cm-numero-servicio" name="numero_servicio" required placeholder="12 dígitos CFE">
+                </div>
+                <div class="col-6">
+                  <label class="form-label form-label-sm">Folio</label>
+                  <input type="text" class="form-control form-control-sm" id="cm-folio" name="folio">
+                </div>
+                <div class="col-6">
+                  <label class="form-label form-label-sm">Fecha emisión</label>
+                  <input type="date" class="form-control form-control-sm" id="cm-fecha-emision" name="fecha_emision">
+                </div>
+                <div class="col-6">
+                  <label class="form-label form-label-sm">Fecha límite pago</label>
+                  <input type="date" class="form-control form-control-sm" id="cm-fecha-limite" name="fecha_limite_pago">
+                </div>
+                <div class="col-6">
+                  <label class="form-label form-label-sm">Total MXN</label>
+                  <input type="text" class="form-control form-control-sm" id="cm-total" name="total_mxn">
+                </div>
+                <div class="col-12">
+                  <label class="form-label form-label-sm fw-semibold">Motivo de captura manual <span class="text-danger">*</span></label>
+                  <select class="form-select form-select-sm" id="cm-motivo" name="motivo_captura_manual" required>
+                    <option value="">— Selecciona —</option>
+                    <option value="texto_cifrado">Texto cifrado en PDF (no seleccionable)</option>
+                    <option value="campos_ilegibles">Campos ilegibles o dañados</option>
+                    <option value="pdf_escaneado">PDF escaneado (imagen)</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+                <!-- Campos ocultos con datos extraídos por el parser -->
+                <input type="hidden" id="cm-uuid-cfdi" name="uuid_cfdi">
+                <input type="hidden" id="cm-serie" name="serie">
+                <input type="hidden" id="cm-rmu" name="rmu">
+                <input type="hidden" id="cm-nombre-cliente" name="nombre_cliente">
+                <input type="hidden" id="cm-rfc-cliente" name="rfc_cliente">
+                <input type="hidden" id="cm-tarifa" name="tarifa">
+                <input type="hidden" id="cm-numero-medidor" name="numero_medidor">
+                <input type="hidden" id="cm-multiplicador" name="multiplicador">
+                <input type="hidden" id="cm-carga-conectada" name="carga_conectada_kw">
+                <input type="hidden" id="cm-demanda-contratada" name="demanda_contratada_kw">
+                <input type="hidden" id="cm-kw-max" name="kw_max">
+                <input type="hidden" id="cm-kvarh" name="kvarh">
+                <input type="hidden" id="cm-fp" name="factor_potencia_pct">
+                <input type="hidden" id="cm-cargo-fijo" name="cargo_fijo_mxn">
+                <input type="hidden" id="cm-energia-total" name="energia_total_mxn">
+                <input type="hidden" id="cm-cargo-fp" name="cargo_factor_potencia_mxn">
+                <input type="hidden" id="cm-subtotal" name="subtotal_mxn">
+                <input type="hidden" id="cm-iva" name="iva_mxn">
+                <input type="hidden" id="cm-facturacion-periodo" name="facturacion_periodo_mxn">
+                <input type="hidden" id="cm-dap" name="derecho_alumbrado_publico_mxn">
+                <input type="hidden" id="cm-credito" name="credito_aplicado_mxn">
+                <input type="hidden" id="cm-periodos-json" name="periodos_json">
+                <input type="hidden" id="cm-componentes-json" name="componentes_mem_json">
+              </div>
+            </form>
+          </div>
+          <!-- Columna derecha: visor PDF -->
+          <div class="col-6 p-0" style="max-height:75vh">
+            <embed id="captura-pdf-viewer" type="application/pdf" class="w-100 h-100" style="min-height:60vh" src="">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div id="captura-manual-error" class="text-danger small me-auto" style="display:none"></div>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-warning" id="btnGuardarCapturaManual" disabled>
+          Guardar factura
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal confirmación discrepancia de identificador -->
 <div class="modal fade" id="modalDiscrepancia" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -384,6 +484,12 @@ async function subirArchivos(files, confirmados = []) {
         data.pendientes_confirmacion.forEach(p => { _pendingFiles[p.nombre] = { file: f, info: p }; });
         pendientes = pendientes.concat(data.pendientes_confirmacion);
       }
+      if (data.requieren_captura_manual) {
+        data.requieren_captura_manual.forEach(item => {
+          item._file = f;
+          _capturaManualPendientes.push(item);
+        });
+      }
     } catch (e) {
       errores.push({ nombre: f.name, error: e.message });
     }
@@ -391,9 +497,13 @@ async function subirArchivos(files, confirmados = []) {
 
   mostrarResultado(procesados, exitosos, errores);
 
-  // Show confirmation modal for first pending file
+  // Show confirmation modal for first pending file (identifier mismatch)
   if (pendientes.length > 0) {
     mostrarDiscrepancia(pendientes[0]);
+  }
+  // Show manual capture modal for first item requiring manual entry
+  if (_capturaManualPendientes.length > 0) {
+    mostrarCapturaManual(_capturaManualPendientes[0]);
   }
 }
 
@@ -438,6 +548,125 @@ function mostrarDiscrepancia(p) {
     if (pending) {
       delete _pendingFiles[p.nombre];
       await subirArchivos([pending.file], [p.nombre]);
+    }
+  };
+}
+
+// ── Captura manual ────────────────────────────────────────────────────────────
+const manualUrl = "{{ url_for('clientes.contrato_upload_manual', cliente_id=cliente.id, contrato_id=contrato.id) }}";
+let _capturaManualPendientes = [];  // queue: [{file, info}]
+let _capturaManualBlobUrl = null;
+
+function _setInputVal(id, val) {
+  const el = document.getElementById(id);
+  if (el && val !== null && val !== undefined) el.value = val;
+}
+
+function mostrarCapturaManual(item) {
+  const { archivo, campos_extraidos: ex, campos_faltantes } = item;
+  const file = item._file;
+
+  // Pre-fill form from campos_extraidos
+  _setInputVal("cm-periodo-inicio", ex.periodo_inicio || "");
+  _setInputVal("cm-periodo-fin", ex.periodo_fin || "");
+  _setInputVal("cm-numero-servicio", ex.numero_servicio || "");
+  _setInputVal("cm-folio", ex.folio || "");
+  _setInputVal("cm-fecha-emision", ex.fecha_emision || "");
+  _setInputVal("cm-fecha-limite", ex.fecha_limite_pago || "");
+  _setInputVal("cm-total", ex.total_mxn || "");
+  _setInputVal("cm-uuid-cfdi", ex.uuid_cfdi || "");
+  _setInputVal("cm-serie", ex.serie || "");
+  _setInputVal("cm-rmu", ex.rmu || "");
+  _setInputVal("cm-nombre-cliente", ex.nombre_cliente || "");
+  _setInputVal("cm-rfc-cliente", ex.rfc_cliente || "");
+  _setInputVal("cm-tarifa", ex.tarifa || "GDMTH");
+  _setInputVal("cm-numero-medidor", ex.numero_medidor || "");
+  _setInputVal("cm-multiplicador", ex.multiplicador || 1);
+  _setInputVal("cm-carga-conectada", ex.carga_conectada_kw || "");
+  _setInputVal("cm-demanda-contratada", ex.demanda_contratada_kw || "");
+  _setInputVal("cm-kw-max", ex.kw_max || "");
+  _setInputVal("cm-kvarh", ex.kvarh || "");
+  _setInputVal("cm-fp", ex.factor_potencia_pct || "");
+  _setInputVal("cm-cargo-fijo", ex.cargo_fijo_mxn || "");
+  _setInputVal("cm-energia-total", ex.energia_total_mxn || "");
+  _setInputVal("cm-cargo-fp", ex.cargo_factor_potencia_mxn || "");
+  _setInputVal("cm-subtotal", ex.subtotal_mxn || "");
+  _setInputVal("cm-iva", ex.iva_mxn || "");
+  _setInputVal("cm-facturacion-periodo", ex.facturacion_periodo_mxn || "");
+  _setInputVal("cm-dap", ex.derecho_alumbrado_publico_mxn || "");
+  _setInputVal("cm-credito", ex.credito_aplicado_mxn || "");
+  _setInputVal("cm-periodos-json", JSON.stringify(ex.periodos || []));
+  _setInputVal("cm-componentes-json", JSON.stringify(ex.componentes_mem || []));
+
+  document.getElementById("captura-archivo-nombre").textContent = archivo;
+  document.getElementById("cm-motivo").value = "";
+  document.getElementById("btnGuardarCapturaManual").disabled = true;
+  document.getElementById("captura-manual-error").style.display = "none";
+
+  // Highlight faltantes
+  campos_faltantes.forEach(campo => {
+    const mapeo = { "numero_servicio": "cm-numero-servicio", "periodo_inicio": "cm-periodo-inicio", "periodo_fin": "cm-periodo-fin" };
+    const el = document.getElementById(mapeo[campo]);
+    if (el) { el.classList.add("border-danger"); el.focus(); }
+  });
+
+  // PDF viewer via Blob URL
+  if (_capturaManualBlobUrl) URL.revokeObjectURL(_capturaManualBlobUrl);
+  if (file) {
+    _capturaManualBlobUrl = URL.createObjectURL(file);
+    document.getElementById("captura-pdf-viewer").src = _capturaManualBlobUrl;
+  }
+
+  const modal = new bootstrap.Modal(document.getElementById("modalCapturaManual"));
+  modal.show();
+
+  // Enable save button when required fields are filled
+  const requeridos = ["cm-periodo-inicio", "cm-periodo-fin", "cm-numero-servicio", "cm-motivo"];
+  const checkRequeridos = () => {
+    const ok = requeridos.every(id => {
+      const el = document.getElementById(id);
+      return el && el.value.trim() !== "";
+    });
+    document.getElementById("btnGuardarCapturaManual").disabled = !ok;
+  };
+  requeridos.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", checkRequeridos);
+    if (el) el.addEventListener("change", checkRequeridos);
+  });
+
+  document.getElementById("btnGuardarCapturaManual").onclick = async function () {
+    const fd = new FormData(document.getElementById("formCapturaManual"));
+    if (file) fd.append("pdf", file, file.name);
+    fd.append("csrf_token", csrfToken);
+
+    const btn = this;
+    btn.disabled = true;
+    btn.textContent = "Guardando…";
+    document.getElementById("captura-manual-error").style.display = "none";
+
+    try {
+      const resp = await fetch(manualUrl, { method: "POST", body: fd, headers: { "X-CSRFToken": csrfToken } });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        document.getElementById("captura-manual-error").textContent = data.error || "Error al guardar.";
+        document.getElementById("captura-manual-error").style.display = "";
+        btn.disabled = false;
+        btn.textContent = "Guardar factura";
+        return;
+      }
+      modal.hide();
+      if (_capturaManualBlobUrl) { URL.revokeObjectURL(_capturaManualBlobUrl); _capturaManualBlobUrl = null; }
+      mostrarResultado(data.procesados || 0, data.exitosos || [], data.errores || []);
+      _capturaManualPendientes.shift();
+      if (_capturaManualPendientes.length > 0) {
+        mostrarCapturaManual(_capturaManualPendientes[0]);
+      }
+    } catch (e) {
+      document.getElementById("captura-manual-error").textContent = e.message;
+      document.getElementById("captura-manual-error").style.display = "";
+      btn.disabled = false;
+      btn.textContent = "Guardar factura";
     }
   };
 }

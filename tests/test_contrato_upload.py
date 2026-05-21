@@ -442,3 +442,153 @@ def test_nuevo_cliente_rfc_minusculas_sanitiza(auth_client, monkeypatch):
         data={"nombre": "Test SA", "rfc": "iti930101aaa", "notas": ""},
     )
     assert resp.status_code == 302
+
+
+# ── Tests captura manual (v2.37.0) ────────────────────────────────────────────
+
+def test_upload_numero_servicio_nulo_requiere_captura_manual(auth_client, monkeypatch):
+    """Factura CFE con numero_servicio vacío → requiere_captura_manual, no se guarda."""
+    _setup_electrico(monkeypatch)
+    monkeypatch.setattr("web.clientes._detect_tipo", lambda _: "cfe")
+    inv = _mock_cfe_invoice(numero_servicio="")  # vacío
+    inv.periodo_inicio = __import__("datetime").date(2024, 1, 1)
+    inv.periodo_fin = __import__("datetime").date(2024, 1, 31)
+    parser = MagicMock()
+    parser.parse.return_value = inv
+    monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
+    guardado = []
+    monkeypatch.setattr("web.clientes.save_cfe_invoice", lambda *a, **kw: guardado.append(1) or (1, "x"))
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload",
+        data={"facturas": _fake_pdf()},
+        content_type="multipart/form-data",
+    )
+    data = resp.get_json()
+    assert data["procesados"] == 0
+    assert len(data["requieren_captura_manual"]) == 1
+    assert data["requieren_captura_manual"][0]["campos_faltantes"] == ["numero_servicio"]
+    assert data["requieren_captura_manual"][0]["motivo"] == "numero_servicio_nulo"
+    assert guardado == []
+
+
+def test_upload_periodo_inicio_nulo_requiere_captura_manual(auth_client, monkeypatch):
+    """Factura CFE con periodo_inicio=None → requiere_captura_manual."""
+    _setup_electrico(monkeypatch)
+    monkeypatch.setattr("web.clientes._detect_tipo", lambda _: "cfe")
+    inv = _mock_cfe_invoice(numero_servicio="812990300016")
+    inv.periodo_inicio = None
+    inv.periodo_fin = __import__("datetime").date(2024, 1, 31)
+    parser = MagicMock()
+    parser.parse.return_value = inv
+    monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
+    guardado = []
+    monkeypatch.setattr("web.clientes.save_cfe_invoice", lambda *a, **kw: guardado.append(1) or (1, "x"))
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload",
+        data={"facturas": _fake_pdf()},
+        content_type="multipart/form-data",
+    )
+    data = resp.get_json()
+    assert data["procesados"] == 0
+    assert len(data["requieren_captura_manual"]) == 1
+    assert "periodo_inicio" in data["requieren_captura_manual"][0]["campos_faltantes"]
+    assert data["requieren_captura_manual"][0]["motivo"] == "fechas_periodo_nulas"
+    assert guardado == []
+
+
+def test_upload_ambas_fechas_nulas_requiere_captura_manual(auth_client, monkeypatch):
+    """Factura CFE con periodo_inicio y periodo_fin None → requiere_captura_manual con ambos en campos_faltantes."""
+    _setup_electrico(monkeypatch)
+    monkeypatch.setattr("web.clientes._detect_tipo", lambda _: "cfe")
+    inv = _mock_cfe_invoice(numero_servicio="812990300016")
+    inv.periodo_inicio = None
+    inv.periodo_fin = None
+    parser = MagicMock()
+    parser.parse.return_value = inv
+    monkeypatch.setattr("web.clientes.get_cfe_parser", lambda tarifa: parser)
+    monkeypatch.setattr("web.clientes.save_cfe_invoice", lambda *a, **kw: (1, "x"))
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload",
+        data={"facturas": _fake_pdf()},
+        content_type="multipart/form-data",
+    )
+    data = resp.get_json()
+    assert data["procesados"] == 0
+    faltantes = data["requieren_captura_manual"][0]["campos_faltantes"]
+    assert "periodo_inicio" in faltantes
+    assert "periodo_fin" in faltantes
+
+
+def test_upload_manual_exitoso(auth_client, monkeypatch):
+    """POST a /upload/manual con datos completos → guarda con validacion_manual=True."""
+    import datetime
+    _setup_electrico(monkeypatch)
+    guardado_kwargs = {}
+    def _fake_save(inv, cliente_id=None, contrato_id=None, **kwargs):
+        guardado_kwargs.update(kwargs)
+        return (99, "2024 ENE CFE 812990300016")
+    monkeypatch.setattr("web.clientes.save_cfe_invoice", _fake_save)
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload/manual",
+        data={
+            "numero_servicio": "812990300016",
+            "periodo_inicio": "2024-01-01",
+            "periodo_fin": "2024-01-31",
+            "folio": "F001",
+            "fecha_emision": "2024-01-15",
+            "fecha_limite_pago": "2024-02-10",
+            "total_mxn": "50000.00",
+            "motivo_captura_manual": "texto_cifrado",
+            "tarifa": "GDMTH",
+            "periodos_json": "[]",
+            "componentes_mem_json": "[]",
+        },
+        content_type="multipart/form-data",
+    )
+    data = resp.get_json()
+    assert resp.status_code == 200
+    assert data["procesados"] == 1
+    assert guardado_kwargs.get("validacion_manual") is True
+    assert guardado_kwargs.get("motivo_captura_manual") == "texto_cifrado"
+
+
+def test_upload_manual_sin_numero_servicio_falla(auth_client, monkeypatch):
+    """POST a /upload/manual sin numero_servicio → 400 con mensaje de error."""
+    _setup_electrico(monkeypatch)
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload/manual",
+        data={
+            "numero_servicio": "",
+            "periodo_inicio": "2024-01-01",
+            "periodo_fin": "2024-01-31",
+            "motivo_captura_manual": "texto_cifrado",
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert "numero_servicio" in data["error"]
+
+
+def test_upload_manual_sin_periodo_falla(auth_client, monkeypatch):
+    """POST a /upload/manual sin periodo_inicio → 400."""
+    _setup_electrico(monkeypatch)
+
+    resp = auth_client.post(
+        "/clientes/1/contratos/10/upload/manual",
+        data={
+            "numero_servicio": "812990300016",
+            "periodo_inicio": "",
+            "periodo_fin": "2024-01-31",
+            "motivo_captura_manual": "texto_cifrado",
+        },
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert "periodo_inicio" in data["error"]

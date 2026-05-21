@@ -1,15 +1,20 @@
 # web/clientes.py
 from __future__ import annotations
 
+import json as _json
 import logging
 import re
 import tempfile
 import unicodedata
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from web.auth import get_current_user as _get_current_user
 from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario
+from calc.excepciones import PeriodoIncompletoError
+from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
 from parsers.cfe import get_cfe_parser
 from parsers.gas import get_gas_parser
@@ -72,6 +77,121 @@ _ESTADOS = [
 ]
 _TARIFAS_CFE = ["GDMTH", "GDMTO", "PDBT", "DAC", "DIST", "DIT"]
 _REGIMENES = ["24/7 continuo", "Dos turnos", "Un turno", "Estacional"]
+
+_MOTIVOS_CAPTURA_MANUAL = [
+    "texto_cifrado",
+    "campos_ilegibles",
+    "pdf_escaneado",
+    "otro",
+]
+
+
+def _invoice_to_campos_extraidos(invoice: CFEInvoice) -> dict:
+    """Serializa los campos de un CFEInvoice a un dict JSON-serializable.
+
+    Usa comprobaciones de tipo estrictas para que sea seguro con MagicMock en tests.
+    """
+    from datetime import date as _date_cls
+    from decimal import Decimal as _Decimal_cls
+
+    def _date(d):
+        return d.isoformat() if isinstance(d, _date_cls) else None
+
+    def _dec(d):
+        return str(d) if isinstance(d, _Decimal_cls) else None
+
+    def _str(s):
+        return s if isinstance(s, str) else None
+
+    def _int_safe(i):
+        return i if isinstance(i, int) and not isinstance(i, bool) else None
+
+    periodos_raw = getattr(invoice, "periodos", [])
+    periodos = (
+        [
+            {
+                "periodo": _str(p.periodo),
+                "consumo_kwh": _dec(p.consumo_kwh),
+                "demanda_kw": _dec(p.demanda_kw),
+                "costo_unitario_kwh": _dec(p.costo_unitario_kwh),
+            }
+            for p in periodos_raw
+        ]
+        if isinstance(periodos_raw, list)
+        else []
+    )
+
+    componentes_raw = getattr(invoice, "componentes_mem", [])
+    componentes_mem = (
+        [
+            {
+                "nombre": _str(c.nombre),
+                "cargo_fijo_mxn": _dec(c.cargo_fijo_mxn),
+                "cargo_demanda_mxn": _dec(c.cargo_demanda_mxn),
+                "cargo_energia_mxn": _dec(c.cargo_energia_mxn),
+                "importe_mxn": _dec(c.importe_mxn),
+            }
+            for c in componentes_raw
+        ]
+        if isinstance(componentes_raw, list)
+        else []
+    )
+
+    advertencias_raw = getattr(invoice, "advertencias", [])
+
+    return {
+        "uuid_cfdi": _str(getattr(invoice, "uuid_cfdi", None)),
+        "folio": _str(getattr(invoice, "folio", None)),
+        "serie": _str(getattr(invoice, "serie", None)),
+        "fecha_emision": _date(getattr(invoice, "fecha_emision", None)),
+        "periodo_inicio": _date(getattr(invoice, "periodo_inicio", None)),
+        "periodo_fin": _date(getattr(invoice, "periodo_fin", None)),
+        "fecha_limite_pago": _date(getattr(invoice, "fecha_limite_pago", None)),
+        "nombre_cliente": _str(getattr(invoice, "nombre_cliente", None)),
+        "rfc_cliente": _str(getattr(invoice, "rfc_cliente", None)),
+        "numero_servicio": _str(getattr(invoice, "numero_servicio", None)),
+        "rmu": _str(getattr(invoice, "rmu", None)),
+        "tarifa": _str(getattr(invoice, "tarifa", None)),
+        "numero_medidor": _str(getattr(invoice, "numero_medidor", None)),
+        "multiplicador": _int_safe(getattr(invoice, "multiplicador", None)),
+        "carga_conectada_kw": _dec(getattr(invoice, "carga_conectada_kw", None)),
+        "demanda_contratada_kw": _dec(getattr(invoice, "demanda_contratada_kw", None)),
+        "kw_max": _dec(getattr(invoice, "kw_max", None)),
+        "kvarh": _dec(getattr(invoice, "kvArh", None)),
+        "factor_potencia_pct": _dec(getattr(invoice, "factor_potencia_pct", None)),
+        "cargo_fijo_mxn": _dec(getattr(invoice, "cargo_fijo_mxn", None)),
+        "energia_total_mxn": _dec(getattr(invoice, "energia_total_mxn", None)),
+        "cargo_factor_potencia_mxn": _dec(getattr(invoice, "cargo_factor_potencia_mxn", None)),
+        "subtotal_mxn": _dec(getattr(invoice, "subtotal_mxn", None)),
+        "iva_mxn": _dec(getattr(invoice, "iva_mxn", None)),
+        "facturacion_periodo_mxn": _dec(getattr(invoice, "facturacion_periodo_mxn", None)),
+        "derecho_alumbrado_publico_mxn": _dec(getattr(invoice, "derecho_alumbrado_publico_mxn", None)),
+        "credito_aplicado_mxn": _dec(getattr(invoice, "credito_aplicado_mxn", None)),
+        "total_mxn": _dec(getattr(invoice, "total_mxn", None)),
+        "advertencias": advertencias_raw if isinstance(advertencias_raw, list) else [],
+        "periodos": periodos,
+        "componentes_mem": componentes_mem,
+    }
+
+
+def _parse_date_field(s: str | None):
+    """Convierte 'YYYY-MM-DD' a date o None si el string está vacío/inválido."""
+    if not s or not s.strip():
+        return None
+    try:
+        return datetime.strptime(s.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _parse_decimal_field(s: str | None, default: Decimal = Decimal("0")) -> Decimal:
+    """Convierte string a Decimal, devuelve default si vacío/inválido."""
+    if not s or not s.strip():
+        return default
+    try:
+        return Decimal(s.strip())
+    except InvalidOperation:
+        return default
 
 
 def _sanitizar(valor: str) -> str:
@@ -759,6 +879,7 @@ def contrato_upload(cliente_id: int, contrato_id: int):
     exitosos = []
     errors = []
     pendientes_confirmacion = []
+    requieren_captura_manual = []
 
     for f in files:
         nombre = f.filename or "<sin nombre>"
@@ -782,6 +903,31 @@ def contrato_upload(cliente_id: int, contrato_id: int):
             if tipo == "cfe":
                 parser = get_cfe_parser("GDMTH")
                 invoice = parser.parse(tmp_path)
+
+                # Tarea 3: numero_servicio obligatorio antes de guardar
+                if not invoice.numero_servicio:
+                    requieren_captura_manual.append({
+                        "archivo": nombre,
+                        "campos_faltantes": ["numero_servicio"],
+                        "campos_extraidos": _invoice_to_campos_extraidos(invoice),
+                        "motivo": "numero_servicio_nulo",
+                    })
+                    continue
+
+                # Tarea 2: fechas de período obligatorias antes de guardar
+                campos_faltantes_periodo = [
+                    campo for campo in ("periodo_inicio", "periodo_fin")
+                    if getattr(invoice, campo, None) is None
+                ]
+                if campos_faltantes_periodo:
+                    requieren_captura_manual.append({
+                        "archivo": nombre,
+                        "campos_faltantes": campos_faltantes_periodo,
+                        "campos_extraidos": _invoice_to_campos_extraidos(invoice),
+                        "motivo": "fechas_periodo_nulas",
+                    })
+                    continue
+
                 identificador_factura = invoice.numero_servicio
             else:
                 parser = get_gas_parser()
@@ -821,7 +967,184 @@ def contrato_upload(cliente_id: int, contrato_id: int):
         "exitosos": exitosos,
         "errores": errors,
         "pendientes_confirmacion": pendientes_confirmacion,
+        "requieren_captura_manual": requieren_captura_manual,
     })
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/upload/manual",
+    methods=["POST"],
+)
+def contrato_upload_manual(cliente_id: int, contrato_id: int):
+    """Guarda una factura CFE con datos capturados manualmente por el operador.
+
+    Recibe multipart/form-data con el PDF y todos los campos CFE. Se usa cuando
+    el parser no puede extraer campos críticos (período, número de servicio).
+    """
+    from flask import Response, jsonify
+    from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
+
+    user = _get_current_user()
+    if not user:
+        return jsonify({"error": "No autenticado"}), 401
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        return jsonify({"error": "Cliente no encontrado"}), 404
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        return jsonify({"error": "Contrato no encontrado"}), 404
+    if isinstance(resultado, Response):
+        return jsonify({"error": "Acceso denegado"}), 403
+
+    # Campos obligatorios
+    numero_servicio = (request.form.get("numero_servicio") or "").strip()
+    periodo_inicio = _parse_date_field(request.form.get("periodo_inicio"))
+    periodo_fin = _parse_date_field(request.form.get("periodo_fin"))
+
+    errores_validacion = []
+    if not numero_servicio:
+        errores_validacion.append("numero_servicio es obligatorio.")
+    if periodo_inicio is None:
+        errores_validacion.append("periodo_inicio es obligatorio (formato YYYY-MM-DD).")
+    if periodo_fin is None:
+        errores_validacion.append("periodo_fin es obligatorio (formato YYYY-MM-DD).")
+    if periodo_inicio and periodo_fin and periodo_fin <= periodo_inicio:
+        errores_validacion.append("periodo_fin debe ser posterior a periodo_inicio.")
+    if errores_validacion:
+        return jsonify({"error": "; ".join(errores_validacion)}), 400
+
+    # Campos opcionales con valores por defecto
+    folio = (request.form.get("folio") or "").strip() or "SIN_FOLIO"
+    uuid_cfdi = (request.form.get("uuid_cfdi") or "").strip() or None
+    serie = (request.form.get("serie") or "").strip() or None
+    rmu = (request.form.get("rmu") or "").strip() or None
+    nombre_cliente = (request.form.get("nombre_cliente") or "").strip()
+    rfc_cliente = (request.form.get("rfc_cliente") or "").strip()
+    tarifa = (request.form.get("tarifa") or "GDMTH").strip()
+    numero_medidor = (request.form.get("numero_medidor") or "").strip()
+    motivo_captura_manual = (request.form.get("motivo_captura_manual") or "otro").strip()
+
+    fecha_emision = _parse_date_field(request.form.get("fecha_emision")) or periodo_inicio
+    fecha_limite_pago = _parse_date_field(request.form.get("fecha_limite_pago")) or periodo_fin
+
+    multiplicador = int(request.form.get("multiplicador") or 1)
+    carga_conectada_kw = _parse_decimal_field(request.form.get("carga_conectada_kw"))
+    demanda_contratada_kw = _parse_decimal_field(request.form.get("demanda_contratada_kw"))
+    kw_max = _parse_decimal_field(request.form.get("kw_max"))
+    kvarh = _parse_decimal_field(request.form.get("kvarh"))
+    factor_potencia_pct = _parse_decimal_field(request.form.get("factor_potencia_pct"))
+    cargo_fijo_mxn = _parse_decimal_field(request.form.get("cargo_fijo_mxn"))
+    energia_total_mxn = _parse_decimal_field(request.form.get("energia_total_mxn"))
+    cargo_factor_potencia_mxn = _parse_decimal_field(request.form.get("cargo_factor_potencia_mxn"))
+    subtotal_mxn = _parse_decimal_field(request.form.get("subtotal_mxn"))
+    iva_mxn = _parse_decimal_field(request.form.get("iva_mxn"))
+    facturacion_periodo_mxn = _parse_decimal_field(request.form.get("facturacion_periodo_mxn"))
+    derecho_alumbrado_publico_mxn = _parse_decimal_field(request.form.get("derecho_alumbrado_publico_mxn"))
+    credito_aplicado_mxn = _parse_decimal_field(request.form.get("credito_aplicado_mxn"))
+    total_mxn = _parse_decimal_field(request.form.get("total_mxn"))
+
+    # Periodos y componentes MEM desde campos JSON
+    try:
+        periodos_raw = _json.loads(request.form.get("periodos_json") or "[]")
+        periodos = [
+            CFEConsumoHorario(
+                periodo=p["periodo"],
+                consumo_kwh=_parse_decimal_field(p.get("consumo_kwh")),
+                demanda_kw=_parse_decimal_field(p.get("demanda_kw")),
+                costo_unitario_kwh=_parse_decimal_field(p.get("costo_unitario_kwh")),
+            )
+            for p in periodos_raw
+        ]
+    except Exception:
+        periodos = []
+
+    try:
+        componentes_raw = _json.loads(request.form.get("componentes_mem_json") or "[]")
+        componentes_mem = [
+            MEMComponente(
+                nombre=c["nombre"],
+                cargo_fijo_mxn=_parse_decimal_field(c.get("cargo_fijo_mxn")),
+                cargo_demanda_mxn=_parse_decimal_field(c.get("cargo_demanda_mxn")),
+                cargo_energia_mxn=_parse_decimal_field(c.get("cargo_energia_mxn")),
+                importe_mxn=_parse_decimal_field(c.get("importe_mxn")),
+            )
+            for c in componentes_raw
+        ]
+    except Exception:
+        componentes_mem = []
+
+    # PDF: guardar en temp para pdf_path
+    pdf_file = request.files.get("pdf")
+    tmp_path = None
+    try:
+        if pdf_file and pdf_file.filename:
+            suffix = Path(pdf_file.filename).suffix.lower() or ".pdf"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                pdf_file.save(tmp.name)
+                tmp_path = Path(tmp.name)
+            pdf_path = str(tmp_path)
+        else:
+            pdf_path = "captura_manual"
+
+        invoice = CFEInvoice(
+            uuid_cfdi=uuid_cfdi,
+            folio=folio,
+            serie=serie,
+            fecha_emision=fecha_emision,
+            periodo_inicio=periodo_inicio,
+            periodo_fin=periodo_fin,
+            fecha_limite_pago=fecha_limite_pago,
+            nombre_cliente=nombre_cliente,
+            rfc_cliente=rfc_cliente,
+            numero_servicio=numero_servicio,
+            rmu=rmu,
+            tarifa=tarifa,
+            numero_medidor=numero_medidor,
+            multiplicador=multiplicador,
+            carga_conectada_kw=carga_conectada_kw,
+            demanda_contratada_kw=demanda_contratada_kw,
+            periodos=periodos,
+            kw_max=kw_max,
+            kvArh=kvarh,
+            factor_potencia_pct=factor_potencia_pct,
+            componentes_mem=componentes_mem,
+            cargo_fijo_mxn=cargo_fijo_mxn,
+            energia_total_mxn=energia_total_mxn,
+            cargo_factor_potencia_mxn=cargo_factor_potencia_mxn,
+            subtotal_mxn=subtotal_mxn,
+            iva_mxn=iva_mxn,
+            facturacion_periodo_mxn=facturacion_periodo_mxn,
+            derecho_alumbrado_publico_mxn=derecho_alumbrado_publico_mxn,
+            credito_aplicado_mxn=credito_aplicado_mxn,
+            total_mxn=total_mxn,
+            pdf_path=pdf_path,
+        )
+
+        factura_id, nombre_canonico = save_cfe_invoice(
+            invoice,
+            cliente_id=cliente_id,
+            contrato_id=contrato_id,
+            validacion_manual=True,
+            validado_por=user.get("user_id"),
+            motivo_captura_manual=motivo_captura_manual,
+        )
+        logger.info(
+            "Factura CFE guardada manualmente: id=%d, nombre='%s', operador=%s",
+            factura_id, nombre_canonico, user.get("email"),
+        )
+        return jsonify({
+            "procesados": 1,
+            "exitosos": [{"nombre_original": pdf_file.filename if pdf_file else "", "nombre_canonico": nombre_canonico}],
+            "errores": [],
+        })
+    except Exception as exc:
+        logger.error("Error en captura manual: %s", exc, exc_info=True)
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        if tmp_path:
+            tmp_path.unlink(missing_ok=True)
 
 
 @clientes_bp.route(
