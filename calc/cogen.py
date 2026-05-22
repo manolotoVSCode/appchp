@@ -37,14 +37,22 @@ _TASA_ISR = Decimal("0.30")
 
 
 def _capacidad_nominal_kw(cfe_invoices: list[CFEInvoice]) -> Decimal | None:
-    """max(kWh_total_mes / (días × 24 h)) sobre facturas con los tres horarios completos."""
+    """max(kWh_total_mes / (días_calendario × 24 h)) sobre facturas con los tres horarios completos.
+
+    Usa los días del mes calendario asociado (via mes_asociado + calendar.monthrange), no los
+    días de facturación. Esto es correcto porque el motor opera durante las horas reales del
+    mes, independientemente de que la factura abarque días de meses adyacentes.
+    Ejemplo: factura 2018-09-30 → 2018-10-31 se asocia a octubre (31 días), no a los 32
+    días de facturación; dividir entre 32 subestimaría la capacidad.
+    """
     maximos: list[Decimal] = []
     for cfe in cfe_invoices:
         nombres = {p.periodo for p in cfe.periodos}
         if not _PERIODOS_COMPLETOS.issubset(nombres):
             continue
         kwh = sum(p.consumo_kwh for p in cfe.periodos)
-        dias = (cfe.periodo_fin - cfe.periodo_inicio).days + 1
+        mes_anio, mes_mes = mes_asociado(cfe.periodo_inicio, cfe.periodo_fin)
+        dias = calendar.monthrange(mes_anio, mes_mes)[1]
         if kwh > 0 and dias > 0:
             horas = Decimal(dias * 24)
             maximos.append(kwh / horas)

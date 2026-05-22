@@ -673,6 +673,113 @@ def test_ahorro_otros_servicios_cero_sin_componentes():
     assert m.ahorro_otros_servicios_mes_mxn == Decimal("0")
 
 
+def test_capacidad_nominal_dias_calendario():
+    """Factura cross-mes (2018-09-30 → 2018-10-31, 32 días facturados).
+    mes_asociado → octubre 2018 → calendar.monthrange = 31 días.
+    Incorrecto (días facturación): ceil(536196 / (32×24)) = ceil(698.17) = 699.
+    Correcto  (días calendario):  ceil(536196 / (31×24)) = ceil(720.69) = 721.
+    """
+    kwh_total = Decimal("536196")
+    tercio = kwh_total / 3
+    inicio = date(2018, 9, 30)
+    fin    = date(2018, 10, 31)
+    periodos = [
+        CFEConsumoHorario("base",       tercio, Decimal("100"), Decimal("1.00")),
+        CFEConsumoHorario("intermedio", tercio, Decimal("100"), Decimal("1.20")),
+        CFEConsumoHorario("punta",      tercio, Decimal("100"), Decimal("1.50")),
+    ]
+    cfe_cross = CFEInvoice(
+        uuid_cfdi=None, folio="F1", serie=None,
+        fecha_emision=inicio, periodo_inicio=inicio, periodo_fin=fin,
+        fecha_limite_pago=fin, nombre_cliente="TEST", rfc_cliente="TST010101AAA",
+        numero_servicio="12345", rmu=None, tarifa="GDMTH", numero_medidor="M1",
+        multiplicador=1, carga_conectada_kw=Decimal("1000"),
+        demanda_contratada_kw=Decimal("1000"), periodos=periodos,
+        kw_max=Decimal("100"), kvArh=Decimal("0"), factor_potencia_pct=Decimal("90"),
+        componentes_mem=[], cargo_fijo_mxn=Decimal("0"),
+        energia_total_mxn=Decimal("1000000"), cargo_factor_potencia_mxn=Decimal("0"),
+        subtotal_mxn=Decimal("1000000"), iva_mxn=Decimal("0"),
+        facturacion_periodo_mxn=Decimal("1000000"),
+        derecho_alumbrado_publico_mxn=Decimal("0"), credito_aplicado_mxn=Decimal("0"),
+        total_mxn=Decimal("1000000"), pdf_path="test.pdf",
+    )
+    r = calcular_cogen([cfe_cross], [], CoGenParams())
+    assert r.capacidad_nominal_kw == Decimal("721"), (
+        f"Esperado 721 kW (días calendario oct-2018=31), obtenido {r.capacidad_nominal_kw}"
+    )
+
+
+def test_capacidad_nominal_periodo_exacto_mes():
+    """Enero 2024 (1/1→1/31): periodo alineado con el mes.
+    calendar.monthrange(2024,1)[1] = 31 días → 744 h.
+    ceil(744000 / 744) = ceil(1000.0) = 1000 kW.
+    """
+    kwh_jan = Decimal("744000")
+    tercio = kwh_jan / 3
+    inicio = date(2024, 1, 1)
+    fin    = date(2024, 1, 31)
+    periodos = [
+        CFEConsumoHorario("base",       tercio, Decimal("100"), Decimal("1.00")),
+        CFEConsumoHorario("intermedio", tercio, Decimal("100"), Decimal("1.20")),
+        CFEConsumoHorario("punta",      tercio, Decimal("100"), Decimal("1.50")),
+    ]
+    cfe_jan = CFEInvoice(
+        uuid_cfdi=None, folio="F1", serie=None,
+        fecha_emision=inicio, periodo_inicio=inicio, periodo_fin=fin,
+        fecha_limite_pago=fin, nombre_cliente="TEST", rfc_cliente="TST010101AAA",
+        numero_servicio="12345", rmu=None, tarifa="GDMTH", numero_medidor="M1",
+        multiplicador=1, carga_conectada_kw=Decimal("1000"),
+        demanda_contratada_kw=Decimal("1000"), periodos=periodos,
+        kw_max=Decimal("100"), kvArh=Decimal("0"), factor_potencia_pct=Decimal("90"),
+        componentes_mem=[], cargo_fijo_mxn=Decimal("0"),
+        energia_total_mxn=Decimal("2000000"), cargo_factor_potencia_mxn=Decimal("0"),
+        subtotal_mxn=Decimal("2000000"), iva_mxn=Decimal("0"),
+        facturacion_periodo_mxn=Decimal("2000000"),
+        derecho_alumbrado_publico_mxn=Decimal("0"), credito_aplicado_mxn=Decimal("0"),
+        total_mxn=Decimal("2000000"), pdf_path="test.pdf",
+    )
+    r = calcular_cogen([cfe_jan], [], CoGenParams())
+    assert r.capacidad_nominal_kw == Decimal("1000")
+
+
+def test_capacidad_nominal_multiples_facturas():
+    """Con 3 facturas, capacidad_nominal_kw es el MAX de las tres.
+    - Ene-2024 (31 días):  744000 kWh → ceil(744000/744) = 1000 kW  ← máximo
+    - Feb-2023 (28 días):  504000 kWh → ceil(504000/672) = 750 kW
+    - Nov-2023 (30 días):  540000 kWh → ceil(540000/720) = 750 kW
+    """
+    def _cfe_directo(kwh: Decimal, inicio: date, fin: date) -> CFEInvoice:
+        tercio = kwh / 3
+        periodos = [
+            CFEConsumoHorario("base",       tercio, Decimal("100"), Decimal("1.00")),
+            CFEConsumoHorario("intermedio", tercio, Decimal("100"), Decimal("1.20")),
+            CFEConsumoHorario("punta",      tercio, Decimal("100"), Decimal("1.50")),
+        ]
+        return CFEInvoice(
+            uuid_cfdi=None, folio="F1", serie=None,
+            fecha_emision=inicio, periodo_inicio=inicio, periodo_fin=fin,
+            fecha_limite_pago=fin, nombre_cliente="TEST", rfc_cliente="TST010101AAA",
+            numero_servicio="12345", rmu=None, tarifa="GDMTH", numero_medidor="M1",
+            multiplicador=1, carga_conectada_kw=Decimal("1000"),
+            demanda_contratada_kw=Decimal("1000"), periodos=periodos,
+            kw_max=Decimal("100"), kvArh=Decimal("0"), factor_potencia_pct=Decimal("90"),
+            componentes_mem=[], cargo_fijo_mxn=Decimal("0"),
+            energia_total_mxn=Decimal("1000000"), cargo_factor_potencia_mxn=Decimal("0"),
+            subtotal_mxn=Decimal("1000000"), iva_mxn=Decimal("0"),
+            facturacion_periodo_mxn=Decimal("1000000"),
+            derecho_alumbrado_publico_mxn=Decimal("0"), credito_aplicado_mxn=Decimal("0"),
+            total_mxn=Decimal("1000000"), pdf_path="test.pdf",
+        )
+
+    facturas = [
+        _cfe_directo(Decimal("744000"), date(2024, 1, 1),  date(2024, 1, 31)),   # 1000 kW
+        _cfe_directo(Decimal("504000"), date(2023, 2, 1),  date(2023, 2, 28)),   # 750 kW
+        _cfe_directo(Decimal("540000"), date(2023, 11, 1), date(2023, 11, 30)),  # 750 kW
+    ]
+    r = calcular_cogen(facturas, [], CoGenParams())
+    assert r.capacidad_nominal_kw == Decimal("1000")
+
+
 def test_ahorro_otros_servicios_incluido_en_total():
     """Ahorro eléctrico total incluye Ahorro Otros Servicios."""
     from models.cfe_invoice import MEMComponente

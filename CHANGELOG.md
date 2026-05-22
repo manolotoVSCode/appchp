@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.39.1] — 2026-05-21
+
+### Corregido
+- Dashboard Cogeneración: cálculo de Capacidad Nominal ahora usa los días del mes calendario asociado en lugar de los días de facturación. Antes subestimaba la capacidad cuando una factura tenía días sobrantes (ej. 32 días facturados para octubre que solo tiene 31). Impacta también el cálculo de inversión y payback derivados.
+
+### Tests
+- `tests/calc/test_cogen.py`: 3 tests nuevos — `test_capacidad_nominal_dias_calendario` (verifica caso EUREKA oct-2018: 699→721 kW), `test_capacidad_nominal_periodo_exacto_mes` (enero 2024 alineado: 1000 kW exacto), `test_capacidad_nominal_multiples_facturas` (MAX de tres facturas distintas).
+
 ## [2.39.0] — 2026-05-21
 
 ### Corregido
