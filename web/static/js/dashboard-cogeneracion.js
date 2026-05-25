@@ -225,7 +225,7 @@
       E_kwh    += kc;
       gj_pci   += gj_pci_mes;
       // calor_gj usa PCS (no PCI): convención industrial en México; el poder calorífico superior
-      // es el estándar en contratos de gas y en la metodología CRE para CELs.
+      // es el estándar en contratos de gas y en la metodología CNE para CELs.
       calor_gj += gj_pcs * p.rend_term;
     });
     const E  = E_kwh / 1000;
@@ -420,6 +420,7 @@
 
     let ahorro_neto_anual = 0, ah_elec = 0, ah_caldera = 0, costo_gas = 0, om_anual = 0;
     let ah_energia_anual = 0, ah_cap_anual = 0, ah_dist_anual = 0, ah_otros_anual = 0;
+    let orig_energia_anual = 0, orig_cap_anual = 0, orig_dist_anual = 0, orig_otros_anual = 0;
     const lChartE = [], lChartC = [], lChartG = [], lChartOM = [], lChartN = [];
 
     meses_raw.forEach(m => {
@@ -433,6 +434,13 @@
       ah_cap_anual     += res.ah_cap;
       ah_dist_anual    += res.ah_dist;
       ah_otros_anual   += (res.ah_otros || 0);
+      // Costos originales de cada componente (sin cogeneración)
+      orig_energia_anual += (m.kwh_punta || 0) * (m.cu_punta || 0)
+                          + (m.kwh_intermedia || 0) * (m.cu_intermedia || 0)
+                          + (m.kwh_base || 0) * (m.cu_base || 0);
+      orig_cap_anual  += (m.kw_facturado_capacidad  || 0) * (m.precio_capacidad_kw  || 0);
+      orig_dist_anual += (m.kw_facturado_distribucion || 0) * (m.precio_distribucion_kw || 0);
+      orig_otros_anual += (m.kwh_total_orig || 0) * (m.precio_otros_kwh || 0);
       lChartE.push(res.ah_elec);
       lChartC.push(res.ah_caldera);
       lChartG.push(res.costo_gas);
@@ -455,10 +463,20 @@
     setText("kpi-om-val",             fmt(om_anual));
     setText("kpi-total-gastos-val",   fmt(costo_gas + om_anual));
     // Desglose 4 componentes del ahorro eléctrico (solo CFE GDMTH)
+    const pct = (ahorro, orig) => orig > 0 ? Math.min(100, ahorro / orig * 100).toFixed(1) + "%" : "—";
+    const fmtOrig = v => v > 0 ? fmt(v) : "—";
+    setText("kpi-ah-energia-orig",    fmtOrig(orig_energia_anual));
     setText("kpi-ah-energia-val",     fmt(ah_energia_anual));
+    setText("kpi-ah-energia-pct",     pct(ah_energia_anual, orig_energia_anual));
+    setText("kpi-ah-cap-orig",        fmtOrig(orig_cap_anual));
     setText("kpi-ah-cap-val",         fmt(ah_cap_anual));
+    setText("kpi-ah-cap-pct",         pct(ah_cap_anual, orig_cap_anual));
+    setText("kpi-ah-dist-orig",       fmtOrig(orig_dist_anual));
     setText("kpi-ah-dist-val",        fmt(ah_dist_anual));
+    setText("kpi-ah-dist-pct",        pct(ah_dist_anual, orig_dist_anual));
+    setText("kpi-ah-otros-orig",      fmtOrig(orig_otros_anual));
     setText("kpi-ah-otros-val",       fmt(ah_otros_anual));
+    setText("kpi-ah-otros-pct",       pct(ah_otros_anual, orig_otros_anual));
 
     // Payback
     if (tieneInversion) {
@@ -790,7 +808,7 @@
       const link = document.createElement("a");
       link.setAttribute("href", "#");
       link.className = "small text-decoration-none mt-1 d-block";
-      link.textContent = "Ver detalle CRE →";
+      link.textContent = "Ver detalle CNE →";
       link.addEventListener("click", e => { e.preventDefault(); abrirPanel("panelCels"); });
       inner.appendChild(link);
     } else {
@@ -818,7 +836,7 @@
       const link = document.createElement("a");
       link.setAttribute("href", "#");
       link.className = "small text-decoration-none mt-1 d-block";
-      link.textContent = "Ver detalle CRE →";
+      link.textContent = "Ver detalle CNE →";
       link.addEventListener("click", e => { e.preventDefault(); abrirPanel("panelCels"); });
       inner.appendChild(link);
     }

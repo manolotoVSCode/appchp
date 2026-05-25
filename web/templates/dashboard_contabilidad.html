@@ -105,7 +105,10 @@
         <div class="col-md-3">
           <div class="card h-100 shadow-sm">
             <div class="card-body">
-              <div class="text-muted small">Costo Total del Periodo</div>
+              <div class="d-flex align-items-center justify-content-between">
+                <div class="text-muted small">Costo Total del Periodo</div>
+                <a href="#" class="link-datos" onclick="abrirPanel('panelResumenCostoPeriodo'); return false;">Ver detalles</a>
+              </div>
               <div class="fs-4 fw-bold" style="color:var(--color-primary-dark)" id="kpi-costo-total-periodo">—</div>
               <div class="text-muted small">MXN (pre-IVA)</div>
             </div>
@@ -278,6 +281,27 @@
       </div>
 
       {# ═══ PANELES FLOTANTES ═══ #}
+      <div class="panel-flotante" id="panelResumenCostoPeriodo">
+        <div class="panel-header">
+          <span class="panel-titulo">Desglose Costo Total del Periodo</span>
+          <button class="panel-cerrar" title="Cerrar">×</button>
+        </div>
+        <div class="panel-body">
+          <table class="table table-sm table-hover mb-0">
+            <thead>
+              <tr class="table-primary-header">
+                <th class="ps-3">Factura</th>
+                <th>Mes</th>
+                <th class="text-end">kWh</th>
+                <th class="text-end pe-3">Costo MXN (pre-IVA)</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyResumenCostoPeriodo"></tbody>
+          </table>
+        </div>
+        <div class="panel-resize"></div>
+      </div>
+
       <div class="panel-flotante" id="panelConsumosDemandas">
         <div class="panel-header">
           <span class="panel-titulo">Consumos y demandas por horario</span>

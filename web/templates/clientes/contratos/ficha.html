@@ -620,7 +620,7 @@ async function subirArchivos(files, confirmados = []) {
 
   for (let i = 0; i < total; i++) {
     const f = files[i];
-    statusDiv.innerHTML = '<span class="text-muted">Subiendo ' + (i + 1) + ' / ' + total + ': ' + f.name + '</span>';
+    mostrarBarraProgreso(statusDiv, i + 1, total, f.name);
     try {
       const fd = new FormData();
       fd.append("facturas", f);

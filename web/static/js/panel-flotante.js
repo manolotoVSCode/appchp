@@ -33,9 +33,9 @@ class PanelFlotante {
       return;
     }
 
-    // Posición en cascada: centrado + offset de 30px por panel abierto
-    const w = 800;
-    const h = 600;
+    // Posición en cascada: 95% del ancho de ventana, 85% del alto, centrado + offset
+    const w = Math.round(window.innerWidth  * 0.95);
+    const h = Math.round(window.innerHeight * 0.85);
     const idx    = PanelFlotante._openCount % 7;
     const offset = idx * 30;
     const rawL   = (window.innerWidth  - w) / 2 + offset;

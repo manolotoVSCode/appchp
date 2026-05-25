@@ -517,6 +517,32 @@
     }).join("");
   }
 
+  function renderResumenCostoPeriodo(facturas) {
+    const tbody = document.getElementById("tbodyResumenCostoPeriodo");
+    if (!tbody) return;
+    if (!facturas || !facturas.length) {
+      tbody.innerHTML = "<tr><td colspan=\"4\" class=\"text-muted small ps-3 py-2\">Sin facturas seleccionadas</td></tr>";
+      return;
+    }
+    let totalKwh = 0, totalCosto = 0;
+    const filas = facturas.map(f => {
+      totalKwh  += f.kwh_total  || 0;
+      totalCosto += f.costo_mxn || 0;
+      return `<tr>
+        <td class="ps-3 small fw-semibold">${f.nombre_canonico}</td>
+        <td class="small">${f.mes_asociado}</td>
+        <td class="text-end small">${Math.round(f.kwh_total).toLocaleString("en-US")}</td>
+        <td class="text-end small pe-3">$${Math.round(f.costo_mxn).toLocaleString("en-US")}</td>
+      </tr>`;
+    });
+    filas.push(`<tr class="total-row">
+      <td class="ps-3 small fw-semibold" colspan="2">Total</td>
+      <td class="text-end small">${Math.round(totalKwh).toLocaleString("en-US")}</td>
+      <td class="text-end small pe-3">$${Math.round(totalCosto).toLocaleString("en-US")}</td>
+    </tr>`);
+    tbody.innerHTML = filas.join("");
+  }
+
   function renderFacturasCfe(facturas) {
     const tbody = document.getElementById("tbodyFacturasCfe");
     if (!tbody) return;
@@ -721,6 +747,7 @@
     // Facturas
     renderFacturasCfe(data.facturas_cfe);
     renderFacturasGas(data.facturas_gas);
+    renderResumenCostoPeriodo(data.facturas_cfe);
 
     // Gráficas CFE
     if (data.historico && data.historico.labels && data.historico.labels.length) {

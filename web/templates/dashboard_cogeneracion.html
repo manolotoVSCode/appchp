@@ -129,21 +129,35 @@
             <!-- Desglose 4 componentes (solo CFE GDMTH; oculto en PPA) -->
             <div class="collapse mt-2" id="detalleAhorroElec">
               <div class="small text-muted border-top pt-1">
-                <div class="d-flex justify-content-between">
-                  <span>Energía</span>
-                  <span id="kpi-ah-energia-val" class="fw-semibold">—</span>
+                <div class="row g-0 mb-1" style="font-size:.7rem;opacity:.7">
+                  <div class="col-5"></div>
+                  <div class="col-3 text-end">Original</div>
+                  <div class="col-2 text-end">Ahorro</div>
+                  <div class="col-2 text-end">%</div>
                 </div>
-                <div class="d-flex justify-content-between">
-                  <span>Capacidad</span>
-                  <span id="kpi-ah-cap-val" class="fw-semibold">—</span>
+                <div class="row g-0 align-items-center">
+                  <div class="col-5">Energía</div>
+                  <div class="col-3 text-end text-muted" id="kpi-ah-energia-orig">—</div>
+                  <div class="col-2 text-end fw-semibold" id="kpi-ah-energia-val">—</div>
+                  <div class="col-2 text-end" id="kpi-ah-energia-pct">—</div>
                 </div>
-                <div class="d-flex justify-content-between">
-                  <span>Distribución</span>
-                  <span id="kpi-ah-dist-val" class="fw-semibold">—</span>
+                <div class="row g-0 align-items-center">
+                  <div class="col-5">Capacidad</div>
+                  <div class="col-3 text-end text-muted" id="kpi-ah-cap-orig">—</div>
+                  <div class="col-2 text-end fw-semibold" id="kpi-ah-cap-val">—</div>
+                  <div class="col-2 text-end" id="kpi-ah-cap-pct">—</div>
                 </div>
-                <div class="d-flex justify-content-between">
-                  <span>Otros Servicios</span>
-                  <span id="kpi-ah-otros-val" class="fw-semibold">—</span>
+                <div class="row g-0 align-items-center">
+                  <div class="col-5">Distribución</div>
+                  <div class="col-3 text-end text-muted" id="kpi-ah-dist-orig">—</div>
+                  <div class="col-2 text-end fw-semibold" id="kpi-ah-dist-val">—</div>
+                  <div class="col-2 text-end" id="kpi-ah-dist-pct">—</div>
+                </div>
+                <div class="row g-0 align-items-center">
+                  <div class="col-5">Otros Servicios</div>
+                  <div class="col-3 text-end text-muted" id="kpi-ah-otros-orig">—</div>
+                  <div class="col-2 text-end fw-semibold" id="kpi-ah-otros-val">—</div>
+                  <div class="col-2 text-end" id="kpi-ah-otros-pct">—</div>
                 </div>
               </div>
             </div>
@@ -354,7 +368,7 @@
       <canvas id="chart15Year" height="90"></canvas>
       <p class="small text-muted mt-2 mb-0" id="nota-beneficio-fiscal" style="display:none">
         ★ Año 1 incluye beneficio fiscal del 30% sobre inversión por depreciación acelerada en primer año de operación
-        (Art. 34 fracción XIII LISR — aplicable a cogeneración eficiente acreditada CRE).
+        (Art. 34 fracción XIII LISR — aplicable a cogeneración eficiente acreditada CNE).
       </p>
     </div>
   </div>
@@ -403,10 +417,10 @@
   <div class="panel-resize"></div>
 </div>
 
-<!-- ── Panel flotante: Detalle CELs CRE ──────────────────────────────────── -->
+<!-- ── Panel flotante: Detalle CELs CNE ──────────────────────────────────── -->
 <div class="panel-flotante" id="panelCels">
   <div class="panel-header">
-    <span class="panel-titulo">Detalle Cálculo CELs según CRE (Caso I)</span>
+    <span class="panel-titulo">Detalle Cálculo CELs según CNE (Caso I)</span>
     <button class="panel-cerrar" aria-label="Cerrar">&#x2715;</button>
   </div>
   <div class="panel-body p-3">

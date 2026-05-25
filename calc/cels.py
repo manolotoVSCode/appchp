@@ -1,6 +1,6 @@
 # calc/cels.py
 """
-Cálculo de Certificados de Energías Limpias (CELs) según metodología CRE Caso I.
+Cálculo de Certificados de Energías Limpias (CELs) según metodología CNE Caso I.
 Referencia: RES/1838/2016 de la Comisión Reguladora de Energía.
 """
 from __future__ import annotations
@@ -73,7 +73,7 @@ def _refe(capacidad_kw: Decimal, altitud_msnm: int, tipo_motor: str) -> Decimal:
 
 @dataclass
 class CELsResultado:
-    """Resultado del cálculo de CELs según CRE Caso I."""
+    """Resultado del cálculo de CELs según CNE Caso I."""
     # Capacidad y origen
     capacidad_kw: Decimal
     capacidad_es_estimada: bool  # Siempre True: la capacidad usada es la calculada de facturas
@@ -116,7 +116,7 @@ def calcular_cels(
     tipo_motor: str | None,
     medio_termico_vapor_pct: int | None = None,
 ) -> CELsResultado | None:
-    """Calcula CELs según CRE Caso I. Devuelve None si faltan datos del cliente.
+    """Calcula CELs según CNE Caso I. Devuelve None si faltan datos del cliente.
 
     La capacidad usada es capacidad_nominal_kw (calculada con ceil desde facturas históricas).
     medio_termico_vapor_pct (0-100) define el mix de medios: RefH ponderado entre vapor (0.90)

@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.40.0] — 2026-05-21
+
+### Añadido
+- Sidebar: límite de 24 meses seleccionables por análisis. Si se intenta superar el límite (individual o por año completo), se muestra un toast Bootstrap de advertencia y la operación se aborta sin llamar al servidor.
+- Componente JS reutilizable `mostrarBarraProgreso(container, actual, total, nombre)` en `_base.html`. Renderiza barra de progreso Bootstrap con texto contextual. Disponible en todos los templates que extienden `_base.html`.
+- Upload bulk (ficha contrato): reemplaza texto "Subiendo X / Y: archivo" por barra de progreso visual durante subida múltiple de PDFs.
+- Upload PPA (factura calificada): muestra barra de progreso al enviar el formulario de análisis de PDF (el proceso de parseo puede tardar varios segundos).
+- Panel flotante: dimensiones por defecto cambiadas de 800×600 px fijos a 95% del ancho × 85% del alto de la ventana del navegador. Centra automáticamente en cualquier resolución.
+- Dashboard Contabilidad: link "Ver detalles" en la tarjeta "Costo Total del Periodo" abre panel flotante `panelResumenCostoPeriodo` con tabla mensual (factura, mes, kWh, costo MXN pre-IVA) y fila de total.
+- Dashboard Cogeneración — desglose Ahorro Eléctrico: panel de detalle ahora muestra tres columnas (Original MXN, Ahorro MXN, %) para cada componente (Energía, Capacidad, Distribución, Otros Servicios). "Original" es el costo real del componente sin cogeneración; "%" es el porcentaje de ahorro sobre el original.
+
+### Corregido (nomenclatura regulatoria)
+- Reemplazado "CRE" por "CNE" en todos los textos visibles en la UI (ficha cliente, dashboard cogeneración, templates nuevo/editar cliente, comentarios JS). Los identificadores de código (`calcular_cels`, `CELsResultado`, etc.) y referencias normativas (`RES/1838/2016`) no se modificaron.
+
 ## [2.39.1] — 2026-05-21
 
 ### Corregido

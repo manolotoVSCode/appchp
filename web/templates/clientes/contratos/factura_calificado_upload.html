@@ -56,6 +56,7 @@
         <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}"
            class="btn btn-outline-secondary">Cancelar</a>
       </div>
+      <div id="upload-progress" class="mt-3 d-none"></div>
     </form>
   </div>
 </div>
@@ -71,6 +72,7 @@
   const fileName  = document.getElementById("file-name");
   const btnClear  = document.getElementById("btn-clear");
   const btnSubmit = document.getElementById("btn-submit");
+  const progressDiv = document.getElementById("upload-progress");
 
   function setFile(file) {
     if (!file) return;
@@ -114,6 +116,14 @@
   btnClear.addEventListener("click", e => {
     e.stopPropagation();
     clearFile();
+  });
+
+  // Mostrar progreso al enviar el formulario (parse tarda varios segundos)
+  document.getElementById("upload-form").addEventListener("submit", () => {
+    if (!progressDiv) return;
+    progressDiv.classList.remove("d-none");
+    mostrarBarraProgreso(progressDiv, 1, 1, fileInput.files[0] ? fileInput.files[0].name : "archivo");
+    btnSubmit.disabled = true;
   });
 })();
 </script>

@@ -255,6 +255,18 @@
 </head>
 <body>
 
+<!-- Toast: límite de meses seleccionados -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1200">
+  <div id="toast-limite-meses" class="toast align-items-center text-bg-warning border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body">
+        <strong>Límite alcanzado:</strong> Máximo 24 meses seleccionables por análisis.
+      </div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+    </div>
+  </div>
+</div>
+
 <!-- Pantalla de bloqueo para dispositivos < 1024px -->
 <div class="mobile-block-screen" style="position:fixed;inset:0;background:var(--color-bg,#F8F9FA);z-index:9999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;">
   <div style="max-width:420px;">
@@ -592,8 +604,40 @@ function crearAnioEl(d, contratoId, clienteId, expandirPorDefecto, oculto) {
   return wrap;
 }
 
+// ── Utilidades compartidas ────────────────────────────────────────────────────
+function contarMesesSeleccionados() {
+  return document.querySelectorAll("#sidebar .mes-btn.seleccionado").length;
+}
+
+function mostrarToastLimite() {
+  const toastEl = document.getElementById("toast-limite-meses");
+  if (!toastEl) return;
+  bootstrap.Toast.getOrCreateInstance(toastEl, { delay: 4000 }).show();
+}
+
+/**
+ * Renderiza una barra de progreso Bootstrap dentro de `container`.
+ * @param {HTMLElement} container - Elemento donde renderizar
+ * @param {number} actual        - Archivo actual (1-indexed)
+ * @param {number} total         - Total de archivos
+ * @param {string} nombre        - Nombre del archivo actual
+ */
+function mostrarBarraProgreso(container, actual, total, nombre) {
+  const pct = Math.round(actual / total * 100);
+  container.innerHTML = `
+    <div class="small text-muted mb-1">Subiendo ${actual}&nbsp;/&nbsp;${total}: <span class="fw-semibold">${nombre}</span></div>
+    <div class="progress" style="height:6px">
+      <div class="progress-bar" role="progressbar" style="width:${pct}%"
+           aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"></div>
+    </div>`;
+}
+
 async function toggleMes(contratoId, clienteId, anio, mes, btn, maestroChk, wrap) {
   const seleccionado = !btn.classList.contains("seleccionado");
+  if (seleccionado && contarMesesSeleccionados() >= 24) {
+    mostrarToastLimite();
+    return;
+  }
   btn.disabled = true;
   try {
     const resp = await fetch(
@@ -616,6 +660,15 @@ async function toggleMes(contratoId, clienteId, anio, mes, btn, maestroChk, wrap
 
 async function toggleAnio(contratoId, clienteId, anio, chk, wrap) {
   const seleccionado = chk.checked;
+  if (seleccionado) {
+    const disponibles = Array.from(wrap.querySelectorAll(".mes-btn:not(.no-disponible)"));
+    const sinSeleccionar = disponibles.filter(b => !b.classList.contains("seleccionado")).length;
+    if (contarMesesSeleccionados() + sinSeleccionar > 24) {
+      mostrarToastLimite();
+      chk.checked = false;
+      return;
+    }
+  }
   const botonesDisponibles = Array.from(wrap.querySelectorAll(".mes-btn:not(.no-disponible)"));
   botonesDisponibles.forEach(b => { b.disabled = true; });
   try {
