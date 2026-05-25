@@ -517,30 +517,23 @@
     }).join("");
   }
 
-  function renderResumenCostoPeriodo(facturas) {
-    const tbody = document.getElementById("tbodyResumenCostoPeriodo");
+  function renderDetalleCostoTotal(data) {
+    const tbody = document.getElementById("tbodyDetalleCostoTotal");
     if (!tbody) return;
-    if (!facturas || !facturas.length) {
-      tbody.innerHTML = "<tr><td colspan=\"4\" class=\"text-muted small ps-3 py-2\">Sin facturas seleccionadas</td></tr>";
-      return;
-    }
-    let totalKwh = 0, totalCosto = 0;
-    const filas = facturas.map(f => {
-      totalKwh  += f.kwh_total  || 0;
-      totalCosto += f.costo_mxn || 0;
-      return `<tr>
-        <td class="ps-3 small fw-semibold">${f.nombre_canonico}</td>
-        <td class="small">${f.mes_asociado}</td>
-        <td class="text-end small">${Math.round(f.kwh_total).toLocaleString("en-US")}</td>
-        <td class="text-end small pe-3">$${Math.round(f.costo_mxn).toLocaleString("en-US")}</td>
+    const fmt = v => "$" + Math.round(v).toLocaleString("es-MX");
+    const filas = data.lineas.map(l => `
+      <tr>
+        <td class="small">${l.nombre}</td>
+        <td class="text-end small">${fmt(l.monto)}</td>
+        <td class="text-end small">${l.pct}%</td>
+      </tr>`).join("");
+    const total = `
+      <tr class="total-row">
+        <td class="small"><strong>TOTAL</strong></td>
+        <td class="text-end small"><strong>${fmt(data.total)}</strong></td>
+        <td class="text-end small"><strong>100%</strong></td>
       </tr>`;
-    });
-    filas.push(`<tr class="total-row">
-      <td class="ps-3 small fw-semibold" colspan="2">Total</td>
-      <td class="text-end small">${Math.round(totalKwh).toLocaleString("en-US")}</td>
-      <td class="text-end small pe-3">$${Math.round(totalCosto).toLocaleString("en-US")}</td>
-    </tr>`);
-    tbody.innerHTML = filas.join("");
+    tbody.innerHTML = filas + total;
   }
 
   function renderFacturasCfe(facturas) {
@@ -685,6 +678,17 @@
 
     const esPPA = data.tipo_suministro_electrico === "electrico_calificado";
 
+    // Link "Ver detalle" del Costo Total — solo visible en CFE GDMTH
+    const linkDetCT = document.getElementById("link-detalle-costo-total");
+    if (linkDetCT) linkDetCT.style.display = esPPA ? "none" : "inline-block";
+    // Reset estado (invalida cache de datos al cambiar selección de meses)
+    const detalleCT = document.getElementById("detalleCostoTotal");
+    if (detalleCT) detalleCT.style.display = "none";
+    const flechaCT = document.getElementById("detalle-costo-total-flecha");
+    if (flechaCT) flechaCT.textContent = "▼";
+    const tbodyDetCT = document.getElementById("tbodyDetalleCostoTotal");
+    if (tbodyDetCT) tbodyDetCT.innerHTML = "";
+
     // Banner PPA
     const bannerPpa = document.getElementById("banner-ppa");
     if (bannerPpa) {
@@ -747,7 +751,6 @@
     // Facturas
     renderFacturasCfe(data.facturas_cfe);
     renderFacturasGas(data.facturas_gas);
-    renderResumenCostoPeriodo(data.facturas_cfe);
 
     // Gráficas CFE
     if (data.historico && data.historico.labels && data.historico.labels.length) {
@@ -854,6 +857,39 @@
       }
       filtrarTablaIndicadores();
     }
+  });
+
+  // ── Handler "Ver detalle" Costo Total (registro único) ────────────────────
+  document.getElementById("link-detalle-costo-total")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const div    = document.getElementById("detalleCostoTotal");
+    const flecha = document.getElementById("detalle-costo-total-flecha");
+    if (!div) return;
+
+    if (div.style.display !== "none") {
+      div.style.display = "none";
+      if (flecha) flecha.textContent = "▼";
+      return;
+    }
+
+    // Cargar datos del endpoint (cache: si tbody ya tiene filas, no vuelve a fetchar)
+    const tbody = document.getElementById("tbodyDetalleCostoTotal");
+    if (tbody && tbody.children.length === 0) {
+      const clienteId = document.getElementById("dashboard-contabilidad-root")?.dataset.clienteId;
+      if (!clienteId) return;
+      try {
+        const resp = await fetch(`/clientes/${clienteId}/dashboard/contabilidad/desglose-costo-total`);
+        if (!resp.ok) { console.error("desglose-costo-total:", resp.status); return; }
+        const data = await resp.json();
+        if (data.lineas) renderDetalleCostoTotal(data);
+      } catch (err) {
+        console.error("desglose-costo-total:", err);
+        return;
+      }
+    }
+
+    div.style.display = "block";
+    if (flecha) flecha.textContent = "▲";
   });
 
   // ── Carga inicial ─────────────────────────────────────────────────────────

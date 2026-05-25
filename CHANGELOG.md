@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.40.1] — 2026-05-25
+
+### Corregido (ajustes UI v2.40.0)
+- Contabilidad — 4ª caja KPI "Costo Total del Periodo": reemplaza el panel flotante por un desplegable inline bajo el bloque de KPIs. Link "Ver detalle ▼" visible solo en modo CFE GDMTH. Nuevo endpoint `GET /clientes/<id>/dashboard/contabilidad/desglose-costo-total` devuelve 4 categorías (Energía, Capacidad, Distribución, Otros Servicios) con importe MXN y % entero. La tabla invalida caché al cambiar selección de meses.
+- Cogeneración — card INGRESOS: reestructura el layout para que el desglose de 4 componentes (Energía, Capacidad, Distribución, Otros Servicios) ocupe el ancho completo del card con grilla `col-3`. Los dos KPIs (Ahorro Electricidad / Ahorro Caldera) quedan en `row/col-6` arriba; Total Ingresos al fondo en ancho completo. Sustituye Bootstrap collapse por toggle `display:none` con flecha ▼/▲.
+
 ## [2.40.0] — 2026-05-21
 
 ### Añadido

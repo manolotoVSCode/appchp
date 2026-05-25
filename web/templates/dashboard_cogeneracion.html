@@ -114,65 +114,73 @@
 
   <!-- Ingresos -->
   <div class="col-md-6">
-    <div class="card h-100 shadow-sm">
+    <div class="card shadow-sm">
       <div class="kpi-section-label">Ingresos</div>
       <div class="card-body pt-1">
-        <div class="row g-2">
+
+        <!-- Dos KPIs lado a lado -->
+        <div class="row g-2 mb-0">
           <div class="col-6">
             <div class="text-muted small">Ahorro Electricidad
-              <a href="#detalleAhorroElec" data-bs-toggle="collapse"
-                 class="ms-1 small text-decoration-none" aria-expanded="false"
-                 id="link-detalle-elec">Ver detalle ▾</a>
+              <a href="#" id="link-detalle-elec"
+                 class="ms-1 small text-decoration-none"
+                 style="display:none">
+                Ver detalle <span id="detalle-elec-flecha">▼</span>
+              </a>
             </div>
             <div class="fs-5 fw-bold" style="color:var(--color-info)" id="kpi-elec-val">—</div>
             <div class="text-muted small">MXN / año</div>
-            <!-- Desglose 4 componentes (solo CFE GDMTH; oculto en PPA) -->
-            <div class="collapse mt-2" id="detalleAhorroElec">
-              <div class="small text-muted border-top pt-1">
-                <div class="row g-0 mb-1" style="font-size:.7rem;opacity:.7">
-                  <div class="col-5"></div>
-                  <div class="col-3 text-end">Original</div>
-                  <div class="col-2 text-end">Ahorro</div>
-                  <div class="col-2 text-end">%</div>
-                </div>
-                <div class="row g-0 align-items-center">
-                  <div class="col-5">Energía</div>
-                  <div class="col-3 text-end text-muted" id="kpi-ah-energia-orig">—</div>
-                  <div class="col-2 text-end fw-semibold" id="kpi-ah-energia-val">—</div>
-                  <div class="col-2 text-end" id="kpi-ah-energia-pct">—</div>
-                </div>
-                <div class="row g-0 align-items-center">
-                  <div class="col-5">Capacidad</div>
-                  <div class="col-3 text-end text-muted" id="kpi-ah-cap-orig">—</div>
-                  <div class="col-2 text-end fw-semibold" id="kpi-ah-cap-val">—</div>
-                  <div class="col-2 text-end" id="kpi-ah-cap-pct">—</div>
-                </div>
-                <div class="row g-0 align-items-center">
-                  <div class="col-5">Distribución</div>
-                  <div class="col-3 text-end text-muted" id="kpi-ah-dist-orig">—</div>
-                  <div class="col-2 text-end fw-semibold" id="kpi-ah-dist-val">—</div>
-                  <div class="col-2 text-end" id="kpi-ah-dist-pct">—</div>
-                </div>
-                <div class="row g-0 align-items-center">
-                  <div class="col-5">Otros Servicios</div>
-                  <div class="col-3 text-end text-muted" id="kpi-ah-otros-orig">—</div>
-                  <div class="col-2 text-end fw-semibold" id="kpi-ah-otros-val">—</div>
-                  <div class="col-2 text-end" id="kpi-ah-otros-pct">—</div>
-                </div>
-              </div>
-            </div>
           </div>
           <div class="col-6">
             <div class="text-muted small">Ahorro Caldera</div>
             <div class="fs-5 fw-bold text-warning" id="kpi-caldera-val">—</div>
             <div class="text-muted small">MXN / año</div>
           </div>
-          <div class="col-12 pt-2 border-top mt-1">
-            <div class="text-muted small">Total Ingresos</div>
-            <div class="fs-5 fw-bold" style="color:var(--color-primary-dark)" id="kpi-total-ingresos-val">—</div>
-            <div class="text-muted small">MXN / año</div>
+        </div>
+
+        <!-- Desglose 4 componentes a ancho completo (solo CFE GDMTH; oculto en PPA) -->
+        <div id="detalleAhorroElec" style="display:none">
+          <hr class="my-3">
+          <div class="row small fw-semibold text-muted mb-2">
+            <div class="col-3">Componente</div>
+            <div class="col-3 text-end">Original</div>
+            <div class="col-3 text-end">Ahorro</div>
+            <div class="col-3 text-end">%</div>
+          </div>
+          <div class="row small mb-1">
+            <div class="col-3">Energía</div>
+            <div class="col-3 text-end text-muted" id="kpi-ah-energia-orig">—</div>
+            <div class="col-3 text-end fw-semibold" id="kpi-ah-energia-val">—</div>
+            <div class="col-3 text-end text-success" id="kpi-ah-energia-pct">—</div>
+          </div>
+          <div class="row small mb-1">
+            <div class="col-3">Capacidad</div>
+            <div class="col-3 text-end text-muted" id="kpi-ah-cap-orig">—</div>
+            <div class="col-3 text-end fw-semibold" id="kpi-ah-cap-val">—</div>
+            <div class="col-3 text-end text-success" id="kpi-ah-cap-pct">—</div>
+          </div>
+          <div class="row small mb-1">
+            <div class="col-3">Distribución</div>
+            <div class="col-3 text-end text-muted" id="kpi-ah-dist-orig">—</div>
+            <div class="col-3 text-end fw-semibold" id="kpi-ah-dist-val">—</div>
+            <div class="col-3 text-end text-success" id="kpi-ah-dist-pct">—</div>
+          </div>
+          <div class="row small mb-1">
+            <div class="col-3">Otros Servicios</div>
+            <div class="col-3 text-end text-muted" id="kpi-ah-otros-orig">—</div>
+            <div class="col-3 text-end fw-semibold" id="kpi-ah-otros-val">—</div>
+            <div class="col-3 text-end text-success" id="kpi-ah-otros-pct">—</div>
           </div>
         </div>
+
+        <!-- Total Ingresos a ancho completo -->
+        <hr class="my-3">
+        <div>
+          <div class="text-muted small">Total Ingresos</div>
+          <div class="fs-5 fw-bold" style="color:var(--color-primary-dark)" id="kpi-total-ingresos-val">—</div>
+          <div class="text-muted small">MXN / año</div>
+        </div>
+
       </div>
     </div>
   </div>

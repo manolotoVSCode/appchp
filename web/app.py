@@ -868,6 +868,62 @@ def create_app() -> Flask:
             "historico_ppa": historico_ppa,
         })
 
+    @app.route("/clientes/<int:cliente_id>/dashboard/contabilidad/desglose-costo-total")
+    def cliente_dashboard_contabilidad_desglose(cliente_id: int):
+        """Desglose en 4 categorías del costo total del periodo seleccionado.
+
+        Solo aplica a CFE GDMTH. Devuelve agregado sobre las facturas
+        seleccionadas (mismo conjunto que usa el dashboard principal).
+        """
+        from flask import jsonify
+        from decimal import Decimal
+        cliente, err = _verificar_cliente_activo(cliente_id)
+        if err:
+            return err
+
+        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+        if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
+            return jsonify({"error": "No aplica a PPA"}), 400
+
+        cfe_invoices, _, _, _ = _cargar_facturas_seleccionadas(cliente_id)
+
+        energia = Decimal("0")
+        capacidad = Decimal("0")
+        distribucion = Decimal("0")
+        otros = Decimal("0")
+
+        for inv in cfe_invoices:
+            comp = {c.nombre: c for c in inv.componentes_mem}
+            energia += (
+                (comp["Generación B"].importe_mxn if "Generación B" in comp else Decimal("0"))
+                + (comp["Generación I"].importe_mxn if "Generación I" in comp else Decimal("0"))
+                + (comp["Generación P"].importe_mxn if "Generación P" in comp else Decimal("0"))
+            )
+            capacidad += comp["Capacidad"].importe_mxn if "Capacidad" in comp else Decimal("0")
+            distribucion += comp["Distribución"].importe_mxn if "Distribución" in comp else Decimal("0")
+            otros += (
+                (comp["Transmisión"].importe_mxn if "Transmisión" in comp else Decimal("0"))
+                + (comp["CENACE"].importe_mxn if "CENACE" in comp else Decimal("0"))
+                + (comp["SCnMEM"].importe_mxn if "SCnMEM" in comp else Decimal("0"))
+                + (comp["Suministro"].importe_mxn if "Suministro" in comp else Decimal("0"))
+                + (inv.cargo_factor_potencia_mxn or Decimal("0"))
+            )
+
+        total = energia + capacidad + distribucion + otros
+
+        def _pct(v, t):
+            return round(float(v / t * 100)) if t > 0 else 0
+
+        return jsonify({
+            "lineas": [
+                {"nombre": "Energía",         "monto": float(energia),      "pct": _pct(energia, total)},
+                {"nombre": "Capacidad",       "monto": float(capacidad),    "pct": _pct(capacidad, total)},
+                {"nombre": "Distribución",    "monto": float(distribucion), "pct": _pct(distribucion, total)},
+                {"nombre": "Otros Servicios", "monto": float(otros),        "pct": _pct(otros, total)},
+            ],
+            "total": float(total),
+        })
+
     @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion/data")
     def cliente_dashboard_cogeneracion_data(cliente_id: int):
         """JSON con todos los datos del dashboard de Cogeneración."""

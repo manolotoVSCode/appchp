@@ -664,10 +664,8 @@
     // Panel detalle Ahorro Eléctrico: solo visible en CFE GDMTH
     const linkDetalleElec = document.getElementById("link-detalle-elec");
     const detalleElec = document.getElementById("detalleAhorroElec");
-    if (linkDetalleElec) linkDetalleElec.style.display = esPPA ? "none" : "";
-    if (detalleElec && esPPA) {
-      detalleElec.classList.remove("show");
-    }
+    if (linkDetalleElec) linkDetalleElec.style.display = esPPA ? "none" : "inline";
+    if (detalleElec && esPPA) detalleElec.style.display = "none";
 
     // Banner PPA
     const bannerPpa = document.getElementById("banner-ppa-cogen");
@@ -904,6 +902,17 @@
   ["cobertura", "rendimiento-elec", "rendimiento-term", "caldera"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("input", actualizarSensibilidad);
+  });
+
+  // ── Toggle detalle Ahorro Eléctrico (registro único) ─────────────────────
+  document.getElementById("link-detalle-elec")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const div    = document.getElementById("detalleAhorroElec");
+    const flecha = document.getElementById("detalle-elec-flecha");
+    if (!div) return;
+    const estaVisible = div.style.display !== "none";
+    div.style.display = estaVisible ? "none" : "block";
+    if (flecha) flecha.textContent = estaVisible ? "▼" : "▲";
   });
 
   // ── Carga inicial ─────────────────────────────────────────────────────────
