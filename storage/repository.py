@@ -380,13 +380,15 @@ def _row_to_cliente_dict(row: dict) -> dict:
         "precio_gas_manual_mxn_gj_pcs": row.get("precio_gas_manual_mxn_gj_pcs"),
         "num_cfe": len(row.get("cfe_facturas") or []),
         "num_gas": len(row.get("gas_facturas") or []),
+        "num_calificado": len(row.get("facturas_electricidad_calificado") or []),
+        "num_electricidad": len(row.get("cfe_facturas") or []) + len(row.get("facturas_electricidad_calificado") or []),
     }
 
 
 def get_all_clientes_con_conteos() -> list[dict]:
     """Devuelve todos los clientes con conteo de facturas CFE y gas. Ordenados por nombre."""
     result = _supabase.table("clientes").select(
-        f"id, nombre, rfc, notas, created_at, logo_url, sector_industrial, cfe_facturas(id), gas_facturas(id)"
+        f"id, nombre, rfc, notas, created_at, logo_url, sector_industrial, cfe_facturas(id), gas_facturas(id), facturas_electricidad_calificado(id)"
     ).order("nombre").execute()
     return [_row_to_cliente_dict(row) for row in result.data]
 
@@ -395,7 +397,7 @@ def get_cliente_con_conteos(cliente_id: int) -> dict | None:
     """Devuelve un cliente con todos sus campos y conteo de facturas, o None si no existe."""
     result = _supabase.table("clientes").select(
         f"id, nombre, rfc, notas, created_at, {_CLIENTE_CAMPOS_EXTENDIDOS}, "
-        "cfe_facturas(id), gas_facturas(id)"
+        "cfe_facturas(id), gas_facturas(id), facturas_electricidad_calificado(id)"
     ).eq("id", cliente_id).execute()
     if not result.data:
         return None

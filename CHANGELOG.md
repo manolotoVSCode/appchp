@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.45.1] — 2026-05-26
+
+### Corregido
+- Listado de clientes: el conteo de facturas eléctricas ahora suma CFE + PPA (facturas_electricidad_calificado). Se añade `num_electricidad` y `num_calificado` al dict de cliente; `num_cfe` y `num_gas` se conservan para no romper consumidores existentes. La columna "Facturas CFE" pasa a llamarse "Facturas Electricidad" y el badge "Solo CFE" pasa a "Solo electricidad".
+
 ## [2.42.0] — 2026-05-25
 
 ### Añadido
