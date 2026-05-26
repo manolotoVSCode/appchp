@@ -308,29 +308,33 @@ a:hover { color: var(--color-primary-dark); }
 /* ── Jerarquía de KPIs — solo tipografía, sin tocar cajas ────────────────── */
 
 /* Default global: números tabulares en todos los KPIs */
+[id^="kpi-"][id$="-val"],
 .kpi-value { font-variant-numeric: tabular-nums; }
 
-/* Nivel PRIMARIO: solo tipografía más grande */
+/* Nivel PRIMARIO */
+.kpi-nivel-primario [id^="kpi-"][id$="-val"],
 .kpi-nivel-primario .kpi-value {
-  font-size: 2rem;
-  font-weight: 800;
-  line-height: 1.1;
+  font-size: 2rem !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
   letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
 }
 
-/* Nivel SECUNDARIO: tipografía estándar */
+/* Nivel SECUNDARIO */
+.kpi-nivel-secundario [id^="kpi-"][id$="-val"],
 .kpi-nivel-secundario .kpi-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1.15;
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  line-height: 1.15 !important;
   font-variant-numeric: tabular-nums;
 }
 
-/* Nivel TERCIARIO: tipografía más pequeña */
+/* Nivel TERCIARIO */
+.kpi-nivel-terciario [id^="kpi-"][id$="-val"],
 .kpi-nivel-terciario .kpi-value {
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  font-size: 1.15rem !important;
+  font-weight: 600 !important;
+  color: var(--color-text-secondary) !important;
   font-variant-numeric: tabular-nums;
 }
