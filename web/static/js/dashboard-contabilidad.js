@@ -553,54 +553,6 @@
     renderDonutComponentes("donutDetalleCostoTotal", datosDonut);
   }
 
-  function renderFacturasCfe(facturas) {
-    const tbody = document.getElementById("tbodyFacturasCfe");
-    if (!tbody) return;
-    if (!facturas.length) {
-      tbody.innerHTML = "<tr><td colspan=\"5\" class=\"text-muted small ps-3 py-2\">Sin facturas CFE seleccionadas</td></tr>";
-      return;
-    }
-    tbody.innerHTML = facturas.map(f => {
-      const star = f.prorrateado ? "<span class=\"badge bg-warning text-dark ms-1\" style=\"font-size:.6em\">★</span>" : "";
-      return `<tr>
-        <td class="ps-3 small fw-semibold">${f.nombre_canonico}</td>
-        <td class="small">${f.periodo}${star}</td>
-        <td class="small">${f.mes_asociado}</td>
-        <td class="text-end small">${Math.round(f.kwh_total).toLocaleString("en-US")}</td>
-        <td class="text-end small pe-3">$${Math.round(f.costo_mxn).toLocaleString("en-US")}</td>
-      </tr>`;
-    }).join("");
-    const notasProrrateo = document.getElementById("notas-prorrateo-cfe");
-    if (notasProrrateo) {
-      notasProrrateo.style.display = facturas.some(f => f.prorrateado) ? "" : "none";
-    }
-  }
-
-  function renderFacturasGas(facturas) {
-    const tbody = document.getElementById("tbodyFacturasGas");
-    if (!tbody) return;
-    if (!facturas.length) {
-      tbody.innerHTML = "<tr><td colspan=\"5\" class=\"text-muted small ps-3 py-2\">Sin facturas de gas seleccionadas</td></tr>";
-      return;
-    }
-    tbody.innerHTML = facturas.map(f => {
-      const star = f.prorrateado ? "<span class=\"badge bg-warning text-dark ms-1\" style=\"font-size:.6em\">★</span>" : "";
-      return `<tr>
-        <td class="ps-3 small fw-semibold">${f.nombre_canonico}</td>
-        <td class="small">${f.periodo}${star}</td>
-        <td class="small">${f.mes_asociado}</td>
-        <td class="text-end small">${f.gj_total.toLocaleString("es-MX", { maximumFractionDigits: 2 })}</td>
-        <td class="text-end small pe-3">$${Math.round(f.costo_mxn).toLocaleString("en-US")}</td>
-      </tr>`;
-    }).join("");
-    const badgeGas = document.getElementById("badge-num-gas");
-    if (badgeGas) badgeGas.textContent = facturas.length + " Gas";
-    const notasProrrateo = document.getElementById("notas-prorrateo-gas");
-    if (notasProrrateo) {
-      notasProrrateo.style.display = facturas.some(f => f.prorrateado) ? "" : "none";
-    }
-  }
-
   function renderGasHistorico(gasHist) {
     const tbody = document.getElementById("tbodyGasHistorico");
     if (!tbody || !gasHist) return;
@@ -723,16 +675,6 @@
     const kpiLabel = document.getElementById("kpi-num-meses-label");
     if (kpiLabel) kpiLabel.textContent = esPPA ? "facturas PPA" : "facturas CFE";
 
-    // Etiqueta de facturas eléctricas
-    const facturasLabel = document.getElementById("facturas-elec-label");
-    if (facturasLabel) facturasLabel.textContent = esPPA ? "Electricidad (PPA calificado)" : "Electricidad (CFE)";
-
-    // Badge CFE/PPA
-    const badgeCfe = document.getElementById("badge-num-cfe");
-    if (badgeCfe && data.facturas_cfe) {
-      badgeCfe.textContent = data.facturas_cfe.length + (esPPA ? " PPA" : " CFE");
-    }
-
     // Secciones GDMTH vs PPA
     const graficasGdmth = document.getElementById("graficas-gdmth");
     const graficasPpa   = document.getElementById("graficas-ppa");
@@ -765,10 +707,6 @@
     if (costoTotal != null) {
       setText("kpi-costo-total-periodo", "$" + Math.round(costoTotal).toLocaleString("es-MX"));
     }
-
-    // Facturas
-    renderFacturasCfe(data.facturas_cfe);
-    renderFacturasGas(data.facturas_gas);
 
     // Gráficas CFE
     if (data.historico && data.historico.labels && data.historico.labels.length) {

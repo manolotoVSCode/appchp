@@ -145,66 +145,6 @@
         </div>
       </div>
 
-      {# Accordion: facturas CFE #}
-      <div class="card shadow-sm mb-4">
-        <div class="card-header d-flex align-items-center" style="cursor:pointer"
-             data-bs-toggle="collapse" data-bs-target="#facturas-panel">
-          <span>Facturas seleccionadas</span>
-          <span class="badge bg-secondary ms-2" id="badge-num-cfe">0 CFE</span>
-          <span class="ms-auto text-muted small">&#9660;</span>
-        </div>
-        <div id="facturas-panel" class="collapse">
-          <div class="card-body p-0">
-            <div class="px-3 pt-3 pb-1 fw-semibold small text-muted" id="facturas-elec-label">Electricidad (CFE)</div>
-            <table class="table table-sm table-hover mb-0">
-              <thead>
-                <tr class="table-primary-header">
-                  <th class="ps-3">Factura</th>
-                  <th>Periodo facturado</th>
-                  <th>Mes asociado</th>
-                  <th class="text-end">kWh</th>
-                  <th class="text-end pe-3">Costo</th>
-                </tr>
-              </thead>
-              <tbody id="tbodyFacturasCfe"></tbody>
-            </table>
-            <div id="notas-prorrateo-cfe" class="px-3 py-2 text-muted small border-top" style="display:none">
-              ★ Factura con periodo corto prorrateada a 30 días equivalentes.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {# Accordion: facturas Gas #}
-      <div class="card shadow-sm mb-4">
-        <div class="card-header d-flex align-items-center" style="cursor:pointer"
-             data-bs-toggle="collapse" data-bs-target="#facturas-gas-panel">
-          <span>Facturas de gas seleccionadas</span>
-          <span class="badge bg-secondary ms-2" id="badge-num-gas">0 Gas</span>
-          <span class="ms-auto text-muted small">&#9660;</span>
-        </div>
-        <div id="facturas-gas-panel" class="collapse">
-          <div class="card-body p-0">
-            <div class="px-3 pt-3 pb-1 fw-semibold small text-muted">Gas Natural</div>
-            <table class="table table-sm table-hover mb-0">
-              <thead>
-                <tr class="table-primary-header">
-                  <th class="ps-3">Factura</th>
-                  <th>Periodo facturado</th>
-                  <th>Mes asociado</th>
-                  <th class="text-end">GJ</th>
-                  <th class="text-end pe-3">Costo</th>
-                </tr>
-              </thead>
-              <tbody id="tbodyFacturasGas"></tbody>
-            </table>
-            <div id="notas-prorrateo-gas" class="px-3 py-2 text-muted small border-top" style="display:none">
-              ★ Factura con periodo corto prorrateada a 30 días equivalentes.
-            </div>
-          </div>
-        </div>
-      </div>
-
       {# ═══ SECCIÓN: COMPORTAMIENTO ENERGÉTICO HISTÓRICO ═══ #}
       <div class="section-header">
         <h2>Comportamiento energético histórico</h2>
