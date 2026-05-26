@@ -311,8 +311,7 @@ a:hover { color: var(--color-primary-dark); }
 .kpi-value { font-variant-numeric: tabular-nums; }
 
 /* Nivel PRIMARIO: solo tipografía más grande */
-.kpi-card.kpi-nivel-primario .kpi-value,
-.kpi-card-b2.kpi-nivel-primario .kpi-value {
+.kpi-nivel-primario .kpi-value {
   font-size: 2rem;
   font-weight: 800;
   line-height: 1.1;
@@ -321,8 +320,7 @@ a:hover { color: var(--color-primary-dark); }
 }
 
 /* Nivel SECUNDARIO: tipografía estándar */
-.kpi-card.kpi-nivel-secundario .kpi-value,
-.kpi-card-b2.kpi-nivel-secundario .kpi-value {
+.kpi-nivel-secundario .kpi-value {
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.15;
@@ -330,7 +328,7 @@ a:hover { color: var(--color-primary-dark); }
 }
 
 /* Nivel TERCIARIO: tipografía más pequeña */
-.kpi-card.kpi-nivel-terciario .kpi-value {
+.kpi-nivel-terciario .kpi-value {
   font-size: 1.15rem;
   font-weight: 600;
   color: var(--color-text-secondary);
