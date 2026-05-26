@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.41.2] — 2026-05-25
+
+### Cambiado
+- Login — columna izquierda: eliminado el copyright al fondo del formulario. El panel blanco queda sin footer.
+- Login — columna derecha: restructurado layout a `.login-right-inner` (flex row, contenido + gráficas) + `.login-right-footer-unified` al fondo. El footer unificado ocupa el ancho completo de la franja azul oscuro, separado por borde sutil, y contiene dos líneas: copyright corporativo y resumen del aviso de privacidad con link a `/privacidad`.
+- Login — gráficas: añadida tercera gráfica hand-drawn SVG (donut antes/después de huella CO₂) debajo de las dos existentes. Los tres SVGs quedan envueltos en `<div>` con `.sketch-chart-caption`. Tamaños ajustados para encajar las tres gráficas verticalmente.
+
 ## [2.41.1] — 2026-05-25
 
 ### Añadido
