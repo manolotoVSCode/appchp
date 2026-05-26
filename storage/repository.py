@@ -386,7 +386,7 @@ def _row_to_cliente_dict(row: dict) -> dict:
 def get_all_clientes_con_conteos() -> list[dict]:
     """Devuelve todos los clientes con conteo de facturas CFE y gas. Ordenados por nombre."""
     result = _supabase.table("clientes").select(
-        f"id, nombre, rfc, notas, created_at, logo_url, cfe_facturas(id), gas_facturas(id)"
+        f"id, nombre, rfc, notas, created_at, logo_url, sector_industrial, cfe_facturas(id), gas_facturas(id)"
     ).order("nombre").execute()
     return [_row_to_cliente_dict(row) for row in result.data]
 
