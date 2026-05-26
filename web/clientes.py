@@ -513,7 +513,7 @@ def ficha(cliente_id: int):
 
 @clientes_bp.route("/<int:cliente_id>/activar", methods=["POST"])
 def cliente_activar(cliente_id: int):
-    from flask import jsonify
+    from flask import jsonify, make_response
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:
         return jsonify({"error": "Cliente no encontrado"}), 404
@@ -521,16 +521,26 @@ def cliente_activar(cliente_id: int):
     session["cliente_activo_nombre"] = cliente["nombre"]
     session["cliente_activo_logo_url"] = cliente.get("logo_url")
     session.pop("_cp_cache", None)
-    return jsonify({"ok": True})
+    resp = make_response(jsonify({"ok": True}))
+    user = _get_current_user()
+    if user and user.get("rol") in ("master_admin", "admin"):
+        resp.set_cookie(
+            "last_cliente_id", str(cliente_id),
+            max_age=30 * 24 * 3600, samesite="Lax",
+            httponly=True, secure=not current_app.debug,
+        )
+    return resp
 
 
 @clientes_bp.route("/desactivar", methods=["POST"])
 def cliente_desactivar():
-    from flask import jsonify
+    from flask import jsonify, make_response
     session.pop("cliente_activo_id", None)
     session.pop("cliente_activo_nombre", None)
     session.pop("cliente_activo_logo_url", None)
-    return jsonify({"ok": True})
+    resp = make_response(jsonify({"ok": True}))
+    resp.delete_cookie("last_cliente_id")
+    return resp
 
 
 @clientes_bp.route("/<int:cliente_id>/editar", methods=["GET", "POST"])
