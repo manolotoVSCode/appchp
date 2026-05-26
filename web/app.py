@@ -424,7 +424,7 @@ def create_app() -> Flask:
 
     # Rutas exentas de autenticación
     _PUBLIC_PREFIXES = ("/auth/", "/static")
-    _PUBLIC_EXACT = {"/healthz", "/health"}
+    _PUBLIC_EXACT = {"/healthz", "/health", "/privacidad"}
 
     @app.before_request
     def _require_login():
@@ -1229,6 +1229,378 @@ def create_app() -> Flask:
             "cliente_ficha_url": url_for("clientes.ficha", cliente_id=cliente_id),
         })
 
+    @app.route("/clientes/<int:cliente_id>/dashboard/contabilidad/export-datos")
+    def cliente_dashboard_contabilidad_export(cliente_id: int):
+        """Descarga Excel con los datos del dashboard de Contabilidad Energética."""
+        import io
+        from decimal import Decimal
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, numbers
+        from openpyxl.utils import get_column_letter
+
+        cliente, err = _verificar_cliente_activo(cliente_id)
+        if err:
+            return err
+
+        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+
+        try:
+            if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
+                cfe_invoices = []
+                facturas_cfe = []
+                tablas = {}
+                historico = None
+                historico_gas = calcular_historico_gas(gas_invoices)
+            else:
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+                tablas = calcular_tablas_cfe(cfe_invoices)
+                historico = calcular_historico_cfe(cfe_invoices)
+                historico_gas = calcular_historico_gas(gas_invoices)
+                ppa_invoices = []
+                facturas_ppa = []
+        except Exception as _e:
+            logger.exception("Error en contabilidad/export-datos: %s", _e)
+            return f"Error generando Excel: {_e}", 500
+
+        wb = Workbook()
+        _HDR_FILL = PatternFill("solid", fgColor="E8F4ED")
+        _HDR_FONT = Font(bold=True, color="155936")
+        _TOT_FILL = PatternFill("solid", fgColor="F0F4F1")
+        _TOT_FONT = Font(bold=True)
+        _FMT_MXN  = '$#,##0'
+        _FMT_KWH  = '#,##0'
+        _FMT_GJ   = '#,##0.00'
+        _FMT_PCT  = '0.0%'
+
+        def _hdr_row(ws, cols, row=1):
+            for c, title in enumerate(cols, 1):
+                cell = ws.cell(row=row, column=c, value=title)
+                cell.font = _HDR_FONT
+                cell.fill = _HDR_FILL
+                cell.alignment = Alignment(horizontal="center")
+
+        def _autofit(ws):
+            for col in ws.columns:
+                max_len = max((len(str(cell.value)) for cell in col if cell.value), default=8)
+                ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 32)
+
+        nombre_cliente = cliente["nombre"]
+
+        if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
+            # ── Hoja 1: KPIs PPA ───────────────────────────────────────────────
+            ws = wb.active
+            ws.title = "KPIs"
+            kwh_total_ppa = sum(f["kwh_total"] for f in facturas_ppa)
+            costo_total_ppa = sum(f["costo_mxn"] for f in facturas_ppa)
+            kpis = [
+                ("Cliente", nombre_cliente),
+                ("Meses seleccionados", len(facturas_ppa)),
+                ("kWh total (PPA)", kwh_total_ppa),
+                ("Costo total PPA (MXN)", costo_total_ppa),
+                ("Costo unitario prom. (MXN/kWh)", costo_total_ppa / kwh_total_ppa if kwh_total_ppa else 0),
+            ]
+            for r_i, (k, v) in enumerate(kpis, 1):
+                ws.cell(r_i, 1, k).font = Font(bold=True)
+                ws.cell(r_i, 2, v)
+            _autofit(ws)
+
+            # ── Hoja 2: Facturas PPA ───────────────────────────────────────────
+            ws2 = wb.create_sheet("Facturas PPA")
+            cols2 = ["Mes", "Suministrador", "kWh Total", "Precio Unit. (MXN/kWh)", "Costo (MXN)"]
+            _hdr_row(ws2, cols2)
+            for i, f in enumerate(facturas_ppa, 2):
+                ws2.cell(i, 1, f["mes_asociado"])
+                ws2.cell(i, 2, f["suministrador"])
+                ws2.cell(i, 3, f["kwh_total"]).number_format = _FMT_KWH
+                ws2.cell(i, 4, f["precio_unitario_mxn_kwh"]).number_format = '$#,##0.0000'
+                ws2.cell(i, 5, f["costo_mxn"]).number_format = _FMT_MXN
+            tot_row = len(facturas_ppa) + 2
+            ws2.cell(tot_row, 1, "TOTAL").font = _TOT_FONT
+            ws2.cell(tot_row, 1).fill = _TOT_FILL
+            ws2.cell(tot_row, 3, kwh_total_ppa).number_format = _FMT_KWH
+            ws2.cell(tot_row, 3).font = _TOT_FONT
+            ws2.cell(tot_row, 3).fill = _TOT_FILL
+            ws2.cell(tot_row, 5, costo_total_ppa).number_format = _FMT_MXN
+            ws2.cell(tot_row, 5).font = _TOT_FONT
+            ws2.cell(tot_row, 5).fill = _TOT_FILL
+            _autofit(ws2)
+
+        else:
+            # ── Hoja 1: KPIs CFE ───────────────────────────────────────────────
+            ws = wb.active
+            ws.title = "KPIs"
+            ind = tablas.get("indicadores", [])
+            kwh_total_cfe = sum(f["kwh_total"] for f in facturas_cfe)
+            costo_total_cfe = sum(f["costo_mxn"] for f in facturas_cfe)
+            kpis = [
+                ("Cliente", nombre_cliente),
+                ("Meses seleccionados", len(facturas_cfe)),
+                ("kWh total", kwh_total_cfe),
+                ("Costo total CFE (MXN)", costo_total_cfe),
+                ("Costo unitario prom. (MXN/kWh)", tablas.get("costo_unit_promedio_total", 0)),
+            ]
+            for r_i, (k, v) in enumerate(kpis, 1):
+                ws.cell(r_i, 1, k).font = Font(bold=True)
+                ws.cell(r_i, 2, float(v) if hasattr(v, "__float__") else v)
+            _autofit(ws)
+
+            # ── Hoja 2: Consumos y demandas ────────────────────────────────────
+            ws2 = wb.create_sheet("Consumos y demandas")
+            cols2 = ["Mes", "kWh Base", "kWh Intermedio", "kWh Punta", "kWh Total",
+                     "kW Base", "kW Intermedio", "kW Punta"]
+            _hdr_row(ws2, cols2)
+            cd = tablas.get("consumos_demandas", [])
+            for i, row in enumerate(cd, 2):
+                ws2.cell(i, 1, row["mes"])
+                ws2.cell(i, 2, float(row["kwh_base"])).number_format = _FMT_KWH
+                ws2.cell(i, 3, float(row["kwh_inter"])).number_format = _FMT_KWH
+                ws2.cell(i, 4, float(row["kwh_punta"])).number_format = _FMT_KWH
+                ws2.cell(i, 5, float(row["kwh_total"])).number_format = _FMT_KWH
+                ws2.cell(i, 6, float(row.get("kw_base", 0))).number_format = '#,##0.0'
+                ws2.cell(i, 7, float(row.get("kw_inter", 0))).number_format = '#,##0.0'
+                ws2.cell(i, 8, float(row.get("kw_punta", 0))).number_format = '#,##0.0'
+            _autofit(ws2)
+
+            # ── Hoja 3: Costos detallados ──────────────────────────────────────
+            ws3 = wb.create_sheet("Costos detallados")
+            cols3 = ["Mes", "CE Base (MXN)", "CE Inter (MXN)", "CE Punta (MXN)", "CE Total (MXN)",
+                     "Costo Dist. (MXN)", "Costo Cap. (MXN)", "Cargo FP (MXN)",
+                     "Subtotal (MXN)", "CU Base ($/kWh)", "CU Inter ($/kWh)", "CU Punta ($/kWh)"]
+            _hdr_row(ws3, cols3)
+            cos = tablas.get("costos_detallados", [])
+            for i, row in enumerate(cos, 2):
+                ws3.cell(i, 1, row["mes"])
+                ws3.cell(i, 2, float(row["ce_base"])).number_format = _FMT_MXN
+                ws3.cell(i, 3, float(row["ce_inter"])).number_format = _FMT_MXN
+                ws3.cell(i, 4, float(row["ce_punta"])).number_format = _FMT_MXN
+                ws3.cell(i, 5, float(row["ce_total"])).number_format = _FMT_MXN
+                ws3.cell(i, 6, float(row.get("costo_dist", 0))).number_format = _FMT_MXN
+                ws3.cell(i, 7, float(row.get("costo_cap", 0))).number_format = _FMT_MXN
+                ws3.cell(i, 8, float(row.get("cargo_fp", 0))).number_format = _FMT_MXN
+                ws3.cell(i, 9, float(row.get("subtotal", 0))).number_format = _FMT_MXN
+                ws3.cell(i, 10, float(row.get("cu_base_total", 0))).number_format = '$#,##0.0000'
+                ws3.cell(i, 11, float(row.get("cu_inter_total", 0))).number_format = '$#,##0.0000'
+                ws3.cell(i, 12, float(row.get("cu_punta_total", 0))).number_format = '$#,##0.0000'
+            _autofit(ws3)
+
+            # ── Hoja 4: Indicadores ────────────────────────────────────────────
+            ws4 = wb.create_sheet("Indicadores")
+            cols4 = ["Mes", "Costo Unit. (MXN/kWh)", "% Energía", "% Demanda",
+                     "Factor de Carga", "Demanda Prom. (kW)"]
+            _hdr_row(ws4, cols4)
+            for i, row in enumerate(ind, 2):
+                ws4.cell(i, 1, row["mes"])
+                ws4.cell(i, 2, float(row["costo_unit"])).number_format = '$#,##0.0000'
+                ws4.cell(i, 3, float(row["pct_energia"]) / 100).number_format = _FMT_PCT
+                ws4.cell(i, 4, float(row["pct_demanda"]) / 100).number_format = _FMT_PCT
+                ws4.cell(i, 5, float(row.get("factor_carga", 0))).number_format = '0.00'
+                ws4.cell(i, 6, float(row.get("demanda_prom", 0))).number_format = '#,##0.0'
+            _autofit(ws4)
+
+        # ── Hoja Gas ───────────────────────────────────────────────────────────
+        ws_gas = wb.create_sheet("Gas natural")
+        cols_g = ["Mes", "Consumo (GJ)", "Costo Unit. (MXN/GJ)", "Costo Total (MXN)"]
+        _hdr_row(ws_gas, cols_g)
+        for i, row in enumerate(historico_gas or [], 2):
+            ws_gas.cell(i, 1, row.get("mes", ""))
+            ws_gas.cell(i, 2, float(row.get("consumo_gj", 0))).number_format = _FMT_GJ
+            ws_gas.cell(i, 3, float(row.get("costo_unit_gj", 0))).number_format = '$#,##0.00'
+            ws_gas.cell(i, 4, float(row.get("costo_total_mxn", 0))).number_format = _FMT_MXN
+        _autofit(ws_gas)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        slug = nombre_cliente.lower().replace(" ", "_")
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=f"contabilidad_{slug}.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion/export-datos")
+    def cliente_dashboard_cogeneracion_export(cliente_id: int):
+        """Descarga Excel con los datos del dashboard de Cogeneración."""
+        import io
+        from decimal import Decimal as _D
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+
+        cliente, err = _verificar_cliente_activo(cliente_id)
+        if err:
+            return err
+
+        # Leer parámetros de slider desde query string
+        def _qparam(name, default, lo=0.01, hi=1.0):
+            try:
+                v = float(request.args.get(name, default))
+                return _D(str(max(lo, min(hi, v))))
+            except (TypeError, ValueError):
+                return _D(str(default))
+
+        params = CoGenParams(
+            cobertura_electrica=_qparam("cobertura", 0.75, 0.50, 0.95),
+            rendimiento_electrico=_qparam("rend_elec", 0.40, 0.10, 0.60),
+            rendimiento_termico=_qparam("rend_term", 0.25, 0.05, 0.50),
+            eficiencia_caldera=_qparam("eficiencia_caldera", 0.85, 0.50, 0.99),
+        )
+
+        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+
+        try:
+            _cfg = {row["clave"]: row["valor"] for row in list_configuracion()}
+            tc_str = _cfg.get("tipo_cambio_mxn_usd")
+            tipo_cambio = _D(tc_str) if tc_str else _D("17.50")
+
+            if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
+                ppa_invoices, gas_invoices, _, _ = _cargar_ultimas_ppa_cogen(cliente_id)
+                r = calcular_cogen_ppa(ppa_invoices, gas_invoices, params, tipo_cambio=tipo_cambio)
+            else:
+                cfe_invoices, gas_invoices, _, _ = _cargar_ultimas_facturas_cogen(cliente_id)
+                _pm_str = cliente.get("precio_gas_manual_mxn_gj_pcs")
+                _pm = _D(_pm_str) if _pm_str else None
+                if len(cfe_invoices) >= 12 and len(gas_invoices) < 12 and _pm:
+                    r = calcular_cogen_precio_manual(cfe_invoices, _pm, params, tipo_cambio=tipo_cambio)
+                else:
+                    r = calcular_cogen(cfe_invoices, gas_invoices, params, tipo_cambio=tipo_cambio)
+        except Exception as _e:
+            logger.exception("Error en cogeneracion/export-datos: %s", _e)
+            return f"Error generando Excel: {_e}", 500
+
+        wb = Workbook()
+        _HDR_FILL = PatternFill("solid", fgColor="E8F4ED")
+        _HDR_FONT = Font(bold=True, color="155936")
+        _TOT_FILL = PatternFill("solid", fgColor="F0F4F1")
+        _TOT_FONT = Font(bold=True)
+        _FMT_MXN  = '$#,##0'
+        _FMT_KWH  = '#,##0'
+        _FMT_GJ   = '#,##0.00'
+        _FMT_PCT  = '0.0%'
+
+        def _hdr_row(ws, cols, row=1):
+            for c, title in enumerate(cols, 1):
+                cell = ws.cell(row=row, column=c, value=title)
+                cell.font = _HDR_FONT
+                cell.fill = _HDR_FILL
+                cell.alignment = Alignment(horizontal="center")
+
+        def _autofit(ws):
+            for col in ws.columns:
+                max_len = max((len(str(cell.value)) for cell in col if cell.value), default=8)
+                ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 32)
+
+        nombre_cliente = cliente["nombre"]
+
+        # ── Hoja 1: KPIs ──────────────────────────────────────────────────────
+        ws = wb.active
+        ws.title = "KPIs"
+        kpis = [
+            ("Cliente", nombre_cliente),
+            ("kWh total anual", float(r.kwh_total_anual)),
+            ("kWh cubiertos anual", float(r.kwh_cubiertos_anual)),
+            ("Ahorro eléctrico anual (MXN)", float(r.ahorro_electricidad_anual_mxn)),
+            ("Ahorro caldera anual (MXN)", float(r.ahorro_caldera_anual_mxn)),
+            ("Costo gas cogeneración anual (MXN)", float(r.costo_gas_cogen_anual_mxn)),
+            ("Gasto O&M anual (MXN)", float(r.gasto_om_anual_mxn)),
+            ("EBITDA anual (MXN)", float(r.ebitda_anual_mxn)),
+            ("Capacidad nominal (kW)", float(r.capacidad_nominal_kw) if r.capacidad_nominal_kw else ""),
+            ("Inversión estimada (MXN)", float(r.inversion_mxn) if r.inversion_mxn else ""),
+        ]
+        for r_i, (k, v) in enumerate(kpis, 1):
+            ws.cell(r_i, 1, k).font = Font(bold=True)
+            ws.cell(r_i, 2, v)
+        _autofit(ws)
+
+        # ── Hoja 2: Parámetros ────────────────────────────────────────────────
+        ws2 = wb.create_sheet("Parámetros motor")
+        params_rows = [
+            ("Cobertura eléctrica", float(r.params.cobertura_electrica)),
+            ("Rendimiento eléctrico", float(r.params.rendimiento_electrico)),
+            ("Rendimiento térmico", float(r.params.rendimiento_termico)),
+            ("Eficiencia caldera ref.", float(r.params.eficiencia_caldera)),
+        ]
+        for r_i, (k, v) in enumerate(params_rows, 1):
+            ws2.cell(r_i, 1, k).font = Font(bold=True)
+            ws2.cell(r_i, 2, v).number_format = _FMT_PCT
+
+        # ── Hoja 3: Tabla mensual ─────────────────────────────────────────────
+        ws3 = wb.create_sheet("Tabla mensual")
+        cols3 = ["Mes", "kWh Total", "Costo CFE (MXN)", "kWh Cubiertos",
+                 "GJ Gas Cogen", "Costo Gas Cogen (MXN)",
+                 "Ahorro Eléctrico (MXN)", "Ahorro Caldera (MXN)",
+                 "O&M (MXN)", "EBITDA Mes (MXN)"]
+        _hdr_row(ws3, cols3)
+        for i, m in enumerate(r.meses, 2):
+            ws3.cell(i, 1, m.periodo_inicio.strftime("%b %Y"))
+            ws3.cell(i, 2, float(m.kwh_total)).number_format = _FMT_KWH
+            ws3.cell(i, 3, float(m.costo_cfe_mxn)).number_format = _FMT_MXN
+            ws3.cell(i, 4, float(m.kwh_cubiertos)).number_format = _FMT_KWH
+            ws3.cell(i, 5, float(m.gj_gas_cogen)).number_format = _FMT_GJ
+            ws3.cell(i, 6, float(m.costo_gas_cogen_mxn)).number_format = _FMT_MXN
+            ws3.cell(i, 7, float(m.ahorro_electricidad_mxn)).number_format = _FMT_MXN
+            ws3.cell(i, 8, float(m.ahorro_caldera_mxn)).number_format = _FMT_MXN
+            ws3.cell(i, 9, float(m.gasto_om_mes_mxn)).number_format = _FMT_MXN
+            ws3.cell(i, 10, float(m.ebitda_mes_mxn)).number_format = _FMT_MXN
+        # Fila TOTAL
+        tr = len(r.meses) + 2
+        ws3.cell(tr, 1, "TOTAL").font = _TOT_FONT
+        ws3.cell(tr, 1).fill = _TOT_FILL
+        for col_idx, val in enumerate([
+            float(r.kwh_total_anual), float(sum(m.costo_cfe_mxn for m in r.meses)),
+            float(r.kwh_cubiertos_anual), float(r.gj_gas_cogen_anual),
+            float(r.costo_gas_cogen_anual_mxn), float(r.ahorro_electricidad_anual_mxn),
+            float(r.ahorro_caldera_anual_mxn), float(r.gasto_om_anual_mxn),
+            float(r.ebitda_anual_mxn),
+        ], 2):
+            c = ws3.cell(tr, col_idx, val)
+            c.font = _TOT_FONT
+            c.fill = _TOT_FILL
+        _autofit(ws3)
+
+        # ── Hoja 4: Cascada ahorro ────────────────────────────────────────────
+        ws4 = wb.create_sheet("Cascada ahorro")
+        cascada = [
+            ("Ahorro Energía (MXN)",        float(r.ahorro_energia_anual_mxn)),
+            ("Ahorro Capacidad (MXN)",       float(r.ahorro_capacidad_anual_mxn)),
+            ("Ahorro Distribución (MXN)",    float(r.ahorro_distribucion_anual_mxn)),
+            ("Ahorro Otros Servicios (MXN)", float(r.ahorro_otros_servicios_anual_mxn)),
+            ("Ahorro Caldera (MXN)",         float(r.ahorro_caldera_anual_mxn)),
+            ("Costo Gas Cogen (MXN)",        -float(r.costo_gas_cogen_anual_mxn)),
+            ("Gasto O&M (MXN)",              -float(r.gasto_om_anual_mxn)),
+            ("EBITDA Anual (MXN)",           float(r.ebitda_anual_mxn)),
+        ]
+        _hdr_row(ws4, ["Concepto", "Importe (MXN)"])
+        for i, (k, v) in enumerate(cascada, 2):
+            ws4.cell(i, 1, k)
+            ws4.cell(i, 2, v).number_format = _FMT_MXN
+        _autofit(ws4)
+
+        # ── Hoja 5: Flujo 15 años ─────────────────────────────────────────────
+        if r.inversion_mxn and r.inversion_mxn > 0:
+            ws5 = wb.create_sheet("Flujo 15 años")
+            _hdr_row(ws5, ["Año", "Flujo Anual (MXN)", "Flujo Acumulado (MXN)"])
+            flujo_vals = calcular_flujo_acumulado(r.inversion_mxn, r.ebitda_anual_mxn)
+            annual_vals = [-float(r.inversion_mxn)] + [float(r.ebitda_anual_mxn)] * 15
+            for i, (anual, acum) in enumerate(zip(annual_vals, flujo_vals), 2):
+                ws5.cell(i, 1, i - 2)
+                ws5.cell(i, 2, anual).number_format = _FMT_MXN
+                ws5.cell(i, 3, float(acum)).number_format = _FMT_MXN
+            _autofit(ws5)
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        slug = nombre_cliente.lower().replace(" ", "_")
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=f"cogeneracion_{slug}.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
     @app.route("/export/excel")
     def export_excel():
         import tempfile
@@ -1454,6 +1826,10 @@ def create_app() -> Flask:
             md_text = "_Sin changelog disponible._"
         content = markdown.markdown(md_text, extensions=["nl2br"])
         return render_template("changelog.html", content=content)
+
+    @app.route("/privacidad")
+    def aviso_privacidad():
+        return render_template("privacidad.html")
 
     @app.route("/healthz")
     def healthz():

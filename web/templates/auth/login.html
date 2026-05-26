@@ -112,8 +112,61 @@
       background: var(--color-bg-sidebar);
       display: flex;
       flex-direction: column;
-      justify-content: center;
       padding: 4rem 5%;
+      color: #fff;
+    }
+
+    .login-right-main {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 3rem;
+    }
+
+    .login-right-content {
+      flex: 0 1 540px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .login-right-visuals {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    @media (max-width: 1279px) {
+      .login-right-visuals { display: none; }
+    }
+
+    .svg-chart-label {
+      font-size: .75rem;
+      fill: rgba(255,255,255,.55);
+    }
+    .svg-chart-title {
+      font-size: .78rem;
+      fill: rgba(255,255,255,.45);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .login-right-footer {
+      margin-top: auto;
+      padding-top: 2rem;
+      font-size: .75rem;
+      color: rgba(255,255,255,.45);
+      line-height: 1.6;
+      max-width: 540px;
+    }
+    .login-right-footer a {
+      color: rgba(255,255,255,.7);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .login-right-footer a:hover {
       color: #fff;
     }
 
@@ -281,34 +334,112 @@
 
     <!-- ─── Columna derecha: propuesta de valor ───────────────────────── -->
     <div class="login-right">
-      <div class="vp-tagline">Cogeneración con datos,<br>no con suposiciones.</div>
-      <div class="vp-subtagline">
-        Evalúa el ahorro real de un proyecto de cogeneración con las facturas de tu planta, no con estimaciones.
+
+      <div class="login-right-main">
+
+      <!-- Contenido textual -->
+      <div class="login-right-content">
+        <div class="vp-tagline">Cogeneración con datos,<br>no con suposiciones.</div>
+        <div class="vp-subtagline">
+          Evalúa el ahorro real de un proyecto de cogeneración con las facturas de tu planta, no con estimaciones.
+        </div>
+
+        <div class="vp-item">
+          <div class="vp-icon"><i class="bi bi-graph-up-arrow"></i></div>
+          <div class="vp-text">
+            <strong>Análisis financiero respaldado en facturas reales</strong>
+            <span>Cargamos tus facturas CFE o PPA y las de gas natural. El motor calcula EBITDA mensual, ahorro neto anual, payback con interpolación lineal y flujo de caja proyectado a 15 años usando los costos unitarios reales de tu planta. Sin promedios, sin supuestos, sin sorpresas.</span>
+          </div>
+        </div>
+
+        <div class="vp-item">
+          <div class="vp-icon"><i class="bi bi-shield-check"></i></div>
+          <div class="vp-text">
+            <strong>Metodología regulatoria aplicada de raíz</strong>
+            <span>Tarifa GDMTH con sus cuatro componentes de ahorro eléctrico (Energía, Capacidad, Distribución, Otros Servicios). Cálculo de Certificados de Energías Limpias (CELs) según la resolución vigente. Beneficio fiscal por depreciación inmediata del Art. 34 fracción XIII LISR. Todo cuantificado en tu caso particular.</span>
+          </div>
+        </div>
+
+        <div class="vp-item">
+          <div class="vp-icon"><i class="bi bi-clipboard-data"></i></div>
+          <div class="vp-text">
+            <strong>Decisión ejecutiva, no especulativa</strong>
+            <span>Reporte exportable a Excel con tabla mensual completa, parámetros del motor y sensibilidad ajustable. La conversación con tu equipo financiero, tu junta directiva o tu socio inversor deja de ser un debate de hipótesis y pasa a ser una revisión de cifras.</span>
+          </div>
+        </div>
+      </div><!-- /login-right-content -->
+
+      <!-- Visuales decorativas -->
+      <div class="login-right-visuals">
+
+        <!-- SVG 1: Cascada de ahorro (waterfall) -->
+        <svg viewBox="0 0 280 180" width="280" height="180" xmlns="http://www.w3.org/2000/svg">
+          <text x="140" y="14" text-anchor="middle" class="svg-chart-title">Composición del ahorro</text>
+          <!-- barras -->
+          <!-- Ahorro Elec: base 160, alto 70 -->
+          <rect x="18"  y="88"  width="30" height="70" rx="3" fill="#4FA876" opacity=".85"/>
+          <!-- Caldera: base 160, +30 -->
+          <rect x="68"  y="58"  width="30" height="30" rx="3" fill="#4FA876" opacity=".6"/>
+          <!-- Gas (negativo): acorta 25 -->
+          <rect x="118" y="88"  width="30" height="25" rx="3" fill="#E07070" opacity=".75"/>
+          <!-- O&M (negativo): acorta 10 -->
+          <rect x="168" y="113" width="30" height="10" rx="3" fill="#E07070" opacity=".6"/>
+          <!-- Neto: resultado -->
+          <rect x="218" y="71"  width="30" height="87" rx="3" fill="rgba(255,255,255,.22)" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/>
+          <!-- línea conectora -->
+          <line x1="48"  y1="88"  x2="68"  y2="88"  stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3 2"/>
+          <line x1="98"  y1="58"  x2="118" y2="58"  stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3 2"/>
+          <line x1="148" y1="83"  x2="168" y2="83"  stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3 2"/>
+          <line x1="198" y1="113" x2="218" y2="113" stroke="rgba(255,255,255,.25)" stroke-width="1" stroke-dasharray="3 2"/>
+          <!-- eje X -->
+          <line x1="10" y1="158" x2="270" y2="158" stroke="rgba(255,255,255,.2)" stroke-width="1"/>
+          <!-- etiquetas -->
+          <text x="33"  y="171" text-anchor="middle" class="svg-chart-label">Elec</text>
+          <text x="83"  y="171" text-anchor="middle" class="svg-chart-label">Caldera</text>
+          <text x="133" y="171" text-anchor="middle" class="svg-chart-label">−Gas</text>
+          <text x="183" y="171" text-anchor="middle" class="svg-chart-label">−O&amp;M</text>
+          <text x="233" y="171" text-anchor="middle" class="svg-chart-label">Neto</text>
+        </svg>
+
+        <!-- SVG 2: Flujo acumulado 15 años -->
+        <svg viewBox="0 0 280 160" width="280" height="160" xmlns="http://www.w3.org/2000/svg">
+          <text x="140" y="14" text-anchor="middle" class="svg-chart-title">Flujo acumulado — 15 años</text>
+          <!-- zona negativa sombreada -->
+          <rect x="18" y="80" width="75" height="55" fill="rgba(224,112,112,.08)"/>
+          <!-- línea de flujo (curva suavizada) -->
+          <polyline
+            points="18,134  33,125  48,112  63,99  78,86  93,80  108,70  123,60  138,50  153,42  168,35  183,29  198,24  213,20  228,17  243,14"
+            fill="none" stroke="#4FA876" stroke-width="2.2" stroke-linejoin="round"/>
+          <!-- payback marker ~año 4.5 -->
+          <line x1="86" y1="26" x2="86" y2="140" stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="89" y="38" class="svg-chart-label" fill="rgba(255,255,255,.65)">payback</text>
+          <!-- eje X -->
+          <line x1="18" y1="135" x2="250" y2="135" stroke="rgba(255,255,255,.2)" stroke-width="1"/>
+          <!-- eje Y -->
+          <line x1="18" y1="25"  x2="18"  y2="135" stroke="rgba(255,255,255,.2)" stroke-width="1"/>
+          <!-- cero -->
+          <line x1="18" y1="80"  x2="250" y2="80"  stroke="rgba(255,255,255,.15)" stroke-width="1" stroke-dasharray="2 3"/>
+          <!-- etiquetas eje X -->
+          <text x="18"  y="148" text-anchor="middle" class="svg-chart-label">0</text>
+          <text x="93"  y="148" text-anchor="middle" class="svg-chart-label">5</text>
+          <text x="168" y="148" text-anchor="middle" class="svg-chart-label">10</text>
+          <text x="243" y="148" text-anchor="middle" class="svg-chart-label">15a</text>
+        </svg>
+
+      </div><!-- /login-right-visuals -->
+
+      </div><!-- /login-right-main -->
+
+      <div class="login-right-footer">
+        Tratamos tus datos conforme a la Ley Federal de Protección de
+        Datos Personales en Posesión de los Particulares (LFPDPPP).
+        Tu información operativa y financiera es confidencial y no se
+        comparte con terceros.
+        <a href="/privacidad" target="_blank" rel="noopener">
+          Ver aviso de privacidad completo
+        </a>
       </div>
 
-      <div class="vp-item">
-        <div class="vp-icon"><i class="bi bi-graph-up-arrow"></i></div>
-        <div class="vp-text">
-          <strong>Análisis financiero respaldado en facturas reales</strong>
-          <span>Cargamos tus facturas CFE o PPA y las de gas natural. El motor calcula EBITDA mensual, ahorro neto anual, payback con interpolación lineal y flujo de caja proyectado a 15 años usando los costos unitarios reales de tu planta. Sin promedios, sin supuestos, sin sorpresas.</span>
-        </div>
-      </div>
-
-      <div class="vp-item">
-        <div class="vp-icon"><i class="bi bi-shield-check"></i></div>
-        <div class="vp-text">
-          <strong>Metodología regulatoria aplicada de raíz</strong>
-          <span>Tarifa GDMTH con sus cuatro componentes de ahorro eléctrico (Energía, Capacidad, Distribución, Otros Servicios). Cálculo de Certificados de Energías Limpias (CELs) según la resolución vigente. Beneficio fiscal por depreciación inmediata del Art. 34 fracción XIII LISR. Todo cuantificado en tu caso particular.</span>
-        </div>
-      </div>
-
-      <div class="vp-item">
-        <div class="vp-icon"><i class="bi bi-clipboard-data"></i></div>
-        <div class="vp-text">
-          <strong>Decisión ejecutiva, no especulativa</strong>
-          <span>Reporte exportable a Excel con tabla mensual completa, parámetros del motor y sensibilidad ajustable. La conversación con tu equipo financiero, tu junta directiva o tu socio inversor deja de ser un debate de hipótesis y pasa a ser una revisión de cifras.</span>
-        </div>
-      </div>
     </div>
 
   </div>

@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.41.1] — 2026-05-25
+
+### Añadido
+- Login — columna derecha: footer discreto con resumen de protección de datos y link "Ver aviso de privacidad completo" que abre `/privacidad` en nueva pestaña. El layout de `.login-right` se reestructura a columna con `.login-right-main` como wrapper horizontal interno para el contenido y las gráficas SVG, y el footer al fondo con `margin-top: auto`.
+- Página pública `/privacidad`: aviso de privacidad completo conforme a la LFPDPPP. Incluye identidad del Responsable, categorías de datos recabados, compromiso de confidencialidad de información operativa y financiera, finalidades, transferencias (Supabase, Render), plazos de conservación, derechos ARCO y medidas de seguridad. Accesible sin autenticación (agregada a `_PUBLIC_EXACT` en `before_request`). Template propio `privacidad.html` sin sidebar.
+
+## [2.41.0] — 2026-05-25
+
+### Añadido
+- Dashboard Contabilidad y Cogeneración: botón "Descargar datos" en la barra de título. Descarga un Excel (.xlsx) generado en memoria con todos los datos del análisis activo. Contabilidad CFE: hojas KPIs, Consumos y demandas, Costos detallados, Indicadores, Gas natural. Contabilidad PPA: hojas KPIs, Facturas PPA, Gas natural. Cogeneración: hojas KPIs, Parámetros motor, Tabla mensual, Cascada ahorro, Flujo 15 años. Los parámetros de slider activos se incluyen en el export de cogeneración vía query string.
+- Login: panel derecho restructurado con flexbox horizontal. Se añade columna de visuales decorativas con dos gráficas SVG dibujadas a mano — cascada de composición del ahorro y curva de flujo acumulado a 15 años con marcador de payback. La columna de visuales se oculta en pantallas < 1280 px.
+
+### Cambiado
+- Encabezados de tabla (`.table-primary-header th`): fondo cambia de verde oscuro (`#1F7A4C`) a verde suave (`#E8F4ED`) con texto en verde oscuro (`#155936`) y borde inferior `2px solid`. Elimina los estilos redundantes `.table-mes th` de `dashboard.html` y `dashboard_contabilidad.html`.
+- Panel flotante: el método `abrir()` ahora mide la altura natural del contenido y la aplica como altura real, con tope del 95% del alto de la ventana. Antes usaba 85% del alto de forma fija. Garantiza que paneles con poco contenido no quedan con espacio vacío excesivo.
+
 ## [2.40.1] — 2026-05-25
 
 ### Corregido (ajustes UI v2.40.0)
