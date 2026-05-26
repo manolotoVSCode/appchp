@@ -78,39 +78,43 @@
     <div id="dashboard-main-content">
 
       {# KPIs #}
+      <div class="section-divider">
+        <h2>Costo del Periodo</h2>
+        <hr>
+      </div>
       <div class="row g-3 mb-4">
         <div class="col-md-3">
           <div class="card h-100 shadow-sm">
-            <div class="card-body">
-              <div class="text-muted small">Meses analizados</div>
-              <div class="fs-4 fw-bold" style="color:var(--color-primary-dark)" id="kpi-num-meses">—</div>
+            <div class="card-body kpi-card kpi-nivel-terciario">
+              <div class="text-muted small kpi-label">Meses analizados</div>
+              <div class="fs-4 fw-bold kpi-value" style="color:var(--color-primary-dark)" id="kpi-num-meses">—</div>
               <div class="text-muted small" id="kpi-num-meses-label">facturas CFE</div>
             </div>
           </div>
         </div>
         <div class="col-md-3">
           <div class="card h-100 shadow-sm">
-            <div class="card-body">
-              <div class="text-muted small">Consumo total</div>
-              <div class="fs-4 fw-bold" style="color:var(--color-primary-dark)" id="kpi-kwh-total">—</div>
+            <div class="card-body kpi-card kpi-nivel-secundario">
+              <div class="text-muted small kpi-label">Consumo total</div>
+              <div class="fs-4 fw-bold kpi-value" style="color:var(--color-primary-dark)" id="kpi-kwh-total">—</div>
               <div class="text-muted small">kWh en el periodo</div>
             </div>
           </div>
         </div>
         <div class="col-md-3">
           <div class="card h-100 shadow-sm">
-            <div class="card-body">
-              <div class="text-muted small">Costo unitario promedio</div>
-              <div class="fs-4 fw-bold" style="color:var(--color-primary-dark)" id="kpi-costo-unit">—</div>
+            <div class="card-body kpi-card kpi-nivel-secundario">
+              <div class="text-muted small kpi-label">Costo unitario promedio</div>
+              <div class="fs-4 fw-bold kpi-value" style="color:var(--color-primary-dark)" id="kpi-costo-unit">—</div>
               <div class="text-muted small">$/kWh (pre-IVA)</div>
             </div>
           </div>
         </div>
         <div class="col-md-3">
           <div class="card h-100 shadow-sm">
-            <div class="card-body">
-              <div class="text-muted small">Costo Total del Periodo</div>
-              <div class="fs-4 fw-bold" style="color:var(--color-primary-dark)" id="kpi-costo-total-periodo">—</div>
+            <div class="card-body kpi-card kpi-nivel-primario">
+              <div class="text-muted small kpi-label">Costo Total del Periodo</div>
+              <div class="fs-4 fw-bold kpi-value" style="color:var(--color-primary-dark)" id="kpi-costo-total-periodo">—</div>
               <div class="text-muted small">MXN (pre-IVA)</div>
               <a href="#" id="link-detalle-costo-total"
                  class="small text-decoration-none mt-1 d-inline-block"

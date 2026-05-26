@@ -228,13 +228,18 @@
   </div>
 </div>
 
+<div class="section-divider">
+  <h2>Resultado del Proyecto</h2>
+  <hr>
+</div>
+
 <!-- ── KPI: Ahorro Neto + Reducción CO2 + CELs + Energía Limpia ─────────── -->
 <div class="row g-3 mb-4">
 
   <!-- Ahorro Neto Anual -->
   <div class="col-sm-6 col-lg-3">
     <div class="card shadow-sm h-100">
-      <div class="kpi-card-b2">
+      <div class="kpi-card-b2 kpi-nivel-primario">
         <i class="bi bi-cash-coin kpi-icon" style="font-size:2rem;color:#28a745"></i>
         <div class="kpi-label">Ahorro Neto Anual</div>
         <div class="kpi-value" id="kpi-ahorro-neto-val" style="color:#28a745">—</div>
@@ -246,7 +251,7 @@
   <!-- Reducción Huella de Carbono -->
   <div class="col-sm-6 col-lg-3">
     <div class="card shadow-sm h-100">
-      <div class="kpi-card-b2">
+      <div class="kpi-card-b2 kpi-nivel-secundario">
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"
              fill="#28a745" class="kpi-icon">
           <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.3c.48.17.98.3 1.5.41C16 21 22 15 22 5c-1.5 2.5-5 2.5-8 3z"/>
@@ -262,16 +267,16 @@
   <!-- CELs Generados -->
   <div class="col-sm-6 col-lg-3">
     <div class="card shadow-sm h-100">
-      <div class="kpi-card-b2" id="cels-card-body">
+      <div class="kpi-card-b2 kpi-nivel-secundario" id="cels-card-body">
         <!-- JS renderiza el contenido -->
       </div>
     </div>
   </div>
 
-  <!-- Energía Limpia Generada (NUEVA) -->
+  <!-- Energía Limpia Generada -->
   <div class="col-sm-6 col-lg-3">
     <div class="card shadow-sm h-100">
-      <div class="kpi-card-b2">
+      <div class="kpi-card-b2 kpi-nivel-secundario">
         <i class="bi bi-lightning-charge kpi-icon" style="font-size:2rem;color:#28a745"></i>
         <div class="kpi-label">Energía Limpia Generada</div>
         <div class="kpi-value text-success" id="kpi-energia-limpia-val">—</div>
@@ -289,9 +294,9 @@
     <div class="col-md-4">
       <div class="card h-100 shadow-sm">
         <div class="kpi-section-label">Inversión y Retorno</div>
-        <div class="card-body pt-1">
-          <div class="text-muted small">Capacidad Nominal</div>
-          <div class="fs-5 fw-bold" style="color:var(--color-primary-dark)" id="kpi-capacidad-val">—</div>
+        <div class="card-body pt-1 kpi-card kpi-nivel-secundario">
+          <div class="text-muted small kpi-label">Capacidad Nominal</div>
+          <div class="fs-5 fw-bold kpi-value" style="color:var(--color-primary-dark)" id="kpi-capacidad-val">—</div>
           <div class="text-muted small">max kWh/mes ÷ (días × 24 h)</div>
         </div>
       </div>
@@ -299,9 +304,9 @@
     <div class="col-md-4">
       <div class="card h-100 shadow-sm">
         <div class="kpi-section-label">&nbsp;</div>
-        <div class="card-body pt-1">
-          <div class="text-muted small">Inversión estimada</div>
-          <div class="fs-5 fw-bold" style="color:var(--color-primary-dark)" id="kpi-inversion-usd-val">—</div>
+        <div class="card-body pt-1 kpi-card kpi-nivel-secundario">
+          <div class="text-muted small kpi-label">Inversión estimada</div>
+          <div class="fs-5 fw-bold kpi-value" style="color:var(--color-primary-dark)" id="kpi-inversion-usd-val">—</div>
           <div class="text-muted small" id="kpi-inversion-mxn-val"></div>
         </div>
       </div>
@@ -309,14 +314,19 @@
     <div class="col-md-4">
       <div class="card h-100 shadow-sm">
         <div class="kpi-section-label">&nbsp;</div>
-        <div class="card-body pt-1">
-          <div class="text-muted small">Periodo de Retorno</div>
-          <div class="fs-5 fw-bold text-muted" id="kpi-payback-val">—</div>
+        <div class="card-body pt-1 kpi-card kpi-nivel-primario">
+          <div class="text-muted small kpi-label">Periodo de Retorno</div>
+          <div class="fs-5 fw-bold text-muted kpi-value" id="kpi-payback-val">—</div>
           <div class="text-muted small">a 1,400 USD/kW · sin inflación</div>
         </div>
       </div>
     </div>
   </div>
+</div>
+
+<div class="section-divider">
+  <h2>Análisis de Sensibilidad</h2>
+  <hr>
 </div>
 
 <!-- ── Sliders de sensibilidad ────────────────────────────────────────────── -->
@@ -358,6 +368,11 @@
       <strong class="fs-5" id="ahorro-neto-sensibilidad">—</strong>
     </div>
   </div>
+</div>
+
+<div class="section-divider">
+  <h2>Proyección Mensual</h2>
+  <hr>
 </div>
 
 <!-- ── Gráfica mensual ─────────────────────────────────────────────────────── -->
