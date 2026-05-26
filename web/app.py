@@ -1388,9 +1388,9 @@ def create_app() -> Flask:
                 ws2.cell(i, 3, float(row["kwh_inter"])).number_format = _FMT_KWH
                 ws2.cell(i, 4, float(row["kwh_punta"])).number_format = _FMT_KWH
                 ws2.cell(i, 5, float(row["kwh_total"])).number_format = _FMT_KWH
-                ws2.cell(i, 6, float(row.get("kw_base", 0))).number_format = '#,##0.0'
-                ws2.cell(i, 7, float(row.get("kw_inter", 0))).number_format = '#,##0.0'
-                ws2.cell(i, 8, float(row.get("kw_punta", 0))).number_format = '#,##0.0'
+                ws2.cell(i, 6, float(row.get("kw_base") or 0)).number_format = '#,##0.0'
+                ws2.cell(i, 7, float(row.get("kw_inter") or 0)).number_format = '#,##0.0'
+                ws2.cell(i, 8, float(row.get("kw_punta") or 0)).number_format = '#,##0.0'
             _autofit(ws2)
 
             # ── Hoja 3: Costos detallados ──────────────────────────────────────
@@ -1410,9 +1410,9 @@ def create_app() -> Flask:
                 ws3.cell(i, 7, float(row.get("costo_cap", 0))).number_format = _FMT_MXN
                 ws3.cell(i, 8, float(row.get("cargo_fp", 0))).number_format = _FMT_MXN
                 ws3.cell(i, 9, float(row.get("subtotal", 0))).number_format = _FMT_MXN
-                ws3.cell(i, 10, float(row.get("cu_base_total", 0))).number_format = '$#,##0.0000'
-                ws3.cell(i, 11, float(row.get("cu_inter_total", 0))).number_format = '$#,##0.0000'
-                ws3.cell(i, 12, float(row.get("cu_punta_total", 0))).number_format = '$#,##0.0000'
+                ws3.cell(i, 10, float(row.get("cu_base_total") or 0)).number_format = '$#,##0.0000'
+                ws3.cell(i, 11, float(row.get("cu_inter_total") or 0)).number_format = '$#,##0.0000'
+                ws3.cell(i, 12, float(row.get("cu_punta_total") or 0)).number_format = '$#,##0.0000'
             _autofit(ws3)
 
             # ── Hoja 4: Indicadores ────────────────────────────────────────────
@@ -1433,11 +1433,23 @@ def create_app() -> Flask:
         ws_gas = wb.create_sheet("Gas natural")
         cols_g = ["Mes", "Consumo (GJ)", "Costo Unit. (MXN/GJ)", "Costo Total (MXN)"]
         _hdr_row(ws_gas, cols_g)
-        for i, row in enumerate(historico_gas or [], 2):
+        gas_filas = historico_gas["filas"] if historico_gas else []
+        for i, row in enumerate(gas_filas, 2):
             ws_gas.cell(i, 1, row.get("mes", ""))
-            ws_gas.cell(i, 2, float(row.get("consumo_gj", 0))).number_format = _FMT_GJ
-            ws_gas.cell(i, 3, float(row.get("costo_unit_gj", 0))).number_format = '$#,##0.00'
-            ws_gas.cell(i, 4, float(row.get("costo_total_mxn", 0))).number_format = _FMT_MXN
+            ws_gas.cell(i, 2, float(row.get("consumo_gj") or 0)).number_format = _FMT_GJ
+            ws_gas.cell(i, 3, float(row.get("costo_unit_gj") or 0)).number_format = '$#,##0.00'
+            ws_gas.cell(i, 4, float(row.get("costo_total_mxn") or 0)).number_format = _FMT_MXN
+        if historico_gas:
+            tot = historico_gas["total"]
+            tr = len(gas_filas) + 2
+            ws_gas.cell(tr, 1, "TOTAL").font = _TOT_FONT
+            ws_gas.cell(tr, 1).fill = _TOT_FILL
+            ws_gas.cell(tr, 2, float(tot.get("consumo_gj") or 0)).number_format = _FMT_GJ
+            ws_gas.cell(tr, 2).font = _TOT_FONT; ws_gas.cell(tr, 2).fill = _TOT_FILL
+            ws_gas.cell(tr, 3, float(tot.get("costo_unit_gj") or 0)).number_format = '$#,##0.00'
+            ws_gas.cell(tr, 3).font = _TOT_FONT; ws_gas.cell(tr, 3).fill = _TOT_FILL
+            ws_gas.cell(tr, 4, float(tot.get("costo_total_mxn") or 0)).number_format = _FMT_MXN
+            ws_gas.cell(tr, 4).font = _TOT_FONT; ws_gas.cell(tr, 4).fill = _TOT_FILL
         _autofit(ws_gas)
 
         buf = io.BytesIO()
