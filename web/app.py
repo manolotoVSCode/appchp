@@ -1285,6 +1285,37 @@ def create_app() -> Flask:
                 max_len = max((len(str(cell.value)) for cell in col if cell.value), default=8)
                 ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 32)
 
+        _PERIODOS = ("base", "intermedio", "punta")
+
+        def _to_excel_value(v):
+            """Convierte un valor a tipo que openpyxl acepta en celda."""
+            if v is None:
+                return None
+            if isinstance(v, bool):
+                return v
+            if isinstance(v, (int, float, str)):
+                return v
+            if hasattr(v, "isoformat"):   # date / datetime
+                return v
+            if hasattr(v, "__float__"):
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    return str(v)
+            return str(v)   # fallback seguro para dict, list, etc.
+
+        def _expandir_kpis(kpis):
+            """Expande entradas cuyo valor sea dict por periodo horario a 3 filas."""
+            resultado = []
+            for label, v in kpis:
+                if isinstance(v, dict) and any(k in _PERIODOS for k in v):
+                    for p in _PERIODOS:
+                        if p in v:
+                            resultado.append((f"{label} ({p.capitalize()})", v[p]))
+                else:
+                    resultado.append((label, v))
+            return resultado
+
         nombre_cliente = cliente["nombre"]
 
         if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
@@ -1333,16 +1364,16 @@ def create_app() -> Flask:
             ind = tablas.get("indicadores", [])
             kwh_total_cfe = sum(f["kwh_total"] for f in facturas_cfe)
             costo_total_cfe = sum(f["costo_mxn"] for f in facturas_cfe)
-            kpis = [
+            kpis = _expandir_kpis([
                 ("Cliente", nombre_cliente),
                 ("Meses seleccionados", len(facturas_cfe)),
                 ("kWh total", kwh_total_cfe),
                 ("Costo total CFE (MXN)", costo_total_cfe),
                 ("Costo unitario prom. (MXN/kWh)", tablas.get("costo_unit_promedio_total", 0)),
-            ]
+            ])
             for r_i, (k, v) in enumerate(kpis, 1):
                 ws.cell(r_i, 1, k).font = Font(bold=True)
-                ws.cell(r_i, 2, float(v) if hasattr(v, "__float__") else v)
+                ws.cell(r_i, 2, _to_excel_value(v))
             _autofit(ws)
 
             # ── Hoja 2: Consumos y demandas ────────────────────────────────────
