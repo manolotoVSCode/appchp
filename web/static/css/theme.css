@@ -338,3 +338,14 @@ a:hover { color: var(--color-primary-dark); }
   color: var(--color-text-secondary) !important;
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Separadores de sección discretos (sin líneas, solo texto) ────────────── */
+.section-label {
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--color-text-secondary);
+  margin: 2rem 0 1rem;
+  padding: 0;
+}
