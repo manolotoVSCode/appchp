@@ -467,6 +467,7 @@
         <td class="text-end small pe-3">${kw(f.kw_punta)}</td>
       </tr>`;
     }).join("");
+    if (_paneles["panelConsumosDemandas"]) _paneles["panelConsumosDemandas"].ajustarAltura();
   }
 
   function renderCostosDetallados(filas) {
@@ -497,6 +498,7 @@
         <td class="text-end small pe-3">$${Math.round(f.subtotal).toLocaleString("en-US")}</td>
       </tr>`;
     }).join("");
+    if (_paneles["panelCostosDetallados"]) _paneles["panelCostosDetallados"].ajustarAltura();
   }
 
   function renderIndicadores(filas) {
@@ -515,6 +517,7 @@
         <td class="text-end small pe-3">${f.demanda_prom.toLocaleString("es-MX", { maximumFractionDigits: 1 })}</td>
       </tr>`;
     }).join("");
+    if (_paneles["panelIndicadores"]) _paneles["panelIndicadores"].ajustarAltura();
   }
 
   function renderDetalleCostoTotal(data) {
@@ -613,6 +616,7 @@
     };
 
     tbody.innerHTML = gasHist.filas.map(f => renderFila(f, false)).join("") + renderFila(gasHist.total, true);
+    if (_paneles["panelGasHistorico"]) _paneles["panelGasHistorico"].ajustarAltura();
   }
 
   // ── Actualizar banner de aviso ────────────────────────────────────────────

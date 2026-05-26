@@ -562,6 +562,7 @@
     </tr>`;
 
     tbody.innerHTML = html + totalRow;
+    if (_paneles["panelTablaCoGen"]) _paneles["panelTablaCoGen"].ajustarAltura();
   }
 
   // ── Render panel CELs ─────────────────────────────────────────────────────
@@ -575,6 +576,7 @@
     setText("cd-altitud",       cels.altitud_msnm + " msnm");
     setText("cd-tipo-motor",    etiqMotor[cels.tipo_motor] || "Otros");
     setText("cd-capacidad",     fmt2(cels.capacidad_kw) + " kW" + (cels.capacidad_es_estimada ? " ⚠" : ""));
+    if (_paneles["panelCels"]) _paneles["panelCels"].ajustarAltura();
   }
 
   // ── Actualizar aviso ──────────────────────────────────────────────────────

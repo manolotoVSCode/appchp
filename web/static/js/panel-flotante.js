@@ -25,6 +25,18 @@ class PanelFlotante {
     this._initFocus();
   }
 
+  /** Mide la altura necesaria para mostrar todo el contenido (cap 95% viewport). */
+  _medirAltura() {
+    const header = this.el.querySelector('.panel-header');
+    const body   = this.el.querySelector('.panel-body');
+    const resize = this.el.querySelector('.panel-resize');
+    const altoMax = Math.round(window.innerHeight * 0.95);
+    const natural = (header ? header.offsetHeight : 0)
+                  + (body   ? body.scrollHeight   : 0)
+                  + (resize ? resize.offsetHeight : 0);
+    return Math.min(natural || altoMax, altoMax);
+  }
+
   /** Abre el panel. Si ya está visible, lo trae al frente. */
   abrir() {
     if (!this.el) return;
@@ -33,15 +45,13 @@ class PanelFlotante {
       return;
     }
 
-    // Posición en cascada: 95% del ancho, alto auto-ajustado al contenido (cap 95%)
-    const w       = Math.round(window.innerWidth * 0.95);
-    const altoMax = Math.round(window.innerHeight * 0.95);
+    const w = Math.round(window.innerWidth * 0.95);
 
-    // Medir altura natural del contenido
+    // Mostrar primero para que el DOM esté renderizado al medir
     this.el.style.width   = w + 'px';
-    this.el.style.height  = 'auto';
     this.el.style.display = 'flex';
-    const h = Math.min(this.el.offsetHeight || altoMax, altoMax);
+
+    const h = this._medirAltura();
 
     const idx    = PanelFlotante._openCount % 7;
     const offset = idx * 30;
@@ -56,6 +66,21 @@ class PanelFlotante {
 
     PanelFlotante._openCount++;
     this.traerAlFrente();
+  }
+
+  /**
+   * Reajusta la altura del panel al contenido actual.
+   * Llamar tras cargar datos dinámicos en el panel-body.
+   */
+  ajustarAltura() {
+    if (!this.el || this.el.style.display !== 'flex') return;
+    const h   = this._medirAltura();
+    const top = Math.min(
+      Math.max(0, this.el.offsetTop),
+      window.innerHeight - 60
+    );
+    this.el.style.top    = top + 'px';
+    this.el.style.height = h   + 'px';
   }
 
   /** Cierra el panel. */
