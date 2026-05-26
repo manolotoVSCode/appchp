@@ -126,16 +126,22 @@
       <div id="detalleCostoTotal" class="card shadow-sm mb-4" style="display:none">
         <div class="card-body">
           <h6 class="card-title mb-3">Desglose del Costo Total del Periodo</h6>
-          <table class="table table-sm mb-0">
-            <thead>
-              <tr class="table-primary-header">
-                <th>Componente</th>
-                <th class="text-end">Importe (MXN)</th>
-                <th class="text-end">% del total</th>
-              </tr>
-            </thead>
-            <tbody id="tbodyDetalleCostoTotal"></tbody>
-          </table>
+          <div class="row g-4 align-items-center">
+            <div class="col-md-7">
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr style="border-bottom: 1px solid var(--color-border)">
+                    <th class="small fw-semibold text-muted" style="background:transparent">Componente</th>
+                    <th class="text-end small fw-semibold text-muted" style="background:transparent">Importe (MXN)</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyDetalleCostoTotal"></tbody>
+              </table>
+            </div>
+            <div class="col-md-5">
+              <div id="donutDetalleCostoTotal" style="max-width:340px; margin:0 auto"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -463,6 +469,7 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/panel-flotante.js') }}"></script>
+<script src="{{ url_for('static', filename='js/donut-componentes.js') }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/dashboard-contabilidad.js') }}"></script>
 <script>

@@ -524,19 +524,33 @@
     const tbody = document.getElementById("tbodyDetalleCostoTotal");
     if (!tbody) return;
     const fmt = v => "$" + Math.round(v).toLocaleString("es-MX");
+    const colores = {
+      "Energía":         "var(--color-primary)",
+      "Capacidad":       "var(--color-warning)",
+      "Distribución":    "var(--color-info)",
+      "Otros Servicios": "var(--color-danger)",
+    };
     const filas = data.lineas.map(l => `
       <tr>
-        <td class="small">${l.nombre}</td>
+        <td class="small">
+          <span class="donut-color-dot" style="background:${colores[l.nombre] || '#999'}"></span>${l.nombre}
+        </td>
         <td class="text-end small">${fmt(l.monto)}</td>
-        <td class="text-end small">${l.pct}%</td>
       </tr>`).join("");
     const total = `
-      <tr class="total-row">
+      <tr style="border-top:1px solid var(--color-primary-light); background:var(--color-primary-soft)">
         <td class="small"><strong>TOTAL</strong></td>
         <td class="text-end small"><strong>${fmt(data.total)}</strong></td>
-        <td class="text-end small"><strong>100%</strong></td>
       </tr>`;
     tbody.innerHTML = filas + total;
+
+    // Donut
+    const datosDonut = data.lineas.map(l => ({
+      nombre: l.nombre,
+      pct:    l.pct,
+      color:  colores[l.nombre] || "#999",
+    }));
+    renderDonutComponentes("donutDetalleCostoTotal", datosDonut);
   }
 
   function renderFacturasCfe(facturas) {

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.42.0] — 2026-05-25
+
+### Añadido
+- Dashboard Contabilidad — desplegable "Desglose del Costo Total": rediseñado con layout de dos columnas (tabla izquierda + donut SVG derecha). La columna de porcentaje se elimina; los porcentajes se leen visualmente en el donut. Cabecera de tabla transparente; fila TOTAL con fondo verde suave y borde superior.
+- Dashboard Cogeneración — card INGRESOS / desplegable ahorro eléctrico: rediseñado con layout de dos columnas (tabla 3 cols — Componente/Original/Ahorro + donut SVG). La columna de porcentaje se elimina; el donut muestra la composición relativa del ahorro. Se actualiza en tiempo real al mover los sliders de sensibilidad.
+- Nuevo archivo compartido `web/static/js/donut-componentes.js` con funciones globales `arcPath()` y `renderDonutComponentes()`, reutilizables entre dashboards.
+- Nuevo CSS `.donut-color-dot` en `theme.css` para puntos de color en filas de tabla.
+
 ## [2.41.2] — 2026-05-25
 
 ### Cambiado

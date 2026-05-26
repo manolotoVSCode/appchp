@@ -146,35 +146,46 @@
         <!-- Desglose 4 componentes a ancho completo (solo CFE GDMTH; oculto en PPA) -->
         <div id="detalleAhorroElec" style="display:none">
           <hr class="my-3">
-          <div class="row small fw-semibold text-muted mb-2">
-            <div class="col-3">Componente</div>
-            <div class="col-3 text-end">Original</div>
-            <div class="col-3 text-end">Ahorro</div>
-            <div class="col-3 text-end">%</div>
-          </div>
-          <div class="row small mb-1">
-            <div class="col-3">Energía</div>
-            <div class="col-3 text-end text-muted" id="kpi-ah-energia-orig">—</div>
-            <div class="col-3 text-end fw-semibold" id="kpi-ah-energia-val">—</div>
-            <div class="col-3 text-end text-success" id="kpi-ah-energia-pct">—</div>
-          </div>
-          <div class="row small mb-1">
-            <div class="col-3">Capacidad</div>
-            <div class="col-3 text-end text-muted" id="kpi-ah-cap-orig">—</div>
-            <div class="col-3 text-end fw-semibold" id="kpi-ah-cap-val">—</div>
-            <div class="col-3 text-end text-success" id="kpi-ah-cap-pct">—</div>
-          </div>
-          <div class="row small mb-1">
-            <div class="col-3">Distribución</div>
-            <div class="col-3 text-end text-muted" id="kpi-ah-dist-orig">—</div>
-            <div class="col-3 text-end fw-semibold" id="kpi-ah-dist-val">—</div>
-            <div class="col-3 text-end text-success" id="kpi-ah-dist-pct">—</div>
-          </div>
-          <div class="row small mb-1">
-            <div class="col-3">Otros Servicios</div>
-            <div class="col-3 text-end text-muted" id="kpi-ah-otros-orig">—</div>
-            <div class="col-3 text-end fw-semibold" id="kpi-ah-otros-val">—</div>
-            <div class="col-3 text-end text-success" id="kpi-ah-otros-pct">—</div>
+          <div class="row g-4 align-items-center">
+            <div class="col-md-7">
+              <div class="row small fw-semibold text-muted mb-2"
+                   style="border-bottom:1px solid var(--color-border); padding-bottom:.4rem">
+                <div class="col-4">Componente</div>
+                <div class="col-4 text-end">Original</div>
+                <div class="col-4 text-end">Ahorro</div>
+              </div>
+              <div class="row small mb-2">
+                <div class="col-4">
+                  <span class="donut-color-dot" style="background:var(--color-primary)"></span>Energía
+                </div>
+                <div class="col-4 text-end text-muted" id="kpi-ah-energia-orig">—</div>
+                <div class="col-4 text-end fw-semibold" id="kpi-ah-energia-val">—</div>
+              </div>
+              <div class="row small mb-2">
+                <div class="col-4">
+                  <span class="donut-color-dot" style="background:var(--color-warning)"></span>Capacidad
+                </div>
+                <div class="col-4 text-end text-muted" id="kpi-ah-cap-orig">—</div>
+                <div class="col-4 text-end fw-semibold" id="kpi-ah-cap-val">—</div>
+              </div>
+              <div class="row small mb-2">
+                <div class="col-4">
+                  <span class="donut-color-dot" style="background:var(--color-info)"></span>Distribución
+                </div>
+                <div class="col-4 text-end text-muted" id="kpi-ah-dist-orig">—</div>
+                <div class="col-4 text-end fw-semibold" id="kpi-ah-dist-val">—</div>
+              </div>
+              <div class="row small mb-2">
+                <div class="col-4">
+                  <span class="donut-color-dot" style="background:var(--color-danger)"></span>Otros Servicios
+                </div>
+                <div class="col-4 text-end text-muted" id="kpi-ah-otros-orig">—</div>
+                <div class="col-4 text-end fw-semibold" id="kpi-ah-otros-val">—</div>
+              </div>
+            </div>
+            <div class="col-md-5">
+              <div id="donutAhorroElec" style="max-width:340px; margin:0 auto"></div>
+            </div>
           </div>
         </div>
 
@@ -491,5 +502,6 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/panel-flotante.js') }}"></script>
+<script src="{{ url_for('static', filename='js/donut-componentes.js') }}"></script>
 <script src="{{ url_for('static', filename='js/dashboard-cogeneracion.js') }}"></script>
 {% endblock %}

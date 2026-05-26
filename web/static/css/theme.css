@@ -139,6 +139,16 @@ a:hover { color: var(--color-primary-dark); }
   border-bottom: 2px solid var(--color-primary);
 }
 
+/* ── Donut componentes — dot de color en filas de tabla ────────────────────── */
+.donut-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
 /* ── Cards ────────────────────────────────────────────────────────────────── */
 .card {
   border-color: var(--color-border);
