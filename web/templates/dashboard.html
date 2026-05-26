@@ -5,7 +5,6 @@
 
 {% block extra_styles %}
 <style>
-  .table-mes th { background: var(--color-primary); color: #fff; white-space: nowrap; }
   .total-row td { background: var(--color-primary-soft); font-weight: 600; }
   .ebitda-cell  { background: var(--color-primary-soft); font-weight: 600; }
   .section-header {
@@ -454,9 +453,9 @@
 <div class="card shadow-sm mb-4">
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-sm table-hover table-mes mb-0">
+      <table class="table table-sm table-hover mb-0">
         <thead>
-          <tr>
+          <tr class="table-primary-header">
             <th>Periodo</th>
             <th class="text-end">kWh Total</th>
             <th class="text-end">Costo CFE (MXN)</th>

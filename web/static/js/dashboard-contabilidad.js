@@ -892,6 +892,15 @@
     if (flecha) flecha.textContent = "▲";
   });
 
+  // ── Botón Descargar datos ─────────────────────────────────────────────────
+  document.getElementById("btn-descargar-datos")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const clienteId = document.getElementById("dashboard-contabilidad-root")?.dataset.clienteId;
+    if (clienteId) {
+      window.location.href = `/clientes/${clienteId}/dashboard/contabilidad/export-datos`;
+    }
+  });
+
   // ── Carga inicial ─────────────────────────────────────────────────────────
   fetchData(false);
 

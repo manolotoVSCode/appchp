@@ -915,6 +915,17 @@
     if (flecha) flecha.textContent = estaVisible ? "▼" : "▲";
   });
 
+  // ── Botón Descargar datos ─────────────────────────────────────────────────
+  document.getElementById("btn-descargar-datos")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const cob = (document.getElementById("cobertura")?.value ?? 75) / 100;
+    const re  = (document.getElementById("rendimiento-elec")?.value ?? 40) / 100;
+    const rt  = (document.getElementById("rendimiento-term")?.value ?? 25) / 100;
+    const ec  = (document.getElementById("caldera")?.value ?? 85) / 100;
+    window.location.href = `/clientes/${CLIENTE_ID}/dashboard/cogeneracion/export-datos` +
+      `?cobertura=${cob}&rend_elec=${re}&rend_term=${rt}&eficiencia_caldera=${ec}`;
+  });
+
   // ── Carga inicial ─────────────────────────────────────────────────────────
   fetchData(false);
 

@@ -132,10 +132,11 @@ a:hover { color: var(--color-primary-dark); }
 
 /* ── Tablas — encabezados ──────────────────────────────────────────────────── */
 .table-primary-header th {
-  background-color: var(--color-primary);
-  color: #fff;
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary-dark);
   font-weight: 600;
   white-space: nowrap;
+  border-bottom: 2px solid var(--color-primary);
 }
 
 /* ── Cards ────────────────────────────────────────────────────────────────── */

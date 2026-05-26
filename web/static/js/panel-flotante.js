@@ -33,9 +33,16 @@ class PanelFlotante {
       return;
     }
 
-    // Posición en cascada: 95% del ancho de ventana, 85% del alto, centrado + offset
-    const w = Math.round(window.innerWidth  * 0.95);
-    const h = Math.round(window.innerHeight * 0.85);
+    // Posición en cascada: 95% del ancho, alto auto-ajustado al contenido (cap 95%)
+    const w       = Math.round(window.innerWidth * 0.95);
+    const altoMax = Math.round(window.innerHeight * 0.95);
+
+    // Medir altura natural del contenido
+    this.el.style.width   = w + 'px';
+    this.el.style.height  = 'auto';
+    this.el.style.display = 'flex';
+    const h = Math.min(this.el.offsetHeight || altoMax, altoMax);
+
     const idx    = PanelFlotante._openCount % 7;
     const offset = idx * 30;
     const rawL   = (window.innerWidth  - w) / 2 + offset;
@@ -43,11 +50,9 @@ class PanelFlotante {
     const left   = Math.min(Math.max(0, rawL), window.innerWidth  - 120);
     const top    = Math.min(Math.max(0, rawT),  window.innerHeight - 60);
 
-    this.el.style.left    = left + 'px';
-    this.el.style.top     = top  + 'px';
-    this.el.style.width   = w    + 'px';
-    this.el.style.height  = h    + 'px';
-    this.el.style.display = 'flex';
+    this.el.style.left   = left + 'px';
+    this.el.style.top    = top  + 'px';
+    this.el.style.height = h    + 'px';
 
     PanelFlotante._openCount++;
     this.traerAlFrente();

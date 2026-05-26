@@ -6,7 +6,6 @@
 {% block extra_styles %}
 <link href="{{ url_for('static', filename='css/panel-flotante.css') }}" rel="stylesheet">
 <style>
-  .table-mes th { background: var(--color-primary); color: #fff; white-space: nowrap; }
   .total-row td { background: var(--color-primary-soft); font-weight: 600; }
   .section-header {
     display: flex; align-items: center; gap: .75rem;
@@ -58,6 +57,11 @@
       <span class="ms-2 text-secondary" style="font-size:.75rem" id="periodo-label"></span>
     </span>
     {% endif %}
+    <a id="btn-descargar-datos" href="#"
+       class="btn btn-sm btn-outline-secondary ms-auto"
+       style="white-space:nowrap">
+      <i class="bi bi-download me-1"></i>Descargar datos
+    </a>
   </div>
 
   {# Contenedor de avisos (rellenado por JS) #}
