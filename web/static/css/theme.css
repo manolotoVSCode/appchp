@@ -305,119 +305,34 @@ a:hover { color: var(--color-primary-dark); }
 }
 .dashboard-error-banner .btn-reintentar:hover { background: #991b1b; }
 
-/* ── Jerarquía de KPIs ────────────────────────────────────────────────────── */
+/* ── Jerarquía de KPIs — solo tipografía, sin tocar cajas ────────────────── */
 
-/* Números tabulares globales en todos los valores KPI */
+/* Default global: números tabulares en todos los KPIs */
 .kpi-value { font-variant-numeric: tabular-nums; }
 
-/* Nivel PRIMARIO — KPI dominante */
-.kpi-card.kpi-nivel-primario {
-  padding: 1.75rem 2rem;
-  border-left-width: 6px;
-  box-shadow: var(--shadow-md);
-}
-.kpi-card.kpi-nivel-primario .kpi-label {
-  font-size: .72rem;
-  font-weight: 700;
-  letter-spacing: .08em;
-  color: var(--color-primary-dark);
-}
-.kpi-card.kpi-nivel-primario .kpi-value {
-  font-size: 2.4rem;
+/* Nivel PRIMARIO: solo tipografía más grande */
+.kpi-card.kpi-nivel-primario .kpi-value,
+.kpi-card-b2.kpi-nivel-primario .kpi-value {
+  font-size: 2rem;
   font-weight: 800;
-  line-height: 1.05;
+  line-height: 1.1;
   letter-spacing: -.02em;
-  color: var(--color-primary-dark);
   font-variant-numeric: tabular-nums;
 }
-.kpi-card.kpi-nivel-primario .text-muted {
-  font-size: .82rem;
-}
 
-/* Nivel SECUNDARIO — contexto relevante */
-.kpi-card.kpi-nivel-secundario {
-  padding: 1.25rem 1.5rem;
-}
-.kpi-card.kpi-nivel-secundario .kpi-label {
-  font-size: .68rem;
-  font-weight: 600;
-  letter-spacing: .07em;
-}
-.kpi-card.kpi-nivel-secundario .kpi-value {
+/* Nivel SECUNDARIO: tipografía estándar */
+.kpi-card.kpi-nivel-secundario .kpi-value,
+.kpi-card-b2.kpi-nivel-secundario .kpi-value {
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 
-/* Nivel TERCIARIO — informativo */
-.kpi-card.kpi-nivel-terciario {
-  padding: 1rem 1.25rem;
-}
-.kpi-card.kpi-nivel-terciario .kpi-label {
-  font-size: .65rem;
-  font-weight: 600;
-  letter-spacing: .06em;
-}
+/* Nivel TERCIARIO: tipografía más pequeña */
 .kpi-card.kpi-nivel-terciario .kpi-value {
   font-size: 1.15rem;
   font-weight: 600;
   color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
-}
-.kpi-card.kpi-nivel-terciario .text-muted {
-  font-size: .7rem;
-}
-
-/* Jerarquía para cards centradas (.kpi-card-b2) en Cogeneración bloque 2
-   — solo tipografía, sin border-left ni sombra extra sobre la card exterior */
-.kpi-card-b2.kpi-nivel-primario .kpi-label {
-  font-size: .72rem;
-  font-weight: 700;
-  letter-spacing: .08em;
-  color: var(--color-primary-dark);
-}
-.kpi-card-b2.kpi-nivel-primario .kpi-value {
-  font-size: 2.2rem;
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -.02em;
-  font-variant-numeric: tabular-nums;
-}
-.kpi-card-b2.kpi-nivel-primario .kpi-sublabel {
-  font-size: .78rem;
-}
-.kpi-card-b2.kpi-nivel-secundario .kpi-label {
-  font-size: .68rem;
-  font-weight: 600;
-  letter-spacing: .07em;
-}
-.kpi-card-b2.kpi-nivel-secundario .kpi-value {
-  font-size: 1.45rem;
-  font-weight: 700;
-  line-height: 1.15;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Separadores de sección sutiles ──────────────────────────────────────── */
-.section-divider {
-  display: flex;
-  align-items: center;
-  gap: .75rem;
-  margin: 2.5rem 0 1rem;
-}
-.section-divider h2 {
-  font-size: .78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-  margin: 0;
-}
-.section-divider hr {
-  flex: 1;
-  border: none;
-  border-top: 1px solid var(--color-border);
-  margin: 0;
 }
