@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.54.4] — 2026-05-27
+
+### Eliminado
+- `flask-login` y `python-dotenv` de `requirements.txt` — sin importaciones en el código desde v2.31.0.
+- Variables `APP_USER` y `APP_PASSWORD_HASH` de `render.yaml` — eliminadas del sistema de autenticación en v2.31.0.
+- Archivo `VERSION` — redundante; la versión se lee directamente desde `CHANGELOG.md`.
+
+### Cambiado
+- `web/app.py`: `_APP_VERSION` ahora se extrae con regex de la primera entrada `## [X.Y.Z]` del `CHANGELOG.md`, eliminando la dependencia del archivo `VERSION`.
+
 ## [2.54.3] — 2026-05-27
 
 ### Eliminado

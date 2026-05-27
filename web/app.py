@@ -36,8 +36,11 @@ logger = logging.getLogger(__name__)
 csrf = CSRFProtect()
 
 try:
-    _APP_VERSION = (Path(__file__).resolve().parent.parent / "VERSION").read_text(encoding="utf-8").strip()
-except FileNotFoundError:
+    import re as _re
+    _changelog = (Path(__file__).resolve().parent.parent / "CHANGELOG.md").read_text(encoding="utf-8")
+    _m = _re.search(r"^## \[(\d+\.\d+\.\d+)\]", _changelog, _re.MULTILINE)
+    _APP_VERSION = _m.group(1) if _m else ""
+except Exception:
     _APP_VERSION = ""
 
 
