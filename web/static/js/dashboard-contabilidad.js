@@ -656,7 +656,7 @@
 
     // Link "Ver detalle" del Costo Total — solo visible en CFE GDMTH
     const linkDetCT = document.getElementById("link-detalle-costo-total");
-    if (linkDetCT) linkDetCT.style.display = esPPA ? "none" : "inline-block";
+    if (linkDetCT) linkDetCT.style.setProperty("display", esPPA ? "none" : "inline-block", "important");
     // Reset estado (invalida cache de datos al cambiar selección de meses)
     const detalleCT = document.getElementById("detalleCostoTotal");
     if (detalleCT) detalleCT.style.display = "none";

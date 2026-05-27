@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.46.8] — 2026-05-26
+
+### Corregido
+- Dashboard Contabilidad PPA: link "Ver detalle ▼" seguía visible aunque JS asignaba `style.display="none"`. Causa: clase Bootstrap `d-inline-block` aplica `display:inline-block !important` y gana contra el inline style sin prioridad. Fix: cambiado a `style.setProperty("display", ..., "important")` para que el `!important` inline venza a Bootstrap.
+
 ## [2.46.7] — 2026-05-26
 
 ### Corregido
