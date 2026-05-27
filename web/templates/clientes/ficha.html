@@ -17,12 +17,10 @@
     <div class="card shadow-sm h-100">
       <div class="card-header fw-semibold small text-muted">Datos generales</div>
       <div class="card-body">
-        {% if cliente.logo_url %}
         <div class="mb-3 pb-3 border-bottom">
-          <img src="{{ cliente.logo_url }}" alt="{{ cliente.nombre }}"
+          <img src="{{ obtener_logo_cliente(cliente) }}" alt="{{ cliente.nombre }}"
                style="max-height:64px; max-width:180px; object-fit:contain;">
         </div>
-        {% endif %}
         <dl class="row mb-0 small">
           <dt class="col-sm-4 text-muted">Nombre</dt>
           <dd class="col-sm-8 fw-semibold mb-2">{{ cliente.nombre }}</dd>

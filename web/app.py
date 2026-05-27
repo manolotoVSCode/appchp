@@ -44,6 +44,36 @@ except Exception:
     _APP_VERSION = ""
 
 
+_SECTOR_SVG_MAP = {
+    "hotelero": "hotelero.svg",
+    "manufactura": "manufactura.svg",
+    "alimentos y bebidas": "alimentos-y-bebidas.svg",
+    "químico": "quimico.svg",
+    "textil": "textil.svg",
+    "pesquero": "pesquero.svg",
+    "forestal": "forestal.svg",
+    "cerámico": "ceramico.svg",
+    "plásticos": "plasticos.svg",
+    "metalúrgico": "metalurgico.svg",
+    "otro": "otro.svg",
+}
+
+
+def obtener_logo_cliente(cliente: dict) -> str:
+    """Devuelve la URL del logo a mostrar para un cliente.
+
+    Si el cliente tiene logo_url personalizado, lo devuelve.
+    Si no, devuelve el logo SVG por defecto del sector.
+    Si no hay sector o el sector no tiene SVG, devuelve 'otro.svg'.
+    """
+    from flask import url_for
+    if cliente.get("logo_url"):
+        return cliente["logo_url"]
+    sector = (cliente.get("sector_industrial") or "").strip().lower()
+    archivo = _SECTOR_SVG_MAP.get(sector, "otro.svg")
+    return url_for("static", filename=f"img/sectores/{archivo}")
+
+
 def _verificar_cliente_activo(cliente_id: int):
     """Verifica que cliente_id coincida con la sesión activa y exista en BD.
 
@@ -505,6 +535,10 @@ def create_app() -> Flask:
         session["_cp_cache"] = {"id": id_, "ts": time(), "data": data}
         return {**base, "cliente_activo": data}
 
+    @app.context_processor
+    def _inject_logo_helper():
+        return {"obtener_logo_cliente": obtener_logo_cliente}
+
     @app.route("/")
     def dashboard():
         """Redirige al listado de clientes."""
@@ -591,7 +625,7 @@ def create_app() -> Flask:
             aviso_datos=aviso_datos,
             cliente_id=cliente_id,
             cliente_nombre=cliente["nombre"],
-            logo_url=cliente.get("logo_url"),
+            logo_url=obtener_logo_cliente(cliente),
             facturas_cfe=facturas_cfe_tmpl,
             facturas_gas=facturas_gas,
             historico=historico,
@@ -779,7 +813,7 @@ def create_app() -> Flask:
             aviso_datos=aviso_datos,
             cliente_id=cliente_id,
             cliente_nombre=cliente["nombre"],
-            logo_url=cliente.get("logo_url"),
+            logo_url=obtener_logo_cliente(cliente),
             periodo_label=periodo_label,
             rango_cogen=rango_cogen,
             chart_labels=chart_labels,

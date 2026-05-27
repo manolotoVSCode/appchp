@@ -68,7 +68,6 @@
 
 <!-- Título -->
 <div class="d-flex align-items-center mb-4 gap-3">
-  {% if logo_url %}
   <img src="{{ logo_url }}" alt="{{ cliente_nombre }}"
        style="height:64px; max-height:80px; width:auto; max-width:180px; object-fit:contain;">
   <div>
@@ -77,12 +76,6 @@
       <span class="ms-2 text-secondary" style="font-size:.75rem" id="periodo-label"></span>
     </div>
   </div>
-  {% else %}
-  <h1 class="h3 mb-0">{{ cliente_nombre }}</h1>
-  <span class="text-muted small">Proyecto Cogeneración
-    <span class="ms-2 text-secondary" style="font-size:.75rem" id="periodo-label"></span>
-  </span>
-  {% endif %}
   <a id="btn-descargar-datos" href="#"
      class="btn btn-sm btn-outline-secondary ms-auto"
      style="white-space:nowrap">

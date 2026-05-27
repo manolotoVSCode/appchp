@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" style="max-width:80px">
+  <!-- Fish body (ellipse) -->
+  <ellipse cx="44" cy="50" rx="27" ry="16" fill="#1A1A1A"/>
+  <!-- Tail fin -->
+  <polygon points="80,50 67,36 67,64" fill="#1A1A1A"/>
+  <!-- Dorsal fin -->
+  <polygon points="32,34 46,34 40,44" fill="#1A1A1A"/>
+  <!-- Pectoral fin -->
+  <polygon points="36,52 48,52 44,60" fill="#1A1A1A"/>
+</svg>

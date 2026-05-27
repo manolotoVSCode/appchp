@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.56.0] — 2026-05-27
+
+### Añadido
+- 11 archivos SVG en `web/static/img/sectores/`: hotelero, manufactura, alimentos-y-bebidas, quimico, textil, pesquero, forestal, ceramico, plasticos, metalurgico, otro. Iconos minimalistas B&N, viewBox 100×100, sin texto.
+- Función `obtener_logo_cliente(cliente)` en `web/app.py`: devuelve `logo_url` personalizado si existe, o el SVG del sector correspondiente, o `otro.svg` como fallback.
+- Context processor `_inject_logo_helper`: expone `obtener_logo_cliente` en todos los templates Jinja2.
+
+### Cambiado
+- `ficha.html`: logo siempre visible vía `obtener_logo_cliente(cliente)`; eliminado el bloque `{% if cliente.logo_url %}`.
+- `dashboard.html`, `dashboard_cogeneracion.html`, `dashboard_contabilidad.html`: eliminados los bloques condicionales `{% if logo_url %}`/`{% else %}`, ya que siempre hay un logo (personalizado o de sector).
+- Rutas `cliente_dashboard_contabilidad` y `cliente_dashboard_cogeneracion` en `app.py`: pasan `logo_url=obtener_logo_cliente(cliente)` en lugar de `logo_url=cliente.get("logo_url")`.
+
 ## [2.55.2] — 2026-05-27
 
 ### Documentación

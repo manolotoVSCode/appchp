@@ -34,21 +34,14 @@
 
   {# Título #}
   <div class="d-flex align-items-center mb-4 gap-3">
-    {% if cliente_activo and cliente_activo.logo_url %}
-    <img src="{{ cliente_activo.logo_url }}" alt="{{ cliente_activo.nombre }}"
+    <img src="{{ logo_url }}" alt="{{ cliente_nombre }}"
          style="height:64px; max-height:80px; width:auto; max-width:180px; object-fit:contain;">
     <div>
-      <div class="fw-bold fs-5" style="color:var(--color-primary-dark)">{{ cliente_activo.nombre }}</div>
+      <div class="fw-bold fs-5" style="color:var(--color-primary-dark)">{{ cliente_nombre }}</div>
       <div class="text-muted small">Contabilidad Energética
         <span class="ms-2 text-secondary" style="font-size:.75rem" id="periodo-label"></span>
       </div>
     </div>
-    {% else %}
-    <h1 class="h3 mb-0">{{ cliente_activo.nombre if cliente_activo else "" }}</h1>
-    <span class="text-muted small">Contabilidad Energética
-      <span class="ms-2 text-secondary" style="font-size:.75rem" id="periodo-label"></span>
-    </span>
-    {% endif %}
     <a id="btn-descargar-datos" href="#"
        class="btn btn-sm btn-outline-secondary ms-auto"
        style="white-space:nowrap">

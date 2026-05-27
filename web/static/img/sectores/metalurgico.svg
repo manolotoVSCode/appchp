@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" style="max-width:80px">
+  <!-- Anvil silhouette -->
+  <!-- Base feet -->
+  <rect x="26" y="70" width="20" height="12" rx="2" fill="#1A1A1A"/>
+  <rect x="54" y="70" width="20" height="12" rx="2" fill="#1A1A1A"/>
+  <!-- Body (trapezoid narrowing upward) -->
+  <polygon points="30,70 70,70 66,56 34,56" fill="#1A1A1A"/>
+  <!-- Top working surface -->
+  <rect x="20" y="42" width="60" height="16" rx="3" fill="#1A1A1A"/>
+  <!-- Horn (tapered left extension) -->
+  <polygon points="20,42 20,56 6,51" fill="#1A1A1A"/>
+</svg>

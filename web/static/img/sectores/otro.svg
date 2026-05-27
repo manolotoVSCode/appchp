@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" style="max-width:80px">
+  <!-- Generic factory building -->
+  <!-- Chimney 1 (tall) -->
+  <rect x="18" y="22" width="12" height="34" rx="1" fill="#1A1A1A"/>
+  <!-- Chimney 2 (shorter) -->
+  <rect x="36" y="30" width="10" height="26" rx="1" fill="#1A1A1A"/>
+  <!-- Roof / top edge -->
+  <rect x="14" y="54" width="72" height="6" rx="1" fill="#1A1A1A"/>
+  <!-- Main building body -->
+  <rect x="14" y="58" width="72" height="28" rx="2" fill="#1A1A1A"/>
+</svg>
