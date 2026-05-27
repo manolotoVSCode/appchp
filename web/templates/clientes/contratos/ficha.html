@@ -121,6 +121,14 @@
 </div>
 {% endif %}
 
+<!-- Barra de borrado masivo (visible al seleccionar facturas) -->
+<div id="barra-borrado-masivo" class="mt-4 p-2 rounded border border-danger bg-danger bg-opacity-10" style="display:none">
+  <div class="d-flex align-items-center gap-2">
+    <span id="barra-borrado-texto" class="small fw-semibold text-danger flex-grow-1"></span>
+    <button class="btn btn-danger btn-sm" id="btnAbrirBorradoMasivo">Borrar seleccionadas</button>
+  </div>
+</div>
+
 <!-- Facturas CFE del contrato -->
 {% if facturas_cfe %}
 <div class="card shadow-sm mt-4">
@@ -132,6 +140,7 @@
     <table class="table table-sm table-hover mb-0" id="tabla-cfe">
       <thead class="table-light">
         <tr>
+          <th style="width:2rem"><input type="checkbox" id="chk-maestro-cfe" class="form-check-input"></th>
           <th>Nombre</th>
           <th>Periodo</th>
           <th class="text-end">Subtotal</th>
@@ -141,6 +150,7 @@
       <tbody>
         {% for f in facturas_cfe %}
         <tr>
+          <td><input type="checkbox" class="chk-factura form-check-input" data-factura-id="{{ f.id }}" data-tipo="cfe"></td>
           <td class="font-monospace small">{{ f.nombre_canonico }}</td>
           <td class="small text-muted">{{ f.periodo_inicio }} – {{ f.periodo_fin }}</td>
           <td class="text-end small">${{ "{:,.2f}".format(f.subtotal_mxn|float) }}</td>
@@ -170,6 +180,7 @@
     <table class="table table-sm table-hover mb-0" id="tabla-gas">
       <thead class="table-light">
         <tr>
+          <th style="width:2rem"><input type="checkbox" id="chk-maestro-gas" class="form-check-input"></th>
           <th>Nombre</th>
           <th>Periodo</th>
           <th class="text-end">Subtotal</th>
@@ -179,6 +190,7 @@
       <tbody>
         {% for f in facturas_gas %}
         <tr>
+          <td><input type="checkbox" class="chk-factura form-check-input" data-factura-id="{{ f.id }}" data-tipo="gas"></td>
           <td class="font-monospace small">{{ f.nombre_canonico }}</td>
           <td class="small text-muted">{{ f.periodo_inicio }} – {{ f.periodo_fin }}</td>
           <td class="text-end small">${{ "{:,.2f}".format(f.subtotal_mxn|float) }}</td>
@@ -204,9 +216,10 @@
     <span class="fw-normal text-muted ms-1" style="font-size:.7rem">— La selección de meses se gestiona desde el sidebar</span>
   </div>
   <div class="table-responsive">
-    <table class="table table-sm table-hover mb-0">
+    <table class="table table-sm table-hover mb-0" id="tabla-ppa">
       <thead class="table-light">
         <tr>
+          <th style="width:2rem"><input type="checkbox" id="chk-maestro-ppa" class="form-check-input"></th>
           <th>Nombre</th>
           <th>Periodo</th>
           <th class="text-end">Consumo kWh</th>
@@ -217,6 +230,7 @@
       <tbody>
         {% for f in facturas_calificado %}
         <tr>
+          <td><input type="checkbox" class="chk-factura form-check-input" data-factura-id="{{ f.id }}" data-tipo="calificado"></td>
           <td class="font-monospace small">{{ f.nombre_canonico or "—" }}</td>
           <td class="small text-muted">{{ f.periodo_inicio }} – {{ f.periodo_fin }}</td>
           <td class="text-end small">{{ "{:,.2f}".format(f.consumo_kwh|float) }}</td>
@@ -521,6 +535,25 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-danger" id="btnBorrarCalificado">Borrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal borrado masivo -->
+<div class="modal fade" id="modalBorrarMasivo" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger">Borrar facturas seleccionadas</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="borrado-masivo-desglose" class="mb-0"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="btnConfirmarBorradoMasivo">Borrar todas</button>
       </div>
     </div>
   </div>
@@ -934,5 +967,112 @@ document.getElementById("btnBorrarCalificado").addEventListener("click", async f
     alert("Error: " + e.message);
   }
 });
+</script>
+<script>
+// ── Borrado masivo ─────────────────────────────────────────────────────────────
+const _borrarCfeBase = "{{ url_for('clientes.contrato_factura_borrar', cliente_id=cliente.id, contrato_id=contrato.id, factura_id=0) }}";
+const _borrarPpaBase = "{{ url_for('clientes.factura_calificado_borrar', cliente_id=cliente.id, contrato_id=contrato.id, factura_id=0) }}";
+
+function _borrarMasivoUrl(tipo, id) {
+  if (tipo === "calificado") return _borrarPpaBase.replace("/0/borrar", "/" + id + "/borrar");
+  return _borrarCfeBase.replace("/0/borrar", "/" + id + "/borrar");
+}
+
+function actualizarBarraBorrado() {
+  const n = document.querySelectorAll(".chk-factura:checked").length;
+  const barra = document.getElementById("barra-borrado-masivo");
+  const texto = document.getElementById("barra-borrado-texto");
+  if (!barra) return;
+  barra.style.display = n > 0 ? "" : "none";
+  if (texto) texto.textContent = n + " factura" + (n !== 1 ? "s" : "") + " seleccionada" + (n !== 1 ? "s" : "");
+}
+
+function sincronizarMaestro(maestroId, dataTipo) {
+  const maestro = document.getElementById(maestroId);
+  if (!maestro) return;
+  const hijos = Array.from(document.querySelectorAll(".chk-factura[data-tipo='" + dataTipo + "']"));
+  const total = hijos.length;
+  const marcados = hijos.filter(c => c.checked).length;
+  maestro.checked = total > 0 && marcados === total;
+  maestro.indeterminate = marcados > 0 && marcados < total;
+}
+
+// Maestros
+[["cfe","cfe"], ["gas","gas"], ["ppa","calificado"]].forEach(function(par) {
+  const maestro = document.getElementById("chk-maestro-" + par[0]);
+  if (!maestro) return;
+  maestro.addEventListener("change", function () {
+    document.querySelectorAll(".chk-factura[data-tipo='" + par[1] + "']").forEach(function(chk) {
+      chk.checked = maestro.checked;
+    });
+    actualizarBarraBorrado();
+  });
+});
+
+// Individuales
+document.querySelectorAll(".chk-factura").forEach(function(chk) {
+  chk.addEventListener("change", function () {
+    const tipo = this.dataset.tipo;
+    const maestroId = tipo === "cfe" ? "chk-maestro-cfe" : tipo === "gas" ? "chk-maestro-gas" : "chk-maestro-ppa";
+    sincronizarMaestro(maestroId, tipo);
+    actualizarBarraBorrado();
+  });
+});
+
+// Abrir modal con desglose
+const _btnAbrirMasivo = document.getElementById("btnAbrirBorradoMasivo");
+if (_btnAbrirMasivo) {
+  _btnAbrirMasivo.addEventListener("click", function () {
+    let nCfe = 0, nGas = 0, nPpa = 0;
+    document.querySelectorAll(".chk-factura:checked").forEach(function(chk) {
+      if (chk.dataset.tipo === "cfe") nCfe++;
+      else if (chk.dataset.tipo === "gas") nGas++;
+      else nPpa++;
+    });
+    const partes = [];
+    if (nCfe > 0) partes.push(nCfe + " factura" + (nCfe !== 1 ? "s" : "") + " CFE");
+    if (nGas > 0) partes.push(nGas + " factura" + (nGas !== 1 ? "s" : "") + " de gas");
+    if (nPpa > 0) partes.push(nPpa + " factura" + (nPpa !== 1 ? "s" : "") + " PPA");
+    document.getElementById("borrado-masivo-desglose").textContent =
+      "Se borrarán: " + partes.join(", ") + ". Esta acción no se puede deshacer.";
+    new bootstrap.Modal(document.getElementById("modalBorrarMasivo")).show();
+  });
+}
+
+// Confirmar borrado masivo
+const _btnConfirmarMasivo = document.getElementById("btnConfirmarBorradoMasivo");
+if (_btnConfirmarMasivo) {
+  _btnConfirmarMasivo.addEventListener("click", async function () {
+    const seleccionados = Array.from(document.querySelectorAll(".chk-factura:checked"));
+    if (seleccionados.length === 0) return;
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Borrando\u2026';
+
+    const resultados = await Promise.allSettled(seleccionados.map(function(chk) {
+      const id = chk.dataset.facturaId;
+      const tipo = chk.dataset.tipo;
+      const url = _borrarMasivoUrl(tipo, id);
+      if (tipo === "calificado") {
+        return fetch(url, { method: "POST", headers: { "X-CSRFToken": csrfToken } });
+      }
+      const fd = new FormData();
+      fd.append("tipo", tipo);
+      return fetch(url, { method: "POST", body: fd, headers: { "X-CSRFToken": csrfToken } });
+    }));
+
+    const ok = resultados.filter(function(r) { return r.status === "fulfilled" && r.value.ok; }).length;
+    const fail = resultados.length - ok;
+    bootstrap.Modal.getInstance(document.getElementById("modalBorrarMasivo")).hide();
+
+    if (fail === 0) {
+      window.location.reload();
+    } else {
+      btn.disabled = false;
+      btn.textContent = "Reintentar";
+      alert(ok + " borradas correctamente, " + fail + " con error. Recarga para ver el estado actual.");
+    }
+  });
+}
 </script>
 {% endblock %}

@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.46.0] — 2026-05-26
+
+### Añadido
+- Ficha del contrato: borrado masivo de facturas. Cada tabla (CFE, Gas, PPA) tiene un checkbox por fila y un checkbox maestro en el encabezado. Al seleccionar una o más facturas aparece una barra roja con el botón "Borrar seleccionadas". El modal de confirmación muestra el desglose por tipo. El borrado ejecuta una petición por factura en paralelo (Promise.all) usando los endpoints existentes. Si alguna falla, muestra resumen sin recargar.
+
 ## [2.45.6] — 2026-05-26
 
 ### Cambiado
