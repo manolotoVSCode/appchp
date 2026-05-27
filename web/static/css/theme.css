@@ -330,6 +330,11 @@ a:hover { color: var(--color-primary-dark); }
   font-variant-numeric: tabular-nums;
 }
 
+/* Inversión estimada: MXN y TC son sub-labels, no valores principales —
+   override necesario porque [id^="kpi-"][id$="-val"] los captura */
+#kpi-inversion-mxn-val { font-size: .8rem !important;  font-weight: 400 !important; line-height: 1.1 !important; }
+#kpi-inversion-tc-val  { font-size: .65rem !important; font-weight: 400 !important; line-height: 1.1 !important; }
+
 /* Nivel TERCIARIO */
 .kpi-nivel-terciario [id^="kpi-"][id$="-val"],
 .kpi-nivel-terciario .kpi-value {

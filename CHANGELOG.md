@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.46.6] — 2026-05-26
+
+### Corregido
+- Dashboard Cogeneración: cuadro "Inversión estimada" — los tres valores (USD, MXN, TC) se renderizaban en 24px idéntico porque la regla `.kpi-nivel-secundario [id^="kpi-"][id$="-val"] { font-size: 1.5rem !important }` en `theme.css` capturaba los tres IDs y aplastaba los font-size inline. Añadidos overrides ID-selector en `theme.css` para `#kpi-inversion-mxn-val` (.8rem) y `#kpi-inversion-tc-val` (.65rem), ambos con `font-weight: 400 !important` para neutralizar también el 700 forzado por la regla genérica.
+
 ## [2.46.5] — 2026-05-26
 
 ### Corregido
