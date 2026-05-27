@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.46.3] — 2026-05-26
+
+### Corregido
+- Pie chart "Composición del costo eléctrico" (Contabilidad): revertido a colores originales `["#1F7A4C","#4FA876","#9A9A9A"]`. La paleta azul había sido aplicada por error en v2.46.1.
+- Donut "Desglose del Costo Total" (Contabilidad): aplicada paleta azul monocromática (#0D3B66 Energía, #1F6FB2 Capacidad, #4A9FD8 Distribución, #A8D0E6 Otros Servicios) en `renderDetalleCostoTotal`.
+- Donut "Ahorro Eléctrico" en caja Ingresos (Cogeneración): aplicada misma paleta azul en `renderDonutComponentes("donutAhorroElec")`.
+- Cuadro Inversión (Cogeneración): JS y HTML ya estaban correctamente separados desde v2.46.2 — USD `fs-4`, MXN `.85rem`, TC `.7rem opacity:.75`. Sin cambios adicionales.
+- Link "Ver detalle" Contabilidad PPA: ya estaba oculto correctamente cuando `esPPA`. Sin cambios adicionales.
+
 ## [2.46.2] — 2026-05-26
 
 ### Verificado y corregido

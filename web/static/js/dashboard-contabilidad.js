@@ -168,7 +168,7 @@
       ],
       datasets: [{
         data: [d.energia, d.demanda, d.otros],
-        backgroundColor: ["#0D3B66", "#1F6FB2", "#4A9FD8", "#A8D0E6"],
+        backgroundColor: ["#1F7A4C", "#4FA876", "#9A9A9A"],
         borderWidth: 2,
         borderColor: "#fff",
       }],
@@ -525,10 +525,10 @@
     if (!tbody) return;
     const fmt = v => "$" + Math.round(v).toLocaleString("es-MX");
     const colores = {
-      "Energía":         "var(--color-primary)",
-      "Capacidad":       "var(--color-warning)",
-      "Distribución":    "var(--color-info)",
-      "Otros Servicios": "var(--color-danger)",
+      "Energía":         "#0D3B66",
+      "Capacidad":       "#1F6FB2",
+      "Distribución":    "#4A9FD8",
+      "Otros Servicios": "#A8D0E6",
     };
     const filas = data.lineas.map(l => `
       <tr>
