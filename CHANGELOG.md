@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.54.1] — 2026-05-27
+
+### Corregido
+- Bug: `auth.admin.update_user_by_id` devolvía "User not allowed" al cambiar contraseña desde el panel admin. Causa raíz: en supabase-py v2, `sign_in_with_password` dispara el listener `_listen_to_auth_events(SIGNED_IN)` que muta `sb.auth._headers["Authorization"]` con el JWT del usuario autenticado (no service_role). Esto contamina el cliente singleton para todas las peticiones admin posteriores del mismo proceso. El reset existente `sb.postgrest.auth(SUPABASE_KEY)` solo corregía el cliente postgrest. Fix: añadir `sb.auth._headers["Authorization"] = f"Bearer {service_key}"` en el mismo bloque de restauración de `_handle_login`.
+
 ## [2.54.0] — 2026-05-27
 
 ### Seguridad

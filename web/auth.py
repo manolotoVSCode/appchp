@@ -219,12 +219,15 @@ def _handle_login(email: str, password: str, remember: bool) -> str | None:
     user_id = res.user.id
     access_token = res.session.access_token
 
-    # sign_in_with_password cambia el Authorization del cliente compartido al JWT del
-    # usuario (authenticated). Resetear a service_role para que _get_user_profile
-    # pueda leer user_profiles sin depender de GRANTs a authenticated.
+    # sign_in_with_password dispara _listen_to_auth_events(SIGNED_IN), que muta
+    # sb.auth._headers["Authorization"] con el JWT del usuario (no service_role).
+    # Esto contamina auth.admin.* para todas las peticiones siguientes del mismo proceso.
+    # Resetear tanto postgrest como auth._headers al service_role key.
     import os
     try:
-        sb.postgrest.auth(os.environ["SUPABASE_KEY"])
+        service_key = os.environ["SUPABASE_KEY"]
+        sb.auth._headers["Authorization"] = f"Bearer {service_key}"
+        sb.postgrest.auth(service_key)
     except Exception:
         pass
 
