@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.46.2] — 2026-05-26
+
+### Verificado y corregido
+- Pie chart Contabilidad: paleta azul monocromática ya estaba aplicada correctamente desde v2.46.1. Sin cambios.
+- Cuadro Inversión Cogeneración: estilos completados — MXN con `font-size:.85rem;line-height:1.2`, TC con `font-size:.7rem;line-height:1.2;opacity:.75`. La jerarquía USD > MXN > TC es ahora visualmente clara.
+- Desglose costo total PPA: ya estaba correctamente oculto para PPA (reset siempre a `display:none` + link "Ver detalle" oculto cuando `esPPA`). Sin cambios.
+
 ## [2.46.1] — 2026-05-26
 
 ### Cambiado
