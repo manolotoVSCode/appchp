@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.57.0] — 2026-05-27
+
+### Añadido
+- `web/error_logger.py`: función `log_error(nivel, mensaje, exc, codigo_http)` que persiste eventos en la tabla `error_logs` de Supabase. Falla silenciosa (warning en log local) si la escritura en BD falla.
+- `web/templates/error.html`: página de error genérica (extiende `_base.html`) para 403, 404 y 500, con botón "Volver al inicio".
+- `web/templates/admin/errores.html`: vista `/admin/errores` con tabla paginada (50/página), filtros por nivel/email/ruta/fechas, badges por nivel, modal de traceback para errores 500.
+- `storage/migrations/202605_error_logs.sql`: DDL de la tabla `error_logs` con índices y GRANTs a `service_role`.
+
+### Cambiado
+- `web/app.py`: `from web.error_logger import log_error` al nivel de módulo; handlers globales `@app.errorhandler` para 403, 404 y `Exception` (500); ruta `GET /admin/errores` restringida a `master_admin`.
+- `web/templates/clientes/_base.html`: enlace "Registro de Errores" en sidebar, sección Administración, visible solo para `master_admin`.
+- `web/clientes.py`: `from web.error_logger import log_error` al nivel de módulo; todos los `flash(..., "danger")` precedidos de `log_error("negocio", ...)` o `log_error("validacion", ...)` según criterio.
+
 ## [2.56.1] — 2026-05-27
 
 ### Cambiado

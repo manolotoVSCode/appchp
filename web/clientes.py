@@ -13,6 +13,7 @@ from pathlib import Path
 from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from web.auth import get_current_user as _get_current_user
 from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario
+from web.error_logger import log_error
 from calc.excepciones import PeriodoIncompletoError
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
@@ -372,6 +373,7 @@ def listado():
 def nuevo():
     user = _get_current_user()
     if not usuario_puede_crear(user or {}):
+        log_error("negocio", "No tienes permisos para crear clientes.")
         flash("No tienes permisos para crear clientes.", "danger")
         return redirect(url_for("clientes.listado"))
     if request.method == "POST":
@@ -618,6 +620,7 @@ def editar(cliente_id: int):
 def borrar(cliente_id: int):
     user = _get_current_user()
     if not usuario_puede_borrar(user or {}):
+        log_error("negocio", "No tienes permisos para borrar clientes.")
         flash("No tienes permisos para borrar clientes.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
     cliente = get_cliente_con_conteos(cliente_id)
@@ -629,6 +632,7 @@ def borrar(cliente_id: int):
     confirmacion = request.form.get("confirmacion", "").strip()
 
     if confirmacion != nombre:
+        log_error("validacion", "La confirmación no coincide con el nombre del cliente. No se realizó ningún cambio.")
         flash(
             "La confirmación no coincide con el nombre del cliente. No se realizó ningún cambio.",
             "danger",
@@ -648,6 +652,7 @@ def borrar(cliente_id: int):
         flash(f"Cliente '{nombre}' y todas sus facturas han sido borrados.", "success")
     except Exception as exc:
         logger.error("Error borrando cliente id=%d: %s", cliente_id, exc)
+        log_error("negocio", f"Error al borrar el cliente: {exc}")
         flash(f"Error al borrar el cliente: {exc}", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
@@ -891,6 +896,7 @@ def contrato_editar(cliente_id: int, contrato_id: int):
 def contrato_borrar(cliente_id: int, contrato_id: int):
     user = _get_current_user()
     if not usuario_puede_borrar(user or {}):
+        log_error("negocio", "No tienes permisos para borrar contratos.")
         flash("No tienes permisos para borrar contratos.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
     cliente = get_cliente_con_conteos(cliente_id)
@@ -910,6 +916,7 @@ def contrato_borrar(cliente_id: int, contrato_id: int):
     nombre = contrato.nombre
     confirmacion = request.form.get("confirmacion", "").strip()
     if confirmacion != nombre:
+        log_error("validacion", "La confirmación no coincide con el nombre del contrato. No se realizó ningún cambio.")
         flash(
             "La confirmación no coincide con el nombre del contrato. No se realizó ningún cambio.",
             "danger",
@@ -926,6 +933,7 @@ def contrato_borrar(cliente_id: int, contrato_id: int):
         flash(f"Contrato '{nombre}' borrado correctamente.", "success")
     except Exception as exc:
         logger.error("Error borrando contrato id=%d: %s", contrato_id, exc)
+        log_error("negocio", f"Error al borrar el contrato: {exc}")
         flash(f"Error al borrar el contrato: {exc}", "danger")
         return redirect(url_for(
             "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
@@ -1271,6 +1279,7 @@ def contrato_factura_borrar(cliente_id: int, contrato_id: int, factura_id: int):
 
     user = _get_current_user()
     if not usuario_puede_borrar(user or {}):
+        log_error("negocio", "No tienes permisos para borrar facturas.")
         flash("No tienes permisos para borrar facturas.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
 
@@ -1593,6 +1602,7 @@ def factura_calificado_crear(cliente_id: int, contrato_id: int):
     contrato = resultado
 
     if contrato.tipo != TIPO_ELECTRICO_CALIFICADO:
+        log_error("negocio", "Este contrato no es de tipo eléctrico calificado.")
         flash("Este contrato no es de tipo eléctrico calificado.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
 
@@ -1723,6 +1733,7 @@ def factura_calificado_borrar(cliente_id: int, contrato_id: int, factura_id: int
 
     user = _get_current_user()
     if not usuario_puede_borrar(user or {}):
+        log_error("negocio", "No tienes permisos para borrar facturas.")
         flash("No tienes permisos para borrar facturas.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
 
@@ -1760,6 +1771,7 @@ def factura_calificado_borrar(cliente_id: int, contrato_id: int, factura_id: int
         flash("Factura borrada.", "success")
     except Exception as exc:
         logger.error("Error borrando factura calificada id=%d: %s", factura_id, exc)
+        log_error("negocio", f"Error al borrar: {exc}")
         flash(f"Error al borrar: {exc}", "danger")
     return redirect(url_for(
         "clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id
@@ -1912,6 +1924,7 @@ def cliente_ppa_datos_actualizar(cliente_id: int):
         flash("Datos PPA actualizados.", "success")
     except Exception as exc:
         logger.error("Error actualizando PPA datos cliente_id=%d: %s", cliente_id, exc)
+        log_error("negocio", f"Error al guardar datos PPA: {exc}")
         flash(f"Error al guardar datos PPA: {exc}", "danger")
     return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
@@ -1930,6 +1943,7 @@ def cliente_ppa_bloques_actualizar(cliente_id: int):
     try:
         anio = int(anio_str)
     except ValueError:
+        log_error("validacion", "Año inválido.")
         flash("Año inválido.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
@@ -1973,6 +1987,7 @@ def cliente_gas_manual_actualizar(cliente_id: int):
 
     user = _get_current_user()
     if not user or user.get("rol") not in ("master_admin", "admin"):
+        log_error("negocio", "No tienes permiso para esta acción.")
         flash("No tienes permiso para esta acción.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
@@ -1993,5 +2008,6 @@ def cliente_gas_manual_actualizar(cliente_id: int):
             update_precio_gas_manual(cliente_id, precio)
             flash(f"Precio de gas manual actualizado: {precio} MXN/GJ.", "success")
         except (InvalidOperation, ValueError) as exc:
+            log_error("validacion", f"Valor inválido para precio de gas: {exc}")
             flash(f"Valor inválido para precio de gas: {exc}", "danger")
     return redirect(url_for("clientes.ficha", cliente_id=cliente_id))

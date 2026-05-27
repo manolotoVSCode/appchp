@@ -1,0 +1,24 @@
+{% extends "clientes/_base.html" %}
+
+{% block title %}Error {{ codigo }} — CHP App{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column align-items-center justify-content-center" style="min-height:60vh; text-align:center">
+  <div style="font-size:4rem; font-weight:700; color:var(--color-primary-dark); line-height:1">
+    {{ codigo }}
+  </div>
+  <div class="h4 mt-3 mb-2 text-dark">{{ mensaje }}</div>
+  <p class="text-muted small mb-4" style="max-width:400px">
+    {% if codigo == 403 %}
+      No tienes permisos para acceder a este recurso.
+    {% elif codigo == 404 %}
+      La página que buscas no existe o ha sido movida.
+    {% else %}
+      Ocurrió un error inesperado. Si el problema persiste, contacta al administrador.
+    {% endif %}
+  </p>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+    <i class="bi bi-house"></i> Volver al inicio
+  </a>
+</div>
+{% endblock %}

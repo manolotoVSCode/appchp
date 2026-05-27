@@ -1,0 +1,150 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "errores" %}
+
+{% block title %}Registro de Errores — CHP App{% endblock %}
+
+{% block content %}
+
+{# Modales de traceback (generados antes de la tabla) #}
+{% for r in registros %}
+{% if r.traceback %}
+<div class="modal fade" id="tb-{{ r.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title me-2">#{{ r.id }}</h6>
+        {% set _badge_map = {'error_500': 'danger', 'error_403': 'warning', 'error_404': 'secondary', 'validacion': 'info', 'negocio': 'primary'} %}
+        <span class="badge bg-{{ _badge_map.get(r.nivel, 'secondary') }}">{{ r.nivel }}</span>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="font-size:.82rem">
+        <div class="text-muted mb-2" style="font-size:.75rem">
+          <span>{{ (r.created_at or '')[:19]|replace('T', ' ') }}</span>
+          {% if r.ruta %}&nbsp;·&nbsp;<code>{{ r.metodo }} {{ r.ruta }}</code>{% endif %}
+          {% if r.usuario_email %}&nbsp;·&nbsp;{{ r.usuario_email }}{% endif %}
+          {% if r.ip %}&nbsp;·&nbsp;IP {{ r.ip }}{% endif %}
+        </div>
+        <p class="mb-2"><strong>{{ r.mensaje }}</strong></p>
+        <pre style="font-size:.73rem; max-height:400px; overflow-y:auto; background:#f8f9fa; padding:.75rem; border-radius:4px; white-space:pre-wrap; word-break:break-all">{{ r.traceback }}</pre>
+      </div>
+      <div class="modal-footer py-2" style="font-size:.75rem">
+        <span class="text-muted me-auto">ID {{ r.id }}{% if r.user_agent %} · {{ r.user_agent[:80] }}{% endif %}</span>
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<div class="d-flex align-items-center mb-3 gap-3 flex-wrap">
+  <h1 class="h4 mb-0">Registro de Errores</h1>
+  <span class="text-muted small">{{ total }} evento{% if total != 1 %}s{% endif %} encontrado{% if total != 1 %}s{% endif %}</span>
+</div>
+
+{# Filtros #}
+<form method="GET" action="{{ url_for('admin_errores') }}" class="d-flex gap-2 mb-4 flex-wrap align-items-end">
+  <div>
+    <label class="form-label small mb-1">Nivel</label>
+    <select name="nivel" class="form-select form-select-sm" style="width:150px">
+      <option value="">Todos</option>
+      {% for n in niveles %}
+      <option value="{{ n }}"{% if filtros.get('nivel') == n %} selected{% endif %}>{{ n }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="form-label small mb-1">Email usuario</label>
+    <input type="text" name="email" class="form-control form-control-sm" style="width:200px"
+           value="{{ filtros.get('email', '') }}" placeholder="usuario@empresa.com">
+  </div>
+  <div>
+    <label class="form-label small mb-1">Ruta</label>
+    <input type="text" name="ruta" class="form-control form-control-sm" style="width:180px"
+           value="{{ filtros.get('ruta', '') }}" placeholder="/clientes/42/...">
+  </div>
+  <div>
+    <label class="form-label small mb-1">Desde</label>
+    <input type="date" name="fecha_desde" class="form-control form-control-sm"
+           value="{{ filtros.get('fecha_desde', '') }}">
+  </div>
+  <div>
+    <label class="form-label small mb-1">Hasta</label>
+    <input type="date" name="fecha_hasta" class="form-control form-control-sm"
+           value="{{ filtros.get('fecha_hasta', '') }}">
+  </div>
+  <div class="d-flex gap-2 align-items-end">
+    <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+    <a href="{{ url_for('admin_errores') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+  </div>
+</form>
+
+{% if registros %}
+<div class="table-responsive">
+  <table class="table table-hover table-sm" style="font-size:.8rem">
+    <thead class="table-light">
+      <tr>
+        <th style="white-space:nowrap">Fecha</th>
+        <th>Nivel</th>
+        <th>HTTP</th>
+        <th>Usuario</th>
+        <th style="max-width:180px">Ruta</th>
+        <th style="max-width:260px">Mensaje</th>
+        <th>TB</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set _badge_map = {'error_500': 'danger', 'error_403': 'warning', 'error_404': 'secondary', 'validacion': 'info', 'negocio': 'primary'} %}
+      {% for r in registros %}
+      <tr>
+        <td style="white-space:nowrap">{{ (r.created_at or '')[:19]|replace('T', ' ') }}</td>
+        <td><span class="badge bg-{{ _badge_map.get(r.nivel, 'secondary') }}">{{ r.nivel }}</span></td>
+        <td>{{ r.codigo_http or '—' }}</td>
+        <td>
+          {% if r.usuario_email %}
+          <div>{{ r.usuario_email }}</div>
+          <div class="text-muted" style="font-size:.7rem">{{ r.usuario_rol|label_rol if r.usuario_rol else '' }}</div>
+          {% else %}—{% endif %}
+        </td>
+        <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+          {% if r.metodo and r.ruta %}<code>{{ r.metodo }} {{ r.ruta }}</code>{% else %}—{% endif %}
+        </td>
+        <td style="max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
+            title="{{ r.mensaje }}">{{ r.mensaje }}</td>
+        <td>
+          {% if r.traceback %}
+          <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1"
+                  style="font-size:.7rem" data-bs-toggle="modal" data-bs-target="#tb-{{ r.id }}">TB</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# Paginación #}
+{% if total_paginas > 1 %}
+<div class="d-flex align-items-center gap-3 mt-3">
+  <span class="text-muted small">Página {{ pagina }} de {{ total_paginas }}</span>
+  <div class="d-flex gap-1">
+    {% if pagina > 1 %}
+    <a href="{{ url_for('admin_errores', pagina=pagina-1, **filtros) }}"
+       class="btn btn-sm btn-outline-secondary">&#8592; Anterior</a>
+    {% endif %}
+    {% if pagina < total_paginas %}
+    <a href="{{ url_for('admin_errores', pagina=pagina+1, **filtros) }}"
+       class="btn btn-sm btn-outline-secondary">Siguiente &#8594;</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-check-circle" style="font-size:2.5rem; display:block; margin-bottom:.75rem"></i>
+  No hay eventos con los filtros seleccionados.
+</div>
+{% endif %}
+
+{% endblock %}

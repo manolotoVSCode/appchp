@@ -26,6 +26,7 @@ from storage.repository import (
     set_configuracion,
 )
 from models.contrato import TIPO_ELECTRICO_CALIFICADO
+from web.error_logger import log_error
 from calc.cogen import calcular_cogen, calcular_cogen_ppa, calcular_cogen_precio_manual, calcular_payback_decimal, calcular_flujo_acumulado
 from calc.historico import calcular_historico_cfe, calcular_tablas_cfe, calcular_historico_gas
 from calc.nombre_canonico import generar_nombre_canonico
@@ -2370,5 +2371,85 @@ def create_app() -> Flask:
         return jsonify({
             "error": "Este endpoint fue eliminado. Usa /clientes/<id>/contratos/<id>/upload."
         }), 410
+
+    # ── Error handlers ────────────────────────────────────────────────────────
+
+    @app.errorhandler(403)
+    def handle_403(e):
+        log_error("error_403", str(e), codigo_http=403)
+        return render_template("error.html", codigo=403, mensaje="Acceso no autorizado."), 403
+
+    @app.errorhandler(404)
+    def handle_404(e):
+        log_error("error_404", str(e), codigo_http=404)
+        return render_template("error.html", codigo=404, mensaje="Página no encontrada."), 404
+
+    @app.errorhandler(Exception)
+    def handle_500(e):
+        import traceback
+        log_error("error_500", str(e), exc=e, codigo_http=500)
+        app.logger.error("Unhandled exception: %s", traceback.format_exc())
+        return render_template("error.html", codigo=500, mensaje="Error interno del servidor."), 500
+
+    # ── Ruta de registro de errores ────────────────────────────────────────────
+
+    @app.route("/admin/errores")
+    def admin_errores():
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN
+        from storage.repository import _supabase
+        import os
+        import math
+
+        actor = _gcu()
+        if not actor or actor["rol"] != ROL_MASTER_ADMIN:
+            flash("Acceso restringido a Super Admin.", "danger")
+            return redirect(url_for("dashboard"))
+
+        POR_PAGINA = 50
+        NIVELES = ["error_500", "error_403", "error_404", "validacion", "negocio"]
+
+        filtros = {
+            "nivel":       request.args.get("nivel", "").strip() or None,
+            "email":       request.args.get("email", "").strip() or None,
+            "ruta":        request.args.get("ruta", "").strip() or None,
+            "fecha_desde": request.args.get("fecha_desde", "").strip() or None,
+            "fecha_hasta": request.args.get("fecha_hasta", "").strip() or None,
+        }
+        pagina = max(1, int(request.args.get("pagina", 1)))
+
+        try:
+            _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
+            q = _supabase.table("error_logs").select("*", count="exact")
+
+            if filtros["nivel"]:
+                q = q.eq("nivel", filtros["nivel"])
+            if filtros["email"]:
+                q = q.ilike("usuario_email", f"%{filtros['email']}%")
+            if filtros["ruta"]:
+                q = q.ilike("ruta", f"%{filtros['ruta']}%")
+            if filtros["fecha_desde"]:
+                q = q.gte("created_at", filtros["fecha_desde"])
+            if filtros["fecha_hasta"]:
+                q = q.lte("created_at", filtros["fecha_hasta"] + "T23:59:59")
+
+            offset = (pagina - 1) * POR_PAGINA
+            res = q.order("created_at", desc=True).range(offset, offset + POR_PAGINA - 1).execute()
+            registros = res.data or []
+            total = res.count or 0
+            total_paginas = max(1, math.ceil(total / POR_PAGINA))
+        except Exception as exc:
+            logger.error("Error consultando error_logs: %s", exc)
+            registros, total, total_paginas = [], 0, 1
+
+        return render_template(
+            "admin/errores.html",
+            registros=registros,
+            total=total,
+            pagina=pagina,
+            total_paginas=total_paginas,
+            niveles=NIVELES,
+            filtros={k: v for k, v in filtros.items() if v},
+            nav_active="errores",
+        )
 
     return app
