@@ -27,6 +27,20 @@ function arcPath(cx, cy, rOut, rIn, angIni, angFin) {
 }
 
 /**
+ * Resuelve una referencia CSS var(--nombre) al valor hexadecimal real.
+ * SVG no resuelve variables CSS en atributos (solo en propiedades CSS),
+ * por lo que es necesario leer el valor computado antes de generar el markup.
+ * @param {string} color - p.ej. "var(--color-primary)" o "#1F7A4C"
+ * @returns {string} valor resuelto
+ */
+function resolveColor(color) {
+  if (!color) return color;
+  const m = color.match(/^var\(--([^)]+)\)$/);
+  if (!m) return color;
+  return getComputedStyle(document.documentElement).getPropertyValue('--' + m[1]).trim() || color;
+}
+
+/**
  * Renderiza un donut SVG con 4 segmentos en el contenedor dado.
  * @param {string} containerId - id del div contenedor
  * @param {Array<{nombre: string, pct: number, color: string}>} datos
@@ -51,7 +65,7 @@ function renderDonutComponentes(containerId, datos) {
     const anguloFin = anguloInicio + fraccion * Math.PI * 2;
     const seg = {
       path:      arcPath(cx, cy, rOut, rIn, anguloInicio, anguloFin),
-      color:     d.color,
+      color:     resolveColor(d.color),
       nombre:    d.nombre,
       pct:       d.pct,
     };

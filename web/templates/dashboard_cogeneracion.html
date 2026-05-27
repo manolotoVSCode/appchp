@@ -142,40 +142,42 @@
           <hr class="my-3">
           <div class="row g-4 align-items-center">
             <div class="col-md-7">
-              <div class="row small fw-semibold text-muted mb-2"
-                   style="border-bottom:1px solid var(--color-border); padding-bottom:.4rem">
-                <div class="col-4">Componente</div>
-                <div class="col-4 text-end">Original</div>
-                <div class="col-4 text-end">Ahorro</div>
-              </div>
-              <div class="row small mb-2">
-                <div class="col-4">
-                  <span class="donut-color-dot" style="background:var(--color-primary)"></span>Energía
-                </div>
-                <div class="col-4 text-end text-muted" id="kpi-ah-energia-orig">—</div>
-                <div class="col-4 text-end fw-semibold" id="kpi-ah-energia-val">—</div>
-              </div>
-              <div class="row small mb-2">
-                <div class="col-4">
-                  <span class="donut-color-dot" style="background:var(--color-warning)"></span>Capacidad
-                </div>
-                <div class="col-4 text-end text-muted" id="kpi-ah-cap-orig">—</div>
-                <div class="col-4 text-end fw-semibold" id="kpi-ah-cap-val">—</div>
-              </div>
-              <div class="row small mb-2">
-                <div class="col-4">
-                  <span class="donut-color-dot" style="background:var(--color-info)"></span>Distribución
-                </div>
-                <div class="col-4 text-end text-muted" id="kpi-ah-dist-orig">—</div>
-                <div class="col-4 text-end fw-semibold" id="kpi-ah-dist-val">—</div>
-              </div>
-              <div class="row small mb-2">
-                <div class="col-4">
-                  <span class="donut-color-dot" style="background:var(--color-danger)"></span>Otros Servicios
-                </div>
-                <div class="col-4 text-end text-muted" id="kpi-ah-otros-orig">—</div>
-                <div class="col-4 text-end fw-semibold" id="kpi-ah-otros-val">—</div>
-              </div>
+              <table class="w-100 small" style="table-layout:fixed; border-collapse:collapse">
+                <colgroup>
+                  <col style="width:44%">
+                  <col style="width:28%">
+                  <col style="width:28%">
+                </colgroup>
+                <thead>
+                  <tr style="border-bottom:1px solid var(--color-border)">
+                    <th class="fw-semibold text-muted pb-1" style="font-weight:600">Componente</th>
+                    <th class="fw-semibold text-muted text-end pb-1" style="font-weight:600">Original</th>
+                    <th class="fw-semibold text-muted text-end pb-1" style="font-weight:600">Ahorro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="py-1"><span class="donut-color-dot" style="background:var(--color-primary)"></span>Energía</td>
+                    <td class="py-1 text-end text-muted" id="kpi-ah-energia-orig">—</td>
+                    <td class="py-1 text-end fw-semibold" id="kpi-ah-energia-val">—</td>
+                  </tr>
+                  <tr>
+                    <td class="py-1"><span class="donut-color-dot" style="background:var(--color-warning)"></span>Capacidad</td>
+                    <td class="py-1 text-end text-muted" id="kpi-ah-cap-orig">—</td>
+                    <td class="py-1 text-end fw-semibold" id="kpi-ah-cap-val">—</td>
+                  </tr>
+                  <tr>
+                    <td class="py-1"><span class="donut-color-dot" style="background:var(--color-info)"></span>Distribución</td>
+                    <td class="py-1 text-end text-muted" id="kpi-ah-dist-orig">—</td>
+                    <td class="py-1 text-end fw-semibold" id="kpi-ah-dist-val">—</td>
+                  </tr>
+                  <tr>
+                    <td class="py-1"><span class="donut-color-dot" style="background:var(--color-danger)"></span>Otros Servicios</td>
+                    <td class="py-1 text-end text-muted" id="kpi-ah-otros-orig">—</td>
+                    <td class="py-1 text-end fw-semibold" id="kpi-ah-otros-val">—</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
             <div class="col-md-5">
               <div id="donutAhorroElec" style="max-width:340px; margin:0 auto"></div>
