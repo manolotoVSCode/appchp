@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.54.3] — 2026-05-27
+
+### Eliminado
+- `web/templates/login.html` (192 líneas) — template huérfano, reemplazado por `auth/login.html` desde v2.31.0. Sin ningún `render_template` apuntando a él.
+- `web/templates/auth/reset_password_nuevo.html` (78 líneas) — funcionalidad de reset password por email eliminada en v2.32.0. El handler ya no existía.
+- `test_flask.py` (9 líneas) — snippet de diagnóstico, mini servidor Flask sin asserts. No era un test real.
+- `start.py` (23 líneas) — punto de entrada antiguo que llamaba `create_app("invoices")` con argumento posicional que ya no existe en la firma actual. Hubiera roto en ejecución.
+- `run_server.py` (30 líneas) — mismo problema. Llamaba `create_app(invoices_dir=..., db_path=...)`. La app arranca vía gunicorn en producción.
+- `auditoria_chpapp.md` (~58 KB) — auditoría técnica histórica en la raíz. Artefacto de trabajo, no documentación operativa.
+- `estructura.txt` (231 líneas) — árbol de directorios generado manualmente, obsoleto.
+- `chpapp.db` (local) — base de datos SQLite de la era pre-Supabase. Estaba en `.gitignore`.
+- `.DS_Store` raíz y subdirectorios (8 archivos, ~58 KB) — metadatos macOS. Añadido `**/.DS_Store` a `.gitignore` para cubrir subdirectorios.
+
 ## [2.54.2] — 2026-05-27
 
 ### Seguridad
