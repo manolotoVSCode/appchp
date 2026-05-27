@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.46.5] — 2026-05-26
+
+### Corregido
+- Dashboard Cogeneración: cuadro "Inversión estimada" — jerarquía tipográfica forzada con tamaños explícitos. USD: `1.5rem fw-bold` (eliminada clase `fs-4` que podía ser sobrescrita). MXN: `.8rem`. TC: `.65rem opacity:.7`. Los tres con `line-height:1.1` y `margin-bottom` escalonado para apilado compacto. La diferencia de tamaño entre USD y TC es ahora de ~2.3× (antes ~1.2×).
+
 ## [2.46.4] — 2026-05-26
 
 ### Revertido
