@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.53.1] — 2026-05-27
+
+### Añadido
+- Enlace "Auditoría Login" en el sidebar, sección Administración, visible solo para `master_admin`. Icono `bi-shield-check`. Se activa con `nav_active = 'auditoria'` en el template correspondiente.
+
 ## [2.53.0] — 2026-05-27
 
 ### Añadido

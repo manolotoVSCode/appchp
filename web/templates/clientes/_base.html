@@ -132,6 +132,12 @@
     <i class="bi bi-people-fill"></i>Usuarios
   </a>
   {% endif %}
+  {% if current_user_data and current_user_data.rol == 'master_admin' %}
+  <a href="{{ url_for('admin_auditoria_logins') }}"
+     class="sidebar-link{% if nav_active == 'auditoria' %} active{% endif %}">
+    <i class="bi bi-shield-check"></i>Auditoría Login
+  </a>
+  {% endif %}
   {% endif %}
 
   <div id="sidebar-scroll-indicator"></div>
