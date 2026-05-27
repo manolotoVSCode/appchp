@@ -950,7 +950,6 @@ def contrato_upload(cliente_id: int, contrato_id: int):
     contrato = resultado
 
     files = request.files.getlist("facturas")
-    confirmados = set(request.form.getlist("confirmado_pese_a_discrepancia"))
 
     if not files or all(not f.filename for f in files):
         return jsonify({"procesados": 0, "errores": [{"nombre": "", "error": "No se enviaron archivos"}]}), 400
@@ -958,7 +957,6 @@ def contrato_upload(cliente_id: int, contrato_id: int):
     ok_count = 0
     exitosos = []
     errors = []
-    pendientes_confirmacion = []
     requieren_captura_manual = []
 
     for f in files:
@@ -1016,14 +1014,6 @@ def contrato_upload(cliente_id: int, contrato_id: int):
 
             id_discrepante = identificador_factura != contrato.identificador_real
 
-            if id_discrepante and nombre not in confirmados:
-                pendientes_confirmacion.append({
-                    "nombre": nombre,
-                    "identificador_factura": identificador_factura,
-                    "identificador_contrato": contrato.identificador_real,
-                })
-                continue
-
             if tipo == "cfe":
                 factura_id, nombre_canonico = save_cfe_invoice(
                     invoice, cliente_id=cliente_id, contrato_id=contrato_id
@@ -1035,7 +1025,13 @@ def contrato_upload(cliente_id: int, contrato_id: int):
 
             logger.info("Factura guardada: '%s' → id=%d (tipo=%s, contrato=%d)", nombre, factura_id, tipo, contrato_id)
             ok_count += 1
-            exitosos.append({"nombre_original": nombre, "nombre_canonico": nombre_canonico})
+            entrada = {"nombre_original": nombre, "nombre_canonico": nombre_canonico}
+            if id_discrepante:
+                entrada["advertencia"] = (
+                    f"Identificador de la factura ({identificador_factura}) "
+                    f"no coincide con el del contrato ({contrato.identificador_real})."
+                )
+            exitosos.append(entrada)
         except Exception as e:
             logger.error("Error procesando '%s': %s: %s", nombre, type(e).__name__, e, exc_info=True)
             errors.append({"nombre": nombre, "error": str(e)})
@@ -1046,7 +1042,6 @@ def contrato_upload(cliente_id: int, contrato_id: int):
         "procesados": ok_count,
         "exitosos": exitosos,
         "errores": errors,
-        "pendientes_confirmacion": pendientes_confirmacion,
         "requieren_captura_manual": requieren_captura_manual,
     })
 

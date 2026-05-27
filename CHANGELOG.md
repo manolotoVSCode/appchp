@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.45.5] — 2026-05-26
+
+### Cambiado
+- Upload batch (CFE y gas): la discrepancia de identificador ya no bloquea el guardado. La factura se persiste siempre; si el identificador no coincide con el del contrato, aparece un aviso naranja (⚠) junto al nombre en el resumen final. Eliminados el modal de confirmación de discrepancia, la lógica de `pendientes_confirmacion` en backend y frontend, y la queue `_pendingFiles`.
+
 ## [2.45.4] — 2026-05-26
 
 ### Corregido

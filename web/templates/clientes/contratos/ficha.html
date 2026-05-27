@@ -488,26 +488,6 @@
   </div>
 </div>
 
-<!-- Modal confirmación discrepancia de identificador -->
-<div class="modal fade" id="modalDiscrepancia" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header border-warning">
-        <h5 class="modal-title text-warning">Advertencia: datos discrepantes</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="discrepancia-mensaje"></div>
-        <p class="text-muted small mb-0 mt-2">Puedes confirmar igualmente si estás seguro de que la factura pertenece a este contrato.</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-warning" id="btnConfirmarDiscrepancia">Guardar de todas formas</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- Modal confirmación borrar factura -->
 <div class="modal fade" id="modalBorrarFactura" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -610,13 +590,10 @@ if (dropZone) {
   });
 }
 
-// Queue of files pending identifier confirmation
-let _pendingFiles = {};
-
-async function subirArchivos(files, confirmados = []) {
+async function subirArchivos(files) {
   if (!files || files.length === 0) return;
   const total = files.length;
-  let procesados = 0, exitosos = [], errores = [], pendientes = [];
+  let procesados = 0, exitosos = [], errores = [];
 
   for (let i = 0; i < total; i++) {
     const f = files[i];
@@ -624,17 +601,12 @@ async function subirArchivos(files, confirmados = []) {
     try {
       const fd = new FormData();
       fd.append("facturas", f);
-      confirmados.forEach(nombre => fd.append("confirmado_pese_a_discrepancia", nombre));
       const resp = await fetch(uploadUrl, { method: "POST", body: fd, headers: { "X-CSRFToken": csrfToken } });
       if (!resp.ok) { errores.push({ nombre: f.name, error: "HTTP " + resp.status }); continue; }
       const data = await resp.json();
       procesados += data.procesados || 0;
       if (data.exitosos) exitosos = exitosos.concat(data.exitosos);
       if (data.errores) errores = errores.concat(data.errores);
-      if (data.pendientes_confirmacion) {
-        data.pendientes_confirmacion.forEach(p => { _pendingFiles[p.nombre] = { file: f, info: p }; });
-        pendientes = pendientes.concat(data.pendientes_confirmacion);
-      }
       if (data.requieren_captura_manual) {
         data.requieren_captura_manual.forEach(item => {
           item._file = f;
@@ -648,10 +620,6 @@ async function subirArchivos(files, confirmados = []) {
 
   mostrarResultado(procesados, exitosos, errores);
 
-  // Show confirmation modal for first pending file (identifier mismatch)
-  if (pendientes.length > 0) {
-    mostrarDiscrepancia(pendientes[0]);
-  }
   // Show manual capture modal for first item requiring manual entry
   if (_capturaManualPendientes.length > 0) {
     mostrarCapturaManual(_capturaManualPendientes[0]);
@@ -668,7 +636,13 @@ function mostrarResultado(procesados, exitosos, errores) {
     html += `<strong>&#10003; ${procesados} factura(s) procesada(s).</strong>`;
     if (exitosos.length > 0) {
       html += `<ul class="mb-0 mt-1">`;
-      exitosos.forEach(e => { html += `<li class="small">${e.nombre_canonico} <span class="text-muted">(${e.nombre_original})</span></li>`; });
+      exitosos.forEach(e => {
+        html += `<li class="small">${e.nombre_canonico} <span class="text-muted">(${e.nombre_original})</span>`;
+        if (e.advertencia) {
+          html += ` <span style="color:#e67e22">&#9888; ${e.advertencia}</span>`;
+        }
+        html += `</li>`;
+      });
       html += `</ul>`;
     }
   }
@@ -682,25 +656,6 @@ function mostrarResultado(procesados, exitosos, errores) {
   }
   html += "</div>";
   statusDiv.innerHTML = html;
-}
-
-function mostrarDiscrepancia(p) {
-  let html = `<p class="mb-2">La factura <strong>${p.nombre}</strong> presenta las siguientes discrepancias:</p><ul class="mb-0">`;
-  if (p.identificador_factura !== undefined) {
-    html += `<li>Identificador de la factura: <code>${p.identificador_factura}</code> — contrato: <code>${p.identificador_contrato}</code></li>`;
-  }
-  html += "</ul>";
-  document.getElementById("discrepancia-mensaje").innerHTML = html;
-  const modal = new bootstrap.Modal(document.getElementById("modalDiscrepancia"));
-  modal.show();
-  document.getElementById("btnConfirmarDiscrepancia").onclick = async function () {
-    modal.hide();
-    const pending = _pendingFiles[p.nombre];
-    if (pending) {
-      delete _pendingFiles[p.nombre];
-      await subirArchivos([pending.file], [p.nombre]);
-    }
-  };
 }
 
 // ── Captura manual ────────────────────────────────────────────────────────────
