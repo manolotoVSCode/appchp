@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.45.2] — 2026-05-26
+
+### Corregido
+- Dashboard Contabilidad PPA: eliminada la exigencia de par electricidad+gas para mostrar el dashboard. Para clientes PPA, gas es opcional; el aviso `sin_facturas` ahora usa `num_electricidad` (CFE+PPA) y `aviso_datos = None` se alcanza con solo tener facturas PPA seleccionadas. Las ramas `sin_par` y `sin_pares_mes` se conservan únicamente para la rama CFE GDMTH, que sí requiere el par histórico.
+
 ## [2.45.1] — 2026-05-26
 
 ### Corregido

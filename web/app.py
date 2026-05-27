@@ -548,17 +548,24 @@ def create_app() -> Flask:
                 500,
             )
 
-        num_cfe_total = cliente["num_cfe"]
-        num_gas_total = cliente["num_gas"]
-
-        if num_cfe_total == 0 and num_gas_total == 0:
-            aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0, "cliente_id": cliente_id}
-        elif num_elec_sel == 0 and num_gas_sel == 0:
-            aviso_datos = {"tipo": "sin_seleccion", "cliente_id": cliente_id}
-        elif num_elec_sel == 0 or num_gas_sel == 0:
-            aviso_datos = {"tipo": "sin_par", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
+        if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
+            if cliente["num_electricidad"] == 0 and cliente["num_gas"] == 0:
+                aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0, "cliente_id": cliente_id}
+            elif num_elec_sel == 0:
+                aviso_datos = {"tipo": "sin_seleccion", "cliente_id": cliente_id}
+            else:
+                aviso_datos = None
         else:
-            aviso_datos = None
+            num_cfe_total = cliente["num_cfe"]
+            num_gas_total = cliente["num_gas"]
+            if num_cfe_total == 0 and num_gas_total == 0:
+                aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0, "cliente_id": cliente_id}
+            elif num_elec_sel == 0 and num_gas_sel == 0:
+                aviso_datos = {"tipo": "sin_seleccion", "cliente_id": cliente_id}
+            elif num_elec_sel == 0 or num_gas_sel == 0:
+                aviso_datos = {"tipo": "sin_par", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
+            else:
+                aviso_datos = None
 
         return render_template(
             "dashboard_contabilidad.html",
@@ -835,17 +842,24 @@ def create_app() -> Flask:
             logger.exception("Error en contabilidad/data: %s", _e)
             return jsonify({"error": "error_calculo", "mensaje": str(_e)}), 500
 
-        num_cfe_total = cliente["num_cfe"]
-        num_gas_total = cliente["num_gas"]
-
-        if num_cfe_total == 0 and num_gas_total == 0:
-            aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
-        elif num_elec_sel == 0 and num_gas_sel == 0:
-            aviso_datos = {"tipo": "sin_seleccion"}
-        elif num_elec_sel == 0 or num_gas_sel == 0:
-            aviso_datos = {"tipo": "sin_par", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
+        if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
+            if cliente["num_electricidad"] == 0 and cliente["num_gas"] == 0:
+                aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
+            elif num_elec_sel == 0:
+                aviso_datos = {"tipo": "sin_seleccion"}
+            else:
+                aviso_datos = None
         else:
-            aviso_datos = None
+            num_cfe_total = cliente["num_cfe"]
+            num_gas_total = cliente["num_gas"]
+            if num_cfe_total == 0 and num_gas_total == 0:
+                aviso_datos = {"tipo": "sin_facturas", "num_cfe": 0, "num_gas": 0}
+            elif num_elec_sel == 0 and num_gas_sel == 0:
+                aviso_datos = {"tipo": "sin_seleccion"}
+            elif num_elec_sel == 0 or num_gas_sel == 0:
+                aviso_datos = {"tipo": "sin_par", "num_cfe": num_elec_sel, "num_gas": num_gas_sel}
+            else:
+                aviso_datos = None
 
         return jsonify({
             "estado": "ok",
