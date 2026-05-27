@@ -419,7 +419,7 @@ def create_app() -> Flask:
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # Autenticación, CSRF y blueprints
-    from web.auth import init_auth, get_current_user, is_authenticated, clear_user_session, _verificar_activo_con_cache
+    from web.auth import init_auth, get_current_user, is_authenticated, clear_user_session, _verificar_activo_con_cache, _verificar_session_version_con_cache
     from web.clientes import clientes_bp
     init_auth(app)
     csrf.init_app(app)
@@ -448,6 +448,10 @@ def create_app() -> Flask:
         if user and not _verificar_activo_con_cache(user["user_id"]):
             clear_user_session()
             flash("Tu cuenta ha sido desactivada. Contacta con tu administrador.", "warning")
+            return redirect(url_for("auth.login"))
+        if user and not _verificar_session_version_con_cache(user["user_id"]):
+            clear_user_session()
+            flash("Tu sesión ha sido invalidada por seguridad. Por favor inicia sesión de nuevo.", "warning")
             return redirect(url_for("auth.login"))
         # usuario_normal solo puede ver su empresa asignada
         if user and user["rol"] == "usuario_normal":
@@ -2109,6 +2113,9 @@ def create_app() -> Flask:
             flash(f"Error cambiando contraseña: {exc}", "danger")
             return redirect(url_for("admin_usuarios"))
 
+        from storage.repository import incrementar_session_version
+        incrementar_session_version(user_id)
+
         if password_generada:
             flash(
                 f"Contraseña actualizada para {target['email']}. Nueva contraseña: {nueva_password}. "
@@ -2284,6 +2291,11 @@ def create_app() -> Flask:
         from storage.repository import _supabase
         try:
             _supabase.auth.admin.update_user_by_id(user["user_id"], {"password": nueva})
+            from storage.repository import incrementar_session_version, get_session_version
+            incrementar_session_version(user["user_id"])
+            # Refrescar la versión en la sesión actual para que el usuario no se desloguee a sí mismo
+            session["_session_version"] = get_session_version(user["user_id"]) or 1
+            session.pop("_sv_check", None)
             flash("Contraseña actualizada correctamente.", "success")
         except Exception as exc:
             flash(f"Error: {exc}", "danger")

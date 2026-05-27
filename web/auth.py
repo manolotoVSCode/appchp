@@ -39,6 +39,7 @@ def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
                      empresa_nombre: str | None = None,
                      nombre: str | None = None,
                      apellido: str | None = None) -> None:
+    from storage.repository import get_session_version
     session.permanent = remember
     session["_user_id"] = user_id
     session["_user_email"] = email
@@ -48,6 +49,7 @@ def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
     session["_nombre"] = nombre
     session["_apellido"] = apellido
     session["_access_token"] = access_token
+    session["_session_version"] = get_session_version(user_id) or 1
 
 
 def clear_user_session() -> None:
@@ -96,6 +98,21 @@ def _decode_jwt_payload(token: str) -> dict:
 def _get_supabase():
     from storage.repository import _supabase
     return _supabase
+
+
+def _verificar_session_version_con_cache(user_id: str) -> bool:
+    """Verifica que _session_version de la cookie coincide con BD. Cache 5 minutos."""
+    from time import time
+    from storage.repository import get_session_version
+    cookie_version = session.get("_session_version", 0)
+    cache = session.get("_sv_check")
+    if cache and cache.get("user_id") == user_id and time() - cache.get("ts", 0) < 300:
+        return cookie_version == cache.get("version", -1)
+    actual = get_session_version(user_id)
+    if actual is None:
+        return True  # error de red: asumir válido
+    session["_sv_check"] = {"user_id": user_id, "ts": time(), "version": actual}
+    return cookie_version == actual
 
 
 def _verificar_activo_con_cache(user_id: str) -> bool:

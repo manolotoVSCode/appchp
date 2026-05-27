@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.54.0] — 2026-05-27
+
+### Seguridad
+- Invalidación de sesiones al cambiar contraseña mediante `session_version`. La tabla `user_profiles` tiene nueva columna `session_version INTEGER DEFAULT 1`. Al hacer login, la versión se guarda en la sesión Flask. `before_request` la compara con BD en cada request (cache de 5 minutos). Al cambiar contraseña, `incrementar_session_version()` incrementa el contador en BD — todas las sesiones activas del usuario quedan inválidas en su siguiente request. El usuario que cambia su propia contraseña desde "Mi Perfil" no se desloguea: su sesión actual se refresca con la nueva versión.
+
+### Migración requerida
+DDL ejecutado en Supabase SQL Editor (`storage/migrations/202605_session_version.sql`):
+```sql
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 1;
+```
+Verificar: `SELECT id, email, session_version FROM user_profiles LIMIT 5;`
+
 ## [2.53.1] — 2026-05-27
 
 ### Añadido

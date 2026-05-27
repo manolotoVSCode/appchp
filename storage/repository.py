@@ -1255,6 +1255,22 @@ def get_configuracion_row(clave: str) -> dict | None:
     return resp.data[0] if resp.data else None
 
 
+def get_session_version(user_id: str) -> int | None:
+    """Devuelve la session_version actual del usuario, o None si no existe o hay error."""
+    try:
+        res = _supabase.table("user_profiles").select("session_version").eq("id", user_id).limit(1).execute()
+        rows = res.data or []
+        return rows[0].get("session_version") if rows else None
+    except Exception:
+        return None
+
+
+def incrementar_session_version(user_id: str) -> None:
+    """Incrementa session_version del usuario. Invalida todas las sesiones activas."""
+    actual = get_session_version(user_id) or 0
+    _supabase.table("user_profiles").update({"session_version": actual + 1}).eq("id", user_id).execute()
+
+
 def registrar_login_audit(
     user_id: str | None,
     email: str,
