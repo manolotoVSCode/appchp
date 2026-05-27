@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.52.1] — 2026-05-27
+
+### Corregido
+- `delete_cookie("last_cliente_id")` en logout ahora pasa `path="/"`, `samesite="Lax"`, `secure=not current_app.debug`, `httponly=True` — mismos atributos con los que se creó en `clientes.py`. Sin esta paridad el navegador no borraba la cookie.
+
 ## [2.52.0] — 2026-05-27
 
 ### Seguridad

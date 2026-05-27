@@ -245,7 +245,13 @@ def logout():
         pass
     clear_user_session()
     response = make_response(redirect(url_for("auth.login")))
-    response.delete_cookie("last_cliente_id")
+    response.delete_cookie(
+        "last_cliente_id",
+        path="/",
+        samesite="Lax",
+        secure=not current_app.debug,
+        httponly=True,
+    )
     return response
 
 
