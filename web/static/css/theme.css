@@ -29,6 +29,12 @@
   --color-sidebar-active-text: var(--color-primary);
   --color-sidebar-active-bg:   var(--color-primary-soft);
 
+  /* Colores del sidebar no tokenizados previamente.
+     --color-sidebar-dark-bg solo se usa en páginas standalone de auth (login). */
+  --color-sidebar-hover-bg:    #F0F0F2;
+  --color-sidebar-border-hard: #D0D0D0;
+  --color-sidebar-dark-bg:     #1A2D3F;
+
   /* ── Espaciado (solo --space-lg en uso activo) ── */
   --space-lg:  1.5rem;
 

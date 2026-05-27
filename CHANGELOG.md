@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.49.0] — 2026-05-27
+
+### Refactorizado
+- CSS — extraído el bloque `<style>` del sidebar de `clientes/_base.html` (243 líneas) al archivo independiente `web/static/css/sidebar.css` (248 líneas con cabecera). El template ahora carga `sidebar.css` como `<link>` después de `theme.css`.
+- CSS — tokenizados 8 hardcodes en `sidebar.css`: `#F0F0F2` (5 ocurrencias hover) → `var(--color-sidebar-hover-bg)`; `#D0D0D0` (1 ocurrencia borde mes-btn) → `var(--color-sidebar-border-hard)`; `#5A5A5A` (1 ocurrencia texto mes-btn) → `var(--color-text-secondary)`; `#1F7A4C` (1 ocurrencia color contrato eléctrico básico) → `var(--color-primary)`.
+- CSS — añadidas 3 variables nuevas a `theme.css :root`: `--color-sidebar-hover-bg: #F0F0F2`, `--color-sidebar-border-hard: #D0D0D0`, `--color-sidebar-dark-bg: #1A2D3F`.
+- Colores sin variable equivalente que quedan hardcoded en `sidebar.css`: `#6A6A6A` (3×, texto links inactivos), `#8A8A8A` (1×, texto sub-links), `#F8F8F8` (1×, fondo mes disponible), `#C0C0C0`/`#EBEBEB` (mes no disponible), `#bbb`/`#555` (toggle button), `#0d6efd` (contrato calificado), `#d4a017` (contrato gas). Pendiente tokenizar en fases posteriores.
+
 ## [2.48.0] — 2026-05-27
 
 ### Refactorizado
