@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.45.3] — 2026-05-26
+
+### Corregido
+- Sidebar contratos PPA: la selección masiva por año ("botón maestro") no persistía en BD. `upsert_meses_seleccionados_anio` ahora recibe `contrato_tipo` y lo pasa a `get_meses_con_factura`, que así consulta `facturas_electricidad_calificado` en lugar de `cfe_facturas` para contratos PPA.
+
 ## [2.45.2] — 2026-05-26
 
 ### Corregido

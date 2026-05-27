@@ -1432,7 +1432,7 @@ def contrato_seleccion_anio(cliente_id: int, contrato_id: int):
                         msg = ("Hay meses de facturas calificadas (PPA) seleccionados. "
                                "Deselecciona primero todos los meses de los contratos PPA antes de activar suministro CFE GDMTH.")
                     return jsonify({"error": msg}), 409
-            n = upsert_meses_seleccionados_anio(contrato_id, anio)
+            n = upsert_meses_seleccionados_anio(contrato_id, anio, contrato_tipo=contrato.tipo)
             return jsonify({"ok": True, "insertados": n})
         else:
             delete_meses_seleccionados_anio(contrato_id, anio)

@@ -826,9 +826,9 @@ def delete_mes_seleccionado(contrato_id: int, anio: int, mes: int) -> None:
     ).eq("anio", anio).eq("mes", mes).execute()
 
 
-def upsert_meses_seleccionados_anio(contrato_id: int, anio: int) -> int:
+def upsert_meses_seleccionados_anio(contrato_id: int, anio: int, contrato_tipo: str = "") -> int:
     """Selecciona todos los meses con factura del año. Retorna cantidad insertada."""
-    meses = get_meses_con_factura(contrato_id, anio)
+    meses = get_meses_con_factura(contrato_id, anio, contrato_tipo=contrato_tipo)
     if not meses:
         return 0
     _supabase.table("contrato_meses_seleccionados").upsert(
