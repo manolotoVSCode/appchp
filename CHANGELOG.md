@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.48.0] — 2026-05-27
+
+### Refactorizado
+- CSS — rediseño completo del sistema de jerarquía tipográfica de KPIs. Eliminado el selector atributo `[id^="kpi-"][id$="-val"]` con `!important` aplicado desde el contenedor. Eliminados los dos overrides de ID (`#kpi-inversion-mxn-val`, `#kpi-inversion-tc-val`). Reemplazados por tres clases directas sin `!important` aplicadas al elemento de valor: `.kpi-valor-primario` (2rem/800), `.kpi-valor-secundario` (1.5rem/700), `.kpi-valor-terciario` (1.15rem/600). Actualizados 8 elementos en dos templates: 4 en `dashboard_cogeneracion.html` (kpi-ahorro-neto-val, kpi-payback-val → primario; kpi-energia-limpia-val, kpi-capacidad-val → secundario) y 4 en `dashboard_contabilidad.html` (kpi-costo-total-periodo → primario; kpi-kwh-total, kpi-costo-unit → secundario; kpi-num-meses → terciario). Los tres elementos del cuadro Inversión estimada no reciben clase nueva — sus estilos inline ya controlan la tipografía directamente.
+- Corrección involuntaria: los valores de CO₂ renderizados por JS (`kpi-value` + inline `font-size:1.2rem`) ahora respetan el tamaño 1.2rem especificado en el código; el sistema anterior los forzaba a 1.5rem con `!important`.
+
 ## [2.47.0] — 2026-05-27
 
 ### Refactorizado

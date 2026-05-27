@@ -177,6 +177,7 @@ a:hover { color: var(--color-primary-dark); }
   font-weight: 700;
   color: var(--color-text-primary);
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .kpi-label {
@@ -300,42 +301,30 @@ a:hover { color: var(--color-primary-dark); }
 }
 .dashboard-error-banner .btn-reintentar:hover { background: #991b1b; }
 
-/* ── Jerarquía de KPIs — solo tipografía, sin tocar cajas ────────────────── */
+/* ── Jerarquía de KPIs — clase directa al elemento de valor ──────────────── */
+/* Aplicar .kpi-valor-* directamente al elemento que muestra el número.      */
+/* Sin selector atributo, sin !important, sin overrides de ID.               */
 
-/* Default global: números tabulares en todos los KPIs */
-[id^="kpi-"][id$="-val"],
-.kpi-value { font-variant-numeric: tabular-nums; }
-
-/* Nivel PRIMARIO */
-.kpi-nivel-primario [id^="kpi-"][id$="-val"],
-.kpi-nivel-primario .kpi-value {
-  font-size: 2rem !important;
-  font-weight: 800 !important;
-  line-height: 1.1 !important;
+.kpi-valor-primario {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
   letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
 }
 
-/* Nivel SECUNDARIO */
-.kpi-nivel-secundario [id^="kpi-"][id$="-val"],
-.kpi-nivel-secundario .kpi-value {
-  font-size: 1.5rem !important;
-  font-weight: 700 !important;
-  line-height: 1.15 !important;
+.kpi-valor-secundario {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 
-/* Inversión estimada: MXN y TC son sub-labels, no valores principales —
-   override necesario porque [id^="kpi-"][id$="-val"] los captura */
-#kpi-inversion-mxn-val { font-size: .8rem !important;  font-weight: 400 !important; line-height: 1.1 !important; }
-#kpi-inversion-tc-val  { font-size: .65rem !important; font-weight: 400 !important; line-height: 1.1 !important; }
-
-/* Nivel TERCIARIO */
-.kpi-nivel-terciario [id^="kpi-"][id$="-val"],
-.kpi-nivel-terciario .kpi-value {
-  font-size: 1.15rem !important;
-  font-weight: 600 !important;
-  color: var(--color-text-secondary) !important;
+.kpi-valor-terciario {
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
