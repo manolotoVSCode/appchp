@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.46.1] — 2026-05-26
+
+### Cambiado
+- Dashboard Contabilidad: pie chart de distribución del costo eléctrico usa paleta monocromática azul (`#0D3B66`, `#1F6FB2`, `#4A9FD8`, `#A8D0E6`) para no colisionar con los colores de periodos horarios (verde Base, amarillo Intermedio, rojo Punta).
+- Dashboard Cogeneración: tarjeta "Inversión estimada" jerarquiza tipográficamente: USD en `fs-4` (valor primario), MXN en `text-muted small` (valor secundario), y tipo de cambio en línea independiente `font-size:.7rem` como referencia.
+
 ## [2.46.0] — 2026-05-26
 
 ### Añadido

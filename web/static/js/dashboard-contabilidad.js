@@ -168,7 +168,7 @@
       ],
       datasets: [{
         data: [d.energia, d.demanda, d.otros],
-        backgroundColor: ["#1F7A4C", "#4FA876", "#9A9A9A"],
+        backgroundColor: ["#0D3B66", "#1F6FB2", "#4A9FD8", "#A8D0E6"],
         borderWidth: 2,
         borderColor: "#fff",
       }],

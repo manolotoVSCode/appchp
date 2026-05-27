@@ -712,9 +712,8 @@
         : "Sin datos");
       if (k.inversion_usd) {
         setText("kpi-inversion-usd-val", "$" + Math.round(k.inversion_usd).toLocaleString("en-US") + " USD");
-        setText("kpi-inversion-mxn-val",
-          "$" + Math.round(k.inversion_mxn).toLocaleString("en-US") + " MXN al tipo " +
-          (k.tipo_cambio || 0).toFixed(2));
+        setText("kpi-inversion-mxn-val", "$" + Math.round(k.inversion_mxn).toLocaleString("en-US") + " MXN");
+        setText("kpi-inversion-tc-val", "TC: $" + (k.tipo_cambio || 0).toFixed(2) + " MXN/USD");
       }
     }
 
