@@ -611,10 +611,15 @@
         " Selecciona meses en el sidebar de los contratos para ver el análisis."));
     } else if (aviso.tipo === "sin_par") {
       const nElec = parseInt(aviso.num_cfe, 10) || 0;
-      const sElec = document.createElement("strong");
-      sElec.textContent = nElec + " factura" + (nElec !== 1 ? "s" : "") + " eléctrica" + (nElec !== 1 ? "s" : "");
-      cont.appendChild(_mkAlerta("alert-info", "Sin facturas eléctricas seleccionadas.",
-        " Hay ", sElec, " seleccionadas. Carga o selecciona facturas de electricidad para ver el análisis histórico."));
+      const nGas  = parseInt(aviso.num_gas,  10) || 0;
+      const msg = nElec > 0 && nGas === 0
+        ? "Faltan facturas de gas para análisis completo. Se muestra solo análisis eléctrico."
+        : "Faltan facturas eléctricas para análisis completo. Se muestra solo análisis de gas.";
+      const div = document.createElement("div");
+      div.className = "alert alert-secondary py-1 px-2 mb-2";
+      div.style.fontSize = "0.8rem";
+      div.textContent = msg;
+      cont.appendChild(div);
     }
   }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.45.6] — 2026-05-26
+
+### Cambiado
+- Dashboard Contabilidad (CFE GDMTH): aviso `sin_par` reemplazado por un banner discreto (`alert-secondary`, texto pequeño, sin icono) que indica qué categoría falta sin ocultar el dashboard ni bloquear la navegación.
+
 ## [2.45.5] — 2026-05-26
 
 ### Cambiado
