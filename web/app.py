@@ -405,14 +405,21 @@ def create_app() -> Flask:
 
     app = Flask(__name__)
 
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32))
+    secret = os.environ.get("SECRET_KEY")
+    if not secret:
+        raise RuntimeError(
+            "SECRET_KEY no configurada en variables de entorno. "
+            "Genera una con: python -c \"import secrets; print(secrets.token_hex(32))\" "
+            "y configúrala en Render Dashboard → Environment."
+        )
+    app.config["SECRET_KEY"] = secret
 
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SECURE"] = not app.debug
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # Autenticación, CSRF y blueprints
-    from web.auth import init_auth, get_current_user, is_authenticated
+    from web.auth import init_auth, get_current_user, is_authenticated, clear_user_session, _verificar_activo_con_cache
     from web.clientes import clientes_bp
     init_auth(app)
     csrf.init_app(app)
@@ -436,8 +443,13 @@ def create_app() -> Flask:
                 return None
         if not is_authenticated():
             return redirect(url_for("auth.login", next=path))
-        # usuario_normal solo puede ver su empresa asignada
         user = get_current_user()
+        # Verificar que la cuenta sigue activa (cache de 5 minutos en sesión)
+        if user and not _verificar_activo_con_cache(user["user_id"]):
+            clear_user_session()
+            flash("Tu cuenta ha sido desactivada. Contacta con tu administrador.", "warning")
+            return redirect(url_for("auth.login"))
+        # usuario_normal solo puede ver su empresa asignada
         if user and user["rol"] == "usuario_normal":
             from web.auth_permissions import usuario_puede_ver_empresa
             empresa_id = user.get("empresa_id")

@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.51.0] — 2026-05-27
+
+### Seguridad
+- `SECRET_KEY` ahora es obligatoria: eliminado el fallback silencioso `os.urandom(32)`. Si la variable de entorno no está configurada, el proceso falla en el arranque con un `RuntimeError` descriptivo. Esto convierte un problema silencioso (sesiones invalidadas en cada cold start de Render) en un error evidente y detectable en despliegue.
+- Verificación de `activo` en `before_request`: si un administrador desactiva una cuenta en `user_profiles.activo = false`, el usuario es deslogueado en su próximo request (máx. 5 minutos de latencia por cache TTL en sesión). Antes, la cuenta desactivada permanecía operativa hasta expirar la cookie de 30 días. Implementado con cache en sesión Flask para evitar una query a Supabase en cada request.
+
 ## [2.50.0] — 2026-05-27
 
 ### Refactorizado

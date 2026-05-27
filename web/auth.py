@@ -97,6 +97,24 @@ def _get_supabase():
     return _supabase
 
 
+def _verificar_activo_con_cache(user_id: str) -> bool:
+    """Verifica si el usuario sigue activo en user_profiles, con cache de 5 minutos en sesión."""
+    from time import time
+    cache = session.get("_activo_check")
+    if cache and cache.get("user_id") == user_id and time() - cache.get("ts", 0) < 300:
+        return cache.get("activo", True)
+    try:
+        sb = _get_supabase()
+        res = sb.table("user_profiles").select("activo").eq("id", user_id).limit(1).execute()
+        rows = res.data or []
+        activo = bool(rows and rows[0].get("activo", False))
+    except Exception:
+        # En error de red, asumir activo para no bloquear por fallo transitorio
+        activo = True
+    session["_activo_check"] = {"user_id": user_id, "ts": time(), "activo": activo}
+    return activo
+
+
 def _get_user_profile(user_id: str) -> dict | None:
     """Obtiene perfil desde user_profiles."""
     try:
