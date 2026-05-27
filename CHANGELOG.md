@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.55.0] — 2026-05-27
+
+### Añadido
+- `README.md` en raíz: stack, estructura, instrucciones de arranque local y variables de entorno.
+- `scripts/README.md`: documenta los tres scripts de migración (versión, fecha, estado), explica por qué se conservan y advierte sobre ejecución sin contexto.
+- `docs/historico/disenos-iniciales/README.md`: explica que los planes son documentos históricos, no documentación operativa.
+
+### Cambiado
+- `docs/superpowers/plans/` renombrada a `docs/historico/disenos-iniciales/` para reflejar su naturaleza histórica. Los seis archivos de diseño se mueven sin modificar contenido.
+
 ## [2.54.4] — 2026-05-27
 
 ### Eliminado
