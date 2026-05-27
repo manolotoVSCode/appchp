@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.54.2] — 2026-05-27
+
+### Seguridad
+- Eliminado `.env.bak` local (contenía `SUPABASE_URL` y `SUPABASE_KEY` en texto plano). Verificado con `git log --all --full-history -- .env.bak` que nunca llegó al repositorio — sin exposición de credenciales.
+- Añadidos a `.gitignore`: `.env.bak`, `.env.*`, `*.env`. La regla anterior solo cubría `.env` literal; cualquier variante (`.env.local`, `.env.production`, `.env.bak`) quedaba sin protección.
+
 ## [2.54.1] — 2026-05-27
 
 ### Corregido

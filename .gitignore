@@ -12,6 +12,9 @@ build/
 venv/
 env/
 .env
+.env.bak
+.env.*
+*.env
 
 # Base de datos
 *.db
