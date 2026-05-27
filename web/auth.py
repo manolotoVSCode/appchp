@@ -179,17 +179,24 @@ def login():
 
 def _handle_login(email: str, password: str, remember: bool) -> str | None:
     """Intenta autenticar con Supabase. Retorna mensaje de error o None si OK."""
+    from storage.repository import registrar_login_audit
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent", "")[:500]
+
     sb = _get_supabase()
     try:
         res = sb.auth.sign_in_with_password({"email": email, "password": password})
     except Exception as exc:
         msg = str(exc).lower()
         if "invalid" in msg or "credentials" in msg or "email" in msg:
+            registrar_login_audit(None, email, False, ip, user_agent, "invalid_credentials")
             return "Correo o contraseña incorrectos."
         logger.error("Error en sign_in_with_password para %s: %s", email, exc)
+        registrar_login_audit(None, email, False, ip, user_agent, "other")
         return f"Error sign_in: {exc}"
 
     if not res or not res.session:
+        registrar_login_audit(None, email, False, ip, user_agent, "invalid_credentials")
         return "Correo o contraseña incorrectos."
 
     user_id = res.user.id
@@ -207,9 +214,11 @@ def _handle_login(email: str, password: str, remember: bool) -> str | None:
     profile = _get_user_profile(user_id)
     if profile is None:
         logger.warning("Perfil no encontrado: user_id=%s", user_id)
+        registrar_login_audit(user_id, email, False, ip, user_agent, "user_not_found")
         return "Tu cuenta no tiene perfil de acceso. Contacta al administrador."
 
     if not profile.get("activo", True):
+        registrar_login_audit(user_id, email, False, ip, user_agent, "user_inactive")
         return "Tu cuenta está desactivada. Contacta al administrador."
 
     empresa_nombre = None
@@ -233,6 +242,7 @@ def _handle_login(email: str, password: str, remember: bool) -> str | None:
         nombre=profile.get("nombre"),
         apellido=profile.get("apellido"),
     )
+    registrar_login_audit(user_id, email, True, ip, user_agent, None)
     logger.info("Login exitoso: email=%s rol=%s", email, profile["rol"])
     return None
 

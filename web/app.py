@@ -1908,6 +1908,29 @@ def create_app() -> Flask:
     def health():
         return "ok", 200
 
+    @app.route("/admin/auditoria-logins", methods=["GET"])
+    def admin_auditoria_logins():
+        from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROL_ADMIN
+        user = _gcu()
+        if not user or user["rol"] not in (ROL_MASTER_ADMIN, ROL_ADMIN):
+            flash("Acceso no autorizado.", "danger")
+            return redirect(url_for("dashboard"))
+        from storage.repository import _supabase
+        email_q = request.args.get("email", "").strip()
+        success_q = request.args.get("success", "")
+        q = _supabase.table("login_audit").select("*").order("created_at", desc=True).limit(100)
+        if email_q:
+            q = q.ilike("email", f"%{email_q}%")
+        if success_q in ("1", "0"):
+            q = q.eq("success", success_q == "1")
+        registros = q.execute().data or []
+        return render_template(
+            "admin/auditoria_logins.html",
+            registros=registros,
+            email_q=email_q,
+            success_q=success_q,
+        )
+
     @app.route("/admin/usuarios", methods=["GET"])
     def admin_usuarios():
         from web.auth import get_current_user as _gcu, ROL_MASTER_ADMIN, ROL_ADMIN

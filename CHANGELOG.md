@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.53.0] — 2026-05-27
+
+### Añadido
+- Auditoría de logins: tabla `login_audit` en Supabase registra cada intento de autenticación (exitoso o fallido) con `user_id`, `email`, `success`, `ip_address`, `user_agent`, `failure_reason` y `created_at`. La función `registrar_login_audit()` en `storage/repository.py` es falla-silenciosa: no bloquea el login si Supabase no responde. Cubiertas 4 causas de fallo: `invalid_credentials`, `user_not_found`, `user_inactive`, `other`.
+- Vista `/admin/auditoria-logins` (acceso: master_admin y admin): tabla de los últimos 100 registros con filtros por email y resultado (éxito/fallo). Permite investigar el caso de sesiones en navegadores no reconocidos.
+
+### Migración requerida
+DDL ejecutado en Supabase SQL Editor (`storage/migrations/202605_login_audit.sql`):
+```sql
+CREATE TABLE IF NOT EXISTS login_audit (
+    id BIGSERIAL PRIMARY KEY, user_id UUID, email TEXT,
+    success BOOLEAN NOT NULL, ip_address TEXT, user_agent TEXT,
+    failure_reason TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_login_audit_user_id    ON login_audit(user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_login_audit_email      ON login_audit(email);
+CREATE INDEX IF NOT EXISTS idx_login_audit_created_at ON login_audit(created_at DESC);
+```
+
+Consulta de investigación:
+```sql
+SELECT created_at, email, success, ip_address, user_agent, failure_reason
+FROM login_audit
+WHERE email = 'usuario@dominio.com'
+ORDER BY created_at DESC
+LIMIT 50;
+```
+
 ## [2.52.2] — 2026-05-27
 
 ### Corregido

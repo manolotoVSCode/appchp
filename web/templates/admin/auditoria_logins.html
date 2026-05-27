@@ -1,0 +1,78 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "auditoria" %}
+
+{% block title %}Auditoría de logins — CHP App{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <h1 class="h3 mb-0">Auditoría de logins</h1>
+  <span class="text-muted small ms-2">Últimos 100 registros</span>
+</div>
+
+{# Filtros #}
+<form method="GET" class="d-flex gap-2 mb-4 flex-wrap align-items-end">
+  <div>
+    <label class="form-label small mb-1">Email</label>
+    <input type="text" name="email" class="form-control form-control-sm" style="width:220px"
+           value="{{ email_q }}" placeholder="Filtrar por email">
+  </div>
+  <div>
+    <label class="form-label small mb-1">Resultado</label>
+    <select name="success" class="form-select form-select-sm" style="width:140px">
+      <option value="" {% if success_q == "" %}selected{% endif %}>Todos</option>
+      <option value="1" {% if success_q == "1" %}selected{% endif %}>Exitoso</option>
+      <option value="0" {% if success_q == "0" %}selected{% endif %}>Fallido</option>
+    </select>
+  </div>
+  <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+  {% if email_q or success_q %}
+  <a href="{{ url_for('admin_auditoria_logins') }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+  {% endif %}
+</form>
+
+{% if registros %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle" style="font-size:.85rem">
+    <thead class="table-primary-header">
+      <tr>
+        <th>Fecha</th>
+        <th>Email</th>
+        <th>Resultado</th>
+        <th>IP</th>
+        <th>User-Agent</th>
+        <th>Motivo fallo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in registros %}
+      <tr>
+        <td class="text-nowrap">{{ r.created_at[:19].replace("T", " ") }}</td>
+        <td>{{ r.email or "—" }}</td>
+        <td>
+          {% if r.success %}
+            <span class="badge bg-success">Éxito</span>
+          {% else %}
+            <span class="badge bg-danger">Fallo</span>
+          {% endif %}
+        </td>
+        <td class="text-nowrap">{{ r.ip_address or "—" }}</td>
+        <td class="text-muted" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="{{ r.user_agent or '' }}">
+          {{ r.user_agent or "—" }}
+        </td>
+        <td>
+          {% if r.failure_reason %}
+            <span class="badge bg-secondary">{{ r.failure_reason }}</span>
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted">Sin registros para los filtros seleccionados.</p>
+{% endif %}
+{% endblock %}

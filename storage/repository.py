@@ -1255,6 +1255,31 @@ def get_configuracion_row(clave: str) -> dict | None:
     return resp.data[0] if resp.data else None
 
 
+def registrar_login_audit(
+    user_id: str | None,
+    email: str,
+    success: bool,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+    failure_reason: str | None = None,
+) -> None:
+    """Registra un intento de login en login_audit. Falla-silenciosa."""
+    try:
+        _supabase.table("login_audit").insert({
+            "user_id": user_id,
+            "email": email,
+            "success": success,
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+            "failure_reason": failure_reason,
+        }).execute()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "No se pudo registrar login_audit para %s: %s", email, exc
+        )
+
+
 def set_configuracion(clave: str, valor: str) -> None:
     """Crea o actualiza un parámetro en la tabla configuracion."""
     from datetime import datetime, timezone
