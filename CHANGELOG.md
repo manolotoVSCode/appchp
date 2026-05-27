@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.55.2] — 2026-05-27
+
+### Documentación
+- `docs/supabase-conventions.md`: guía de convenciones para creación de tablas en Supabase. Documenta la arquitectura service_role + RLS sin políticas, el patrón SQL estándar (CREATE TABLE + índices + ENABLE ROW LEVEL SECURITY + GRANT a service_role), y la nota sobre el requisito de GRANT explícito a partir del 30 de octubre de 2026.
+
 ## [2.55.1] — 2026-05-27
 
 ### Seguridad
