@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.46.7] — 2026-05-26
+
+### Corregido
+- Dashboard Contabilidad PPA: error 400 en consola al cargar. `esPPA` solo vivía en el scope de `hidratarDashboardContabilidad` y no era accesible en el click handler de "Ver detalle". Promovida a variable de módulo; el handler ahora hace `if (!div || esPPA) return` antes de cualquier fetch a `desglose-costo-total`.
+
+### Verificado sin cambios
+- Sidebar scroll fijo: estructura ya correcta (`#sidebar` flex-column, `#sidebar-content` flex:1/overflow-y:auto/min-height:0, `.sidebar-bottom` flex-shrink:0). Añadido `flex-shrink:0` a `.sidebar-brand` que faltaba explícitamente.
+- Aviso `sin_par` Contabilidad: ya implementado como `alert-secondary` compacto con mensaje diferenciado según falta electricidad o gas. `sinDatos` no incluye `sin_par`. Sin cambios en lógica.
+
 ## [2.46.6] — 2026-05-26
 
 ### Corregido

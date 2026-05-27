@@ -32,6 +32,7 @@
 
   let quesoDatos    = null;
   let filtroActivo  = "__todos__";
+  let esPPA         = false;  // se actualiza en hidratarDashboardContabilidad
 
   // ── AbortController + debounce ────────────────────────────────────────────
   let _abortCtrl  = null;
@@ -651,7 +652,7 @@
     if (mainSection) mainSection.style.display = sinDatos ? "none" : "";
     if (sinDatos) return;
 
-    const esPPA = data.tipo_suministro_electrico === "electrico_calificado";
+    esPPA = data.tipo_suministro_electrico === "electrico_calificado";
 
     // Link "Ver detalle" del Costo Total — solo visible en CFE GDMTH
     const linkDetCT = document.getElementById("link-detalle-costo-total");
@@ -825,7 +826,7 @@
     e.preventDefault();
     const div    = document.getElementById("detalleCostoTotal");
     const flecha = document.getElementById("detalle-costo-total-flecha");
-    if (!div) return;
+    if (!div || esPPA) return;
 
     if (div.style.display !== "none") {
       div.style.display = "none";
