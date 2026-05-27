@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.47.0] — 2026-05-27
+
+### Refactorizado
+- CSS — eliminadas 9 variables huérfanas de `theme.css` (confirmadas con grep de 0 usos): `--space-xs`, `--space-sm`, `--space-md`, `--space-xl`, `--space-2xl`, `--shadow-md`, `--shadow-lg`, `--radius-xl`, `--color-text-sidebar`. Se mantiene `--space-lg` (uso real en `.kpi-card`) y `--shadow-sm` (3 usos).
+- CSS — introducida variable `--color-positive: #28a745` para valores positivos en KPIs financieros (Ahorro Neto, EBITDA, iconos de éxito). Separa semánticamente el verde de resultado positivo del verde marca `--color-primary`. Reemplazados todos los hardcodes `#28a745` en `dashboard_cogeneracion.html` (4 ocurrencias) y `dashboard-cogeneracion.js` (1 ocurrencia).
+
 ## [2.46.8] — 2026-05-26
 
 ### Corregido

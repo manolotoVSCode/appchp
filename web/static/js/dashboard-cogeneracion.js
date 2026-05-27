@@ -722,7 +722,7 @@
     if (elLimpia) {
       if (data.kpis.energia_limpia_pct != null) {
         elLimpia.textContent = data.kpis.energia_limpia_pct.toFixed(1) + "%";
-        elLimpia.style.color = "var(--bs-success, #28a745)";
+        elLimpia.style.color = "var(--color-positive)";
       } else {
         elLimpia.textContent = "N/D";
         elLimpia.style.color = "var(--bs-secondary, #6c757d)";

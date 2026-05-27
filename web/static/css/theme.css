@@ -23,31 +23,26 @@
   /* ── Sidebar claro ── */
   --color-bg-sidebar:        #F5F6F7;
   --color-border-sidebar:    #E0E0E0;
-  --color-text-sidebar:      #2A2A2A;
   --color-text-sidebar-muted: #9A9A9A;
 
   /* Item activo */
   --color-sidebar-active-text: var(--color-primary);
   --color-sidebar-active-bg:   var(--color-primary-soft);
 
-  /* ── Espaciado ── */
-  --space-xs:  .25rem;
-  --space-sm:  .5rem;
-  --space-md:  1rem;
+  /* ── Espaciado (solo --space-lg en uso activo) ── */
   --space-lg:  1.5rem;
-  --space-xl:  2rem;
-  --space-2xl: 3rem;
 
   /* ── Sombras ── */
   --shadow-sm:  0 1px 3px rgba(0,0,0,.08);
-  --shadow-md:  0 4px 12px rgba(0,0,0,.10);
-  --shadow-lg:  0 8px 24px rgba(0,0,0,.12);
 
   /* ── Bordes ── */
   --radius-sm:  .375rem;
   --radius-md:  .5rem;
   --radius-lg:  .75rem;
-  --radius-xl:  1rem;
+
+  /* ── KPIs financieros — verde de valor positivo / ahorro / EBITDA ── */
+  /* Distinto del verde marca --color-primary; no usar #28a745 hardcoded fuera de aquí */
+  --color-positive: #28a745;
 }
 
 /* ── Bootstrap overrides — botones ────────────────────────────────────────── */
