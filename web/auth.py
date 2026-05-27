@@ -51,8 +51,11 @@ def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
 
 
 def clear_user_session() -> None:
-    """Limpia completamente la sesión Flask del usuario."""
+    """Limpia completamente la sesión Flask del usuario, preservando el token CSRF."""
+    csrf_token = session.get("csrf_token")
     session.clear()
+    if csrf_token:
+        session["csrf_token"] = csrf_token
 
 
 def get_current_user() -> dict | None:

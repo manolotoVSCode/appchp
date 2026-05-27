@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.52.2] — 2026-05-27
+
+### Corregido
+- Regresión crítica de v2.52.0: `session.clear()` borraba el token CSRF de Flask-WTF, causando "CSRF session token is missing" en el POST de login tras logout. `clear_user_session()` ahora preserva `csrf_token` antes de limpiar y lo restaura después.
+
 ## [2.52.1] — 2026-05-27
 
 ### Corregido
