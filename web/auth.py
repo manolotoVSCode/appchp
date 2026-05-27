@@ -51,10 +51,8 @@ def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
 
 
 def clear_user_session() -> None:
-    for key in ("_user_id", "_user_email", "_user_rol", "_empresa_id", "_empresa_nombre",
-                "_nombre", "_apellido", "_access_token", "_cp_cache", "cliente_activo_id",
-                "cliente_activo_nombre", "cliente_activo_logo_url"):
-        session.pop(key, None)
+    """Limpia completamente la sesión Flask del usuario."""
+    session.clear()
 
 
 def get_current_user() -> dict | None:
@@ -246,7 +244,9 @@ def logout():
     except Exception:
         pass
     clear_user_session()
-    return redirect(url_for("auth.login"))
+    response = make_response(redirect(url_for("auth.login")))
+    response.delete_cookie("last_cliente_id")
+    return response
 
 
 # ── Inicialización ────────────────────────────────────────────────────────────

@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.52.0] — 2026-05-27
+
+### Seguridad
+- `clear_user_session()` reemplaza el `pop()` explícito por `session.clear()`. Garantiza que cualquier clave presente en sesión (incluyendo `_activo_check`, `_cp_cache`, `cliente_activo_id` y claves futuras) se elimina al hacer logout, sin depender de una lista explícita que puede quedar desactualizada.
+- Logout borra la cookie `last_cliente_id` además de la sesión Flask. Antes, esta cookie persistía 30 días tras cerrar sesión, exponiendo el ID del último cliente visitado en el navegador.
+
 ## [2.51.0] — 2026-05-27
 
 ### Seguridad
