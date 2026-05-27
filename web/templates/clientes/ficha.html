@@ -46,9 +46,9 @@
   <!-- Facturas asociadas -->
   <div class="col-md-3">
     <div class="card shadow-sm h-100 text-center">
-      <div class="card-header fw-semibold small text-muted">Facturas CFE</div>
+      <div class="card-header fw-semibold small text-muted">Facturas Electricidad</div>
       <div class="card-body d-flex align-items-center justify-content-center">
-        <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ cliente.num_cfe }}</span>
+        <span class="display-5 fw-bold" style="color:var(--color-primary-dark)">{{ cliente.num_electricidad }}</span>
       </div>
     </div>
   </div>
@@ -496,7 +496,7 @@
         <p>
           Esta acción borrará permanentemente al cliente y
           <strong>TODAS sus facturas asociadas
-          ({{ cliente.num_cfe }} facturas CFE y {{ cliente.num_gas }} facturas de gas)</strong>.
+          ({{ cliente.num_electricidad }} facturas de electricidad y {{ cliente.num_gas }} facturas de gas)</strong>.
           <strong>Esta acción NO se puede deshacer.</strong>
         </p>
         <label class="form-label fw-semibold">Para confirmar, escriba el nombre exacto del cliente:</label>

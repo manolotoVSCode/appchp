@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.45.4] — 2026-05-26
+
+### Corregido
+- Ficha de cliente: caja "Facturas CFE" renombrada a "Facturas Electricidad" y ahora muestra `num_electricidad` (suma CFE + PPA). El modal de borrado también actualiza el texto a "facturas de electricidad".
+
 ## [2.45.3] — 2026-05-26
 
 ### Corregido
