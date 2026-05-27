@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.58.0] — 2026-05-27
+
+### Añadido
+- `web/app.py`: variable de entorno `FASE2_HABILITADA` leída en `create_app()` y almacenada en `app.config["FASE2_HABILITADA"]`; context_processor `inject_fase2_flag` inyecta `fase2_habilitada` (bool) en todos los templates.
+- `web/auth_permissions.py`: decorador `@require_master_admin_y_fase2` — devuelve 404 si la flag está apagada, 403 si el rol no es `master_admin`. Importa `abort` y `current_app`.
+- `web/templates/clientes/_base.html`: bloque sidebar "Telemetría (Beta)" visible únicamente cuando `fase2_habilitada` y rol `master_admin`.
+- `tests/test_fase2_aislamiento.py`: 9 tests de aislamiento (a–i) que cubren el decorador, el context_processor y la visibilidad del sidebar bajo distintas combinaciones de flag y rol.
+- `.env.example`: entradas `SECRET_KEY` y `FASE2_HABILITADA=false`.
+
+### Documentación
+- `CLAUDE.md`: sección "Aislamiento de fase 2" en "Decisiones arquitectónicas establecidas".
+
 ## [2.57.0] — 2026-05-27
 
 ### Añadido

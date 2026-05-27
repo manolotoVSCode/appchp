@@ -50,6 +50,16 @@ La inicialización de schema no vive en código de aplicación. Las tablas exist
 
 Los campos numéricos en Supabase están tipados como text para preservar exactitud del PDF original. Toda aritmética del cálculo debe convertir explícitamente a Decimal, no a float.
 
+## Aislamiento de fase 2
+
+Las rutas y funcionalidades de fase 2 (telemetría, IoT, monitoreo en tiempo real) están aisladas mediante dos mecanismos: un feature flag de entorno y un decorador de acceso.
+
+Variable de entorno `FASE2_HABILITADA` (valor `true`|`false`, defecto `false`). Se lee en `create_app()` y se almacena en `app.config["FASE2_HABILITADA"]`. Un context_processor inyecta `fase2_habilitada` en todos los templates para condicionar la UI sin consultar la config en cada vista.
+
+Decorador `@require_master_admin_y_fase2` en `web/auth_permissions.py`. Si la flag está apagada devuelve 404 (la ruta no existe desde el punto de vista del cliente). Si la flag está encendida pero el rol no es `master_admin` devuelve 403. Esto permite exponer funcionalidades beta exclusivamente al operador autorizado durante la construcción de fase 2, sin necesidad de ramas de código separadas.
+
+El sidebar muestra el bloque "Telemetría (Beta)" solo cuando `fase2_habilitada` es `True` y el usuario es `master_admin`. Los enlaces concretos de la sección se añadirán en entregas posteriores de fase 2.
+
 ## Schema de Supabase (tablas existentes)
 
 clientes: id, nombre, rfc (único), notas, created_at, sector_industrial, contacto_nombre, contacto_cargo, contacto_email, contacto_telefono, direccion, estado, codigo_postal, tarifa_cfe, capacidad_instalada_kw, demanda_contratada_kw, anio_inicio_operacion, regimen_operacion, consumo_anual_estimado_mwh, logo_url, medio_termico, medio_termico_vapor_pct (INTEGER 0-100), nivel_tension_kv, altitud_msnm, tipo_motor.

@@ -146,6 +146,13 @@
   {% endif %}
   {% endif %}
 
+  {% if fase2_habilitada and current_user_data and current_user_data.rol == 'master_admin' %}
+  <div class="sidebar-section sidebar-section-fase2">
+    <h6 class="sidebar-heading">Telemetría (Beta)</h6>
+    {# Enlaces de fase 2 se agregarán en entregas posteriores #}
+  </div>
+  {% endif %}
+
   <div id="sidebar-scroll-indicator"></div>
   </div>{# /sidebar-content #}
 

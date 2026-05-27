@@ -447,6 +447,7 @@ def create_app() -> Flask:
             "y configúrala en Render Dashboard → Environment."
         )
     app.config["SECRET_KEY"] = secret
+    app.config["FASE2_HABILITADA"] = os.getenv("FASE2_HABILITADA", "false").lower() == "true"
 
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SECURE"] = not app.debug
@@ -539,6 +540,10 @@ def create_app() -> Flask:
     @app.context_processor
     def _inject_logo_helper():
         return {"obtener_logo_cliente": obtener_logo_cliente}
+
+    @app.context_processor
+    def inject_fase2_flag():
+        return {"fase2_habilitada": app.config["FASE2_HABILITADA"]}
 
     @app.route("/")
     def dashboard():

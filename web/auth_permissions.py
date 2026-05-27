@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from functools import wraps
 
-from flask import flash, redirect, request, url_for
+from flask import abort, current_app, flash, redirect, request, url_for
 
 from web.auth import (
     ROL_MASTER_ADMIN,
@@ -46,6 +46,19 @@ def require_master_admin(f):
 
 def require_admin_or_master(f):
     return require_role(ROL_MASTER_ADMIN, ROL_ADMIN)(f)
+
+
+def require_master_admin_y_fase2(f):
+    """404 si FASE2_HABILITADA está apagada; 403 si el rol no es master_admin."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_app.config.get("FASE2_HABILITADA", False):
+            abort(404)
+        current = get_current_user()
+        if not current or current.get("rol") != ROL_MASTER_ADMIN:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
 
 
 # ── Checks de permisos ────────────────────────────────────────────────────────
