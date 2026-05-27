@@ -172,8 +172,8 @@
       <i class="bi bi-box-arrow-right"></i>Cerrar sesión
     </a>
     <div class="sidebar-footer-meta">
-      {% if app_version %}<span>v{{ app_version }}</span> &middot; {% endif %}
-      <a href="{{ url_for('changelog') }}">Changelog</a>
+      {% if app_version %}<span>v{{ app_version }}</span>{% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %} &middot; {% endif %}{% endif %}
+      {% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}<a href="{{ url_for('changelog') }}">Changelog</a>{% endif %}
     </div>
   </div>
 </nav>

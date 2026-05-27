@@ -1894,6 +1894,9 @@ def create_app() -> Flask:
 
     @app.route("/changelog")
     def changelog():
+        user = get_current_user()
+        if not user or user.get("rol") not in ("admin", "master_admin"):
+            abort(403)
         import markdown
         changelog_path = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
         try:

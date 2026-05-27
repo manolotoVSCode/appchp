@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.55.1] — 2026-05-27
+
+### Seguridad
+- `/changelog` ahora requiere rol `admin` o `master_admin`; devuelve 403 a `usuario_normal` y a usuarios no autenticados.
+- Enlace "Changelog" en el footer del sidebar oculto para `usuario_normal` (sigue viendo el número de versión).
+
+### Añadido
+- Sección "Uso de cookies" en `privacidad.html`: documenta la cookie de sesión y `last_cliente_id`, declara ausencia de cookies de analítica/publicidad/rastreo, e informa al usuario de que puede eliminarlas desde el navegador.
+
 ## [2.55.0] — 2026-05-27
 
 ### Añadido
