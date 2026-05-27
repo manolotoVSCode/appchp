@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.50.0] — 2026-05-27
+
+### Refactorizado
+- CSS — reemplazados 12 hardcodes del design system en templates y JS en-scope. Desglose: `clientes/_base.html` (5 fallbacks redundantes en mobile-block-screen eliminados: `var(--color-primary,#1F7A4C)` → `var(--color-primary)`, `var(--color-text-secondary,#5A5A5A)` × 2 → `var(--color-text-secondary)`, `var(--color-border,#E0E0E0)` → `var(--color-border)`, `var(--color-text-primary,#1A1A1A)` → `var(--color-text-primary)`); `dashboard_contabilidad.html` (1: `#6c757d` → `var(--color-text-muted)` en `.link-datos`); `dashboard_cogeneracion.html` (3: dos `var(--color-text-muted, #6c757d)` → `var(--color-text-muted)`, un `var(--color-secondary, #6c757d)` → `var(--color-text-muted)`); `dashboard-cogeneracion.js` (3: dos `"var(--bs-secondary, #6c757d)"` en `el.style.color` → `"var(--color-text-muted)"`, un `var(--color-text-muted,#6c757d)` → `var(--color-text-muted)`).
+- CSS — añadida regla `.text-muted { color: var(--color-text-muted) !important; }` al final de `theme.css`. Sincroniza las ~229 ocurrencias de `.text-muted` en templates con el token `--color-text-muted: #9A9A9A` del design system (antes usaba Bootstrap `--bs-secondary-color` ≈ gris semitransparente). Cambio visual perceptible: gris más claro y opaco en toda la app.
+- Ocurrencias NO tocadas: `dashboard.html:687` `borderColor:"#1F7A4C"` y `dashboard-cogeneracion.js:286,371` `borderColor`/`backgroundColor` — configuración interna de Chart.js, no CSS. `dashboard-contabilidad.js:48,172` `COLOR_GAS_LINEA`/`backgroundColor[]` — constantes y arrays de Chart.js. `donut-componentes.js:70` `fill="#1A1A1A"` — atributo SVG de presentación; CSS variables no aplican a atributos HTML.
+
+### Verificado sin cambios
+- `text-danger` (59×), `text-warning` (4×), `text-success` (6×), `text-secondary` (10×): uso semánticamente coherente en todos los casos analizados. No se interviene — Bootstrap los gestiona correctamente.
+
 ## [2.49.0] — 2026-05-27
 
 ### Refactorizado

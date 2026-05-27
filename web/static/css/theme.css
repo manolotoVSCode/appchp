@@ -344,3 +344,10 @@ a:hover { color: var(--color-primary-dark); }
   margin: 2rem 0 1rem;
   padding: 0;
 }
+
+/* ── Sincronización de Bootstrap utilities con design system ──────────────── */
+/* Bootstrap .text-muted usa --bs-secondary-color (~rgba gris oscuro).        */
+/* Este override lo sincroniza con el token del design system.                */
+.text-muted {
+  color: var(--color-text-muted) !important;
+}

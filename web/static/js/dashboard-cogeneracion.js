@@ -512,7 +512,7 @@
           elEL.style.color = "var(--bs-success, #198754)";
         } else {
           elEL.textContent = "N/D";
-          elEL.style.color = "var(--bs-secondary, #6c757d)";
+          elEL.style.color = "var(--color-text-muted)";
         }
       }
     }
@@ -725,7 +725,7 @@
         elLimpia.style.color = "var(--color-positive)";
       } else {
         elLimpia.textContent = "N/D";
-        elLimpia.style.color = "var(--bs-secondary, #6c757d)";
+        elLimpia.style.color = "var(--color-text-muted)";
       }
     }
 
@@ -854,7 +854,7 @@
     card.textContent = "";
     const icon = document.createElement("i");
     icon.className = "bi bi-slash-circle kpi-icon";
-    icon.style.cssText = "font-size:2rem;color:var(--color-text-muted,#6c757d)";
+    icon.style.cssText = "font-size:2rem;color:var(--color-text-muted)";
     const inner = document.createElement("div");
     const lbl = document.createElement("div");
     lbl.className = "small text-muted mb-1";
