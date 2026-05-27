@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.46.4] — 2026-05-26
+
+### Revertido
+- `dashboard-cogeneracion.js`: eliminado guard `window._cogDashLoaded` añadido por error en diagnóstico incorrecto de doble inicialización. No había problema real de ejecución múltiple del script.
+
 ## [2.46.3] — 2026-05-26
 
 ### Corregido
