@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" style="max-width:80px">
-  <!-- Generic factory building -->
+  <!-- Generic factory outline -->
   <!-- Chimney 1 (tall) -->
-  <rect x="18" y="22" width="12" height="34" rx="1" fill="#1A1A1A"/>
+  <rect x="18" y="22" width="12" height="34" rx="1" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Chimney 2 (shorter) -->
-  <rect x="36" y="30" width="10" height="26" rx="1" fill="#1A1A1A"/>
+  <rect x="36" y="30" width="10" height="26" rx="1" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Roof / top edge -->
-  <rect x="14" y="54" width="72" height="6" rx="1" fill="#1A1A1A"/>
+  <rect x="14" y="54" width="72" height="6" rx="1" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Main building body -->
-  <rect x="14" y="58" width="72" height="28" rx="2" fill="#1A1A1A"/>
+  <rect x="14" y="58" width="72" height="28" rx="2" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

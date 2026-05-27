@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.56.1] — 2026-05-27
+
+### Cambiado
+- Los 11 SVG de `web/static/img/sectores/` pasan de silueta rellena a estilo outline: `fill="none"`, `stroke="#1A1A1A"`, `stroke-width="3"`, `stroke-linejoin="round"`, `stroke-linecap="round"`. `manufactura` y `textil` eliminan sus `<mask>` y añaden un `<circle>` de contorno para el agujero central.
+
 ## [2.56.0] — 2026-05-27
 
 ### Añadido

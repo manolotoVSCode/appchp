@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" style="max-width:80px">
-  <!-- Erlenmeyer flask silhouette -->
+  <!-- Erlenmeyer flask outline -->
   <!-- Lip/rim at top -->
-  <rect x="40" y="14" width="20" height="5" rx="2" fill="#1A1A1A"/>
+  <rect x="40" y="14" width="20" height="5" rx="2" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Neck -->
-  <rect x="43" y="18" width="14" height="24" fill="#1A1A1A"/>
+  <rect x="43" y="18" width="14" height="24" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Body: trapezoid widening downward -->
-  <polygon points="43,42 57,42 78,78 22,78" fill="#1A1A1A"/>
+  <polygon points="43,42 57,42 78,78 22,78" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Flat base -->
-  <rect x="22" y="76" width="56" height="7" rx="3" fill="#1A1A1A"/>
+  <rect x="22" y="76" width="56" height="7" rx="3" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

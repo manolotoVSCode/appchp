@@ -1,17 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" style="max-width:80px">
   <!-- Thread spool (side view) -->
   <!-- Top flange -->
-  <rect x="26" y="24" width="48" height="12" rx="5" fill="#1A1A1A"/>
+  <rect x="26" y="24" width="48" height="12" rx="5" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Bottom flange -->
-  <rect x="26" y="64" width="48" height="12" rx="5" fill="#1A1A1A"/>
+  <rect x="26" y="64" width="48" height="12" rx="5" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Core (barrel) -->
-  <rect x="36" y="36" width="28" height="28" rx="2" fill="#1A1A1A"/>
+  <rect x="36" y="36" width="28" height="28" rx="2" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Axle hole -->
-  <defs>
-    <mask id="spool-hole">
-      <rect width="100" height="100" fill="white"/>
-      <circle cx="50" cy="50" r="7" fill="black"/>
-    </mask>
-  </defs>
-  <rect x="36" y="36" width="28" height="28" rx="2" fill="#1A1A1A" mask="url(#spool-hole)"/>
+  <circle cx="50" cy="50" r="7" fill="none" stroke="#1A1A1A" stroke-width="3"/>
 </svg>

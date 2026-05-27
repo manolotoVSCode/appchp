@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" style="max-width:80px">
   <!-- Fork -->
   <!-- Tines -->
-  <rect x="30" y="22" width="4" height="26" rx="2" fill="#1A1A1A"/>
-  <rect x="37" y="22" width="4" height="26" rx="2" fill="#1A1A1A"/>
-  <rect x="44" y="22" width="4" height="26" rx="2" fill="#1A1A1A"/>
+  <rect x="30" y="22" width="4" height="26" rx="2" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="37" y="22" width="4" height="26" rx="2" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="44" y="22" width="4" height="26" rx="2" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Tine connector -->
-  <rect x="30" y="44" width="18" height="4" rx="1" fill="#1A1A1A"/>
+  <rect x="30" y="44" width="18" height="4" rx="1" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Handle -->
-  <rect x="35" y="48" width="8" height="30" rx="3" fill="#1A1A1A"/>
+  <rect x="35" y="48" width="8" height="30" rx="3" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 
   <!-- Knife -->
   <!-- Blade (tapered) -->
-  <path d="M58,48 L66,48 L64,22 L58,22 Z" fill="#1A1A1A" rx="1"/>
+  <path d="M58,48 L66,48 L64,22 L58,22 Z" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Handle -->
-  <rect x="58" y="48" width="8" height="30" rx="3" fill="#1A1A1A"/>
+  <rect x="58" y="48" width="8" height="30" rx="3" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

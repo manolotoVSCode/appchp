@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" style="max-width:80px">
-  <!-- Plastic bottle silhouette -->
+  <!-- Plastic bottle outline -->
   <!-- Cap -->
-  <rect x="40" y="14" width="20" height="8" rx="3" fill="#1A1A1A"/>
+  <rect x="40" y="14" width="20" height="8" rx="3" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Neck -->
-  <rect x="42" y="22" width="16" height="14" rx="2" fill="#1A1A1A"/>
+  <rect x="42" y="22" width="16" height="14" rx="2" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Shoulder (transition) -->
-  <polygon points="42,34 58,34 64,42 36,42" fill="#1A1A1A"/>
+  <polygon points="42,34 58,34 64,42 36,42" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
   <!-- Body -->
-  <rect x="32" y="40" width="36" height="42" rx="6" fill="#1A1A1A"/>
+  <rect x="32" y="40" width="36" height="42" rx="6" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>
