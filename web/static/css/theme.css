@@ -148,6 +148,7 @@ a:hover { color: var(--color-primary-dark); }
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: middle;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
 }
 
 /* ── Cards ────────────────────────────────────────────────────────────────── */

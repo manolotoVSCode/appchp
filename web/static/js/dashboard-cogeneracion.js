@@ -572,10 +572,10 @@
     setText("kpi-ah-otros-val",       fmt(ah_otros_anual));
     // Donut: porcentajes del ahorro por componente
     renderDonutComponentes("donutAhorroElec", [
-      { nombre: "Energía",         pct: _pctD(ah_energia_anual), color: "var(--color-primary)" },
-      { nombre: "Capacidad",       pct: _pctD(ah_cap_anual),     color: "var(--color-warning)" },
-      { nombre: "Distribución",    pct: _pctD(ah_dist_anual),    color: "var(--color-info)" },
-      { nombre: "Otros Servicios", pct: _pctD(ah_otros_anual),   color: "var(--color-danger)" },
+      { nombre: "Energía",         pct: _pctD(ah_energia_anual), color: "#0D3B66" },
+      { nombre: "Capacidad",       pct: _pctD(ah_cap_anual),     color: "#1F6FB2" },
+      { nombre: "Distribución",    pct: _pctD(ah_dist_anual),    color: "#4A9FD8" },
+      { nombre: "Otros Servicios", pct: _pctD(ah_otros_anual),   color: "#A8D0E6" },
     ]);
 
     // Payback
