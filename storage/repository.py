@@ -1407,6 +1407,17 @@ def get_medicion_datos(medicion_id: int) -> list[dict]:
     return result
 
 
+def update_medicion(medicion_id: int, campos: dict) -> dict | None:
+    """Actualiza campos de una medición. Retorna el registro actualizado o None."""
+    resp = (
+        _supabase.table("mediciones_cincominutal")
+        .update(campos)
+        .eq("id", medicion_id)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
 def delete_medicion(medicion_id: int) -> None:
     """Borra la cabecera; ON DELETE CASCADE elimina los datos automáticamente."""
     _supabase.table("mediciones_cincominutal").delete().eq("id", medicion_id).execute()

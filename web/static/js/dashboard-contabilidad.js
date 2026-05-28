@@ -15,6 +15,13 @@
   const CLIENTE_ID = parseInt(root.dataset.clienteId, 10);
   const DATA_URL   = `/clientes/${CLIENTE_ID}/dashboard/contabilidad/data`;
 
+  // Helper: "YYYY-MM-DD" → "DD MMM YYYY" en español (meses en mayúsculas)
+  function _fmtFechaEs(iso) {
+    const _M = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+    const [y, m, d] = iso.split("-");
+    return `${d} ${_M[parseInt(m, 10) - 1]} ${y}`;
+  }
+
   const spinner    = document.getElementById("dashboard-spinner");
   const errorBanner= document.getElementById("dashboard-error-banner");
   const errorMsg   = document.getElementById("dashboard-error-msg");
@@ -890,7 +897,7 @@
         if (subtitulo && data.ts.length > 0) {
           const d0 = data.ts[0].slice(0, 10);
           const d1 = data.ts[data.ts.length - 1].slice(0, 10);
-          subtitulo.textContent = `Potencia media cada 5 minutos (kW) — ${d0} → ${d1}`;
+          subtitulo.textContent = `Potencia media cada 5 minutos (kW) — ${_fmtFechaEs(d0)} → ${_fmtFechaEs(d1)}`;
         }
 
         const ctx = document.getElementById("chartCincominutal");

@@ -153,12 +153,6 @@
     {% endif %}
   </div>
 
-  {% if current_user_data.rol in ('master_admin', 'admin') %}
-  <a href="{{ url_for('clientes.medicion_subir', cliente_id=cliente_activo.id) }}"
-     class="sidebar-link" style="padding-left:2.5rem; font-size:.75rem; color:var(--color-primary);">
-    <i class="bi bi-upload" style="font-size:.7rem;"></i> Subir medición
-  </a>
-  {% endif %}
   {% endif %}
 
   {% if not current_user_data or current_user_data.rol != 'usuario_normal' %}

@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.48.0] — 2026-05-27
+
+### Añadido
+- `storage/repository.py`: nueva función `update_medicion(medicion_id, campos)` para PATCH.
+- `web/clientes.py`: endpoint `PATCH/DELETE /<cliente_id>/mediciones/<medicion_id>` — actualiza campos editables (nombre, anio, mes) o borra con respuesta JSON. Endpoint `POST /<cliente_id>/mediciones/borrar-lote` — borra lista de ids en un solo request.
+- `tests/test_mediciones.py`: 15 tests nuevos que cubren PATCH (nombre, mes/año, validación de rangos, campos vacíos, autorización, cliente incorrecto), DELETE (ok, no autorizado, no encontrado) y borrar-lote (ok, ids vacíos, no autorizado, mediciones ajenas).
+
+### Corregido / Cambiado
+- `web/static/js/dashboard-contabilidad.js`: helper `_fmtFechaEs()` convierte fechas ISO a "DD MMM YYYY" en español con meses en mayúsculas (ENE, FEB…). Subtítulo de la gráfica cincominutal pasa de "2026-03-01 → 2026-03-31" a "01 MAR 2026 → 31 MAR 2026".
+- `web/templates/clientes/_base.html`: eliminado enlace "Subir medición" del sidebar (la acción ya existe en la ficha del cliente).
+- `web/templates/clientes/ficha.html`: sección Mediciones rediseñada — título "Mediciones" (sin "Cincominutal"); columna "Subido por" eliminada; nueva columna "Tipo" con badge; edición inline de nombre y mes/año (clic → input, Enter/blur → PATCH, Escape cancela, flash verde de confirmación); checkboxes por fila + "seleccionar todo" con barra de acciones y conteo; borrado individual y en bloque con modal de confirmación obligatoria; botones deshabilitados durante peticiones en curso.
+
 ## [2.47.2] — 2026-05-27
 
 ### Corregido

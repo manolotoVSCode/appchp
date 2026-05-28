@@ -63,6 +63,7 @@ from storage.repository import (
     create_medicion,
     save_medicion_datos,
     get_medicion_datos,
+    update_medicion,
     delete_medicion,
 )
 
@@ -2209,3 +2210,82 @@ def medicion_seleccionar(cliente_id: int):
 
     session["medicion_activa_id"] = int(medicion_id)
     return jsonify({"ok": True})
+
+
+@clientes_bp.route("/<int:cliente_id>/mediciones/<int:medicion_id>", methods=["PATCH", "DELETE"])
+def medicion_api(cliente_id: int, medicion_id: int):
+    """PATCH: actualiza campos editables. DELETE: borra la medición. Devuelve JSON."""
+    from flask import jsonify
+    user = _get_current_user()
+    if not user or user.get("rol") not in ("master_admin", "admin"):
+        return jsonify({"error": "No autorizado"}), 403
+
+    medicion = get_medicion(medicion_id)
+    if not medicion or medicion["cliente_id"] != cliente_id:
+        return jsonify({"error": "No encontrada"}), 404
+
+    if request.method == "DELETE":
+        delete_medicion(medicion_id)
+        return jsonify({"ok": True})
+
+    # PATCH
+    data = request.get_json(silent=True) or {}
+    campos: dict = {}
+
+    if "nombre" in data:
+        v = str(data["nombre"]).strip() if data["nombre"] is not None else ""
+        campos["nombre"] = v or None
+
+    if "anio" in data:
+        try:
+            anio = int(data["anio"])
+            if not (2000 <= anio <= 2100):
+                return jsonify({"error": "Año fuera de rango (2000-2100)"}), 422
+            campos["anio"] = anio
+        except (ValueError, TypeError):
+            return jsonify({"error": "Año inválido"}), 422
+
+    if "mes" in data:
+        try:
+            mes = int(data["mes"])
+            if not (1 <= mes <= 12):
+                return jsonify({"error": "Mes fuera de rango (1-12)"}), 422
+            campos["mes"] = mes
+        except (ValueError, TypeError):
+            return jsonify({"error": "Mes inválido"}), 422
+
+    if not campos:
+        return jsonify({"error": "Sin campos válidos a actualizar"}), 422
+
+    updated = update_medicion(medicion_id, campos)
+    if updated is None:
+        return jsonify({"error": "No se pudo actualizar"}), 500
+    return jsonify({"ok": True, "medicion": updated})
+
+
+@clientes_bp.route("/<int:cliente_id>/mediciones/borrar-lote", methods=["POST"])
+def medicion_borrar_lote(cliente_id: int):
+    """Borra varias mediciones por lista de ids. Devuelve JSON."""
+    from flask import jsonify
+    user = _get_current_user()
+    if not user or user.get("rol") not in ("master_admin", "admin"):
+        return jsonify({"error": "No autorizado"}), 403
+
+    data = request.get_json(silent=True) or {}
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"error": "Lista de ids vacía"}), 422
+
+    eliminadas = 0
+    errores = 0
+    for mid in ids:
+        try:
+            m = get_medicion(int(mid))
+            if m and m["cliente_id"] == cliente_id:
+                delete_medicion(int(mid))
+                eliminadas += 1
+            else:
+                errores += 1
+        except Exception:
+            errores += 1
+    return jsonify({"ok": True, "eliminadas": eliminadas, "errores": errores})

@@ -311,10 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: fix get_medicion_datos — paginación .range() de
-1,000 en 1,000 para superar max-rows=1000 de PostgREST. Verificado:
-8,927 registros recuperados (medicion_id=1). Gráfica cincominutal usa
-chartjs-adapter-date-fns@3.0.0 (CDN) con eje type:"time".
+Último tema resuelto: ficha cliente — sección Mediciones rediseñada
+(edición inline, borrado individual+lote con modal, columna Tipo,
+sidebar sin "Subir medición"); fechas cincominutal en DD MMM YYYY es;
+endpoints PATCH/DELETE/borrar-lote; 15 tests nuevos en test_mediciones.
 Pendiente: ninguno conocido.
 
 ### Bugs App
