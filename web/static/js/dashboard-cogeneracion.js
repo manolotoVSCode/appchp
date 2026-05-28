@@ -30,9 +30,10 @@
   let esPPA = false;  // true cuando suministro_electrico es 'electrico_calificado'
 
   // ── Instancias Chart.js ───────────────────────────────────────────────────
-  let cogenChart     = null;
-  let chart15        = null;
-  let waterfallChart = null;
+  let cogenChart           = null;
+  let chart15              = null;
+  let waterfallChart       = null;
+  let donutAhorroNetoChart = null;
 
   // ── AbortController + debounce ────────────────────────────────────────────
   let _abortCtrl  = null;
@@ -349,6 +350,73 @@
     }
   }
 
+  // ── Donut: composición del ahorro neto (Electricidad vs Caldera) ─────────
+  function renderDonutAhorroNeto(ah_elec, ah_caldera) {
+    const canvas = document.getElementById("chartCompAhorroNeto");
+    const wrap   = document.getElementById("chartCompAhorroNeto-wrap");
+    if (!canvas) return;
+
+    const total = ah_elec + ah_caldera;
+    if (total === 0) {
+      if (donutAhorroNetoChart) { donutAhorroNetoChart.destroy(); donutAhorroNetoChart = null; }
+      if (wrap) wrap.innerHTML = '<div class="text-center text-muted small py-3">Sin datos</div>';
+      return;
+    }
+
+    const cs = getComputedStyle(document.documentElement);
+    const COLOR_ELEC    = cs.getPropertyValue("--color-info").trim()    || "#6A8A9A";
+    const COLOR_CALDERA = cs.getPropertyValue("--color-warning").trim() || "#E8B547";
+
+    const newData = [ah_elec, ah_caldera];
+    const newBg   = [COLOR_ELEC, COLOR_CALDERA];
+
+    const genLabels = chart => {
+      const ds  = chart.data.datasets[0];
+      const tot = ds.data.reduce((a, b) => a + b, 0);
+      return chart.data.labels.map((lbl, i) => ({
+        text:        lbl + " — " + (tot > 0 ? Math.round(ds.data[i] / tot * 100) : 0) + "%",
+        fillStyle:   ds.backgroundColor[i],
+        strokeStyle: "#fff",
+        lineWidth:   2,
+        hidden:      false,
+        index:       i,
+      }));
+    };
+
+    if (!donutAhorroNetoChart) {
+      donutAhorroNetoChart = new Chart(canvas, {
+        type: "doughnut",
+        data: {
+          labels:   ["Ahorro Electricidad", "Ahorro Caldera"],
+          datasets: [{ data: newData, backgroundColor: newBg, borderWidth: 2, borderColor: "#fff" }],
+        },
+        options: {
+          responsive:          true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels:   { generateLabels: genLabels },
+            },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const tot = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                  const pct = tot > 0 ? Math.round(ctx.raw / tot * 100) : 0;
+                  return fmt(ctx.raw) + " (" + pct + "%)";
+                },
+              },
+            },
+          },
+        },
+      });
+    } else {
+      donutAhorroNetoChart.data.datasets[0].data            = newData;
+      donutAhorroNetoChart.data.datasets[0].backgroundColor = newBg;
+      donutAhorroNetoChart.update();
+    }
+  }
+
   // ── Chart: flujo 15 años ──────────────────────────────────────────────────
   function actualizarChart15(ahorroAnual, beneficioFiscal) {
     beneficioFiscal = beneficioFiscal || 0;
@@ -499,6 +567,7 @@
     const labels = meses_raw.map(m => m.periodo);
     upsertCogenChart(labels, lChartE, lChartC, lChartG, lChartOM, lChartN);
     upsertGraficasComposicion(ah_elec, ah_caldera, costo_gas, om_anual, ahorro_neto_anual);
+    renderDonutAhorroNeto(ah_elec, ah_caldera);
 
     actualizarCO2(p);
     const celRes = recalcularCELs(p);

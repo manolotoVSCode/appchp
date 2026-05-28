@@ -224,24 +224,37 @@
   </div>
 </div>
 
-<!-- ── KPI: Ahorro Neto + Reducción CO2 + CELs + Energía Limpia ─────────── -->
-<div class="section-label">Impacto ambiental y regulatorio</div>
-<div class="row g-3 mb-4">
-
-  <!-- Ahorro Neto Anual -->
-  <div class="col-sm-6 col-lg-3">
-    <div class="card shadow-sm h-100">
-      <div class="kpi-card-b2 kpi-nivel-primario">
-        <i class="bi bi-cash-coin kpi-icon" style="font-size:2rem;color:var(--color-positive)"></i>
-        <div class="kpi-label">Ahorro Neto Anual</div>
-        <div class="kpi-value kpi-valor-primario" id="kpi-ahorro-neto-val" style="color:var(--color-positive)">—</div>
-        <div class="kpi-sublabel">MXN / año (ingresos − gas − O&amp;M)</div>
+<!-- ── KPI: Ahorro Neto Anual + Donut composición ingresos ───────────────── -->
+<div class="row g-3 mb-3">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="kpi-section-label">Ahorro Neto Anual</div>
+      <div class="card-body pt-1">
+        <div class="row g-3 align-items-center">
+          <div class="col-md-6">
+            <i class="bi bi-cash-coin" style="font-size:2rem;color:var(--color-positive)"></i>
+            <div class="kpi-value kpi-valor-primario mt-2" id="kpi-ahorro-neto-val" style="color:var(--color-positive)">—</div>
+            <div class="text-muted small">MXN / año (ingresos − gas − O&amp;M)</div>
+          </div>
+          <div class="col-md-6 d-flex justify-content-center">
+            <div id="chartCompAhorroNeto-wrap" style="max-width:220px;width:100%">
+              <canvas id="chartCompAhorroNeto"
+                      aria-label="Composición del ahorro neto: Ahorro Electricidad vs Ahorro Caldera"
+                      role="img"></canvas>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+</div>
+
+<!-- ── KPI: Reducción CO2 + CELs + Energía Limpia ──────────────────────── -->
+<div class="section-label">Impacto ambiental y regulatorio</div>
+<div class="row g-3 mb-4">
 
   <!-- Reducción Huella de Carbono -->
-  <div class="col-sm-6 col-lg-3">
+  <div class="col-sm-6 col-lg-4">
     <div class="card shadow-sm h-100">
       <div class="kpi-card-b2 kpi-nivel-secundario">
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"
@@ -257,7 +270,7 @@
   </div>
 
   <!-- CELs Generados -->
-  <div class="col-sm-6 col-lg-3">
+  <div class="col-sm-6 col-lg-4">
     <div class="card shadow-sm h-100">
       <div class="kpi-card-b2 kpi-nivel-secundario" id="cels-card-body">
         <!-- JS renderiza el contenido -->
@@ -266,7 +279,7 @@
   </div>
 
   <!-- Energía Limpia Generada -->
-  <div class="col-sm-6 col-lg-3">
+  <div class="col-sm-6 col-lg-4">
     <div class="card shadow-sm h-100">
       <div class="kpi-card-b2 kpi-nivel-secundario">
         <i class="bi bi-lightning-charge kpi-icon" style="font-size:2rem;color:var(--color-positive)"></i>
