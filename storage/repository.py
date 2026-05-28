@@ -1428,7 +1428,7 @@ def delete_medicion(medicion_id: int) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def crear_medidor(
-    empresa_id: int,
+    cliente_id: int,
     nombre: str,
     punto_medicion: str | None = None,
     ubicacion: str | None = None,
@@ -1439,7 +1439,7 @@ def crear_medidor(
 ) -> dict:
     """Inserta un medidor en la tabla medidores y retorna el registro creado con id."""
     payload = {
-        "empresa_id":      empresa_id,
+        "cliente_id":      cliente_id,
         "nombre":          nombre,
         "punto_medicion":  punto_medicion,
         "ubicacion":       ubicacion,
@@ -1452,12 +1452,12 @@ def crear_medidor(
     return resp.data[0]
 
 
-def obtener_medidores_por_empresa(empresa_id: int) -> list[dict]:
-    """Retorna todos los medidores de una empresa, ordenados por nombre."""
+def obtener_medidores_por_cliente(cliente_id: int) -> list[dict]:
+    """Retorna todos los medidores de un cliente, ordenados por nombre."""
     resp = (
         _supabase.table("medidores")
         .select("*")
-        .eq("empresa_id", empresa_id)
+        .eq("cliente_id", cliente_id)
         .order("nombre", desc=False)
         .limit(20000)
         .execute()

@@ -333,9 +333,9 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.59.0 — capa de datos fase 2 entrega A.
-Tablas medidores/mediciones_tiempo_real/mediciones_agregadas_15min
-creadas en PostgreSQL nativo (sin TimescaleDB). Función
-agregar_mediciones_15min() + job pg_cron cada 15 min. 7 funciones
-repositorio + 12 tests. Pendiente: aplicar migración en Supabase,
-verificar SELECT * FROM cron.job. Siguiente: rutas/UI telemetría.
+Último tema resuelto: v2.59.1 — alineación a BD aplicada. La migración
+se aplicó con cliente_id (no empresa_id), creado_en (no created_at),
+PK (medidor_id, timestamp), columna secuencia_fases, pg_cron manual.
+Repository y tests actualizados; obtener_medidores_por_cliente es el
+nombre definitivo. 12/12 tests pasan.
+Pendiente: rutas y UI de telemetría (entrega B).

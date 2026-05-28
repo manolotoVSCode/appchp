@@ -21,7 +21,7 @@ import storage.repository as repo
 
 _MEDIDOR = {
     "id": 1,
-    "empresa_id": 10,
+    "cliente_id": 10,
     "nombre": "Medidor Planta Norte",
     "punto_medicion": "MPN-01",
     "ubicacion": "Cuarto eléctrico N",
@@ -116,7 +116,7 @@ def test_crear_medidor_retorna_con_id():
     mock = _mock_table({"medidores": [_MEDIDOR]})
     with patch("storage.repository._supabase", mock):
         resultado = repo.crear_medidor(
-            empresa_id=10,
+            cliente_id=10,
             nombre="Medidor Planta Norte",
             punto_medicion="MPN-01",
             ubicacion="Cuarto eléctrico N",
@@ -124,25 +124,25 @@ def test_crear_medidor_retorna_con_id():
             relacion_tc=200.0,
         )
     assert resultado["id"] == 1
-    assert resultado["empresa_id"] == 10
+    assert resultado["cliente_id"] == 10
     assert resultado["marca"] == "Accuenergy"
     # Verificar que se llamó a insert en la tabla correcta
     mock.table.assert_called_with("medidores")
 
 
-# b) obtener_medidores_por_empresa filtra por empresa_id
-def test_obtener_medidores_por_empresa_filtra():
+# b) obtener_medidores_por_cliente filtra por cliente_id
+def test_obtener_medidores_por_cliente_filtra():
     mock = _mock_table({"medidores": [_MEDIDOR]})
     with patch("storage.repository._supabase", mock):
-        resultado = repo.obtener_medidores_por_empresa(empresa_id=10)
+        resultado = repo.obtener_medidores_por_cliente(cliente_id=10)
     assert len(resultado) == 1
-    assert resultado[0]["empresa_id"] == 10
+    assert resultado[0]["cliente_id"] == 10
 
 
-def test_obtener_medidores_por_empresa_lista_vacia():
+def test_obtener_medidores_por_cliente_lista_vacia():
     mock = _mock_table({"medidores": []})
     with patch("storage.repository._supabase", mock):
-        resultado = repo.obtener_medidores_por_empresa(empresa_id=99)
+        resultado = repo.obtener_medidores_por_cliente(cliente_id=99)
     assert resultado == []
 
 

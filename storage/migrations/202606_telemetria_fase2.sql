@@ -3,14 +3,19 @@
 -- Capa de datos de telemetría — Fase 2
 -- Medidores Accuenergy Acuvim II, set completo de variables.
 -- PostgreSQL nativo (sin TimescaleDB).
--- Diseño migrable a hypertable: PK de mediciones_tiempo_real incluye timestamp.
+-- Diseño migrable a hypertable: PK de mediciones_tiempo_real incluye medidor_id + timestamp.
 -- REFERENCES usa tabla "clientes" (PK: id INTEGER) que es la tabla de empresas.
+--
+-- NOTA pg_cron: el job de agregación automática se activa manualmente desde el
+-- panel de Supabase (Database → Extensions → pg_cron).  No se ejecuta
+-- CREATE EXTENSION aquí para evitar errores en proyectos donde la extensión
+-- no está habilitada en el plan.  Ver sección "Job pg_cron" al final del archivo.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ── Tabla de medidores ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS medidores (
     id              BIGSERIAL   PRIMARY KEY,
-    empresa_id      INTEGER     NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    cliente_id      INTEGER     NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     nombre          TEXT        NOT NULL,
     punto_medicion  TEXT,
     ubicacion       TEXT,
@@ -19,19 +24,21 @@ CREATE TABLE IF NOT EXISTS medidores (
     marca           TEXT        NOT NULL DEFAULT 'Accuenergy',
     modelo          TEXT        NOT NULL DEFAULT 'Acuvim II',
     activo          BOOLEAN     NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    creado_en       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_medidores_empresa ON medidores(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_medidores_cliente ON medidores(cliente_id);
 
 -- ── Tabla de mediciones en tiempo real ───────────────────────────────────────
 -- Una fila por lectura del medidor (intervalo configurable, típico 1-5 min).
--- PK compuesta (id, timestamp) permite conversión futura a hypertable TimescaleDB
+-- PK compuesta (medidor_id, timestamp) permite conversión futura a hypertable TimescaleDB
 -- con: SELECT create_hypertable('mediciones_tiempo_real', 'timestamp');
 CREATE TABLE IF NOT EXISTS mediciones_tiempo_real (
-    id                  BIGSERIAL,
     medidor_id          BIGINT      NOT NULL REFERENCES medidores(id) ON DELETE CASCADE,
     timestamp           TIMESTAMPTZ NOT NULL,
+
+    -- ── Secuencia de fases ────────────────────────────────────────────────────
+    secuencia_fases     TEXT,                    -- 'ABC', 'ACB', etc.
 
     -- ── Voltajes fase-neutro (V) ─────────────────────────────────────────────
     v_an                NUMERIC(10,3),   -- Fase A – neutro
@@ -103,7 +110,7 @@ CREATE TABLE IF NOT EXISTS mediciones_tiempo_real (
     demanda_max_kw      NUMERIC(12,4),   -- máxima registrada en el medidor
     demanda_max_kva     NUMERIC(12,4),
 
-    PRIMARY KEY (id, timestamp)
+    PRIMARY KEY (medidor_id, timestamp)
 );
 
 CREATE INDEX IF NOT EXISTS idx_mtr_medidor_ts
@@ -152,6 +159,7 @@ CREATE INDEX IF NOT EXISTS idx_mag_medidor_bucket
 
 -- ── Función de agregación a 15 minutos ───────────────────────────────────────
 -- Calcula buckets del rango [p_desde, p_hasta) para un medidor dado.
+-- Ventana por defecto: 30 minutos hacia atrás desde el momento de invocación.
 -- Se invoca manualmente o desde el job de pg_cron.
 CREATE OR REPLACE FUNCTION agregar_mediciones_15min(
     p_medidor_id BIGINT,
@@ -206,47 +214,28 @@ BEGIN
 END;
 $func$;
 
--- ── Job pg_cron: agrega el período de 15 min anterior, cada 15 min ───────────
--- Requiere extensión pg_cron (disponible en Supabase Pro/Enterprise).
--- El DO $$ guarda con IF EXISTS para no fallar si pg_cron no está habilitado.
-DO $cron_setup$
-DECLARE
-    v_job_name TEXT := 'agregar_mediciones_15min_job';
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-        RAISE NOTICE 'pg_cron no está disponible; job no registrado.';
-        RETURN;
-    END IF;
-
-    -- Desregistrar si ya existía (idempotente)
-    BEGIN
-        PERFORM cron.unschedule(v_job_name);
-    EXCEPTION WHEN OTHERS THEN NULL;
-    END;
-
-    -- Registrar el job: cada 15 min, agrega el período anterior para todos los medidores activos
-    PERFORM cron.schedule(
-        v_job_name,
-        '*/15 * * * *',
-        $job$
-        DO $inner$
-        DECLARE
-            r       RECORD;
-            v_hasta TIMESTAMPTZ;
-            v_desde TIMESTAMPTZ;
-        BEGIN
-            v_hasta := date_trunc('hour', NOW())
-                       + INTERVAL '15 min'
-                         * FLOOR(EXTRACT(MINUTE FROM NOW()) / 15);
-            v_desde := v_hasta - INTERVAL '15 minutes';
-            FOR r IN SELECT id FROM medidores WHERE activo = TRUE LOOP
-                PERFORM agregar_mediciones_15min(r.id, v_desde, v_hasta);
-            END LOOP;
-        END;
-        $inner$
-        $job$
-    );
-
-    RAISE NOTICE 'Job % registrado correctamente.', v_job_name;
-END;
-$cron_setup$;
+-- ── Job pg_cron (activar manualmente desde Supabase UI) ──────────────────────
+-- Requiere extensión pg_cron habilitada desde Database → Extensions en el panel
+-- de Supabase.  Una vez habilitada, ejecutar el bloque siguiente en el SQL Editor:
+--
+-- SELECT cron.schedule(
+--     'agregar_mediciones_15min_job',
+--     '*/15 * * * *',
+--     $$
+--     DO $inner$
+--     DECLARE
+--         r       RECORD;
+--         v_hasta TIMESTAMPTZ;
+--         v_desde TIMESTAMPTZ;
+--     BEGIN
+--         v_hasta := date_trunc('hour', NOW())
+--                    + INTERVAL '15 min'
+--                      * FLOOR(EXTRACT(MINUTE FROM NOW()) / 15);
+--         v_desde := v_hasta - INTERVAL '30 minutes';
+--         FOR r IN SELECT id FROM medidores WHERE activo = TRUE LOOP
+--             PERFORM agregar_mediciones_15min(r.id, v_desde, v_hasta);
+--         END LOOP;
+--     END;
+--     $inner$
+--     $$
+-- );

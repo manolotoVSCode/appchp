@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.59.1] — 2026-05-27
+
+### Corregido — Alineación telemetría fase 2 con BD aplicada
+- `storage/repository.py`: renombrada función `obtener_medidores_por_empresa(empresa_id)` → `obtener_medidores_por_cliente(cliente_id)`; parámetro y clave de payload `empresa_id` → `cliente_id` en `crear_medidor` y el filtro `.eq()` correspondiente. La BD usa `cliente_id INTEGER REFERENCES clientes(id)`, no `empresa_id`.
+- `storage/migrations/202606_telemetria_fase2.sql`: reescrito para reflejar exactamente el SQL aplicado — `cliente_id` (no `empresa_id`), `creado_en` (no `created_at`), índice `idx_medidores_cliente`, PK de `mediciones_tiempo_real` = `(medidor_id, timestamp)` (sin columna `id BIGSERIAL`), columna `secuencia_fases TEXT`, ventana de agregación 30 minutos. Bloque pg_cron movido a comentario con instrucción de activación manual desde el panel de Supabase.
+- `tests/test_repository_mediciones.py`: fixture `_MEDIDOR` actualizada (`empresa_id` → `cliente_id`); tests `test_obtener_medidores_por_empresa_*` renombrados a `test_obtener_medidores_por_cliente_*` y actualizados para llamar a la función renombrada. 12/12 passed.
+
 ## [2.59.0] — 2026-05-27
 
 ### Añadido — Fase 2: Capa de datos de telemetría (Entrega A)
