@@ -1316,3 +1316,108 @@ def test_tipo_cambio_actualiza_inversion_mxn(app, monkeypatch):
     json_data = resp_data.get_json()
     # inversion_mxn = 97216 * 20 = 1,944,320
     assert abs(json_data["kpis"]["inversion_mxn"] - 1944320.0) < 1.0
+
+# ── Test 14: desglose-costo-total incluye serie mensual con kwh y costo_unit ──
+
+def _make_cfe_invoice_desglose():
+    """CFEInvoice mínimo con componentes MEM y periodos para el test de desglose."""
+    from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
+    from decimal import Decimal
+    from datetime import date as d
+
+    periodos = [
+        CFEConsumoHorario(periodo="base",       consumo_kwh=Decimal("10000"), demanda_kw=Decimal("0"), costo_unitario_kwh=Decimal("0")),
+        CFEConsumoHorario(periodo="intermedio", consumo_kwh=Decimal("5000"),  demanda_kw=Decimal("0"), costo_unitario_kwh=Decimal("0")),
+        CFEConsumoHorario(periodo="punta",      consumo_kwh=Decimal("2000"),  demanda_kw=Decimal("0"), costo_unitario_kwh=Decimal("0")),
+    ]
+    def _comp(nombre, importe):
+        return MEMComponente(nombre=nombre, cargo_fijo_mxn=Decimal("0"),
+                             cargo_demanda_mxn=Decimal("0"), cargo_energia_mxn=Decimal("0"),
+                             importe_mxn=Decimal(str(importe)))
+
+    componentes = [
+        _comp("Generación B",  5000),
+        _comp("Generación I",  3000),
+        _comp("Generación P",  2000),
+        _comp("Capacidad",     4000),
+        _comp("Distribución",  3500),
+        _comp("Transmisión",   1000),
+        _comp("CENACE",         500),
+        _comp("SCnMEM",         300),
+    ]
+    return CFEInvoice(
+        uuid_cfdi=None, folio="0001", serie=None,
+        fecha_emision=d(2026, 1, 15),
+        periodo_inicio=d(2026, 1, 1), periodo_fin=d(2026, 1, 31),
+        fecha_limite_pago=d(2026, 2, 10),
+        nombre_cliente="IBERICA TILES", rfc_cliente="ITI930101AAA",
+        numero_servicio="123", rmu=None, tarifa="GDMTH",
+        numero_medidor="M1", multiplicador=1,
+        carga_conectada_kw=Decimal("0"), demanda_contratada_kw=Decimal("0"),
+        periodos=periodos,
+        kw_max=Decimal("0"), kvArh=Decimal("0"), factor_potencia_pct=Decimal("0"),
+        componentes_mem=componentes,
+        cargo_fijo_mxn=Decimal("0"), energia_total_mxn=Decimal("10000"),
+        cargo_factor_potencia_mxn=Decimal("200"),
+        subtotal_mxn=Decimal("19500"), iva_mxn=Decimal("3120"),
+        facturacion_periodo_mxn=Decimal("22620"),
+        derecho_alumbrado_publico_mxn=Decimal("0"),
+        credito_aplicado_mxn=Decimal("0"),
+        total_mxn=Decimal("22620"),
+        pdf_path=None, advertencias=[],
+    )
+
+
+def test_desglose_costo_total_incluye_mensual(app, monkeypatch):
+    """GET desglose-costo-total → JSON incluye 'mensual' con claves y valores correctos."""
+    inv = _make_cfe_invoice_desglose()
+    monkeypatch.setattr(
+        "web.app._cargar_facturas_seleccionadas",
+        lambda cliente_id: ([inv], [], [], []),
+    )
+    monkeypatch.setattr(
+        "web.app.get_tipo_suministro_electrico_seleccionado",
+        lambda cliente_id: "electrico_basico",
+    )
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE)
+    c = _login(app, monkeypatch)
+    with c.session_transaction() as sess:
+        sess["cliente_activo_id"] = 1
+        sess["cliente_activo_nombre"] = "IBERICA TILES"
+
+    resp = c.get("/clientes/1/dashboard/contabilidad/desglose-costo-total")
+    assert resp.status_code == 200
+    data = resp.get_json()
+
+    # La clave "lineas" y "total" existen (no alteradas)
+    assert "lineas" in data
+    assert "total" in data
+
+    # La clave "mensual" existe y contiene exactamente un registro (un invoice)
+    assert "mensual" in data
+    mensual = data["mensual"]
+    assert len(mensual) == 1
+    m = mensual[0]
+
+    # Claves obligatorias
+    for clave in ("mes", "energia", "capacidad", "distribucion", "otros", "total", "kwh", "costo_unit"):
+        assert clave in m, f"Falta clave '{clave}' en mensual[0]"
+
+    # Valores numéricos esperados
+    # energia = GenB + GenI + GenP = 5000 + 3000 + 2000 = 10000
+    assert abs(m["energia"] - 10000.0) < 0.01
+    # capacidad = 4000
+    assert abs(m["capacidad"] - 4000.0) < 0.01
+    # distribucion = 3500
+    assert abs(m["distribucion"] - 3500.0) < 0.01
+    # otros = Transmisión + CENACE + SCnMEM + cargo_factor_potencia = 1000+500+300+200 = 2000
+    assert abs(m["otros"] - 2000.0) < 0.01
+    # total = 19500
+    assert abs(m["total"] - 19500.0) < 0.01
+    # kwh = 10000 + 5000 + 2000 = 17000
+    assert abs(m["kwh"] - 17000.0) < 0.01
+    # costo_unit = 19500 / 17000
+    assert abs(m["costo_unit"] - (19500.0 / 17000.0)) < 0.0001
+
+    # Etiqueta mes: factura enero 2026
+    assert m["mes"] == "Jan 2026"

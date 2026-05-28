@@ -311,10 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: ficha cliente — sección Mediciones rediseñada
-(edición inline, borrado individual+lote con modal, columna Tipo,
-sidebar sin "Subir medición"); fechas cincominutal en DD MMM YYYY es;
-endpoints PATCH/DELETE/borrar-lote; 15 tests nuevos en test_mediciones.
+Último tema resuelto: dashboard Contabilidad — gráfica "Costo mensual
+por componente" (barras apiladas + línea $/kWh eje der.) en desplegable
+"Ver detalle". Endpoint expone serie `mensual` con 8 campos por mes.
+Colores donut azules; patrón upsert; 1 test nuevo en test_dashboard_2d.
 Pendiente: ninguno conocido.
 
 ### Bugs App

@@ -36,6 +36,7 @@
   let chartGasCostos     = null;
   let chartPpaConsumo    = null;
   let chartPpaCosto      = null;
+  let costoMensualComponenteChart = null;
 
   let quesoDatos    = null;
   let filtroActivo  = "__todos__";
@@ -399,6 +400,51 @@
     }
   }
 
+  function upsertChartCostoMensualComponente(mensual) {
+    const canvas = document.getElementById("chartCostoMensualComponente");
+    if (!canvas) return;
+    if (!mensual || mensual.length === 0) {
+      canvas.style.display = "none";
+      return;
+    }
+    canvas.style.display = "";
+    const labels = mensual.map(m => m.mes);
+    const datasets = [
+      { label: "Energía",         data: mensual.map(m => m.energia),      backgroundColor: "#0D3B66", yAxisID: "y", stack: "costos" },
+      { label: "Capacidad",       data: mensual.map(m => m.capacidad),    backgroundColor: "#1F6FB2", yAxisID: "y", stack: "costos" },
+      { label: "Distribución",    data: mensual.map(m => m.distribucion), backgroundColor: "#4A9FD8", yAxisID: "y", stack: "costos" },
+      { label: "Otros Servicios", data: mensual.map(m => m.otros),        backgroundColor: "#A8D0E6", yAxisID: "y", stack: "costos" },
+      { type: "line", label: "$/kWh del mes", data: mensual.map(m => m.costo_unit),
+        borderColor: COLOR_LINEA, backgroundColor: "transparent",
+        borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2" }
+    ];
+    if (!costoMensualComponenteChart) {
+      costoMensualComponenteChart = new Chart(canvas, {
+        type: "bar",
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: "top" },
+            tooltip: { callbacks: { label: ctx => ctx.dataset.yAxisID === "y2"
+              ? ctx.dataset.label + ": $" + ctx.raw.toFixed(4)
+              : ctx.dataset.label + ": $" + Math.round(ctx.raw).toLocaleString("es-MX") } }
+          },
+          scales: {
+            x:  { stacked: true },
+            y:  { position: "left",  title: { display: true, text: "MXN" }, beginAtZero: true, stacked: true,
+                  ticks: { callback: v => "$" + Math.round(v).toLocaleString("en-US") } },
+            y2: { position: "right", title: { display: true, text: "$/kWh" }, grid: { drawOnChartArea: false }, beginAtZero: true }
+          }
+        }
+      });
+    } else {
+      costoMensualComponenteChart.data.labels = labels;
+      costoMensualComponenteChart.data.datasets.forEach((ds, i) => { ds.data = datasets[i].data; });
+      costoMensualComponenteChart.update();
+    }
+  }
+
   function upsertChartPpaConsumo(historicoP) {
     const labels = historicoP.map(m => m.mes);
     const kwh    = historicoP.map(m => m.kwh_total);
@@ -559,6 +605,8 @@
       color:  colores[l.nombre] || "#999",
     }));
     renderDonutComponentes("donutDetalleCostoTotal", datosDonut);
+
+    if (data.mensual) upsertChartCostoMensualComponente(data.mensual);
   }
 
   function renderGasHistorico(gasHist) {

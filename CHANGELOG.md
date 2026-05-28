@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.61.0] — 2026-05-27
+
+### Añadido — Gráfica de costo mensual por componente (dashboard Contabilidad)
+- `web/app.py` (endpoint `desglose-costo-total`): nueva clave `mensual` en la respuesta JSON — lista de objetos `{mes, energia, capacidad, distribucion, otros, total, kwh, costo_unit}` por factura CFE seleccionada, ordenada cronológicamente. Las claves existentes `lineas` y `total` no se modificaron.
+- `web/templates/dashboard_contabilidad.html`: bloque `#bloque-costo-mensual-componente` con `<canvas id="chartCostoMensualComponente">` añadido dentro del desplegable "Ver detalle".
+- `web/static/js/dashboard-contabilidad.js`: variable `costoMensualComponenteChart`, función `upsertChartCostoMensualComponente(mensual)` — barras apiladas (Energía, Capacidad, Distribución, Otros Servicios) con línea $/kWh en eje derecho; patrón upsert idéntico a `upsertChartGasCostos`; colores donut `#0D3B66 / #1F6FB2 / #4A9FD8 / #A8D0E6` y `COLOR_LINEA`. `renderDetalleCostoTotal` llama la función cuando `data.mensual` está presente.
+- `tests/test_dashboard_2d.py`: `test_desglose_costo_total_incluye_mensual` — verifica presencia de clave `mensual`, los 8 sub-campos, valores exactos (energia=10000, capacidad=4000, distribucion=3500, otros=2000, total=19500, kwh=17000) y `costo_unit ≈ 19500/17000`.
+
 ## [2.60.1] — 2026-05-28
 
 ### Corregido — Generador de telemetría desalineado del esquema real

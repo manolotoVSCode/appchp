@@ -992,6 +992,38 @@ def create_app() -> Flask:
         def _pct(v, t):
             return round(float(v / t * 100)) if t > 0 else 0
 
+        # Serie mensual — un registro por factura, ordenado cronológicamente
+        mensual = []
+        for inv in sorted(cfe_invoices, key=lambda x: x.periodo_inicio):
+            comp_m = {c.nombre: c for c in inv.componentes_mem}
+            e_m = (
+                (comp_m["Generación B"].importe_mxn if "Generación B" in comp_m else Decimal("0"))
+                + (comp_m["Generación I"].importe_mxn if "Generación I" in comp_m else Decimal("0"))
+                + (comp_m["Generación P"].importe_mxn if "Generación P" in comp_m else Decimal("0"))
+            )
+            c_m = comp_m["Capacidad"].importe_mxn if "Capacidad" in comp_m else Decimal("0")
+            d_m = comp_m["Distribución"].importe_mxn if "Distribución" in comp_m else Decimal("0")
+            o_m = (
+                (comp_m["Transmisión"].importe_mxn if "Transmisión" in comp_m else Decimal("0"))
+                + (comp_m["CENACE"].importe_mxn if "CENACE" in comp_m else Decimal("0"))
+                + (comp_m["SCnMEM"].importe_mxn if "SCnMEM" in comp_m else Decimal("0"))
+                + (comp_m["Suministro"].importe_mxn if "Suministro" in comp_m else Decimal("0"))
+                + (inv.cargo_factor_potencia_mxn or Decimal("0"))
+            )
+            t_m = e_m + c_m + d_m + o_m
+            kwh_m = float(sum(p.consumo_kwh for p in inv.periodos))
+            mes_label = date(*mes_asociado(inv.periodo_inicio, inv.periodo_fin), 1).strftime("%b %Y")
+            mensual.append({
+                "mes":        mes_label,
+                "energia":    float(e_m),
+                "capacidad":  float(c_m),
+                "distribucion": float(d_m),
+                "otros":      float(o_m),
+                "total":      float(t_m),
+                "kwh":        kwh_m,
+                "costo_unit": float(t_m / Decimal(str(kwh_m))) if kwh_m > 0 else 0.0,
+            })
+
         return jsonify({
             "lineas": [
                 {"nombre": "Energía",         "monto": float(energia),      "pct": _pct(energia, total)},
@@ -1000,6 +1032,7 @@ def create_app() -> Flask:
                 {"nombre": "Otros Servicios", "monto": float(otros),        "pct": _pct(otros, total)},
             ],
             "total": float(total),
+            "mensual": mensual,
         })
 
     @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion/data")
