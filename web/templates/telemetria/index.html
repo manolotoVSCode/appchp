@@ -1,0 +1,86 @@
+{% extends "clientes/_base.html" %}
+{% block title %}Telemetría — Medidores{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <h1 class="h3 mb-0">Telemetría <span class="badge bg-warning text-dark" style="font-size:.6rem;vertical-align:middle">Beta</span></h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+{# Selector de cliente #}
+<div class="card mb-4" style="max-width:480px">
+  <div class="card-body py-3">
+    <form method="get" action="{{ url_for('telemetria_index') }}" class="d-flex gap-2 align-items-end">
+      <div class="flex-grow-1">
+        <label for="sel-cliente" class="form-label mb-1" style="font-size:.8rem;font-weight:600">Cliente</label>
+        <select id="sel-cliente" name="cliente_id" class="form-select form-select-sm">
+          <option value="">— seleccionar —</option>
+          {% for c in clientes %}
+          <option value="{{ c.id }}" {% if cliente_sel and cliente_sel.id == c.id %}selected{% endif %}>
+            {{ c.nombre }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-sm btn-primary">Ver</button>
+    </form>
+  </div>
+</div>
+
+{% if cliente_sel %}
+<h5 class="mb-3">{{ cliente_sel.nombre }} — medidores</h5>
+
+{% if medidores %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Nombre</th>
+        <th>Punto de medición</th>
+        <th>Marca / Modelo</th>
+        <th>N.º serie</th>
+        <th>Estado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in medidores %}
+      <tr>
+        <td>{{ m.nombre }}</td>
+        <td>{{ m.punto_medicion or '—' }}</td>
+        <td>{{ m.marca }} / {{ m.modelo }}</td>
+        <td><code style="font-size:.78rem">{{ m.numero_serie or '—' }}</code></td>
+        <td>
+          {% if m.activo %}
+          <span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>
+          {% else %}
+          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactivo</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('telemetria_medidor', medidor_id=m.id) }}"
+             class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-activity"></i> Ver mediciones
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted">Este cliente no tiene medidores registrados.</p>
+{% endif %}
+
+{% elif request.args.get('cliente_id') %}
+<p class="text-warning">Cliente no encontrado.</p>
+{% endif %}
+{% endblock %}

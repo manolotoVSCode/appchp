@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.60.0] — 2026-05-27
+
+### Añadido — Fase 2: Vista de telemetría solo lectura (Entrega B1)
+- `telemetria/seed.py`: generador de mediciones sintéticas (`generar_mediciones_sinteticas`) — 96 lecturas × 15 min con perfil industrial realista (kW senoidal día/noche, V ≈ 13 800 V ±1 %, fp 0.88–0.97, Hz 60 ±0.05, acumuladores kwh/kvarh monótonos). Reutilizable desde rutas web y CLI.
+- `web/app.py`: tres rutas de telemetría bajo `/admin/telemetria`, verificación manual (`get_current_user()` + flag `FASE2_HABILITADA`), sin decoradores. `telemetria_index` lista clientes/medidores. `telemetria_medidor` muestra últimas 200 mediciones de 24 h. `telemetria_sembrar` (POST) genera y persiste las 96 lecturas sintéticas vía `insertar_mediciones_batch`.
+- `web/templates/telemetria/index.html`: selector de cliente + tabla de medidores con enlace a detalle.
+- `web/templates/telemetria/medidor.html`: cabecera del medidor, botón "Sembrar datos de prueba (24 h)" (solo master_admin, con csrf_token), tabla de las últimas 200 mediciones (timestamp, kW, FP, V A-N, I A, Hz).
+- `web/templates/clientes/_base.html`: reemplazado placeholder de fase 2 por enlace real `telemetria_index` en sidebar, visible solo si `fase2_habilitada` y `master_admin`.
+- `tests/test_telemetria_vista.py`: 7 tests (a–f) — 404 sin flag, redirect para no-master_admin, 200 para master_admin, redirect en medidor inexistente, sembrado captura 96 mediciones con rangos validados, redirect para no-master_admin en POST sembrar. 7/7 passed.
+
+### Corregido
+- `web/app.py`: `abort` añadido al import de Flask (faltaba para las rutas nuevas).
+
 ## [2.59.1] — 2026-05-27
 
 ### Corregido — Alineación telemetría fase 2 con BD aplicada

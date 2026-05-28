@@ -1,0 +1,80 @@
+{% extends "clientes/_base.html" %}
+{% block title %}Telemetría — {{ medidor.nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-1 gap-2 flex-wrap">
+  <a href="{{ url_for('telemetria_index') }}" class="btn btn-sm btn-link px-0 text-muted">
+    <i class="bi bi-arrow-left"></i> Medidores
+  </a>
+</div>
+
+<div class="d-flex align-items-center mb-4 gap-3 flex-wrap">
+  <div>
+    <h1 class="h3 mb-0">{{ medidor.nombre }}</h1>
+    <div class="text-muted" style="font-size:.8rem;margin-top:.2rem">
+      {{ medidor.marca }} {{ medidor.modelo }}
+      {% if medidor.punto_medicion %}&nbsp;·&nbsp;{{ medidor.punto_medicion }}{% endif %}
+      {% if medidor.numero_serie %}&nbsp;·&nbsp;S/N&nbsp;<code>{{ medidor.numero_serie }}</code>{% endif %}
+    </div>
+  </div>
+  {% if current_user_data and current_user_data.rol == 'master_admin' %}
+  <form method="post"
+        action="{{ url_for('telemetria_sembrar', medidor_id=medidor.id) }}"
+        class="ms-auto"
+        onsubmit="this.querySelector('button').disabled=true">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-sm btn-outline-warning">
+      <i class="bi bi-database-fill-up"></i> Sembrar datos de prueba (24 h)
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<h5 class="mb-3">
+  Últimas mediciones
+  <small class="text-muted fw-normal" style="font-size:.75rem">(últimas 24 h, máx. 200 filas)</small>
+</h5>
+
+{% if mediciones %}
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Timestamp</th>
+        <th class="text-end">kW total</th>
+        <th class="text-end">FP total</th>
+        <th class="text-end">V A-N (V)</th>
+        <th class="text-end">I A (A)</th>
+        <th class="text-end">Hz</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in mediciones|reverse %}
+      <tr>
+        <td style="white-space:nowrap;font-size:.8rem">{{ m.timestamp }}</td>
+        <td class="text-end">{{ "%.2f"|format(m.kw_total|float) if m.kw_total is not none else '—' }}</td>
+        <td class="text-end">{{ "%.4f"|format(m.pf_total|float) if m.pf_total is not none else '—' }}</td>
+        <td class="text-end">{{ "%.1f"|format(m.v_an|float) if m.v_an is not none else '—' }}</td>
+        <td class="text-end">{{ "%.2f"|format(m.i_a|float) if m.i_a is not none else '—' }}</td>
+        <td class="text-end">{{ "%.3f"|format(m.frecuencia_hz|float) if m.frecuencia_hz is not none else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-info">
+  No hay mediciones en las últimas 24 horas.
+  Use el botón <strong>Sembrar datos de prueba</strong> para generar lecturas sintéticas.
+</div>
+{% endif %}
+{% endblock %}

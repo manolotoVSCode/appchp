@@ -333,9 +333,9 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.59.1 — alineación a BD aplicada. La migración
-se aplicó con cliente_id (no empresa_id), creado_en (no created_at),
-PK (medidor_id, timestamp), columna secuencia_fases, pg_cron manual.
-Repository y tests actualizados; obtener_medidores_por_cliente es el
-nombre definitivo. 12/12 tests pasan.
-Pendiente: rutas y UI de telemetría (entrega B).
+Último tema resuelto: v2.60.0 — vista solo lectura telemetría (entrega B1).
+Rutas /admin/telemetria, /admin/telemetria/medidor/<id>,
+/admin/telemetria/medidor/<id>/sembrar. telemetria/seed.py con generador
+sintético (96 lecturas × 15 min, V≈13800V, fp 0.88-0.97, Hz 60±0.05).
+Sidebar actualizado con enlace real. 7 tests nuevos (7/7 passed).
+Pendiente: integración MQTT/pipeline real (entrega B2).

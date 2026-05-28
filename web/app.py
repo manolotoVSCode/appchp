@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from time import time
 
-from flask import Flask, flash, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, send_file, session, url_for
 from flask_wtf.csrf import CSRFProtect
 
 from storage.repository import (
@@ -2461,5 +2461,86 @@ def create_app() -> Flask:
             filtros={k: v for k, v in filtros.items() if v},
             nav_active="errores",
         )
+
+    # ── FASE 2: Telemetría ────────────────────────────────────────────────────
+
+    @app.route("/admin/telemetria")
+    def telemetria_index():
+        if not app.config.get("FASE2_HABILITADA", False):
+            abort(404)
+        from web.auth import get_current_user as _gcu
+        actor = _gcu()
+        if not actor or actor["rol"] != "master_admin":
+            flash("Acceso restringido.", "danger")
+            return redirect(url_for("dashboard"))
+        from storage.repository import get_all_clientes_con_conteos, obtener_medidores_por_cliente
+        clientes = get_all_clientes_con_conteos()
+        cliente_id = request.args.get("cliente_id", type=int)
+        cliente_sel = None
+        medidores = []
+        if cliente_id:
+            cliente_sel = next((c for c in clientes if c["id"] == cliente_id), None)
+            if cliente_sel:
+                medidores = obtener_medidores_por_cliente(cliente_id)
+        return render_template(
+            "telemetria/index.html",
+            clientes=clientes,
+            cliente_sel=cliente_sel,
+            medidores=medidores,
+            nav_active="telemetria",
+        )
+
+    @app.route("/admin/telemetria/medidor/<int:medidor_id>")
+    def telemetria_medidor(medidor_id):
+        if not app.config.get("FASE2_HABILITADA", False):
+            abort(404)
+        from web.auth import get_current_user as _gcu
+        actor = _gcu()
+        if not actor or actor["rol"] != "master_admin":
+            flash("Acceso restringido.", "danger")
+            return redirect(url_for("dashboard"))
+        from storage.repository import obtener_medidor, obtener_mediciones_recientes
+        from datetime import datetime, timedelta, timezone
+        medidor = obtener_medidor(medidor_id)
+        if medidor is None:
+            flash("Medidor no encontrado.", "warning")
+            return redirect(url_for("telemetria_index"))
+        hasta = datetime.now(timezone.utc)
+        desde = hasta - timedelta(hours=24)
+        todas = obtener_mediciones_recientes(
+            medidor_id,
+            desde=desde.isoformat(),
+            hasta=hasta.isoformat(),
+        )
+        mediciones = todas[-200:] if len(todas) > 200 else todas
+        return render_template(
+            "telemetria/medidor.html",
+            medidor=medidor,
+            mediciones=mediciones,
+            nav_active="telemetria",
+        )
+
+    @app.route("/admin/telemetria/medidor/<int:medidor_id>/sembrar", methods=["POST"])
+    def telemetria_sembrar(medidor_id):
+        if not app.config.get("FASE2_HABILITADA", False):
+            abort(404)
+        from web.auth import get_current_user as _gcu
+        actor = _gcu()
+        if not actor or actor["rol"] != "master_admin":
+            flash("Acceso restringido.", "danger")
+            return redirect(url_for("dashboard"))
+        from storage.repository import obtener_medidor, insertar_mediciones_batch
+        from datetime import datetime, timedelta, timezone
+        from telemetria.seed import generar_mediciones_sinteticas
+        medidor = obtener_medidor(medidor_id)
+        if medidor is None:
+            flash("Medidor no encontrado.", "warning")
+            return redirect(url_for("telemetria_index"))
+        hasta = datetime.now(timezone.utc)
+        desde = hasta - timedelta(hours=24)
+        mediciones = generar_mediciones_sinteticas(medidor_id, desde_utc=desde)
+        total = insertar_mediciones_batch(mediciones)
+        flash(f"Sembrado correcto: {total} mediciones insertadas.", "success")
+        return redirect(url_for("telemetria_medidor", medidor_id=medidor_id))
 
     return app
