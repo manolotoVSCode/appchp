@@ -311,10 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: backend modelado CHP — motor de cálculo
-(calc/modelado_chp.py), cache BD (modelado_chp + curva), endpoints
-data/curva/params en clientes.py, ruta dashboard en app.py, sidebar.
-Pendiente: frontend dashboard_modelado_chp.html (segundo prompt).
+Último tema resuelto: frontend dashboard Modelado CHP — template
+completo, JS con fetchModelado/fetchCurva/tabla diaria, campos CHP
+en ficha cliente (editar.html). Chart.js dual líneas con adapter date-fns.
+Pendiente: ninguno conocido.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout

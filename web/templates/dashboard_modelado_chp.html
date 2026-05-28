@@ -2,10 +2,13 @@
 {% block title %}Modelado CHP — {{ cliente_nombre }}{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center mb-4 gap-3 flex-wrap">
+<!-- Cabecera con logo -->
+<div class="d-flex align-items-center mb-4 gap-3">
+  <img src="{{ logo_url }}" alt="{{ cliente_nombre }}"
+       style="height:52px;max-width:160px;object-fit:contain;">
   <div>
-    <h1 class="h3 mb-0">Modelado CHP</h1>
-    <div class="text-muted" style="font-size:.8rem;margin-top:.2rem">{{ cliente_nombre }}</div>
+    <div class="fw-bold fs-5" style="color:var(--color-primary-dark)">{{ cliente_nombre }}</div>
+    <div class="text-muted small">Modelado CHP</div>
   </div>
 </div>
 
@@ -18,43 +21,187 @@
   {% endfor %}
 {% endwith %}
 
-<div class="alert alert-info">
-  Dashboard en construcción. Backend disponible en
-  <code>/clientes/{{ cliente_id }}/dashboard/modelado-chp/data?medicion_id={{ medicion_activa.id }}</code>.
-</div>
-
-<div class="row g-3 mb-4">
-  <div class="col-md-4">
-    <div class="card h-100">
-      <div class="card-body">
-        <div class="text-muted" style="font-size:.75rem">Medición activa</div>
-        <div class="fw-semibold">{{ medicion_activa.nombre }}</div>
-        <div class="text-muted small">{{ medicion_activa.anio }}-{{ "%02d"|format(medicion_activa.mes) }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card h-100">
-      <div class="card-body">
-        <div class="text-muted" style="font-size:.75rem">Motores CHP</div>
-        <div class="fw-semibold">{{ chp_params.num_motores }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="card h-100">
-      <div class="card-body">
-        <div class="text-muted" style="font-size:.75rem">Margen seguridad</div>
-        <div class="fw-semibold">{{ chp_params.margen_kw }} kW</div>
-      </div>
-    </div>
-  </div>
-</div>
-
+<!-- Root para JS -->
 <div id="dashboard-modelado-chp-root"
      data-cliente-id="{{ cliente_id }}"
      data-medicion-id="{{ medicion_activa.id }}"
-     data-num-motores="{{ chp_params.num_motores }}"
-     data-margen-kw="{{ chp_params.margen_kw }}">
-</div>
+     data-medicion-label="{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][medicion_activa.mes-1] }} {{ medicion_activa.anio }}">
+
+  <!-- Parámetros del modelado -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold small text-muted">Parámetros del modelado</div>
+    <div class="card-body">
+      <div class="row g-2 align-items-end">
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-num-motores">Núm. motogeneradores</label>
+          <select id="param-num-motores" class="form-select form-select-sm" style="width:auto">
+            {% for n in [1,2,3,4] %}
+            <option value="{{ n }}"{% if chp_params.num_motores == n %} selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-margen-kw">Margen seguridad (kW)</label>
+          <input type="number" id="param-margen-kw" class="form-control form-control-sm"
+                 style="width:110px" step="10" min="0"
+                 value="{{ chp_params.margen_kw }}">
+        </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-rendimiento">Rendimiento eléctrico (%)</label>
+          <input type="number" id="param-rendimiento" class="form-control form-control-sm"
+                 style="width:110px" step="0.1" min="20" max="60" value="42">
+        </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-costo-om">Costo O&amp;M ($/kWh)</label>
+          <input type="number" id="param-costo-om" class="form-control form-control-sm"
+                 style="width:110px" step="0.001" min="0" value="0.015">
+        </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-autoconsumo">Autoconsumo aux. (%)</label>
+          <input type="number" id="param-autoconsumo" class="form-control form-control-sm"
+                 style="width:110px" step="0.1" min="0" max="10" value="3">
+        </div>
+        <div class="col-sm-auto d-flex align-items-end gap-2">
+          <button id="btn-recalcular" class="btn btn-sm btn-primary">Recalcular</button>
+          <div id="spinner-recalcular" class="spinner-border spinner-border-sm text-primary d-none" role="status">
+            <span class="visually-hidden">Calculando…</span>
+          </div>
+        </div>
+      </div>
+      <div class="mt-2 text-muted" style="font-size:.75rem">
+        Capacidad nominal: <strong><span id="param-cap-nominal">—</span> kW total</strong>
+        (<span id="param-cap-unitaria">—</span> kW/motor)
+      </div>
+    </div>
+  </div>
+
+  <!-- Spinner inicial -->
+  <div id="chp-spinner" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <div class="text-muted small mt-2">Calculando modelado…</div>
+  </div>
+
+  <!-- Banner de error -->
+  <div id="chp-error-banner" class="alert alert-danger d-none" role="alert">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <span id="chp-error-msg">Error al cargar el modelado.</span>
+  </div>
+
+  <!-- KPIs -->
+  <div id="chp-kpis-section" class="d-none">
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Gen. neta anual</div>
+            <div class="fw-bold fs-5 mt-1"><span id="kpi-gen-neta">—</span> <small class="text-muted fw-normal">MWh</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Gen. bruta anual</div>
+            <div class="fw-bold fs-5 mt-1"><span id="kpi-gen-bruta">—</span> <small class="text-muted fw-normal">MWh</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Cobertura eléctrica</div>
+            <div class="fw-bold fs-5 mt-1"><span id="kpi-cobertura">—</span> <small class="text-muted fw-normal">%</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Horas anuales/motor</div>
+            <div class="fw-bold fs-5 mt-1"><span id="kpi-horas-motor">—</span> <small class="text-muted fw-normal">h</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Cap. nominal promedio</div>
+            <div class="fw-bold fs-5 mt-1"><span id="kpi-cap-promedio">—</span> <small class="text-muted fw-normal">kW</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Consumo gas anual</div>
+            <div class="fw-bold fs-5 mt-1"><span id="kpi-consumo-gas">—</span> <small class="text-muted fw-normal">GJ</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Costo O&amp;M anual</div>
+            <div class="fw-bold fs-5 mt-1">$<span id="kpi-costo-om-anual">—</span> <small class="text-muted fw-normal">MXN</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Consumo cliente mes</div>
+            <div class="fw-bold fs-5 mt-1"><span id="kpi-consumo-cliente">—</span> <small class="text-muted fw-normal">MWh</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráfica -->
+  <div id="chp-grafica-section" class="d-none mb-4">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold small text-muted d-flex align-items-center justify-content-between">
+        <span>Perfil de demanda vs generación modelada</span>
+        <span class="fw-normal text-muted" id="chp-grafica-subtitulo" style="font-size:.7rem"></span>
+      </div>
+      <div class="card-body">
+        <canvas id="chartCHP" height="80"></canvas>
+        <div class="d-flex gap-4 mt-2" style="font-size:.75rem">
+          <span><span style="display:inline-block;width:20px;height:2px;background:rgba(31,122,76,0.85);vertical-align:middle;margin-right:4px"></span>Demanda real</span>
+          <span><span style="display:inline-block;width:20px;height:2px;background:rgba(42,98,168,0.85);vertical-align:middle;margin-right:4px"></span>Generación modelada</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla diaria -->
+  <div id="chp-tabla-section" class="d-none mb-4">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold small text-muted">Resumen diario</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0" id="tabla-chp-diaria">
+            <thead class="table-light">
+              <tr>
+                <th>Día</th>
+                <th class="text-end">Demanda media (kW)</th>
+                <th class="text-end">Gen. neta media (kW)</th>
+                <th class="text-end">Cobertura (%)</th>
+                <th class="text-end">Horas activas</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-chp-diaria"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- dashboard-modelado-chp-root -->
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard-modelado-chp.js') }}"></script>
 {% endblock %}

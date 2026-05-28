@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.63.0] — 2026-05-28
+
+### Añadido — Frontend completo del dashboard Modelado CHP
+- `web/templates/dashboard_modelado_chp.html`: reemplazado template mínimo por dashboard completo — cabecera con logo, card de parámetros (6 inputs inline: num_motores, margen_kw, rendimiento_electrico, costo_om_kwh, autoconsumo_pct + botón Recalcular), spinner inicial, banner de error, 8 cards de KPIs en 2 filas, canvas `#chartCHP` con leyenda manual, tabla de resumen diario. `data-*` attrs para el JS.
+- `web/static/js/dashboard-modelado-chp.js`: IIFE completo — `getParams()` lee los 5 inputs con conversiones (%→fracción); `fetchModelado()` construye query string, fetch con AbortController (timeout 60 s), actualiza cap-nominal/cap-unitaria y los 8 KPIs formateados (`toLocaleString es-MX`), llama `fetchCurva`; `fetchCurva(modeladoId)` fetch del endpoint curva, construye Chart.js `type:"line"` con eje X `type:"time"` via chartjs-adapter-date-fns (dos datasets: verde demanda real, azul generación modelada, `pointRadius:0`), subtítulo de rango de fechas, tabla diaria agrupada por día con demanda media, gen_neta media, cobertura % y horas activas; `guardarParams()` POST fire-and-forget con CSRF; listener `btn-recalcular`; listener `medicionActivaChanged` con destroy de chart; carga inicial `fetchModelado()`.
+- `web/templates/clientes/editar.html`: 2 nuevos campos en la sección de parámetros técnicos — `chp_num_motores` (select 1–4) y `chp_margen_kw` (input number, step=10) — guardados vía el POST existente de editar cliente.
+
 ## [2.62.0] — 2026-05-28
 
 ### Añadido — Backend completo del dashboard Modelado CHP

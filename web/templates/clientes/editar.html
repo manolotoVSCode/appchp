@@ -218,6 +218,24 @@
                 <option value="otros"{% if tipo_motor == 'otros' %} selected{% endif %}>Otros</option>
               </select>
             </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Núm. motogeneradores CHP</label>
+              <select class="form-select" name="chp_num_motores">
+                {% for n in [1,2,3,4] %}
+                <option value="{{ n }}"
+                  {% if cliente.chp_num_motores == n %}selected{% endif %}>
+                  {{ n }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold">Margen seguridad CHP (kW)</label>
+              <input type="number" step="10" min="0"
+                     class="form-control"
+                     name="chp_margen_kw"
+                     value="{{ cliente.chp_margen_kw or 0 }}">
+            </div>
           </div>
         </div>
       </div>
