@@ -176,22 +176,40 @@
 
   <!-- Tabla diaria -->
   <div id="chp-tabla-section" class="d-none mb-4">
-    <div class="card shadow-sm">
-      <div class="card-header fw-semibold small text-muted">Resumen diario</div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover align-middle mb-0" id="tabla-chp-diaria">
-            <thead class="table-light">
-              <tr>
-                <th>Día</th>
-                <th class="text-end">Demanda media (kW)</th>
-                <th class="text-end">Gen. neta media (kW)</th>
-                <th class="text-end">Cobertura (%)</th>
-                <th class="text-end">Horas activas</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-chp-diaria"></tbody>
-          </table>
+    <div class="accordion" id="acordeonTablaDiaria">
+      <div class="accordion-item shadow-sm">
+        <h2 class="accordion-header" id="headingTablaDiaria">
+          <button class="accordion-button collapsed fw-semibold small text-muted py-2"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#collapseTablaDiaria"
+                  aria-expanded="false"
+                  aria-controls="collapseTablaDiaria">
+            Resumen diario
+          </button>
+        </h2>
+        <div id="collapseTablaDiaria"
+             class="accordion-collapse collapse"
+             aria-labelledby="headingTablaDiaria">
+          <div class="accordion-body p-0">
+            <div class="table-responsive">
+              <table id="tabla-chp-diaria"
+                     class="table table-sm table-hover align-middle mb-0"
+                     style="font-size:.8rem">
+                <thead class="table-light">
+                  <tr>
+                    <th>Día</th>
+                    <th class="text-end">Demanda media (kW)</th>
+                    <th class="text-end">Gen. neta media (kW)</th>
+                    <th class="text-end">Cobertura (%)</th>
+                    <th class="text-end">Motores activos</th>
+                    <th class="text-end">Horas activas</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-chp-diaria"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
