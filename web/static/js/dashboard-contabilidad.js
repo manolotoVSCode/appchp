@@ -916,28 +916,34 @@
             legend: { display: false },
             tooltip: {
               callbacks: {
-                label: c => `${c.parsed.y.toLocaleString("es-MX", {maximumFractionDigits: 1})} kW`,
-                title: ts => ts[0].label.replace("T", " ").slice(0, 16),
-              },
-            },
+                label: c => `${c.parsed.y.toLocaleString("es-MX", {maximumFractionDigits:1})} kW`,
+                title: ts => ts[0].label.replace("T", " ").slice(0,16)
+              }
+            }
           },
           scales: {
             x: {
               ticks: {
                 maxTicksLimit: 31,
-                callback: function(val) {
+                callback: function(val, idx) {
                   const label = this.getLabelForValue(val);
-                  return label ? label.slice(0, 10) : "";
+                  if (!label) return "";
+                  const dia = label.slice(8,10);
+                  const prev = idx > 0 ? this.getLabelForValue(val - 1) : null;
+                  const prevDia = prev ? prev.slice(8,10) : null;
+                  return dia !== prevDia ? parseInt(dia, 10).toString() : "";
                 },
-                maxRotation: 45,
-              },
+                maxRotation: 0,
+                autoSkip: false
+              }
             },
             y: {
+              min: 0,
               ticks: {
-                callback: v => v.toLocaleString("es-MX", {maximumFractionDigits: 0}) + " kW",
-              },
-            },
-          },
+                callback: v => v.toLocaleString("es-MX", {maximumFractionDigits:0}) + " kW"
+              }
+            }
+          }
         };
 
         if (!cincominutalChart) {
