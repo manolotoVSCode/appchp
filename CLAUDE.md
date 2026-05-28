@@ -311,11 +311,11 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.66.0 — Modelado CHP cabecera reorganizada en dos
-filas lógicas (operación / cogeneración), gráfica cincominutal integrada
-como #chp-cincominutal-section, defaults correctos (margen=100 desde BD,
-rend=40%, O&M=0.30, inv=cap×1400 USD, gas desde cogen_defaults si viene).
-Factor utilización hidden (0.9132). Eliminado param-precio-vapor.
+Último tema resuelto: v2.66.1 — tres correcciones Modelado CHP: precio gas
+en cogen_defaults (promedio ponderado facturas gas, fallback manual);
+chpRenderGraficaMensual() stacked bar+line en chp-chartCogen (misma paleta
+que upsertCogenChart); condición parseFloat===0 en auto-poblado precio gas;
+cabecera labels uppercase. chpCogenChart destruido en medicionActivaChanged.
 Pendiente: ninguno conocido.
 
 ### Bugs App

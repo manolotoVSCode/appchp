@@ -2355,6 +2355,19 @@ def modelado_chp_data(cliente_id: int):
             peak = max((float(d["potencia_kw"]) for d in get_medicion_datos(medicion_id) or []), default=0.0)
             capacidad_nominal_kw = float(_math.ceil(peak)) if peak > 0 else 100.0
 
+    # precio_gas_gj para cogen_defaults — promedio ponderado desde facturas, fallback manual
+    gas_inv_def = get_ultimas_gas_invoices(cliente_id, n=12)
+    _total_gj_def = sum(float(inv.consumo_total_gj) for inv in gas_inv_def if float(inv.consumo_total_gj) > 0)
+    if _total_gj_def > 0:
+        _precio_gas_gj = sum(
+            float(inv.costo_unitario_total_gj) * float(inv.consumo_total_gj)
+            for inv in gas_inv_def if float(inv.consumo_total_gj) > 0
+        ) / _total_gj_def
+    else:
+        _cliente_rec = get_cliente_con_conteos(cliente_id)
+        _precio_manual_str = _cliente_rec.get("precio_gas_manual_mxn_gj_pcs") if _cliente_rec else None
+        _precio_gas_gj = float(_precio_manual_str) if _precio_manual_str else 0.0
+
     # Buscar en cache
     cached = get_modelado_chp(
         medicion_id, num_motores, margen_kw,
@@ -2392,6 +2405,7 @@ def modelado_chp_data(cliente_id: int):
             "cogen_defaults": {
                 "rendimiento_termico": 0.25,
                 "eficiencia_caldera": 0.85,
+                "precio_gas_gj": round(_precio_gas_gj, 2),
             },
         })
 

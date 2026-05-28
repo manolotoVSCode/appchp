@@ -18,6 +18,7 @@
   let   MEDICION_ID = parseInt(root.dataset.medicionId, 10);
 
   let chpChart         = null;
+  let chpCogenChart    = null;
   let chpCascadaChart  = null;
   let chpFlujoChart    = null;
   let _modeladoId      = null;
@@ -146,9 +147,13 @@
           // Inversión = cap × 1400 USD
           $("param-inversion-usd").value = Math.round(capNom * 1400);
 
-          // Precio gas desde cogen_defaults si viene
-          const pg = data.cogen_defaults?.precio_gas_gj;
-          if (pg) $("param-precio-gas").value = Math.round(pg);
+          // Precio gas desde cogen_defaults si viene y el input sigue en 0
+          if (data.cogen_defaults && data.cogen_defaults.precio_gas_gj) {
+            const inputGas = $("param-precio-gas");
+            if (inputGas && parseFloat(inputGas.value) === 0) {
+              inputGas.value = data.cogen_defaults.precio_gas_gj;
+            }
+          }
         }
 
         _primerasCarga = false;
@@ -307,6 +312,57 @@
 
   // ── Renderizado cogeneración ───────────────────────────────────────────────
 
+  function chpRenderGraficaMensual(data) {
+    const canvas = $("chp-chartCogen");
+    if (!canvas) return;
+    const labels      = data.chart_labels      || [];
+    const ahorro_elec = data.chart_ahorro_elec || [];
+    const ah_caldera  = data.chart_ahorro_caldera || [];
+    const costo_gas   = data.chart_costo_gas   || [];
+    const om          = data.chart_om          || [];
+    const ebitda      = data.chart_ebitda      || [];
+
+    const chartData = {
+      labels,
+      datasets: [
+        { label: "Ahorro Electricidad", data: ahorro_elec,         backgroundColor: "rgba(106,138,154,0.65)", stack: "componentes" },
+        { label: "Ahorro Caldera",      data: ah_caldera,          backgroundColor: "rgba(232,181,71,0.65)",  stack: "componentes" },
+        { label: "Costo Gas Cogen",     data: costo_gas.map(v => -v), backgroundColor: "rgba(216,90,90,0.65)",  stack: "componentes" },
+        { label: "O&M",                 data: om.map(v => -v),     backgroundColor: "rgba(180,100,180,0.65)", stack: "componentes" },
+        {
+          type: "line",
+          label: "Ahorro Neto",
+          data: ebitda,
+          borderColor: "#1F7A4C",
+          backgroundColor: "rgba(31,122,76,0.1)",
+          borderWidth: 2,
+          pointRadius: 4,
+          fill: false,
+          tension: 0.3,
+        },
+      ],
+    };
+    const opts = {
+      responsive: true,
+      maintainAspectRatio: true,
+      animation: false,
+      plugins: {
+        legend: { display: true, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${_fmtMXN(c.parsed.y)}` } },
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { stacked: true, ticks: { callback: v => _fmtMXN(v) }, grid: { color: "rgba(0,0,0,0.06)" } },
+      },
+    };
+    if (!chpCogenChart) {
+      chpCogenChart = new Chart(canvas, { type: "bar", data: chartData, options: opts });
+    } else {
+      chpCogenChart.data = chartData;
+      chpCogenChart.update();
+    }
+  }
+
   function _renderCascada(ah_elec, ah_caldera, costo_gas, om, ahorro_neto) {
     const canvas = $("chp-chartCascada");
     if (!canvas) return;
@@ -428,6 +484,7 @@
     _show("chp-cogen-spinner");
     _hide("chp-cogen-error-banner");
     _hide("chp-cogen-kpis");
+    _hide("chp-graficaMensual-section");
     _hide("chp-cascada-section");
     _hide("chp-flujo-section");
     _hide("chp-tabla-mensual-section");
@@ -477,6 +534,9 @@
             : "> 15 años";
         }
 
+        chpRenderGraficaMensual(data);
+        _show("chp-graficaMensual-section");
+
         _renderCascada(ahElec, ahCaldera, costoGas, om, ebitda);
         _show("chp-cascada-section");
 
@@ -517,8 +577,8 @@
   document.addEventListener("medicionActivaChanged", e => {
     MEDICION_ID    = e.detail.medicion_id;
     _primerasCarga = true;
-    [chpChart, chpCascadaChart, chpFlujoChart].forEach(c => { if (c) c.destroy(); });
-    chpChart = chpCascadaChart = chpFlujoChart = null;
+    [chpChart, chpCogenChart, chpCascadaChart, chpFlujoChart].forEach(c => { if (c) c.destroy(); });
+    chpChart = chpCogenChart = chpCascadaChart = chpFlujoChart = null;
     fetchModelado();
   });
 

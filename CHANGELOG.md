@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.66.1] — 2026-05-28
+
+### Corregido — Modelado CHP: precio gas, gráfica mensual cogeneración, cabecera visual
+- `web/clientes.py` — endpoint `/data`: añadido `precio_gas_gj` a `cogen_defaults`. Se calcula como promedio ponderado de `costo_unitario_total_gj × consumo_total_gj` de las últimas 12 facturas de gas del cliente. Fallback: campo `precio_gas_manual_mxn_gj_pcs` del registro del cliente; si no existe, 0.
+- `web/templates/dashboard_modelado_chp.html` — `#chp-cogen-section`: añadido `<canvas id="chp-chartCogen" height="100">` dentro de `#chp-graficaMensual-section`. Estilos de cabecera actualizados: título con `font-size:.70rem; letter-spacing:.08em; border-bottom`; todos los labels `text-transform:uppercase; font-size:.70rem; font-weight:600; color:#6c757d`.
+- `web/static/js/dashboard-modelado-chp.js`:
+  - `fetchModelado()` — condición para auto-poblar `param-precio-gas` ahora verifica `parseFloat(inputGas.value) === 0` antes de sobreescribir (no pisaba valor editado por usuario).
+  - `chpRenderGraficaMensual(data)` — nueva función. Gráfica stacked bar + line en canvas `id="chp-chartCogen"`, instancia `chpCogenChart`. Misma paleta que `upsertCogenChart` en cogeneracion.js: azul-gris (Ah. Eléctrico), amarillo (Ah. Caldera), rojo (Costo Gas, invertido), morado (O&M, invertido), línea verde (Ahorro Neto). Usa `data.chart_labels`, `data.chart_ahorro_elec`, `data.chart_ahorro_caldera`, `data.chart_costo_gas`, `data.chart_om`, `data.chart_ebitda`.
+  - `fetchCogenData()`: llama `chpRenderGraficaMensual(data)` y muestra `#chp-graficaMensual-section` antes de la cascada.
+  - `medicionActivaChanged`: destruye también `chpCogenChart`.
+
 ## [2.66.0] — 2026-05-28
 
 ### Cambiado — Modelado CHP: cabecera reorganizada + gráfica cincominutal integrada
