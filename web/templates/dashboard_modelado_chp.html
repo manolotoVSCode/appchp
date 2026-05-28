@@ -61,16 +61,20 @@
           <input type="number" id="param-autoconsumo" class="form-control form-control-sm"
                  style="width:110px" step="0.1" min="0" max="10" value="3">
         </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-cap-nominal-input">Capacidad nominal total (kW)</label>
+          <input type="number" id="param-cap-nominal-input" class="form-control form-control-sm"
+                 style="width:130px" step="10" min="0" placeholder="auto">
+          <div class="text-muted mt-1" style="font-size:.72rem">
+            <span id="param-cap-unitaria">—</span> kW/motor
+          </div>
+        </div>
         <div class="col-sm-auto d-flex align-items-end gap-2">
           <button id="btn-recalcular" class="btn btn-sm btn-primary">Recalcular</button>
           <div id="spinner-recalcular" class="spinner-border spinner-border-sm text-primary d-none" role="status">
             <span class="visually-hidden">Calculando…</span>
           </div>
         </div>
-      </div>
-      <div class="mt-2 text-muted" style="font-size:.75rem">
-        Capacidad nominal: <strong><span id="param-cap-nominal">—</span> kW total</strong>
-        (<span id="param-cap-unitaria">—</span> kW/motor)
       </div>
     </div>
   </div>
@@ -149,7 +153,7 @@
       <div class="col-6 col-md-3">
         <div class="card h-100 shadow-sm">
           <div class="card-body py-3">
-            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Consumo cliente mes</div>
+            <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Consumo anual (facturas)</div>
             <div class="fw-bold fs-5 mt-1"><span id="kpi-consumo-cliente">—</span> <small class="text-muted fw-normal">MWh</small></div>
           </div>
         </div>

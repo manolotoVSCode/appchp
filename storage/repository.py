@@ -1588,6 +1588,7 @@ def get_modelado_chp(
     rendimiento_electrico: float,
     costo_om_kwh: float,
     autoconsumo_pct: float,
+    capacidad_nominal_kw: float,
 ) -> dict | None:
     """Busca un modelado con esos parámetros exactos en cache.
     Retorna el registro completo o None si no existe."""
@@ -1600,6 +1601,7 @@ def get_modelado_chp(
         .eq("rendimiento_electrico", rendimiento_electrico)
         .eq("costo_om_kwh", costo_om_kwh)
         .eq("autoconsumo_pct", autoconsumo_pct)
+        .eq("capacidad_nominal_kw", capacidad_nominal_kw)
         .limit(1)
         .execute()
     )
@@ -1616,6 +1618,7 @@ def save_modelado_chp(cliente_id: int, medicion_id: int, params: dict, kpis: dic
         "rendimiento_electrico": params["rendimiento_electrico"],
         "costo_om_kwh":         params["costo_om_kwh"],
         "autoconsumo_pct":      params["autoconsumo_pct"],
+        "capacidad_nominal_kw": params["capacidad_nominal_kw"],
         "gen_neta_anual_kwh":   kpis.get("gen_neta_anual_kwh"),
         "gen_bruta_anual_kwh":  kpis.get("gen_bruta_anual_kwh"),
         "cobertura_pct":        kpis.get("cobertura_pct"),

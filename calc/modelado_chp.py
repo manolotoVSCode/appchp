@@ -25,7 +25,7 @@ def modelar_chp(
     rendimiento_electrico: float,
     costo_om_kwh: float,
     autoconsumo_pct: float,
-    consumo_gas_mes_kwh: float,  # noqa: ARG001 — reservado para cálculos futuros
+    consumo_anual_kwh: float,  # consumo real anual de facturas (para proyección)
 ) -> dict[str, Any]:
     """Simula la operación CHP sobre la serie de potencia mensual.
 
@@ -39,7 +39,7 @@ def modelar_chp(
     rendimiento_electrico : fracción (ej. 0.42)
     costo_om_kwh : MXN/kWh sobre generación bruta
     autoconsumo_pct : consumo auxiliar del propio sistema (fracción, ej. 0.03)
-    consumo_gas_mes_kwh : consumo total de gas del cliente en el mes (kWh)
+    consumo_anual_kwh : consumo real anual del cliente (facturas) para proyección
 
     Retorna
     -------
@@ -119,35 +119,48 @@ def modelar_chp(
             "motores_activos": motores_activos,
         })
 
-    # ── Cálculos finales ────────────────────────────────────────────────────
-    gen_bruta_mes_kwh = (
+    # ── Cálculos mensuales ──────────────────────────────────────────────────
+    gen_neta_mes_kwh        = sum(p["gen_neta_kw"] * _INTERVALO_H for p in curva)
+    gen_bruta_mes_kwh       = (
         gen_neta_mes_kwh / (1.0 - autoconsumo_pct) if autoconsumo_pct < 1.0 else 0.0
     )
-
-    horas_mes_motor = sum(horas_motor) / num_motores  # promedio entre motores
-    cap_promedio_kw = (
-        gen_bruta_mes_kwh / horas_mes_motor if horas_mes_motor > 0 else 0.0
-    )
-
-    consumo_gas_mes_gj = (
-        (gen_bruta_mes_kwh * _KWH_A_GJ) / rendimiento_electrico
-        if rendimiento_electrico > 0 else 0.0
-    )
-    costo_om_mes_mxn = gen_bruta_mes_kwh * costo_om_kwh
-
+    consumo_cliente_mes_kwh = sum(d["potencia_kw"] * _INTERVALO_H for d in datos)
     cobertura_pct = (
         gen_neta_mes_kwh / consumo_cliente_mes_kwh
         if consumo_cliente_mes_kwh > 0 else 0.0
     )
 
-    # Anualizar ×12
+    intervalos_activos = sum(1 for p in curva if p["gen_neta_kw"] > 0)
+    horas_mes_motor    = intervalos_activos * _INTERVALO_H  # h reales de operación
+
+    if intervalos_activos > 0 and autoconsumo_pct < 1.0:
+        gen_bruta_activa_kwh = sum(
+            p["gen_neta_kw"] / (1.0 - autoconsumo_pct) * _INTERVALO_H
+            for p in curva if p["gen_neta_kw"] > 0
+        )
+        cap_promedio_kw = min(gen_bruta_activa_kwh / horas_mes_motor, capacidad_nominal_kw)
+    else:
+        cap_promedio_kw = 0.0
+
+    # ── Proyección anual por cobertura sobre consumo real de facturas ───────
+    gen_neta_anual_kwh  = consumo_anual_kwh * cobertura_pct
+    gen_bruta_anual_kwh = (
+        gen_neta_anual_kwh / (1.0 - autoconsumo_pct) if autoconsumo_pct < 1.0 else 0.0
+    )
+    horas_anuales_motor  = horas_mes_motor * 12
+    consumo_gas_anual_gj = (
+        (gen_bruta_anual_kwh * _KWH_A_GJ) / rendimiento_electrico
+        if rendimiento_electrico > 0 else 0.0
+    )
+    costo_om_anual_mxn = gen_bruta_anual_kwh * costo_om_kwh
+
     kpis = {
-        "gen_neta_anual_kwh":   gen_neta_mes_kwh * 12,
-        "gen_bruta_anual_kwh":  gen_bruta_mes_kwh * 12,
-        "cobertura_pct":        cobertura_pct,
-        "consumo_gas_anual_gj": consumo_gas_mes_gj * 12,
-        "costo_om_anual_mxn":   costo_om_mes_mxn * 12,
-        "horas_anuales_motor":  horas_mes_motor * 12,
+        "gen_neta_anual_kwh":    gen_neta_anual_kwh,
+        "gen_bruta_anual_kwh":   gen_bruta_anual_kwh,
+        "cobertura_pct":         cobertura_pct,
+        "consumo_gas_anual_gj":  consumo_gas_anual_gj,
+        "costo_om_anual_mxn":    costo_om_anual_mxn,
+        "horas_anuales_motor":   horas_anuales_motor,
         "capacidad_promedio_kw": cap_promedio_kw,
         "consumo_cliente_mes_kwh": consumo_cliente_mes_kwh,
     }

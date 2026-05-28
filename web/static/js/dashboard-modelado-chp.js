@@ -16,9 +16,10 @@
   const CLIENTE_ID  = parseInt(root.dataset.clienteId, 10);
   let   MEDICION_ID = parseInt(root.dataset.medicionId, 10);
 
-  let chpChart    = null;
-  let _modeladoId = null;
-  let _abortCtrl  = null;
+  let chpChart      = null;
+  let _modeladoId   = null;
+  let _abortCtrl    = null;
+  let _primerasCarga = true;
 
   // ── Helpers DOM ────────────────────────────────────────────────────────────
   const $  = id => document.getElementById(id);
@@ -41,10 +42,21 @@
     });
   }
 
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  function _numMotores() { return parseInt($("param-num-motores").value, 10) || 1; }
+
+  function _actualizarCapUnitaria() {
+    const cap = parseFloat($("param-cap-nominal-input")?.value) || 0;
+    const n   = _numMotores();
+    if ($("param-cap-unitaria"))
+      $("param-cap-unitaria").textContent = cap > 0 ? _fmt(cap / n, 0) : "—";
+  }
+
   // ── Leer parámetros actuales de los inputs ─────────────────────────────────
   function getParams() {
     return {
-      num_motores:           parseInt($("param-num-motores").value, 10) || 1,
+      num_motores:           _numMotores(),
+      capacidad_nominal_kw:  parseFloat($("param-cap-nominal-input")?.value) || 0,
       margen_kw:             parseFloat($("param-margen-kw").value)   || 0,
       rendimiento_electrico: (parseFloat($("param-rendimiento").value) || 42) / 100,
       costo_om_kwh:          parseFloat($("param-costo-om").value)    || 0.015,
@@ -65,14 +77,16 @@
     _hide("chp-tabla-section");
 
     const p = getParams();
-    const qs = new URLSearchParams({
+    const qsObj = {
       medicion_id:           MEDICION_ID,
       num_motores:           p.num_motores,
       margen_kw:             p.margen_kw,
       rendimiento_electrico: p.rendimiento_electrico,
       costo_om_kwh:          p.costo_om_kwh,
       autoconsumo_pct:       p.autoconsumo_pct,
-    });
+    };
+    if (p.capacidad_nominal_kw > 0) qsObj.capacidad_nominal_kw = p.capacidad_nominal_kw;
+    const qs = new URLSearchParams(qsObj);
 
     const timeoutId = setTimeout(() => _abortCtrl.abort(), 60_000);
 
@@ -85,11 +99,14 @@
       .then(data => {
         if (!data.ok) throw new Error(data.error || "Error desconocido");
 
-        // Capacidad nominal
-        const capNom = data.params.capacidad_nominal_kw;
-        const capUnit = data.params.cap_unitaria_kw;
-        if ($("param-cap-nominal")) $("param-cap-nominal").textContent = _fmt(capNom, 0);
-        if ($("param-cap-unitaria")) $("param-cap-unitaria").textContent = _fmt(capUnit, 0);
+        // Capacidad nominal — poblar input solo en primera carga o si vacío
+        const capNom   = data.params.capacidad_nominal_kw;
+        const capInput = $("param-cap-nominal-input");
+        if (capInput && (_primerasCarga || !capInput.value)) {
+          capInput.value = Math.round(capNom);
+        }
+        _primerasCarga = false;
+        _actualizarCapUnitaria();
 
         // KPIs
         const k = data.kpis;
@@ -100,7 +117,7 @@
         $("kpi-cap-promedio").textContent = _fmt(k.capacidad_promedio_kw,      0);
         $("kpi-consumo-gas").textContent  = _fmt(k.consumo_gas_anual_gj,       1);
         $("kpi-costo-om-anual").textContent = _fmt(k.costo_om_anual_mxn,      0);
-        $("kpi-consumo-cliente").textContent = _fmt(k.consumo_cliente_mes_kwh / 1000, 1);
+        $("kpi-consumo-cliente").textContent = _fmt((data.params.consumo_anual_kwh || 0) / 1000, 1);
 
         _show("chp-kpis-section");
 
@@ -255,6 +272,9 @@
   }
 
   // ── Listeners ──────────────────────────────────────────────────────────────
+  $("param-cap-nominal-input")?.addEventListener("input", _actualizarCapUnitaria);
+  $("param-num-motores")?.addEventListener("change", _actualizarCapUnitaria);
+
   $("btn-recalcular")?.addEventListener("click", () => {
     guardarParams();
     fetchModelado();
@@ -262,6 +282,7 @@
 
   document.addEventListener("medicionActivaChanged", e => {
     MEDICION_ID = e.detail.medicion_id;
+    _primerasCarga = true;
     if (chpChart) {
       chpChart.destroy();
       chpChart = null;

@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.63.1] — 2026-05-28
+
+### Corregido — Modelado CHP: capacidad nominal editable, proyección anual por cobertura
+- `calc/modelado_chp.py`: parámetro renombrado `consumo_gas_mes_kwh` → `consumo_anual_kwh` (consumo real anual de facturas). Sección de cálculos finales reescrita: `gen_neta_mes_kwh` calculada desde la curva (suma `gen_neta_kw × 5/60`); `horas_mes_motor` como intervalos activos × `_INTERVALO_H`; `cap_promedio_kw` restringida a `capacidad_nominal_kw`; proyección anual via `consumo_anual_kwh × cobertura_pct` en lugar de `× 12`.
+- `storage/repository.py`: `get_modelado_chp()` acepta y filtra por `capacidad_nominal_kw`; `save_modelado_chp()` incluye `capacidad_nominal_kw` en el payload.
+- `storage/migrations/202605_modelado_chp.sql`: `ALTER TABLE modelado_chp ADD COLUMN IF NOT EXISTS capacidad_nominal_kw NUMERIC(10,2)`; UNIQUE constraint actualizado para incluir `capacidad_nominal_kw`.
+- `web/clientes.py` — endpoint `modelado_chp_data`: calcula `consumo_anual_kwh` sumando las últimas 12 facturas CFE (periodos kWh) o PPA (`consumo_kwh`); obtiene `capacidad_nominal_kw` desde query param o `_capacidad_nominal_kw(cfe_inv)` como fallback; pasa ambos a `modelar_chp()` y los expone en `params` de la respuesta JSON.
+- `web/static/js/dashboard-modelado-chp.js`: `getParams()` incluye `capacidad_nominal_kw` desde nuevo input; helper `_actualizarCapUnitaria()` recalcula kW/motor en tiempo real; input auto-poblado del backend en primera carga (o al cambiar medición); `kpi-consumo-cliente` muestra `consumo_anual_kwh` de facturas (no `consumo_cliente_mes_kwh`); listeners en `param-cap-nominal-input` y `param-num-motores`.
+- `web/templates/dashboard_modelado_chp.html`: nota estática de capacidad nominal reemplazada por `<input id="param-cap-nominal-input">` editable (step=10, placeholder="auto") con `<span id="param-cap-unitaria">` debajo; etiqueta KPI renombrada a "Consumo anual (facturas)".
+
 ## [2.63.0] — 2026-05-28
 
 ### Añadido — Frontend completo del dashboard Modelado CHP

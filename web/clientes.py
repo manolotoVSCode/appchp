@@ -2331,10 +2331,33 @@ def modelado_chp_data(cliente_id: int):
     costo_om_kwh         = request.args.get("costo_om_kwh",         type=float, default=0.30)
     autoconsumo_pct      = request.args.get("autoconsumo_pct",      type=float, default=0.03)
 
+    # consumo_anual_kwh: suma de kWh de las últimas 12 facturas eléctricas
+    from decimal import Decimal as _Decimal
+    cfe_inv = get_ultimas_cfe_invoices(cliente_id, n=12)
+    if cfe_inv:
+        consumo_anual_kwh = float(
+            sum(sum(p.consumo_kwh for p in inv.periodos) for inv in cfe_inv)
+        )
+    else:
+        ppa_inv = get_ultimas_ppa_invoices(cliente_id, n=12)
+        consumo_anual_kwh = float(sum(inv.consumo_kwh for inv in ppa_inv))
+
+    # capacidad_nominal_kw: del QS si viene, o desde _capacidad_nominal_kw()
+    capacidad_nominal_kw = request.args.get("capacidad_nominal_kw", type=float)
+    if not capacidad_nominal_kw:
+        from calc.cogen import _capacidad_nominal_kw as _cap_fn
+        cap_dec = _cap_fn(cfe_inv) if cfe_inv else None
+        if cap_dec:
+            capacidad_nominal_kw = float(cap_dec)
+        else:
+            peak = max((float(d["potencia_kw"]) for d in get_medicion_datos(medicion_id) or []), default=0.0)
+            capacidad_nominal_kw = float(_math.ceil(peak)) if peak > 0 else 100.0
+
     # Buscar en cache
     cached = get_modelado_chp(
         medicion_id, num_motores, margen_kw,
         rendimiento_electrico, costo_om_kwh, autoconsumo_pct,
+        capacidad_nominal_kw,
     )
     if cached:
         kpis = {
@@ -2345,9 +2368,8 @@ def modelado_chp_data(cliente_id: int):
             "costo_om_anual_mxn":    float(cached.get("costo_om_anual_mxn") or 0),
             "horas_anuales_motor":   float(cached.get("horas_anuales_motor") or 0),
             "capacidad_promedio_kw": float(cached.get("capacidad_promedio_kw") or 0),
-            "consumo_cliente_mes_kwh": 0.0,  # no almacenado en cache
+            "consumo_cliente_mes_kwh": 0.0,
         }
-        cap_nominal = float(cached.get("capacidad_promedio_kw") or 0) * num_motores or (num_motores * 100.0)
         return jsonify({
             "ok": True,
             "modelado_id": cached["id"],
@@ -2355,13 +2377,14 @@ def modelado_chp_data(cliente_id: int):
             "mes": medicion.get("mes"),
             "anio": medicion.get("anio"),
             "params": {
-                "capacidad_nominal_kw": cap_nominal,
-                "cap_unitaria_kw": cap_nominal / num_motores,
+                "capacidad_nominal_kw": capacidad_nominal_kw,
+                "cap_unitaria_kw": capacidad_nominal_kw / num_motores,
                 "num_motores": num_motores,
                 "margen_kw": margen_kw,
                 "rendimiento_electrico": rendimiento_electrico,
                 "costo_om_kwh": costo_om_kwh,
                 "autoconsumo_pct": autoconsumo_pct,
+                "consumo_anual_kwh": consumo_anual_kwh,
             },
             "kpis": kpis,
         })
@@ -2371,11 +2394,6 @@ def modelado_chp_data(cliente_id: int):
     if not datos:
         return jsonify({"error": "Sin datos en la medición"}), 422
 
-    capacidad_nominal_kw = request.args.get("capacidad_nominal_kw", type=float)
-    if not capacidad_nominal_kw:
-        peak = max((float(d["potencia_kw"]) for d in datos), default=0.0)
-        capacidad_nominal_kw = float(_math.ceil(peak)) if peak > 0 else 100.0
-
     resultado = modelar_chp(
         datos=datos,
         capacidad_nominal_kw=capacidad_nominal_kw,
@@ -2384,16 +2402,17 @@ def modelado_chp_data(cliente_id: int):
         rendimiento_electrico=rendimiento_electrico,
         costo_om_kwh=costo_om_kwh,
         autoconsumo_pct=autoconsumo_pct,
-        consumo_gas_mes_kwh=0.0,
+        consumo_anual_kwh=consumo_anual_kwh,
     )
 
     kpis = resultado["kpis"]
     params_save = {
-        "num_motores": num_motores,
-        "margen_kw": margen_kw,
+        "num_motores":           num_motores,
+        "margen_kw":             margen_kw,
         "rendimiento_electrico": rendimiento_electrico,
-        "costo_om_kwh": costo_om_kwh,
-        "autoconsumo_pct": autoconsumo_pct,
+        "costo_om_kwh":          costo_om_kwh,
+        "autoconsumo_pct":       autoconsumo_pct,
+        "capacidad_nominal_kw":  capacidad_nominal_kw,
     }
     modelado_id = save_modelado_chp(cliente_id, medicion_id, params_save, kpis)
     save_modelado_chp_curva(modelado_id, resultado["curva"])
@@ -2412,6 +2431,7 @@ def modelado_chp_data(cliente_id: int):
             "rendimiento_electrico": rendimiento_electrico,
             "costo_om_kwh": costo_om_kwh,
             "autoconsumo_pct": autoconsumo_pct,
+            "consumo_anual_kwh": consumo_anual_kwh,
         },
         "kpis": kpis,
     })

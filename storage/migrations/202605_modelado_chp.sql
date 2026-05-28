@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS modelado_chp (
     capacidad_promedio_kw   NUMERIC(10,2),
     -- Metadata
     calculado_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(medicion_id, num_motores, margen_kw, rendimiento_electrico, costo_om_kwh, autoconsumo_pct)
+    capacidad_nominal_kw    NUMERIC(10,2),
+    UNIQUE(medicion_id, num_motores, margen_kw, rendimiento_electrico, costo_om_kwh, autoconsumo_pct, capacidad_nominal_kw)
 );
 
 -- Tabla de curva modelada (generación neta por intervalo de 5 min)
@@ -39,6 +40,9 @@ CREATE TABLE IF NOT EXISTS modelado_chp_curva (
     gen_neta_kw     NUMERIC(10,3) NOT NULL,
     motores_activos SMALLINT NOT NULL
 );
+
+-- Añadir columna capacidad_nominal_kw si la tabla ya existe
+ALTER TABLE modelado_chp ADD COLUMN IF NOT EXISTS capacidad_nominal_kw NUMERIC(10,2);
 
 CREATE INDEX IF NOT EXISTS idx_modelado_chp_medicion  ON modelado_chp(medicion_id);
 CREATE INDEX IF NOT EXISTS idx_modelado_chp_cliente   ON modelado_chp(cliente_id);

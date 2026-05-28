@@ -311,9 +311,11 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: frontend dashboard Modelado CHP — template
-completo, JS con fetchModelado/fetchCurva/tabla diaria, campos CHP
-en ficha cliente (editar.html). Chart.js dual líneas con adapter date-fns.
+Último tema resuelto: v2.63.1 — corrección modelado CHP: capacidad
+nominal como input editable (auto-poblado desde facturas CFE via
+_capacidad_nominal_kw); proyección anual usa consumo_anual_kwh de
+últimas 12 facturas × cobertura_pct del mes medido. KPI "consumo
+cliente" ahora muestra consumo anual real de facturas, no mes × 12.
 Pendiente: ninguno conocido.
 
 ### Bugs App
