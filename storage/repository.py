@@ -1390,7 +1390,8 @@ def get_medicion_datos(medicion_id: int) -> list[dict]:
         _supabase.table("mediciones_cincominutal_datos")
         .select("ts, potencia_kw")
         .eq("medicion_id", medicion_id)
-        .order("ts")
+        .order("ts", desc=False)
+        .limit(20000)
         .execute()
     )
     return resp.data or []
