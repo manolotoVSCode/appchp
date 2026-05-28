@@ -83,7 +83,7 @@ body { background: var(--color-bg); margin: 0; }
 }
 
 /* Contract sub-items */
-.sidebar-contratos { max-height: 22rem; overflow-y: auto; }
+.sidebar-contratos { }
 .sidebar-link-contrato {
   display: block; padding: .35rem 1.25rem .35rem 2rem; font-size: .8rem;
   color: #8A8A8A; text-decoration: none;
