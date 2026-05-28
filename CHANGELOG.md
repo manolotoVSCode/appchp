@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.47.0] — 2026-05-27
+
+### Corregido
+- `web/static/js/dashboard-contabilidad.js`: gráfica de perfil de demanda cincominutal — eje X ahora muestra los 31 días del mes completo. Se reemplaza el eje con `autoSkip:false` (comprimía ~8,900 puntos en 4 ticks) por eje categórico con `labelsEjeX`: solo el primer intervalo de cada día lleva el número de día, el resto es `""`, y el callback devuelve la etiqueta directamente. Tooltip corregido para leer `data.ts[dataIndex]` en lugar de `label`.
+
 ## [2.58.0] — 2026-05-27
 
 ### Añadido

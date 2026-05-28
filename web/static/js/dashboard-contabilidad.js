@@ -896,8 +896,15 @@
         const ctx = document.getElementById("chartCincominutal");
         if (!ctx) return;
 
+        const labelsEjeX = data.ts.map((t, i) => {
+          if (i === 0) return t.slice(8, 10);
+          return data.ts[i].slice(8, 10) !== data.ts[i - 1].slice(8, 10)
+            ? String(parseInt(t.slice(8, 10), 10))
+            : "";
+        });
+
         const chartData = {
-          labels: data.ts,
+          labels: labelsEjeX,
           datasets: [{
             label: "Potencia (kW)",
             data: data.potencia_kw,
@@ -917,24 +924,18 @@
             tooltip: {
               callbacks: {
                 label: c => `${c.parsed.y.toLocaleString("es-MX", {maximumFractionDigits:1})} kW`,
-                title: ts => ts[0].label.replace("T", " ").slice(0,16)
+                title: ts => data.ts[ts[0].dataIndex]?.replace("T", " ").slice(0, 16) || ""
               }
             }
           },
           scales: {
             x: {
               ticks: {
-                maxTicksLimit: 31,
-                callback: function(val, idx) {
-                  const label = this.getLabelForValue(val);
-                  if (!label) return "";
-                  const dia = label.slice(8,10);
-                  const prev = idx > 0 ? this.getLabelForValue(val - 1) : null;
-                  const prevDia = prev ? prev.slice(8,10) : null;
-                  return dia !== prevDia ? parseInt(dia, 10).toString() : "";
-                },
+                autoSkip: false,
                 maxRotation: 0,
-                autoSkip: false
+                callback: function(val) {
+                  return this.getLabelForValue(val) || "";
+                }
               }
             },
             y: {

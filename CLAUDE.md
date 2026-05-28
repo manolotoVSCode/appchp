@@ -311,11 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: sistema de mediciones cincominutal — upload Excel,
-sidebar con radio por mes, gráfica de perfil de demanda en dashboard
-contabilidad. Pendiente: corregir gráfica cincominutal que solo muestra
-4 días en lugar del mes completo (causa probable: autoSkip:false en
-chartOptions comprime el render con ~8,900 puntos).
+Último tema resuelto: fix gráfica perfil demanda cincominutal — eje X
+muestra mes completo con días 1-31 (solución alternativa sin adaptador
+de fechas: eje categórico con labelsEjeX).
+Pendiente: ninguno conocido.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
