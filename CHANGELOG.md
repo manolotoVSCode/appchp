@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.60.1] — 2026-05-28
+
+### Corregido — Generador de telemetría desalineado del esquema real
+- `telemetria/seed.py`: reescrito para producir EXACTAMENTE las 18 columnas de `mediciones_tiempo_real` (`potencia_activa_kw`, `potencia_reactiva_kvar`, `potencia_aparente_kva`, `factor_potencia`, `energia_activa_importada_kwh`, `energia_activa_exportada_kwh`, `energia_reactiva_importada_kvarh`, `energia_reactiva_exportada_kvarh`, `voltaje_l1_v/l2/l3`, `corriente_l1_a/l2/l3`, `frecuencia_hz`, `secuencia_fases`). Eliminadas las 30+ columnas ficticias previas (`kw_total`, `v_an`, `pf_total`, etc.) que causaban el PGRST204 en producción.
+- `web/templates/telemetria/medidor.html`: referencias de columna actualizadas (`kw_total` → `potencia_activa_kw`, `pf_total` → `factor_potencia`, `v_an` → `voltaje_l1_v`, `i_a` → `corriente_l1_a`).
+- `tests/test_telemetria_vista.py`: test e reforzado — verifica que las claves del dict sean exactamente el conjunto del esquema real (ni de más ni de menos), rangos fp/Hz/V, y monotonicidad del acumulador `energia_activa_importada_kwh`. 7/7 passed.
+
 ## [2.60.0] — 2026-05-27
 
 ### Añadido — Fase 2: Vista de telemetría solo lectura (Entrega B1)

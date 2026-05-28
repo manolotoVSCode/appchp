@@ -127,7 +127,19 @@ def test_d_telemetria_medidor_inexistente_redirige(app):
     assert "/admin/telemetria" in resp.headers["Location"]
 
 
-# ── Test e: sembrado inserta 96 mediciones con valores en rango ───────────────
+# ── Test e: sembrado inserta 96 mediciones con claves exactas y rangos válidos ─
+
+_COLUMNAS_ESPERADAS = frozenset({
+    "medidor_id", "timestamp",
+    "potencia_activa_kw", "potencia_reactiva_kvar", "potencia_aparente_kva",
+    "factor_potencia",
+    "energia_activa_importada_kwh", "energia_activa_exportada_kwh",
+    "energia_reactiva_importada_kvarh", "energia_reactiva_exportada_kvarh",
+    "voltaje_l1_v", "voltaje_l2_v", "voltaje_l3_v",
+    "corriente_l1_a", "corriente_l2_a", "corriente_l3_a",
+    "frecuencia_hz", "secuencia_fases",
+})
+
 
 def test_e_sembrar_inserta_96_mediciones(app):
     captured: list[list] = []
@@ -147,14 +159,25 @@ def test_e_sembrar_inserta_96_mediciones(app):
     assert len(mediciones) == 96
 
     for m in mediciones:
-        pf = m["pf_total"]
-        assert 0.88 <= pf <= 0.97, f"pf fuera de rango: {pf}"
+        # Claves exactas del esquema real — ni de más ni de menos
+        assert set(m.keys()) == _COLUMNAS_ESPERADAS, (
+            f"Claves incorrectas: extras={set(m.keys()) - _COLUMNAS_ESPERADAS}, "
+            f"faltan={_COLUMNAS_ESPERADAS - set(m.keys())}"
+        )
+        fp = m["factor_potencia"]
+        assert 0.88 <= fp <= 0.97, f"fp fuera de rango: {fp}"
         freq = m["frecuencia_hz"]
         assert 59.95 <= freq <= 60.05, f"frecuencia fuera de rango: {freq}"
-        v_an = m["v_an"]
-        assert 13_662 <= v_an <= 13_938, f"voltaje fuera de rango: {v_an}"
-        assert m["kwh_exportado"] == 0.0
-        assert m["kvarh_exportado"] == 0.0
+        for col in ("voltaje_l1_v", "voltaje_l2_v", "voltaje_l3_v"):
+            v = m[col]
+            assert 13_662 <= v <= 13_938, f"{col} fuera de rango: {v}"
+        assert m["energia_activa_exportada_kwh"] == 0.0
+        assert m["energia_reactiva_exportada_kvarh"] == 0.0
+
+    # Energía importada debe ser monótonamente creciente
+    kwh_vals = [m["energia_activa_importada_kwh"] for m in mediciones]
+    for i in range(1, len(kwh_vals)):
+        assert kwh_vals[i] > kwh_vals[i - 1], f"kwh no monótono en índice {i}"
 
 
 # ── Test f: sembrar sin master_admin → redirect ───────────────────────────────

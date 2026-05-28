@@ -333,9 +333,8 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.60.0 — vista solo lectura telemetría (entrega B1).
-Rutas /admin/telemetria, /admin/telemetria/medidor/<id>,
-/admin/telemetria/medidor/<id>/sembrar. telemetria/seed.py con generador
-sintético (96 lecturas × 15 min, V≈13800V, fp 0.88-0.97, Hz 60±0.05).
-Sidebar actualizado con enlace real. 7 tests nuevos (7/7 passed).
+Último tema resuelto: v2.60.1 — fix generador sintético alineado al esquema
+real (18 columnas exactas: potencia_activa_kw, factor_potencia, voltaje_l1_v,
+etc.). Previo seed.py usaba columnas que no existen (kw_total, v_an, pf_total…)
+causando PGRST204. Template medidor.html actualizado. Tests reforzados.
 Pendiente: integración MQTT/pipeline real (entrega B2).
