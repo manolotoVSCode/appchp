@@ -1607,12 +1607,12 @@ def get_modelado_chp(
     resp = (
         _supabase.table("modelado_chp")
         .select("*")
-        .eq("medicion_id", medicion_id)
-        .eq("num_motores", num_motores)
-        .eq("margen_kw", margen_kw)
-        .eq("rendimiento_electrico", rendimiento_electrico)
-        .eq("costo_om_kwh", costo_om_kwh)
-        .eq("autoconsumo_pct", autoconsumo_pct)
+        .eq("medicion_id", int(medicion_id))
+        .eq("num_motores", int(num_motores))
+        .eq("margen_kw", float(round(margen_kw, 2)))
+        .eq("rendimiento_electrico", float(round(rendimiento_electrico, 4)))
+        .eq("costo_om_kwh", float(round(costo_om_kwh, 6)))
+        .eq("autoconsumo_pct", float(round(autoconsumo_pct, 4)))
         .eq("capacidad_nominal_kw", capacidad_nominal_kw)
         .limit(1)
         .execute()
@@ -1639,7 +1639,10 @@ def save_modelado_chp(cliente_id: int, medicion_id: int, params: dict, kpis: dic
         "horas_anuales_motor":  kpis.get("horas_anuales_motor"),
         "capacidad_promedio_kw": kpis.get("capacidad_promedio_kw"),
     }
-    resp = _supabase.table("modelado_chp").insert(payload).execute()
+    resp = _supabase.table("modelado_chp").upsert(
+        payload,
+        on_conflict="medicion_id,num_motores,margen_kw,rendimiento_electrico,costo_om_kwh,autoconsumo_pct",
+    ).execute()
     return resp.data[0]["id"]
 
 

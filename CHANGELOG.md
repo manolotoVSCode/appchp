@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.65.1] — 2026-05-28
+
+### Corregido — save_modelado_chp: upsert + cast explícito en búsqueda
+- `storage/repository.py` — `save_modelado_chp()`: reemplazado `.insert()` por `.upsert(..., on_conflict="medicion_id,num_motores,margen_kw,rendimiento_electrico,costo_om_kwh,autoconsumo_pct")`. Elimina error 23505 cuando `get_modelado_chp()` no encuentra el registro existente por desajuste de tipos.
+- `storage/repository.py` — `get_modelado_chp()`: cast explícito en parámetros de búsqueda: `int(medicion_id)`, `int(num_motores)`, `float(round(margen_kw, 2))`, `float(round(rendimiento_electrico, 4))`, `float(round(costo_om_kwh, 6))`, `float(round(autoconsumo_pct, 4))`. Garantiza coincidencia de tipo con los valores almacenados en Supabase.
+
 ## [2.65.0] — 2026-05-28
 
 ### Añadido — Frontend Modelado CHP: gráfica horaria, parámetros cogen, sección cogeneración completa
