@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.62.0] — 2026-05-28
+
+### Añadido — Backend completo del dashboard Modelado CHP
+- `storage/migrations/202605_modelado_chp.sql`: dos nuevos campos en `clientes` (`chp_num_motores SMALLINT`, `chp_margen_kw NUMERIC`) + tablas `modelado_chp` (cache de KPIs con UNIQUE por parámetros) y `modelado_chp_curva` (curva intervalo a intervalo de 5 min) + 4 índices. Solo generar; no se auto-ejecuta.
+- `calc/modelado_chp.py`: motor de simulación CHP sobre serie cincominutal. Algoritmo greedy intervalo a intervalo: calcula `motores_activos` respetando carga mínima del 60 %, limit de 8 000 h anuales por motor y margen de seguridad. KPIs: `gen_neta_anual_kwh`, `gen_bruta_anual_kwh`, `cobertura_pct`, `consumo_gas_anual_gj`, `costo_om_anual_mxn`, `horas_anuales_motor`, `capacidad_promedio_kw`. Retorna curva completa para graficación.
+- `storage/repository.py`: 6 funciones nuevas — `get_cliente_chp_params`, `update_cliente_chp_params`, `get_modelado_chp` (cache lookup por UNIQUE params), `save_modelado_chp` (insert cabecera), `save_modelado_chp_curva` (batch 1 000), `get_modelado_chp_curva` (paginación 1 000 igual que medición datos).
+- `web/clientes.py`: imports de las 6 funciones nuevas; guardado de `chp_num_motores`/`chp_margen_kw` en el POST de editar cliente; 3 endpoints nuevos: `GET .../modelado-chp/data` (calcula o sirve cache + kpis), `GET .../modelado-chp/curva/<modelado_id>` (ts/demanda/gen arrays), `POST .../modelado-chp/params` (guarda params, solo admin+).
+- `web/app.py`: imports `get_mediciones_por_cliente` y `get_cliente_chp_params`; ruta `GET /clientes/<id>/dashboard/modelado-chp` → `cliente_dashboard_modelado_chp` con verificación cliente activo, redirect si sin mediciones, plantilla `dashboard_modelado_chp.html`.
+- `web/templates/clientes/_base.html`: enlace "Modelado CHP" en sidebar después de "Proyecto Cogeneración", visible solo cuando `mediciones_sidebar` no está vacío.
+- `web/templates/dashboard_modelado_chp.html`: plantilla mínima con cards de estado (medición activa, num_motores, margen_kw) y `data-*` attrs para el JS del frontend (entrega siguiente).
+
 ## [2.61.0] — 2026-05-27
 
 ### Añadido — Gráfica de costo mensual por componente (dashboard Contabilidad)

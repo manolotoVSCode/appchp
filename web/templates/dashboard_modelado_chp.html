@@ -1,0 +1,60 @@
+{% extends "clientes/_base.html" %}
+{% block title %}Modelado CHP — {{ cliente_nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3 flex-wrap">
+  <div>
+    <h1 class="h3 mb-0">Modelado CHP</h1>
+    <div class="text-muted" style="font-size:.8rem;margin-top:.2rem">{{ cliente_nombre }}</div>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="alert alert-info">
+  Dashboard en construcción. Backend disponible en
+  <code>/clientes/{{ cliente_id }}/dashboard/modelado-chp/data?medicion_id={{ medicion_activa.id }}</code>.
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted" style="font-size:.75rem">Medición activa</div>
+        <div class="fw-semibold">{{ medicion_activa.nombre }}</div>
+        <div class="text-muted small">{{ medicion_activa.anio }}-{{ "%02d"|format(medicion_activa.mes) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted" style="font-size:.75rem">Motores CHP</div>
+        <div class="fw-semibold">{{ chp_params.num_motores }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted" style="font-size:.75rem">Margen seguridad</div>
+        <div class="fw-semibold">{{ chp_params.margen_kw }} kW</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dashboard-modelado-chp-root"
+     data-cliente-id="{{ cliente_id }}"
+     data-medicion-id="{{ medicion_activa.id }}"
+     data-num-motores="{{ chp_params.num_motores }}"
+     data-margen-kw="{{ chp_params.margen_kw }}">
+</div>
+{% endblock %}

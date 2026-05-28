@@ -92,6 +92,12 @@
      class="sidebar-link-contrato{% if nav_active == 'cogeneracion' %} active{% endif %}">
     <i class="bi bi-bar-chart-line"></i>Proyecto Cogeneración
   </a>
+  {% if mediciones_sidebar %}
+  <a href="{{ url_for('cliente_dashboard_modelado_chp', cliente_id=cliente_activo.id) }}"
+     class="sidebar-link-contrato{% if nav_active == 'modelado_chp' %} active{% endif %}">
+    <i class="bi bi-cpu"></i>Modelado CHP
+  </a>
+  {% endif %}
   {% if cliente_activo.contratos %}
   <div class="sidebar-sub-header">Contratos</div>
   <div class="sidebar-contratos" id="sidebar-contratos-{{ cliente_activo.id }}">

@@ -311,11 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: dashboard Contabilidad — gráfica "Costo mensual
-por componente" (barras apiladas + línea $/kWh eje der.) en desplegable
-"Ver detalle". Endpoint expone serie `mensual` con 8 campos por mes.
-Colores donut azules; patrón upsert; 1 test nuevo en test_dashboard_2d.
-Pendiente: ninguno conocido.
+Último tema resuelto: backend modelado CHP — motor de cálculo
+(calc/modelado_chp.py), cache BD (modelado_chp + curva), endpoints
+data/curva/params en clientes.py, ruta dashboard en app.py, sidebar.
+Pendiente: frontend dashboard_modelado_chp.html (segundo prompt).
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout

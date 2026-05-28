@@ -24,6 +24,8 @@ from storage.repository import (
     get_configuracion_row,
     list_configuracion,
     set_configuracion,
+    get_mediciones_por_cliente,
+    get_cliente_chp_params,
 )
 from models.contrato import TIPO_ELECTRICO_CALIFICADO
 from web.error_logger import log_error
@@ -2575,5 +2577,38 @@ def create_app() -> Flask:
         total = insertar_mediciones_batch(mediciones)
         flash(f"Sembrado correcto: {total} mediciones insertadas.", "success")
         return redirect(url_for("telemetria_medidor", medidor_id=medidor_id))
+
+    # ── Dashboard Modelado CHP ────────────────────────────────────────────────
+
+    @app.route("/clientes/<int:cliente_id>/dashboard/modelado-chp")
+    def cliente_dashboard_modelado_chp(cliente_id: int):
+        """Vista del dashboard de Modelado CHP con medición cincominutal."""
+        cliente, err = _verificar_cliente_activo(cliente_id)
+        if err:
+            return err
+
+        mediciones = get_mediciones_por_cliente(cliente_id)
+        if not mediciones:
+            flash("Este cliente no tiene mediciones cincominutal cargadas.", "warning")
+            return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
+
+        chp_params = get_cliente_chp_params(cliente_id)
+
+        medicion_activa_id = session.get("medicion_activa_id") or mediciones[0]["id"]
+        medicion_activa = next(
+            (m for m in mediciones if m["id"] == medicion_activa_id),
+            mediciones[0],
+        )
+
+        return render_template(
+            "dashboard_modelado_chp.html",
+            cliente_id=cliente_id,
+            cliente_nombre=cliente["nombre"],
+            logo_url=obtener_logo_cliente(cliente),
+            mediciones=mediciones,
+            medicion_activa=medicion_activa,
+            chp_params=chp_params,
+            nav_active="modelado_chp",
+        )
 
     return app

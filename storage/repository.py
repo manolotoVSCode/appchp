@@ -1548,3 +1548,121 @@ def obtener_agregados_15min(
         .execute()
     )
     return resp.data or []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Modelado CHP — cache de resultados
+# ══════════════════════════════════════════════════════════════════════════════
+
+def get_cliente_chp_params(cliente_id: int) -> dict:
+    """Retorna chp_num_motores y chp_margen_kw del cliente.
+    Si los campos son NULL, devuelve defaults {"num_motores": 1, "margen_kw": 0}."""
+    resp = (
+        _supabase.table("clientes")
+        .select("chp_num_motores, chp_margen_kw")
+        .eq("id", cliente_id)
+        .single()
+        .execute()
+    )
+    if not resp.data:
+        return {"num_motores": 1, "margen_kw": 0.0}
+    row = resp.data
+    return {
+        "num_motores": int(row["chp_num_motores"] or 1),
+        "margen_kw": float(row["chp_margen_kw"] or 0),
+    }
+
+
+def update_cliente_chp_params(cliente_id: int, num_motores: int, margen_kw: float) -> None:
+    """Actualiza chp_num_motores y chp_margen_kw en la tabla clientes."""
+    _supabase.table("clientes").update({
+        "chp_num_motores": num_motores,
+        "chp_margen_kw": margen_kw,
+    }).eq("id", cliente_id).execute()
+
+
+def get_modelado_chp(
+    medicion_id: int,
+    num_motores: int,
+    margen_kw: float,
+    rendimiento_electrico: float,
+    costo_om_kwh: float,
+    autoconsumo_pct: float,
+) -> dict | None:
+    """Busca un modelado con esos parámetros exactos en cache.
+    Retorna el registro completo o None si no existe."""
+    resp = (
+        _supabase.table("modelado_chp")
+        .select("*")
+        .eq("medicion_id", medicion_id)
+        .eq("num_motores", num_motores)
+        .eq("margen_kw", margen_kw)
+        .eq("rendimiento_electrico", rendimiento_electrico)
+        .eq("costo_om_kwh", costo_om_kwh)
+        .eq("autoconsumo_pct", autoconsumo_pct)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def save_modelado_chp(cliente_id: int, medicion_id: int, params: dict, kpis: dict) -> int:
+    """Inserta cabecera en modelado_chp. Retorna el id creado."""
+    payload = {
+        "cliente_id":           cliente_id,
+        "medicion_id":          medicion_id,
+        "num_motores":          params["num_motores"],
+        "margen_kw":            params["margen_kw"],
+        "rendimiento_electrico": params["rendimiento_electrico"],
+        "costo_om_kwh":         params["costo_om_kwh"],
+        "autoconsumo_pct":      params["autoconsumo_pct"],
+        "gen_neta_anual_kwh":   kpis.get("gen_neta_anual_kwh"),
+        "gen_bruta_anual_kwh":  kpis.get("gen_bruta_anual_kwh"),
+        "cobertura_pct":        kpis.get("cobertura_pct"),
+        "consumo_gas_anual_gj": kpis.get("consumo_gas_anual_gj"),
+        "costo_om_anual_mxn":   kpis.get("costo_om_anual_mxn"),
+        "horas_anuales_motor":  kpis.get("horas_anuales_motor"),
+        "capacidad_promedio_kw": kpis.get("capacidad_promedio_kw"),
+    }
+    resp = _supabase.table("modelado_chp").insert(payload).execute()
+    return resp.data[0]["id"]
+
+
+def save_modelado_chp_curva(modelado_id: int, curva: list[dict]) -> None:
+    """Inserta la curva modelada en modelado_chp_curva en batches de 1,000."""
+    BATCH = 1000
+    rows = [
+        {
+            "modelado_id":     modelado_id,
+            "ts":              p["ts"],
+            "demanda_kw":      p["demanda_kw"],
+            "gen_neta_kw":     p["gen_neta_kw"],
+            "motores_activos": p["motores_activos"],
+        }
+        for p in curva
+    ]
+    for i in range(0, len(rows), BATCH):
+        _supabase.table("modelado_chp_curva").insert(rows[i: i + BATCH]).execute()
+
+
+def get_modelado_chp_curva(modelado_id: int) -> list[dict]:
+    """Retorna todos los puntos de la curva modelada ordenados por ts ASC.
+    Pagina de 1,000 en 1,000 igual que get_medicion_datos."""
+    PAGE = 1000
+    result = []
+    start = 0
+    while True:
+        resp = (
+            _supabase.table("modelado_chp_curva")
+            .select("ts, demanda_kw, gen_neta_kw, motores_activos")
+            .eq("modelado_id", modelado_id)
+            .order("ts", desc=False)
+            .range(start, start + PAGE - 1)
+            .execute()
+        )
+        batch = resp.data or []
+        result.extend(batch)
+        if len(batch) < PAGE:
+            break
+        start += PAGE
+    return result

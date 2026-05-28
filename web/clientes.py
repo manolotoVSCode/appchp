@@ -65,6 +65,12 @@ from storage.repository import (
     get_medicion_datos,
     update_medicion,
     delete_medicion,
+    get_cliente_chp_params,
+    update_cliente_chp_params,
+    get_modelado_chp,
+    save_modelado_chp,
+    save_modelado_chp_curva,
+    get_modelado_chp_curva,
 )
 
 logger = logging.getLogger(__name__)
@@ -583,6 +589,9 @@ def editar(cliente_id: int):
 
         try:
             update_cliente(cliente_id, nombre=nombre, notas=notas, rfc=rfc, **campos)
+            chp_num_motores = int(request.form.get("chp_num_motores") or 1)
+            chp_margen_kw = float(request.form.get("chp_margen_kw") or 0)
+            update_cliente_chp_params(cliente_id, chp_num_motores, chp_margen_kw)
             logger.info("Cliente actualizado: id=%d, nombre='%s'", cliente_id, nombre)
             if session.get("cliente_activo_id") == cliente_id:
                 session["cliente_activo_nombre"] = nombre
@@ -2289,3 +2298,153 @@ def medicion_borrar_lote(cliente_id: int):
         except Exception:
             errores += 1
     return jsonify({"ok": True, "eliminadas": eliminadas, "errores": errores})
+
+
+# ── Modelado CHP ─────────────────────────────────────────────────────────────
+
+@clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/data")
+def modelado_chp_data(cliente_id: int):
+    """Calcula o sirve desde cache los KPIs del modelado CHP para una medición."""
+    import math as _math
+    from flask import jsonify
+    from calc.modelado_chp import modelar_chp
+
+    user = _get_current_user()
+    if not user:
+        return jsonify({"error": "No autenticado"}), 401
+
+    medicion_id = request.args.get("medicion_id", type=int)
+    if not medicion_id:
+        return jsonify({"error": "medicion_id es obligatorio"}), 422
+
+    # Verificar que la medición pertenece al cliente
+    medicion = get_medicion(medicion_id)
+    if not medicion or medicion.get("cliente_id") != cliente_id:
+        return jsonify({"error": "Medición no encontrada"}), 404
+
+    # Parámetros CHP del cliente (defaults)
+    chp_params = get_cliente_chp_params(cliente_id)
+
+    num_motores          = request.args.get("num_motores",          type=int,   default=chp_params["num_motores"])
+    margen_kw            = request.args.get("margen_kw",            type=float, default=chp_params["margen_kw"])
+    rendimiento_electrico = request.args.get("rendimiento_electrico", type=float, default=0.40)
+    costo_om_kwh         = request.args.get("costo_om_kwh",         type=float, default=0.30)
+    autoconsumo_pct      = request.args.get("autoconsumo_pct",      type=float, default=0.03)
+
+    # Buscar en cache
+    cached = get_modelado_chp(
+        medicion_id, num_motores, margen_kw,
+        rendimiento_electrico, costo_om_kwh, autoconsumo_pct,
+    )
+    if cached:
+        kpis = {
+            "gen_neta_anual_kwh":    float(cached.get("gen_neta_anual_kwh") or 0),
+            "gen_bruta_anual_kwh":   float(cached.get("gen_bruta_anual_kwh") or 0),
+            "cobertura_pct":         float(cached.get("cobertura_pct") or 0),
+            "consumo_gas_anual_gj":  float(cached.get("consumo_gas_anual_gj") or 0),
+            "costo_om_anual_mxn":    float(cached.get("costo_om_anual_mxn") or 0),
+            "horas_anuales_motor":   float(cached.get("horas_anuales_motor") or 0),
+            "capacidad_promedio_kw": float(cached.get("capacidad_promedio_kw") or 0),
+            "consumo_cliente_mes_kwh": 0.0,  # no almacenado en cache
+        }
+        cap_nominal = float(cached.get("capacidad_promedio_kw") or 0) * num_motores or (num_motores * 100.0)
+        return jsonify({
+            "ok": True,
+            "modelado_id": cached["id"],
+            "medicion_id": medicion_id,
+            "mes": medicion.get("mes"),
+            "anio": medicion.get("anio"),
+            "params": {
+                "capacidad_nominal_kw": cap_nominal,
+                "cap_unitaria_kw": cap_nominal / num_motores,
+                "num_motores": num_motores,
+                "margen_kw": margen_kw,
+                "rendimiento_electrico": rendimiento_electrico,
+                "costo_om_kwh": costo_om_kwh,
+                "autoconsumo_pct": autoconsumo_pct,
+            },
+            "kpis": kpis,
+        })
+
+    # Cache miss: calcular
+    datos = get_medicion_datos(medicion_id)
+    if not datos:
+        return jsonify({"error": "Sin datos en la medición"}), 422
+
+    capacidad_nominal_kw = request.args.get("capacidad_nominal_kw", type=float)
+    if not capacidad_nominal_kw:
+        peak = max((float(d["potencia_kw"]) for d in datos), default=0.0)
+        capacidad_nominal_kw = float(_math.ceil(peak)) if peak > 0 else 100.0
+
+    resultado = modelar_chp(
+        datos=datos,
+        capacidad_nominal_kw=capacidad_nominal_kw,
+        num_motores=num_motores,
+        margen_kw=margen_kw,
+        rendimiento_electrico=rendimiento_electrico,
+        costo_om_kwh=costo_om_kwh,
+        autoconsumo_pct=autoconsumo_pct,
+        consumo_gas_mes_kwh=0.0,
+    )
+
+    kpis = resultado["kpis"]
+    params_save = {
+        "num_motores": num_motores,
+        "margen_kw": margen_kw,
+        "rendimiento_electrico": rendimiento_electrico,
+        "costo_om_kwh": costo_om_kwh,
+        "autoconsumo_pct": autoconsumo_pct,
+    }
+    modelado_id = save_modelado_chp(cliente_id, medicion_id, params_save, kpis)
+    save_modelado_chp_curva(modelado_id, resultado["curva"])
+
+    return jsonify({
+        "ok": True,
+        "modelado_id": modelado_id,
+        "medicion_id": medicion_id,
+        "mes": medicion.get("mes"),
+        "anio": medicion.get("anio"),
+        "params": {
+            "capacidad_nominal_kw": capacidad_nominal_kw,
+            "cap_unitaria_kw": capacidad_nominal_kw / num_motores,
+            "num_motores": num_motores,
+            "margen_kw": margen_kw,
+            "rendimiento_electrico": rendimiento_electrico,
+            "costo_om_kwh": costo_om_kwh,
+            "autoconsumo_pct": autoconsumo_pct,
+        },
+        "kpis": kpis,
+    })
+
+
+@clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/curva/<int:modelado_id>")
+def modelado_chp_curva(cliente_id: int, modelado_id: int):
+    """Retorna la curva modelada (ts, demanda_kw, gen_neta_kw) de un modelado."""
+    from flask import jsonify
+
+    user = _get_current_user()
+    if not user:
+        return jsonify({"error": "No autenticado"}), 401
+
+    puntos = get_modelado_chp_curva(modelado_id)
+    return jsonify({
+        "ts":          [p["ts"] for p in puntos],
+        "demanda_kw":  [float(p["demanda_kw"]) for p in puntos],
+        "gen_neta_kw": [float(p["gen_neta_kw"]) for p in puntos],
+    })
+
+
+@clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/params", methods=["POST"])
+def modelado_chp_params(cliente_id: int):
+    """Guarda los parámetros CHP por defecto del cliente."""
+    from flask import jsonify
+
+    user = _get_current_user()
+    if not user or user.get("rol") not in ("master_admin", "admin"):
+        return jsonify({"error": "No autorizado"}), 403
+
+    data = request.get_json(silent=True) or {}
+    num_motores = int(data.get("num_motores", 1))
+    margen_kw   = float(data.get("margen_kw", 0))
+    update_cliente_chp_params(cliente_id, num_motores, margen_kw)
+    return jsonify({"ok": True})
