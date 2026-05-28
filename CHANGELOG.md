@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.47.2] — 2026-05-27
+
+### Corregido
+- `storage/repository.py`: `get_medicion_datos()` — reemplaza `.limit(20000)` por paginación `.range()` en bucle de 1,000 en 1,000. Necesario porque PostgREST tiene `max-rows=1000` en servidor que el cliente no puede anular. Verificado: tabla con 8,927 filas devuelve las 8,927 correctamente.
+
 ## [2.47.1] — 2026-05-27
 
 ### Corregido

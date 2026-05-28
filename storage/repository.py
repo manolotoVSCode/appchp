@@ -1385,16 +1385,26 @@ def save_medicion_datos(medicion_id: int, datos: list[dict]) -> None:
 
 
 def get_medicion_datos(medicion_id: int) -> list[dict]:
-    """Todos los puntos de una medición ordenados por ts ASC."""
-    resp = (
-        _supabase.table("mediciones_cincominutal_datos")
-        .select("ts, potencia_kw")
-        .eq("medicion_id", medicion_id)
-        .order("ts", desc=False)
-        .limit(20000)
-        .execute()
-    )
-    return resp.data or []
+    """Todos los puntos de una medición ordenados por ts ASC.
+    Pagina de 1,000 en 1,000 para superar el max-rows de PostgREST."""
+    PAGE = 1000
+    result = []
+    start = 0
+    while True:
+        resp = (
+            _supabase.table("mediciones_cincominutal_datos")
+            .select("ts, potencia_kw")
+            .eq("medicion_id", medicion_id)
+            .order("ts", desc=False)
+            .range(start, start + PAGE - 1)
+            .execute()
+        )
+        batch = resp.data or []
+        result.extend(batch)
+        if len(batch) < PAGE:
+            break
+        start += PAGE
+    return result
 
 
 def delete_medicion(medicion_id: int) -> None:

@@ -311,9 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: fix gráfica cincominutal — límite 20000 filas en
-get_medicion_datos + fondo blanco con línea por día en eje X (eje time
-con chartjs-adapter-date-fns@3.0.0 añadido vía CDN).
+Último tema resuelto: fix get_medicion_datos — paginación .range() de
+1,000 en 1,000 para superar max-rows=1000 de PostgREST. Verificado:
+8,927 registros recuperados (medicion_id=1). Gráfica cincominutal usa
+chartjs-adapter-date-fns@3.0.0 (CDN) con eje type:"time".
 Pendiente: ninguno conocido.
 
 ### Bugs App
