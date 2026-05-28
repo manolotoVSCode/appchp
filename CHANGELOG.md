@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.66.2] — 2026-05-28
+
+### Cambiado — Modelado CHP: inversión USD/kW, kW/motor eliminado, layout sección cogen
+- `web/templates/dashboard_modelado_chp.html`:
+  - Eliminado div `param-cap-unitaria` (texto "kW/motor").
+  - Label "Inversión (USD total)" → "Precio motor (USD/kW)", `value` 0 → 1400, `step` 1000 → 100. Añadido `id="chp-inversion-total-label"` con total calculado dinámico.
+  - Bloque `extra_styles` añadido con `.section-label`, `.kpi-section-label`, `.kpi-card-b2`, `.cascada-wrap`. Enlace a `panel-flotante.css`.
+  - `div#chp-cogen-section` reemplazado por layout idéntico al dashboard de cogeneración: Ingresos, Gastos, Ahorro Neto Anual (donut), Impacto Ambiental, Inversión y Retorno, Gráfica Mensual, Cascada, Flujo 15 años, Panel flotante tabla mensual.
+  - Script `panel-flotante.js` añadido al bloque `scripts`.
+- `web/static/js/dashboard-modelado-chp.js`:
+  - Eliminada función `actualizarCapUnitaria()` y sus listeners.
+  - Añadida `actualizarInversionTotal()` con listeners en `param-cap-nominal-input` y `param-inversion-usd`.
+  - `getCogenParams()`: `inversion_usd = Math.round(capNominal × precioKw)`.
+  - `fetchModelado()` primera carga: no sobreescribe `param-inversion-usd`; llama `actualizarInversionTotal()`.
+  - `fetchCogenData()`: IDs actualizados a los nuevos (`chp-kpi-ah-elec-val`, `chp-kpi-total-ingresos-val`, `chp-kpi-total-gastos-val`, `chp-kpi-ahorro-neto-val`, `chp-seccion-inversion`, `chp-kpi-inversion-usd-val`, `chp-kpi-inversion-mxn-val`, `chp-kpi-payback-val`). Añadidos total ingresos y total gastos.
+  - `_renderCascada()`: canvas `chp-chartCascada` → `chp-waterfallChart`, `maintainAspectRatio: false`.
+  - `_renderFlujo()`: canvas `chp-chartFlujo` → `chp-chart15Year`.
+  - Añadida `_renderDonutIngresos()` con canvas `chp-chartCompAhorroNeto` (donut Electricidad/Caldera).
+  - `medicionActivaChanged`: destruye también `chpDonutChart`.
+
 ## [2.66.1] — 2026-05-28
 
 ### Corregido — Modelado CHP: precio gas, gráfica mensual cogeneración, cabecera visual

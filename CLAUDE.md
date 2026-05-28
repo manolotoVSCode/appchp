@@ -311,11 +311,12 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.66.1 — tres correcciones Modelado CHP: precio gas
-en cogen_defaults (promedio ponderado facturas gas, fallback manual);
-chpRenderGraficaMensual() stacked bar+line en chp-chartCogen (misma paleta
-que upsertCogenChart); condición parseFloat===0 en auto-poblado precio gas;
-cabecera labels uppercase. chpCogenChart destruido en medicionActivaChanged.
+Último tema resuelto: v2.66.2 — fix Modelado CHP: inversión como precio/kW
+(default 1400) con total calculado dinámico; eliminado kW/motor del template
+y actualizarCapUnitaria del JS; layout sección cogen reemplazado para ser
+idéntico al dashboard de cogeneración (Ingresos, Gastos, Ahorro Neto con
+donut, Impacto Ambiental, Inversión y Retorno, Cascada, Flujo 15 años,
+panel flotante tabla mensual). Canvas: chp-waterfallChart, chp-chart15Year.
 Pendiente: ninguno conocido.
 
 ### Bugs App
