@@ -27,90 +27,95 @@
      data-medicion-id="{{ medicion_activa.id }}"
      data-medicion-label="{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][medicion_activa.mes-1] }} {{ medicion_activa.anio }}">
 
-  <!-- Parámetros del modelado -->
+  <!-- 1. Parámetros del modelado -->
   <div class="card shadow-sm mb-4">
-    <div class="card-header fw-semibold small text-muted">Parámetros del modelado</div>
-    <div class="card-body">
-      <div class="row g-2 align-items-end">
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-num-motores">Núm. motogeneradores</label>
-          <select id="param-num-motores" class="form-select form-select-sm" style="width:auto">
+    <div class="card-body py-3">
+      <div class="fw-semibold small text-muted mb-3"
+           style="text-transform:uppercase;letter-spacing:.05em;font-size:.72rem">
+        Parámetros del modelado
+      </div>
+
+      <!-- Fila 1: Motor y operación -->
+      <div class="row g-3 align-items-end mb-3">
+        <div class="col-auto">
+          <label class="form-label form-label-sm mb-1">Cap. nominal total (kW)</label>
+          <input type="number" step="10" min="0"
+                 class="form-control form-control-sm" style="width:120px"
+                 id="param-cap-nominal-input" placeholder="—">
+          <div class="text-muted mt-1" style="font-size:.72rem">
+            <span id="param-cap-unitaria">—</span> kW/motor
+          </div>
+        </div>
+        <div class="col-auto">
+          <label class="form-label form-label-sm mb-1">Núm. motogeneradores</label>
+          <select class="form-select form-select-sm" style="width:90px"
+                  id="param-num-motores">
             {% for n in [1,2,3,4] %}
             <option value="{{ n }}"{% if chp_params.num_motores == n %} selected{% endif %}>{{ n }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-margen-kw">Margen seguridad (kW)</label>
-          <input type="number" id="param-margen-kw" class="form-control form-control-sm"
-                 style="width:110px" step="10" min="0"
-                 value="{{ chp_params.margen_kw }}">
+        <div class="col-auto">
+          <label class="form-label form-label-sm mb-1">Margen seguridad (kW)</label>
+          <input type="number" step="10" min="0"
+                 class="form-control form-control-sm" style="width:100px"
+                 id="param-margen-kw" value="{{ chp_params.margen_kw }}">
         </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-rendimiento">Rendimiento eléctrico (%)</label>
-          <input type="number" id="param-rendimiento" class="form-control form-control-sm"
-                 style="width:110px" step="0.1" min="20" max="60" value="42">
-        </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-costo-om">Costo O&amp;M ($/kWh)</label>
-          <input type="number" id="param-costo-om" class="form-control form-control-sm"
-                 style="width:110px" step="0.001" min="0" value="0.015">
-        </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-autoconsumo">Autoconsumo aux. (%)</label>
-          <input type="number" id="param-autoconsumo" class="form-control form-control-sm"
-                 style="width:110px" step="0.1" min="0" max="10" value="3">
-        </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-cap-nominal-input">Capacidad nominal total (kW)</label>
-          <input type="number" id="param-cap-nominal-input" class="form-control form-control-sm"
-                 style="width:130px" step="10" min="0" placeholder="auto">
-          <div class="text-muted mt-1" style="font-size:.72rem">
-            <span id="param-cap-unitaria">—</span> kW/motor
-          </div>
-        </div>
-        <div class="col-sm-auto d-flex align-items-end gap-2">
-          <button id="btn-recalcular" class="btn btn-sm btn-primary">Recalcular</button>
-          <div id="spinner-recalcular" class="spinner-border spinner-border-sm text-primary d-none" role="status">
-            <span class="visually-hidden">Calculando…</span>
-          </div>
+        <div class="col-auto">
+          <label class="form-label form-label-sm mb-1">Autoconsumo aux. (%)</label>
+          <input type="number" step="0.1" min="0" max="10"
+                 class="form-control form-control-sm" style="width:90px"
+                 id="param-autoconsumo" value="3">
         </div>
       </div>
 
-      <!-- Separador y parámetros de cogeneración -->
-      <hr class="my-3">
-      <div class="row g-2 align-items-end">
-        <div class="col-12 col-sm-auto">
-          <span class="text-muted small fw-semibold">Parámetros cogeneración</span>
+      <!-- Separador -->
+      <hr class="my-2">
+
+      <!-- Fila 2: Cogeneración -->
+      <div class="row g-3 align-items-end">
+        <div class="col-auto">
+          <label class="form-label form-label-sm mb-1">Rend. eléctrico (%)</label>
+          <input type="number" step="0.1" min="20" max="60"
+                 class="form-control form-control-sm" style="width:100px"
+                 id="param-rendimiento" value="40">
         </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-rend-termico">Rend. térmico (%)</label>
-          <input type="number" id="param-rend-termico" class="form-control form-control-sm"
-                 style="width:110px" step="0.1" min="5" max="60" value="25">
+        <div class="col-auto">
+          <label class="form-label form-label-sm mb-1">Rend. térmico (%)</label>
+          <input type="number" step="0.1" min="20" max="80"
+                 class="form-control form-control-sm" style="width:100px"
+                 id="param-rend-termico" value="45">
         </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-precio-gas">Precio gas ($/GJ)</label>
-          <input type="number" id="param-precio-gas" class="form-control form-control-sm"
-                 style="width:110px" step="1" min="0" value="">
-          <div class="text-muted mt-1" style="font-size:.72rem">Auto desde facturas</div>
+        <div class="col-auto">
+          <label class="form-label form-label-sm mb-1">Precio gas ($/GJ)</label>
+          <input type="number" step="1" min="0"
+                 class="form-control form-control-sm" style="width:110px"
+                 id="param-precio-gas" value="0">
         </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-precio-vapor">Precio vapor ($/GJ)</label>
-          <input type="number" id="param-precio-vapor" class="form-control form-control-sm"
-                 style="width:110px" step="1" min="0" value="">
-          <div class="text-muted mt-1" style="font-size:.72rem">Auto desde gas</div>
+        <div class="col-auto">
+          <label class="form-label form-label-sm mb-1">Costo O&amp;M ($/kWh)</label>
+          <input type="number" step="0.001" min="0"
+                 class="form-control form-control-sm" style="width:110px"
+                 id="param-costo-om" value="0.30">
         </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-inversion-usd">Inversión (USD/kW)</label>
-          <input type="number" id="param-inversion-usd" class="form-control form-control-sm"
-                 style="width:110px" step="10" min="0" value="600">
+        <div class="col-auto">
+          <label class="form-label form-label-sm mb-1">Inversión (USD total)</label>
+          <input type="number" step="1000" min="0"
+                 class="form-control form-control-sm" style="width:120px"
+                 id="param-inversion-usd" value="0">
         </div>
-        <div class="col-sm-auto">
-          <label class="form-label small fw-semibold mb-1" for="param-factor-util">Factor utilización (%)</label>
-          <input type="number" id="param-factor-util" class="form-control form-control-sm"
-                 style="width:110px" step="1" min="50" max="100" value="85">
+        <!-- Factor utilización hidden -->
+        <input type="hidden" id="param-factor-util" value="0.9132">
+        <div class="col-auto ms-auto d-flex align-items-end">
+          <button class="btn btn-primary btn-sm px-4" id="btn-recalcular">
+            Recalcular
+          </button>
+          <div id="spinner-recalcular"
+               class="spinner-border spinner-border-sm text-secondary ms-2"
+               style="display:none"></div>
         </div>
       </div>
+
     </div>
   </div>
 
@@ -126,7 +131,39 @@
     <span id="chp-error-msg">Error al cargar el modelado.</span>
   </div>
 
-  <!-- KPIs -->
+  <!-- 2. Gráfica cincominutal -->
+  <div id="chp-cincominutal-section" class="card shadow-sm mb-4"
+       style="display:none">
+    <div class="card-body">
+      <div class="d-flex align-items-start justify-content-between mb-1">
+        <div>
+          <h5 class="card-title mb-0">Perfil de demanda cincominutal</h5>
+          <p class="text-muted small mt-1 mb-0"
+             id="chp-grafica-subtitulo">
+            Potencia media por hora (kW)
+          </p>
+        </div>
+      </div>
+      <canvas id="chartCHP" height="80" class="mt-2"></canvas>
+      <!-- Leyenda manual -->
+      <div class="d-flex gap-4 mt-2" style="font-size:.75rem">
+        <span>
+          <span style="display:inline-block;width:20px;height:2px;
+                 background:rgba(31,122,76,0.85);vertical-align:middle;
+                 margin-right:4px"></span>
+          Demanda real
+        </span>
+        <span>
+          <span style="display:inline-block;width:20px;height:2px;
+                 background:rgba(42,98,168,0.85);vertical-align:middle;
+                 margin-right:4px"></span>
+          Generación modelada
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. KPIs modelado -->
   <div id="chp-kpis-section" class="d-none">
     <div class="row g-3 mb-4">
       <div class="col-6 col-md-3">
@@ -196,80 +233,19 @@
     </div>
   </div>
 
-  <!-- Gráfica -->
-  <div id="chp-grafica-section" class="d-none mb-4">
-    <div class="card shadow-sm">
-      <div class="card-header fw-semibold small text-muted d-flex align-items-center justify-content-between">
-        <span>Perfil de demanda vs generación modelada</span>
-        <span class="fw-normal text-muted" id="chp-grafica-subtitulo" style="font-size:.7rem"></span>
-      </div>
-      <div class="card-body">
-        <canvas id="chartCHP" height="80"></canvas>
-        <div class="d-flex gap-4 mt-2" style="font-size:.75rem">
-          <span><span style="display:inline-block;width:20px;height:2px;background:rgba(31,122,76,0.85);vertical-align:middle;margin-right:4px"></span>Demanda real</span>
-          <span><span style="display:inline-block;width:20px;height:2px;background:rgba(42,98,168,0.85);vertical-align:middle;margin-right:4px"></span>Generación modelada</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Tabla diaria -->
-  <div id="chp-tabla-section" class="d-none mb-4">
-    <div class="accordion" id="acordeonTablaDiaria">
-      <div class="accordion-item shadow-sm">
-        <h2 class="accordion-header" id="headingTablaDiaria">
-          <button class="accordion-button collapsed fw-semibold small text-muted py-2"
-                  type="button"
-                  data-bs-toggle="collapse"
-                  data-bs-target="#collapseTablaDiaria"
-                  aria-expanded="false"
-                  aria-controls="collapseTablaDiaria">
-            Resumen diario
-          </button>
-        </h2>
-        <div id="collapseTablaDiaria"
-             class="accordion-collapse collapse"
-             aria-labelledby="headingTablaDiaria">
-          <div class="accordion-body p-0">
-            <div class="table-responsive">
-              <table id="tabla-chp-diaria"
-                     class="table table-sm table-hover align-middle mb-0"
-                     style="font-size:.8rem">
-                <thead class="table-light">
-                  <tr>
-                    <th>Día</th>
-                    <th class="text-end">Demanda media (kW)</th>
-                    <th class="text-end">Gen. neta media (kW)</th>
-                    <th class="text-end">Cobertura (%)</th>
-                    <th class="text-end">Motores activos</th>
-                    <th class="text-end">Horas activas</th>
-                  </tr>
-                </thead>
-                <tbody id="tbody-chp-diaria"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Sección cogeneración (oculta hasta que fetchCogenData la llene) -->
+  <!-- 4. Sección cogeneración -->
   <div id="chp-cogen-section" style="display:none">
 
-    <!-- Spinner cogen -->
     <div id="chp-cogen-spinner" class="text-center py-4 d-none">
       <div class="spinner-border text-primary" role="status"></div>
       <div class="text-muted small mt-2">Calculando cogeneración…</div>
     </div>
 
-    <!-- Banner de error cogen -->
     <div id="chp-cogen-error-banner" class="alert alert-danger d-none" role="alert">
       <i class="bi bi-exclamation-triangle-fill me-2"></i>
       <span id="chp-cogen-error-msg">Error al calcular cogeneración.</span>
     </div>
 
-    <!-- KPIs cogeneración -->
     <div id="chp-cogen-kpis" class="d-none">
       <div class="card shadow-sm mb-4">
         <div class="card-header fw-semibold small text-muted">Resultados cogeneración (desde modelado)</div>
@@ -336,7 +312,6 @@
       </div>
     </div>
 
-    <!-- Cascada de ahorro -->
     <div id="chp-cascada-section" class="d-none mb-4">
       <div class="card shadow-sm">
         <div class="card-header fw-semibold small text-muted">Cascada de ahorro</div>
@@ -346,7 +321,6 @@
       </div>
     </div>
 
-    <!-- Flujo 15 años -->
     <div id="chp-flujo-section" class="d-none mb-4">
       <div class="card shadow-sm">
         <div class="card-header fw-semibold small text-muted">Flujo acumulado — 15 años</div>
@@ -356,7 +330,6 @@
       </div>
     </div>
 
-    <!-- Tabla mensual -->
     <div id="chp-tabla-mensual-section" class="d-none mb-4">
       <div class="accordion" id="acordeonTablaMensual">
         <div class="accordion-item shadow-sm">
@@ -396,6 +369,46 @@
     </div>
 
   </div><!-- /chp-cogen-section -->
+
+  <!-- 5. Tabla diaria (acordeón) -->
+  <div id="chp-tabla-section" class="d-none mb-4">
+    <div class="accordion" id="acordeonTablaDiaria">
+      <div class="accordion-item shadow-sm">
+        <h2 class="accordion-header" id="headingTablaDiaria">
+          <button class="accordion-button collapsed fw-semibold small text-muted py-2"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#collapseTablaDiaria"
+                  aria-expanded="false"
+                  aria-controls="collapseTablaDiaria">
+            Resumen diario
+          </button>
+        </h2>
+        <div id="collapseTablaDiaria"
+             class="accordion-collapse collapse"
+             aria-labelledby="headingTablaDiaria">
+          <div class="accordion-body p-0">
+            <div class="table-responsive">
+              <table id="tabla-chp-diaria"
+                     class="table table-sm table-hover align-middle mb-0"
+                     style="font-size:.8rem">
+                <thead class="table-light">
+                  <tr>
+                    <th>Día</th>
+                    <th class="text-end">Demanda media (kW)</th>
+                    <th class="text-end">Gen. neta media (kW)</th>
+                    <th class="text-end">Cobertura (%)</th>
+                    <th class="text-end">Horas activas</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-chp-diaria"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
 </div><!-- dashboard-modelado-chp-root -->
 {% endblock %}

@@ -311,13 +311,11 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.65.0 — frontend Modelado CHP completo: gráfica
-horaria (agregarPorHora agrega 5-min a 1h para el chart), 5 inputs cogen
-en header, sección #chp-cogen-section con KPIs, cascada horizontal bar,
-flujo 15 años bar+line y tabla mensual. Cadena fetchModelado→fetchCurva→
-fetchCogenData. Campos reales del endpoint: ahorro_electricidad_anual,
-ahorro_caldera_anual, costo_gas_cogen_anual, gasto_om_anual, ebitda_anual,
-flujo_anual_15, flujo_acum_15, tabla_mensual (array plano).
+Último tema resuelto: v2.66.0 — Modelado CHP cabecera reorganizada en dos
+filas lógicas (operación / cogeneración), gráfica cincominutal integrada
+como #chp-cincominutal-section, defaults correctos (margen=100 desde BD,
+rend=40%, O&M=0.30, inv=cap×1400 USD, gas desde cogen_defaults si viene).
+Factor utilización hidden (0.9132). Eliminado param-precio-vapor.
 Pendiente: ninguno conocido.
 
 ### Bugs App

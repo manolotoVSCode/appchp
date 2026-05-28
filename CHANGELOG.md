@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.66.0] — 2026-05-28
+
+### Cambiado — Modelado CHP: cabecera reorganizada + gráfica cincominutal integrada
+- `web/templates/dashboard_modelado_chp.html`: card de parámetros reescrita en dos filas lógicas. Fila 1 (operación): cap. nominal, núm. motores, margen seguridad, autoconsumo. Fila 2 (cogeneración): rend. eléctrico, rend. térmico, precio gas, costo O&M, inversión USD total. Factor utilización como `<input type="hidden" value="0.9132">`. Eliminado `param-precio-vapor`. Orden de secciones: parámetros → gráfica cincominutal (`chp-cincominutal-section`) → KPIs modelado → sección cogen → tabla diaria.
+- `web/templates/dashboard_modelado_chp.html`: gráfica (`id="chp-grafica-section"`) reemplazada por `id="chp-cincominutal-section"` con título "Perfil de demanda cincominutal" y subtítulo con rango de fechas. Usa `style="display:none"` gestionado vía JS.
+- `web/static/js/dashboard-modelado-chp.js`: `actualizarCapUnitaria()` usa `Math.round` + `toLocaleString("es-MX")`; listeners añadidos al inicio del IIFE. En `fetchModelado()`: primera carga auto-pobla `param-inversion-usd = Math.round(capNom × 1400)` y `param-precio-gas` desde `data.cogen_defaults.precio_gas_gj` si existe. `getCogenParams()` elimina `precio_vapor`; `factor_utilizacion` lee valor decimal directo del hidden (sin dividir por 100). `fetchCurva()` muestra `chp-cincominutal-section` vía `style.display`. `medicionActivaChanged` destruye los tres charts en una sola expresión.
+
 ## [2.65.1] — 2026-05-28
 
 ### Corregido — save_modelado_chp: upsert + cast explícito en búsqueda
