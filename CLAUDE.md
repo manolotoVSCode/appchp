@@ -311,12 +311,12 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.63.1 — corrección modelado CHP: capacidad
-nominal como input editable (auto-poblado desde facturas CFE via
-_capacidad_nominal_kw); proyección anual usa consumo_anual_kwh de
-últimas 12 facturas × cobertura_pct del mes medido. KPI "consumo
-cliente" ahora muestra consumo anual real de facturas, no mes × 12.
-Pendiente: ninguno conocido.
+Último tema resuelto: v2.64.0 — backend cogen desde modelado CHP:
+wrapper calcular_cogen_desde_modelado (cobertura_pct del modelado →
+CoGenParams), endpoint /cogen-data con CELs, CO₂, flujo 15 años y
+payback. Campo cogen_defaults en /data.
+Pendiente: frontend sección cogen en dashboard Modelado CHP (segundo
+prompt).
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout

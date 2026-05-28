@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.64.0] — 2026-05-28
+
+### Añadido — Backend cogeneración desde modelado CHP
+- `calc/modelado_chp.py` — `calcular_cogen_desde_modelado()`: wrapper que adapta `kpis_modelado["cobertura_pct"]` como `CoGenParams.cobertura_electrica` y llama a `calcular_cogen()` sin modificarlo. Acepta `rendimiento_electrico`, `rendimiento_termico`, `eficiencia_caldera`, `cfe_invoices`, `gas_invoices`, `tipo_cambio`, `factor_emision_elec/gas`. Retorna `CoGenResultado`.
+- `storage/repository.py` — `get_modelado_chp_by_id(modelado_id)`: lookup de cabecera por PK.
+- `web/clientes.py` — endpoint `GET .../dashboard/modelado-chp/cogen-data`: obtiene cabecera del modelado por `modelado_id`; carga últimas 12 facturas CFE y gas; lee config global (tipo_cambio, factores emisión); llama `calcular_cogen_desde_modelado`; calcula CELs, CO₂, flujo 15 años, payback; retorna JSON compatible con `/cogeneracion/data` más campo `kpis_modelado` con los KPIs del CHP. `rendimiento_termico` y `eficiencia_caldera` llegan por QS con defaults 0.25 y 0.85.
+- `web/clientes.py` — endpoint `/data`: añade campo `cogen_defaults` (`rendimiento_termico`, `eficiencia_caldera`) en ambos paths de respuesta (cache hit y cache miss).
+- Imports añadidos en `clientes.py`: `get_ultimas_gas_invoices`, `get_modelado_chp_by_id`.
+
 ## [2.63.1] — 2026-05-28
 
 ### Corregido — Modelado CHP: capacidad nominal editable, proyección anual por cobertura

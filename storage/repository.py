@@ -1581,6 +1581,18 @@ def update_cliente_chp_params(cliente_id: int, num_motores: int, margen_kw: floa
     }).eq("id", cliente_id).execute()
 
 
+def get_modelado_chp_by_id(modelado_id: int) -> dict | None:
+    """Retorna la cabecera del modelado por su PK. None si no existe."""
+    resp = (
+        _supabase.table("modelado_chp")
+        .select("*")
+        .eq("id", modelado_id)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
 def get_modelado_chp(
     medicion_id: int,
     num_motores: int,

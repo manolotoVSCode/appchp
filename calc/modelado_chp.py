@@ -168,6 +168,47 @@ def modelar_chp(
     return {"kpis": kpis, "curva": curva}
 
 
+def calcular_cogen_desde_modelado(
+    kpis_modelado: dict,
+    rendimiento_electrico: float,
+    rendimiento_termico: float,
+    eficiencia_caldera: float,
+    cfe_invoices: list,
+    gas_invoices: list,
+    tipo_cambio: Any,
+    factor_emision_elec: Any = None,
+    factor_emision_gas: Any = None,
+) -> Any:
+    """Adapta los KPIs del modelado CHP como inputs del motor de cogeneración.
+
+    La cobertura eléctrica usada proviene de kpis_modelado["cobertura_pct"],
+    que es el resultado de la simulación CHP intervalo a intervalo.
+    El resto del cálculo (ahorro eléctrico por horario, ahorro caldera,
+    costo gas adicional, O&M, EBITDA, flujo 15 años) es idéntico a
+    calcular_cogen() del dashboard estándar.
+
+    No modifica calc/cogen.py ni sus interfaces.
+    """
+    from decimal import Decimal as _D
+    from calc.cogen import calcular_cogen
+    from models.cogen_result import CoGenParams
+
+    params = CoGenParams(
+        cobertura_electrica=_D(str(kpis_modelado["cobertura_pct"])),
+        rendimiento_electrico=_D(str(rendimiento_electrico)),
+        rendimiento_termico=_D(str(rendimiento_termico)),
+        eficiencia_caldera=_D(str(eficiencia_caldera)),
+    )
+    return calcular_cogen(
+        cfe_invoices=cfe_invoices,
+        gas_invoices=gas_invoices,
+        params=params,
+        tipo_cambio=_D(str(tipo_cambio)),
+        factor_emision_elec=_D(str(factor_emision_elec)) if factor_emision_elec is not None else None,
+        factor_emision_gas=_D(str(factor_emision_gas)) if factor_emision_gas is not None else None,
+    )
+
+
 def _resultado_vacio() -> dict[str, Any]:
     kpis = {k: 0.0 for k in (
         "gen_neta_anual_kwh", "gen_bruta_anual_kwh", "cobertura_pct",

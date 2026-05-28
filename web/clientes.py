@@ -57,6 +57,7 @@ from storage.repository import (
     get_tipos_electricos_con_meses_seleccionados,
     update_precio_gas_manual,
     get_ultimas_cfe_invoices,
+    get_ultimas_gas_invoices,
     get_ultimas_ppa_invoices,
     get_mediciones_por_cliente,
     get_medicion,
@@ -68,6 +69,7 @@ from storage.repository import (
     get_cliente_chp_params,
     update_cliente_chp_params,
     get_modelado_chp,
+    get_modelado_chp_by_id,
     save_modelado_chp,
     save_modelado_chp_curva,
     get_modelado_chp_curva,
@@ -2387,6 +2389,10 @@ def modelado_chp_data(cliente_id: int):
                 "consumo_anual_kwh": consumo_anual_kwh,
             },
             "kpis": kpis,
+            "cogen_defaults": {
+                "rendimiento_termico": 0.25,
+                "eficiencia_caldera": 0.85,
+            },
         })
 
     # Cache miss: calcular
@@ -2434,6 +2440,10 @@ def modelado_chp_data(cliente_id: int):
             "consumo_anual_kwh": consumo_anual_kwh,
         },
         "kpis": kpis,
+        "cogen_defaults": {
+            "rendimiento_termico": 0.25,
+            "eficiencia_caldera": 0.85,
+        },
     })
 
 
@@ -2468,3 +2478,242 @@ def modelado_chp_params(cliente_id: int):
     margen_kw   = float(data.get("margen_kw", 0))
     update_cliente_chp_params(cliente_id, num_motores, margen_kw)
     return jsonify({"ok": True})
+
+
+@clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/cogen-data")
+def modelado_chp_cogen_data(cliente_id: int):
+    """KPIs de cogeneración calculados desde un modelado CHP previo.
+
+    Usa la cobertura derivada de la simulación CHP (kpis_modelado["cobertura_pct"])
+    como entrada al motor calcular_cogen(), con las facturas CFE y gas reales.
+    Retorna una estructura JSON compatible con /dashboard/cogeneracion/data.
+    """
+    from flask import jsonify
+    from decimal import Decimal as _D
+    from calc.modelado_chp import calcular_cogen_desde_modelado
+    from calc.cogen import calcular_flujo_acumulado, calcular_payback_decimal
+    from storage.repository import list_configuracion
+
+    user = _get_current_user()
+    if not user:
+        return jsonify({"error": "No autenticado"}), 401
+
+    modelado_id = request.args.get("modelado_id", type=int)
+    if not modelado_id:
+        return jsonify({"error": "modelado_id es obligatorio"}), 422
+
+    # 1. Obtener cabecera del modelado
+    modelado = get_modelado_chp_by_id(modelado_id)
+    if not modelado or modelado.get("cliente_id") != cliente_id:
+        return jsonify({"error": "Modelado no encontrado"}), 404
+
+    # 2. Parámetros técnicos — del QS o defaults
+    rendimiento_termico = request.args.get("rendimiento_termico", type=float, default=0.25)
+    eficiencia_caldera  = request.args.get("eficiencia_caldera",  type=float, default=0.85)
+
+    # Del modelado: rendimiento_electrico ya está guardado en la cabecera
+    rendimiento_electrico = float(modelado.get("rendimiento_electrico") or 0.40)
+
+    # KPIs del modelado (campos guardados en la cabecera)
+    kpis_modelado = {
+        "cobertura_pct":         float(modelado.get("cobertura_pct") or 0),
+        "gen_neta_anual_kwh":    float(modelado.get("gen_neta_anual_kwh") or 0),
+        "gen_bruta_anual_kwh":   float(modelado.get("gen_bruta_anual_kwh") or 0),
+        "horas_anuales_motor":   float(modelado.get("horas_anuales_motor") or 0),
+        "capacidad_promedio_kw": float(modelado.get("capacidad_promedio_kw") or 0),
+    }
+
+    # 3. Cargar facturas CFE y gas (últimas 12, igual que cogeneracion/data)
+    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
+    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
+
+    if not cfe_invoices:
+        return jsonify({"error": "Sin facturas CFE disponibles para calcular cogeneración"}), 422
+
+    # 4. Config global
+    cfg = {row["clave"]: row["valor"] for row in list_configuracion()}
+    tc_str     = cfg.get("tipo_cambio_mxn_usd")
+    fe_elec_str = cfg.get("factor_emision_electricidad_kg_co2_kwh")
+    fe_gas_str  = cfg.get("factor_emision_gas_kg_co2_gj")
+    tipo_cambio      = _D(tc_str)      if tc_str      else _D("17.50")
+    factor_emision_elec = _D(fe_elec_str) if fe_elec_str else None
+    factor_emision_gas  = _D(fe_gas_str)  if fe_gas_str  else None
+
+    # 5. Calcular cogeneración con cobertura del modelado
+    try:
+        r = calcular_cogen_desde_modelado(
+            kpis_modelado=kpis_modelado,
+            rendimiento_electrico=rendimiento_electrico,
+            rendimiento_termico=rendimiento_termico,
+            eficiencia_caldera=eficiencia_caldera,
+            cfe_invoices=cfe_invoices,
+            gas_invoices=gas_invoices,
+            tipo_cambio=tipo_cambio,
+            factor_emision_elec=factor_emision_elec,
+            factor_emision_gas=factor_emision_gas,
+        )
+    except Exception as _e:
+        logger.exception("Error en modelado-chp/cogen-data: %s", _e)
+        return jsonify({"error": "error_calculo", "mensaje": str(_e)}), 500
+
+    # 6. CELs
+    cels_resultado = None
+    try:
+        from calc.cels import calcular_cels as _calcular_cels
+        from storage.repository import get_cliente_con_conteos as _gcc
+        cliente = _gcc(cliente_id)
+        calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
+        cels_resultado = _calcular_cels(
+            kwh_cubiertos_anual=r.kwh_cubiertos_anual,
+            gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
+            calor_recuperado_gj_anual=calor_recuperado_anual,
+            capacidad_nominal_kw=r.capacidad_nominal_kw,
+            medio_termico=cliente.get("medio_termico") if cliente else None,
+            nivel_tension_kv=cliente.get("nivel_tension_kv") if cliente else None,
+            altitud_msnm=cliente.get("altitud_msnm") if cliente else None,
+            tipo_motor=cliente.get("tipo_motor") if cliente else None,
+            medio_termico_vapor_pct=cliente.get("medio_termico_vapor_pct") if cliente else None,
+        )
+    except Exception as _e_cels:
+        logger.error("Error calculando CELs en cogen-data: %s", _e_cels)
+
+    # 7. Flujo 15 años y payback
+    if r.inversion_mxn is not None and r.inversion_mxn > 0:
+        payback_inicial   = calcular_payback_decimal(r.inversion_mxn, r.ebitda_anual_mxn, r.ebitda_anual_mxn)
+        flujo_acum_15     = [float(v) for v in calcular_flujo_acumulado(r.inversion_mxn, r.ebitda_anual_mxn)]
+        flujo_anual_15    = [-float(r.inversion_mxn)] + [float(r.ebitda_anual_mxn)] * 15
+        if r.flujo_anio_1_con_beneficio_mxn is not None:
+            flujo_anual_15_fiscal = (
+                [-float(r.inversion_mxn), float(r.flujo_anio_1_con_beneficio_mxn)]
+                + [float(r.ebitda_anual_mxn)] * 14
+            )
+            _acum = 0.0
+            flujo_acum_15_fiscal = []
+            for v in flujo_anual_15_fiscal:
+                _acum += v
+                flujo_acum_15_fiscal.append(_acum)
+            payback_con_beneficio = calcular_payback_decimal(
+                r.inversion_mxn, r.flujo_anio_1_con_beneficio_mxn, r.ebitda_anual_mxn
+            )
+            payback_con_beneficio = float(payback_con_beneficio) if payback_con_beneficio is not None else None
+        else:
+            flujo_anual_15_fiscal = flujo_anual_15
+            flujo_acum_15_fiscal  = flujo_acum_15
+            payback_con_beneficio = float(payback_inicial) if payback_inicial is not None else None
+        payback_inicial = float(payback_inicial) if payback_inicial is not None else None
+    else:
+        payback_inicial = payback_con_beneficio = None
+        flujo_acum_15 = flujo_anual_15 = flujo_anual_15_fiscal = flujo_acum_15_fiscal = []
+
+    # 8. CO2
+    co2 = None
+    if r.co2_reduccion_kg_anual is not None:
+        reduccion_t = float(r.co2_reduccion_kg_anual) / 1000
+        co2 = {
+            "actual_total_t": float(r.co2_actual_total_kg_anual) / 1000 if r.co2_actual_total_kg_anual else None,
+            "reduccion_t": reduccion_t,
+            "reduccion_pct": float(r.co2_reduccion_porcentaje) if r.co2_reduccion_porcentaje else 0.0,
+            "arboles": int(reduccion_t * 50),
+            "factor_emision_elec": float(factor_emision_elec) if factor_emision_elec else None,
+            "factor_emision_gas":  float(factor_emision_gas)  if factor_emision_gas  else None,
+        }
+
+    # 9. CELs dict
+    def _cels_dict(cels):
+        if cels is None:
+            return None
+        def _f(v):
+            return float(v) if v is not None else None
+        return {
+            "es_eficiente": cels.es_eficiente,
+            "cels_mwh_anual": _f(cels.cels_mwh_anual),
+            "capacidad_kw": _f(cels.capacidad_kw),
+            "capacidad_es_estimada": cels.capacidad_es_estimada,
+            "RefE": _f(cels.RefE),
+            "RefH": _f(cels.RefH),
+            "fp": _f(cels.fp),
+            "EE": _f(cels.EE),
+            "EP": _f(cels.EP),
+            "AEP": _f(cels.AEP),
+            "APEP": _f(cels.APEP),
+            "AREL": _f(cels.AREL),
+            "ELC": _f(cels.ELC),
+            "porcentaje_ELC": _f(cels.porcentaje_ELC),
+        }
+
+    chart_labels          = [m.periodo_inicio.strftime("%b %Y") for m in r.meses]
+    chart_ebitda          = [float(m.ebitda_mes_mxn) for m in r.meses]
+    chart_ahorro_elec     = [float(m.ahorro_electricidad_mxn) for m in r.meses]
+    chart_ahorro_caldera  = [float(m.ahorro_caldera_mxn) for m in r.meses]
+    chart_costo_gas       = [float(m.costo_gas_cogen_mxn) for m in r.meses]
+    chart_om              = [float(m.gasto_om_mes_mxn) for m in r.meses]
+
+    tabla_mensual = [
+        {
+            "periodo":                     m.periodo_inicio.strftime("%b %Y"),
+            "kwh_total":                   float(m.kwh_total),
+            "kwh_cubiertos":               float(m.kwh_cubiertos),
+            "ahorro_energia_mes_mxn":      float(m.ahorro_energia_mes_mxn),
+            "ahorro_capacidad_mes_mxn":    float(m.ahorro_capacidad_mes_mxn),
+            "ahorro_distribucion_mes_mxn": float(m.ahorro_distribucion_mes_mxn),
+            "ahorro_otros_servicios_mes_mxn": float(m.ahorro_otros_servicios_mes_mxn),
+            "gj_gas_cogen":                float(m.gj_gas_cogen),
+            "costo_gas_cogen_mxn":         float(m.costo_gas_cogen_mxn),
+            "ahorro_electricidad_mxn":     float(m.ahorro_electricidad_mxn),
+            "calor_recuperado_gj":         float(m.calor_recuperado_gj),
+            "ahorro_caldera_mxn":          float(m.ahorro_caldera_mxn),
+            "gasto_om_mes_mxn":            float(m.gasto_om_mes_mxn),
+            "ebitda_mes_mxn":              float(m.ebitda_mes_mxn),
+        }
+        for m in r.meses
+    ]
+
+    return jsonify({
+        "ok": True,
+        "modelado_id": modelado_id,
+        "kpis_modelado": kpis_modelado,
+        "kpis": {
+            "cobertura_pct":                  float(kpis_modelado["cobertura_pct"]),
+            "ahorro_electricidad_anual":       float(r.ahorro_electricidad_anual_mxn),
+            "ahorro_caldera_anual":            float(r.ahorro_caldera_anual_mxn),
+            "costo_gas_cogen_anual":           float(r.costo_gas_cogen_anual_mxn),
+            "gasto_om_anual":                  float(r.gasto_om_anual_mxn),
+            "ebitda_anual":                    float(r.ebitda_anual_mxn),
+            "kwh_total_anual":                 float(r.kwh_total_anual),
+            "kwh_cubiertos_anual":             float(r.kwh_cubiertos_anual),
+            "gj_gas_cogen_anual":              float(r.gj_gas_cogen_anual),
+            "capacidad_nominal_kw":            float(r.capacidad_nominal_kw) if r.capacidad_nominal_kw else None,
+            "inversion_usd":                   float(r.inversion_usd) if r.inversion_usd else None,
+            "inversion_mxn":                   float(r.inversion_mxn) if r.inversion_mxn else None,
+            "tipo_cambio":                     float(r.tipo_cambio_mxn_usd) if r.tipo_cambio_mxn_usd else None,
+            "ahorro_energia_anual":            float(r.ahorro_energia_anual_mxn),
+            "ahorro_capacidad_anual":          float(r.ahorro_capacidad_anual_mxn),
+            "ahorro_distribucion_anual":       float(r.ahorro_distribucion_anual_mxn),
+            "ahorro_otros_servicios_anual":    float(r.ahorro_otros_servicios_anual_mxn),
+            "beneficio_fiscal_anio_1_mxn":     float(r.beneficio_fiscal_anio_1_mxn) if r.beneficio_fiscal_anio_1_mxn else None,
+            "gen_neta_anual_kwh":              kpis_modelado["gen_neta_anual_kwh"],
+            "gen_bruta_anual_kwh":             kpis_modelado["gen_bruta_anual_kwh"],
+            "horas_anuales_motor":             kpis_modelado["horas_anuales_motor"],
+        },
+        "params": {
+            "cobertura_electrica":    float(kpis_modelado["cobertura_pct"]),
+            "rendimiento_electrico":  rendimiento_electrico,
+            "rendimiento_termico":    rendimiento_termico,
+            "eficiencia_caldera":     eficiencia_caldera,
+        },
+        "co2": co2,
+        "cels": _cels_dict(cels_resultado),
+        "chart_labels": chart_labels,
+        "chart_ebitda": chart_ebitda,
+        "chart_ahorro_elec": chart_ahorro_elec,
+        "chart_ahorro_caldera": chart_ahorro_caldera,
+        "chart_costo_gas": chart_costo_gas,
+        "chart_om": chart_om,
+        "tabla_mensual": tabla_mensual,
+        "payback_inicial": payback_inicial,
+        "payback_con_beneficio": payback_con_beneficio,
+        "flujo_acum_15": flujo_acum_15,
+        "flujo_anual_15": flujo_anual_15,
+        "flujo_anual_15_fiscal": flujo_anual_15_fiscal,
+        "flujo_acum_15_fiscal": flujo_acum_15_fiscal,
+    })
