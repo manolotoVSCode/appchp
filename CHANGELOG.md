@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.65.0] — 2026-05-28
+
+### Añadido — Frontend Modelado CHP: gráfica horaria, parámetros cogen, sección cogeneración completa
+- `web/static/js/dashboard-modelado-chp.js`:
+  - `agregarPorHora(ts_arr, demanda_arr, gen_arr)` — agrega series de 5 min a promedios horarios por cubo `ts.slice(0,13)`. Usado exclusivamente para la gráfica; tabla diaria y encadenamiento siguen usando datos originales 5-min.
+  - `getCogenParams()` — lee 5 nuevos inputs del header: `param-rend-termico` (%, /100), `param-precio-gas`, `param-precio-vapor`, `param-inversion-usd`, `param-factor-util` (%, /100).
+  - `fetchCogenData(modeladoId)` — fetch a `/cogen-data`; popula KPIs (`chp-kpi-*`), muestra/oculta cards de inversión y payback, llama `_renderCascada()`, `_renderFlujo()`, `_renderTablaMensual()`.
+  - `_renderCascada()` — gráfica horizontal bar (Chart.js) con los 5 componentes del ahorro neto; colores rojo/azul según signo.
+  - `_renderFlujo(flujo_anual, flujo_acum)` — gráfica bar+line flujo 15 años usando arrays pre-calculados del endpoint (`flujo_anual_15`, `flujo_acum_15`).
+  - `_renderTablaMensual(filas)` — tabla mensual con fila de totales calculada en JS; campos: `ahorro_electricidad_mxn`, `ahorro_caldera_mxn`, `costo_gas_cogen_mxn`, `gasto_om_mes_mxn`, `ebitda_mes_mxn`.
+  - `fetchModelado()` popula `param-rend-termico` desde `data.cogen_defaults.rendimiento_termico` en primera carga; oculta sección cogen al recalcular.
+  - Cadena de carga: `fetchModelado → fetchCurva → fetchCogenData`.
+  - `medicionActivaChanged` destruye también `chpCascadaChart` y `chpFlujoChart`.
+- `web/templates/dashboard_modelado_chp.html`:
+  - Segunda fila de parámetros (con `<hr>` separador): 5 nuevos inputs (rend. térmico, precio gas, precio vapor, inversión USD/kW, factor utilización).
+  - Sección `#chp-cogen-section` (oculta por defecto): spinner cogen, banner de error cogen, 7 KPI cards (ahorro eléctrico, ahorro caldera, costo gas, O&M, ahorro neto, inversión, payback), canvas `#chp-chartCascada`, canvas `#chp-chartFlujo`, acordeón con tabla mensual `#chp-tbody-tabla-mensual`.
+
 ## [2.64.0] — 2026-05-28
 
 ### Añadido — Backend cogeneración desde modelado CHP

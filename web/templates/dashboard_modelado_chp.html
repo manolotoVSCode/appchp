@@ -76,6 +76,41 @@
           </div>
         </div>
       </div>
+
+      <!-- Separador y parámetros de cogeneración -->
+      <hr class="my-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-sm-auto">
+          <span class="text-muted small fw-semibold">Parámetros cogeneración</span>
+        </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-rend-termico">Rend. térmico (%)</label>
+          <input type="number" id="param-rend-termico" class="form-control form-control-sm"
+                 style="width:110px" step="0.1" min="5" max="60" value="25">
+        </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-precio-gas">Precio gas ($/GJ)</label>
+          <input type="number" id="param-precio-gas" class="form-control form-control-sm"
+                 style="width:110px" step="1" min="0" value="">
+          <div class="text-muted mt-1" style="font-size:.72rem">Auto desde facturas</div>
+        </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-precio-vapor">Precio vapor ($/GJ)</label>
+          <input type="number" id="param-precio-vapor" class="form-control form-control-sm"
+                 style="width:110px" step="1" min="0" value="">
+          <div class="text-muted mt-1" style="font-size:.72rem">Auto desde gas</div>
+        </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-inversion-usd">Inversión (USD/kW)</label>
+          <input type="number" id="param-inversion-usd" class="form-control form-control-sm"
+                 style="width:110px" step="10" min="0" value="600">
+        </div>
+        <div class="col-sm-auto">
+          <label class="form-label small fw-semibold mb-1" for="param-factor-util">Factor utilización (%)</label>
+          <input type="number" id="param-factor-util" class="form-control form-control-sm"
+                 style="width:110px" step="1" min="50" max="100" value="85">
+        </div>
+      </div>
     </div>
   </div>
 
@@ -218,6 +253,149 @@
       </div>
     </div>
   </div>
+
+  <!-- Sección cogeneración (oculta hasta que fetchCogenData la llene) -->
+  <div id="chp-cogen-section" style="display:none">
+
+    <!-- Spinner cogen -->
+    <div id="chp-cogen-spinner" class="text-center py-4 d-none">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div class="text-muted small mt-2">Calculando cogeneración…</div>
+    </div>
+
+    <!-- Banner de error cogen -->
+    <div id="chp-cogen-error-banner" class="alert alert-danger d-none" role="alert">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      <span id="chp-cogen-error-msg">Error al calcular cogeneración.</span>
+    </div>
+
+    <!-- KPIs cogeneración -->
+    <div id="chp-cogen-kpis" class="d-none">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header fw-semibold small text-muted">Resultados cogeneración (desde modelado)</div>
+        <div class="card-body">
+          <div class="row g-3 mb-2">
+            <div class="col-6 col-md-3">
+              <div class="card h-100 bg-light border-0">
+                <div class="card-body py-3">
+                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Ahorro eléctrico anual</div>
+                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-ahorro-elec">—</span> <small class="text-muted fw-normal">MXN</small></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card h-100 bg-light border-0">
+                <div class="card-body py-3">
+                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Ahorro caldera anual</div>
+                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-ahorro-caldera">—</span> <small class="text-muted fw-normal">MXN</small></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card h-100 bg-light border-0">
+                <div class="card-body py-3">
+                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Costo gas adicional</div>
+                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-costo-gas">—</span> <small class="text-muted fw-normal">MXN</small></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card h-100 bg-light border-0">
+                <div class="card-body py-3">
+                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Costo O&amp;M anual</div>
+                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-om">—</span> <small class="text-muted fw-normal">MXN</small></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="card h-100 shadow-sm">
+                <div class="card-body py-3">
+                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Ahorro neto anual</div>
+                  <div class="fw-bold fs-5 mt-1 text-success">$<span id="chp-kpi-ahorro-neto">—</span> <small class="text-muted fw-normal">MXN</small></div>
+                </div>
+              </div>
+            </div>
+            <div id="chp-seccion-inversion" class="col-6 col-md-3 d-none">
+              <div class="card h-100 shadow-sm">
+                <div class="card-body py-3">
+                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Inversión estimada</div>
+                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-inversion">—</span> <small class="text-muted fw-normal">MXN</small></div>
+                </div>
+              </div>
+            </div>
+            <div id="chp-payback-card" class="col-6 col-md-3 d-none">
+              <div class="card h-100 shadow-sm">
+                <div class="card-body py-3">
+                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Payback</div>
+                  <div class="fw-bold fs-5 mt-1"><span id="chp-kpi-payback">—</span> <small class="text-muted fw-normal">años</small></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cascada de ahorro -->
+    <div id="chp-cascada-section" class="d-none mb-4">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold small text-muted">Cascada de ahorro</div>
+        <div class="card-body">
+          <canvas id="chp-chartCascada" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flujo 15 años -->
+    <div id="chp-flujo-section" class="d-none mb-4">
+      <div class="card shadow-sm">
+        <div class="card-header fw-semibold small text-muted">Flujo acumulado — 15 años</div>
+        <div class="card-body">
+          <canvas id="chp-chartFlujo" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla mensual -->
+    <div id="chp-tabla-mensual-section" class="d-none mb-4">
+      <div class="accordion" id="acordeonTablaMensual">
+        <div class="accordion-item shadow-sm">
+          <h2 class="accordion-header" id="headingTablaMensual">
+            <button class="accordion-button collapsed fw-semibold small text-muted py-2"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#collapseTablaMensual"
+                    aria-expanded="false"
+                    aria-controls="collapseTablaMensual">
+              Detalle mensual cogeneración
+            </button>
+          </h2>
+          <div id="collapseTablaMensual"
+               class="accordion-collapse collapse"
+               aria-labelledby="headingTablaMensual">
+            <div class="accordion-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.8rem">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Periodo</th>
+                      <th class="text-end">Ah. eléctrico</th>
+                      <th class="text-end">Ah. caldera</th>
+                      <th class="text-end">Costo gas</th>
+                      <th class="text-end">O&amp;M</th>
+                      <th class="text-end">Ahorro neto</th>
+                    </tr>
+                  </thead>
+                  <tbody id="chp-tbody-tabla-mensual"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /chp-cogen-section -->
 
 </div><!-- dashboard-modelado-chp-root -->
 {% endblock %}

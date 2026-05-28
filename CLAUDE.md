@@ -311,12 +311,14 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.64.0 — backend cogen desde modelado CHP:
-wrapper calcular_cogen_desde_modelado (cobertura_pct del modelado →
-CoGenParams), endpoint /cogen-data con CELs, CO₂, flujo 15 años y
-payback. Campo cogen_defaults en /data.
-Pendiente: frontend sección cogen en dashboard Modelado CHP (segundo
-prompt).
+Último tema resuelto: v2.65.0 — frontend Modelado CHP completo: gráfica
+horaria (agregarPorHora agrega 5-min a 1h para el chart), 5 inputs cogen
+en header, sección #chp-cogen-section con KPIs, cascada horizontal bar,
+flujo 15 años bar+line y tabla mensual. Cadena fetchModelado→fetchCurva→
+fetchCogenData. Campos reales del endpoint: ahorro_electricidad_anual,
+ahorro_caldera_anual, costo_gas_cogen_anual, gasto_om_anual, ebitda_anual,
+flujo_anual_15, flujo_acum_15, tabla_mensual (array plano).
+Pendiente: ninguno conocido.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
