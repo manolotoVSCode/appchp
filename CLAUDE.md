@@ -302,3 +302,39 @@ Antes de implementar, explicar la aproximación y esperar confirmación.
 Cada sesión de trabajo se enfoca en un entregable específico. Al iniciar la sesión, leer este archivo para retomar contexto. Al cerrar, actualizar este archivo si hubo decisiones nuevas que afecten futuras sesiones.
 
 Antes de tomar decisiones que no estén documentadas aquí, preguntar.
+
+---
+
+## Estado de chats activos
+
+Esta sección la mantiene Claude Code. Se actualiza en cada commit.
+Permite retomar cualquier chat sin reconstruir contexto.
+
+### Nuevas funcionalidades
+Último tema resuelto: sistema de mediciones cincominutal — upload Excel,
+sidebar con radio por mes, gráfica de perfil de demanda en dashboard
+contabilidad. Pendiente: corregir gráfica cincominutal que solo muestra
+4 días en lugar del mes completo (causa probable: autoSkip:false en
+chartOptions comprime el render con ~8,900 puntos).
+
+### Bugs App
+Último tema resuelto: tabla componentes cogeneración con table-layout
+fixed para Safari + colores donut resueltos desde CSS vars.
+Pendiente: ninguno conocido.
+
+### Diseño Visual App
+Último tema resuelto: donut Contabilidad y Cogeneración restaurada a
+paleta azules (#1F3A5F, #2E5C8A, #5B8FB9, #A4C8E1), dots de leyenda
+sincronizados al mismo color del arco.
+Pendiente: ninguno conocido.
+
+### Auditorías App
+Último tema resuelto: ninguno. Chat iniciado, modelo recomendado Opus 4.7.
+Pendiente: auditoría de fase 1 al cierre del alcance.
+
+### Integración Telemática
+Último tema resuelto: flag de aislamiento fase 2 apagada (v2.58.0).
+Pendiente: habilitar TimescaleDB en Supabase y crear migración SQL con
+tablas medidores, mediciones_tiempo_real (hypertable) y
+mediciones_agregadas_15min. Bloqueado hasta confirmar disponibilidad
+de TimescaleDB en plan Supabase activo.
