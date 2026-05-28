@@ -413,13 +413,14 @@
     canvas.style.display = "";
     const labels = mensual.map(m => m.mes);
     const datasets = [
-      { label: "Energía",         data: mensual.map(m => m.energia),      backgroundColor: "#0D3B66", yAxisID: "y", stack: "costos" },
-      { label: "Capacidad",       data: mensual.map(m => m.capacidad),    backgroundColor: "#1F6FB2", yAxisID: "y", stack: "costos" },
-      { label: "Distribución",    data: mensual.map(m => m.distribucion), backgroundColor: "#4A9FD8", yAxisID: "y", stack: "costos" },
-      { label: "Otros Servicios", data: mensual.map(m => m.otros),        backgroundColor: "#A8D0E6", yAxisID: "y", stack: "costos" },
+      { label: "Energía",         data: mensual.map(m => m.energia),      backgroundColor: "#0D3B66", yAxisID: "y", stack: "costos", order: 2 },
+      { label: "Capacidad",       data: mensual.map(m => m.capacidad),    backgroundColor: "#1F6FB2", yAxisID: "y", stack: "costos", order: 2 },
+      { label: "Distribución",    data: mensual.map(m => m.distribucion), backgroundColor: "#4A9FD8", yAxisID: "y", stack: "costos", order: 2 },
+      { label: "Otros Servicios", data: mensual.map(m => m.otros),        backgroundColor: "#A8D0E6", yAxisID: "y", stack: "costos", order: 2 },
       { type: "line", label: "$/kWh del mes", data: mensual.map(m => m.costo_unit),
         borderColor: COLOR_LINEA, backgroundColor: "transparent",
-        borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2", _costoUnitLabels: true }
+        borderWidth: 2, pointRadius: 4, pointBackgroundColor: "#fff", pointBorderColor: COLOR_LINEA, pointBorderWidth: 2,
+        tension: 0.2, yAxisID: "y2", order: 1, _costoUnitLabels: true }
     ];
     if (!costoMensualComponenteChart) {
       costoMensualComponenteChart = new Chart(canvas, {
