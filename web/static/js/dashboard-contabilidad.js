@@ -63,17 +63,20 @@
     afterDatasetsDraw(chart) {
       const ctx = chart.ctx;
       chart.data.datasets.forEach((ds, i) => {
-        if (!ds._showLabels) return;
+        if (!ds._showLabels && !ds._costoUnitLabels) return;
         const meta = chart.getDatasetMeta(i);
         meta.data.forEach((el, j) => {
           const val = ds.data[j];
           if (val == null) return;
+          const label = ds._costoUnitLabels
+            ? ("$" + val.toFixed(4))
+            : (typeof val === "number" ? val.toFixed(4) : String(val));
           ctx.save();
           ctx.fillStyle = "#212529";
           ctx.font = "bold 10px sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "bottom";
-          ctx.fillText(typeof val === "number" ? val.toFixed(4) : val, el.x, el.y - 4);
+          ctx.fillText(label, el.x, el.y - 4);
           ctx.restore();
         });
       });
@@ -416,7 +419,7 @@
       { label: "Otros Servicios", data: mensual.map(m => m.otros),        backgroundColor: "#A8D0E6", yAxisID: "y", stack: "costos" },
       { type: "line", label: "$/kWh del mes", data: mensual.map(m => m.costo_unit),
         borderColor: COLOR_LINEA, backgroundColor: "transparent",
-        borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2" }
+        borderWidth: 2, pointRadius: 4, tension: 0.2, yAxisID: "y2", _costoUnitLabels: true }
     ];
     if (!costoMensualComponenteChart) {
       costoMensualComponenteChart = new Chart(canvas, {
