@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.59.0] — 2026-05-27
+
+### Añadido — Fase 2: Capa de datos de telemetría (Entrega A)
+- `storage/migrations/202606_telemetria_fase2.sql`: tres tablas (`medidores`, `mediciones_tiempo_real`, `mediciones_agregadas_15min`) + índices + función PL/pgSQL `agregar_mediciones_15min()` + job pg_cron `*/15 * * * *`. PostgreSQL nativo sin TimescaleDB; diseño migrable a hypertable. FK `medidores.empresa_id → clientes(id)`.
+- `storage/repository.py`: 7 nuevas funciones — `crear_medidor`, `obtener_medidores_por_empresa`, `obtener_medidor`, `insertar_medicion`, `insertar_mediciones_batch` (chunks de 1000), `obtener_mediciones_recientes`, `obtener_agregados_15min`. Todas las lecturas incluyen `.limit(20000)` explícito.
+- `tests/test_repository_mediciones.py`: 12 tests (12/12 passed) que cubren los 8 casos del spec (a–h): inserción y retorno con id, filtro por empresa, retorno None, set completo de variables Acuvim II, batch con división en chunks, rangos de fecha con `.limit(20000)`, y propagación de error FK.
+
 ## [2.48.0] — 2026-05-27
 
 ### Añadido

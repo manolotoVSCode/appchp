@@ -333,8 +333,9 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: flag de aislamiento fase 2 apagada (v2.58.0).
-Pendiente: habilitar TimescaleDB en Supabase y crear migración SQL con
-tablas medidores, mediciones_tiempo_real (hypertable) y
-mediciones_agregadas_15min. Bloqueado hasta confirmar disponibilidad
-de TimescaleDB en plan Supabase activo.
+Último tema resuelto: v2.59.0 — capa de datos fase 2 entrega A.
+Tablas medidores/mediciones_tiempo_real/mediciones_agregadas_15min
+creadas en PostgreSQL nativo (sin TimescaleDB). Función
+agregar_mediciones_15min() + job pg_cron cada 15 min. 7 funciones
+repositorio + 12 tests. Pendiente: aplicar migración en Supabase,
+verificar SELECT * FROM cron.job. Siguiente: rutas/UI telemetría.

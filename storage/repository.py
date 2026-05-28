@@ -1421,3 +1421,130 @@ def update_medicion(medicion_id: int, campos: dict) -> dict | None:
 def delete_medicion(medicion_id: int) -> None:
     """Borra la cabecera; ON DELETE CASCADE elimina los datos automáticamente."""
     _supabase.table("mediciones_cincominutal").delete().eq("id", medicion_id).execute()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FASE 2 — Telemetría de medidores Accuenergy Acuvim II
+# ══════════════════════════════════════════════════════════════════════════════
+
+def crear_medidor(
+    empresa_id: int,
+    nombre: str,
+    punto_medicion: str | None = None,
+    ubicacion: str | None = None,
+    numero_serie: str | None = None,
+    relacion_tc: float | None = None,
+    marca: str = "Accuenergy",
+    modelo: str = "Acuvim II",
+) -> dict:
+    """Inserta un medidor en la tabla medidores y retorna el registro creado con id."""
+    payload = {
+        "empresa_id":      empresa_id,
+        "nombre":          nombre,
+        "punto_medicion":  punto_medicion,
+        "ubicacion":       ubicacion,
+        "numero_serie":    numero_serie,
+        "relacion_tc":     relacion_tc,
+        "marca":           marca,
+        "modelo":          modelo,
+    }
+    resp = _supabase.table("medidores").insert(payload).execute()
+    return resp.data[0]
+
+
+def obtener_medidores_por_empresa(empresa_id: int) -> list[dict]:
+    """Retorna todos los medidores de una empresa, ordenados por nombre."""
+    resp = (
+        _supabase.table("medidores")
+        .select("*")
+        .eq("empresa_id", empresa_id)
+        .order("nombre", desc=False)
+        .limit(20000)
+        .execute()
+    )
+    return resp.data or []
+
+
+def obtener_medidor(medidor_id: int) -> dict | None:
+    """Retorna un medidor por id, o None si no existe."""
+    resp = (
+        _supabase.table("medidores")
+        .select("*")
+        .eq("id", medidor_id)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def insertar_medicion(medidor_id: int, timestamp: str, **variables) -> dict:
+    """Inserta una lectura completa en mediciones_tiempo_real.
+
+    timestamp debe ser un string ISO-8601 o un datetime con tzinfo.
+    Las variables del set completo Acuvim II se pasan como kwargs.
+    Retorna el registro insertado.
+    """
+    payload = {"medidor_id": medidor_id, "timestamp": timestamp, **variables}
+    resp = _supabase.table("mediciones_tiempo_real").insert(payload).execute()
+    return resp.data[0]
+
+
+def insertar_mediciones_batch(lista_mediciones: list[dict]) -> int:
+    """Inserta múltiples lecturas en mediciones_tiempo_real.
+
+    Cada elemento debe ser un dict con 'medidor_id', 'timestamp' y las variables.
+    Retorna el número de filas insertadas.
+    """
+    if not lista_mediciones:
+        return 0
+    _BATCH = 1000
+    total = 0
+    for i in range(0, len(lista_mediciones), _BATCH):
+        chunk = lista_mediciones[i : i + _BATCH]
+        resp = _supabase.table("mediciones_tiempo_real").insert(chunk).execute()
+        total += len(resp.data or [])
+    return total
+
+
+def obtener_mediciones_recientes(
+    medidor_id: int,
+    desde: str,
+    hasta: str,
+) -> list[dict]:
+    """Lecturas de mediciones_tiempo_real para un medidor en el rango [desde, hasta].
+
+    desde/hasta son strings ISO-8601. Ordenadas por timestamp ASC.
+    """
+    resp = (
+        _supabase.table("mediciones_tiempo_real")
+        .select("*")
+        .eq("medidor_id", medidor_id)
+        .gte("timestamp", desde)
+        .lte("timestamp", hasta)
+        .order("timestamp", desc=False)
+        .limit(20000)
+        .execute()
+    )
+    return resp.data or []
+
+
+def obtener_agregados_15min(
+    medidor_id: int,
+    desde: str,
+    hasta: str,
+) -> list[dict]:
+    """Buckets de 15 minutos en mediciones_agregadas_15min para un medidor en [desde, hasta].
+
+    Ordenados por bucket_15min ASC.
+    """
+    resp = (
+        _supabase.table("mediciones_agregadas_15min")
+        .select("*")
+        .eq("medidor_id", medidor_id)
+        .gte("bucket_15min", desde)
+        .lte("bucket_15min", hasta)
+        .order("bucket_15min", desc=False)
+        .limit(20000)
+        .execute()
+    )
+    return resp.data or []
