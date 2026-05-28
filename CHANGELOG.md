@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.47.1] — 2026-05-27
+
+### Corregido
+- `storage/repository.py`: `get_medicion_datos()` ya tenía `.limit(20000)` desde fix anterior — confirmado sin cambio.
+- `web/templates/dashboard_contabilidad.html`: añade `chartjs-adapter-date-fns@3.0.0` vía CDN (necesario para eje `type: "time"`).
+- `web/static/js/dashboard-contabilidad.js`: gráfica cincominutal — eje X cambia a `type:"time"` con `unit:"day"` y `displayFormats:{day:"d"}`; dataset usa puntos `{ts,x,y}`; grid vertical por día con línea sutil; eje Y con `min:0` y grid horizontal; fondo blanco.
+
 ## [2.47.0] — 2026-05-27
 
 ### Corregido

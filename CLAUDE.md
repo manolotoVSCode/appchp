@@ -311,9 +311,9 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: fix gráfica perfil demanda cincominutal — eje X
-muestra mes completo con días 1-31 (solución alternativa sin adaptador
-de fechas: eje categórico con labelsEjeX).
+Último tema resuelto: fix gráfica cincominutal — límite 20000 filas en
+get_medicion_datos + fondo blanco con línea por día en eje X (eje time
+con chartjs-adapter-date-fns@3.0.0 añadido vía CDN).
 Pendiente: ninguno conocido.
 
 ### Bugs App

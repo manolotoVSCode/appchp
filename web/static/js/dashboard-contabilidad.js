@@ -896,18 +896,10 @@
         const ctx = document.getElementById("chartCincominutal");
         if (!ctx) return;
 
-        const labelsEjeX = data.ts.map((t, i) => {
-          if (i === 0) return t.slice(8, 10);
-          return data.ts[i].slice(8, 10) !== data.ts[i - 1].slice(8, 10)
-            ? String(parseInt(t.slice(8, 10), 10))
-            : "";
-        });
-
         const chartData = {
-          labels: labelsEjeX,
           datasets: [{
             label: "Potencia (kW)",
-            data: data.potencia_kw,
+            data: data.ts.map((t, i) => ({ ts: t, x: t, y: data.potencia_kw[i] })),
             borderColor: "rgba(31,122,76,0.85)",
             backgroundColor: "transparent",
             borderWidth: 1,
@@ -924,27 +916,46 @@
             tooltip: {
               callbacks: {
                 label: c => `${c.parsed.y.toLocaleString("es-MX", {maximumFractionDigits:1})} kW`,
-                title: ts => data.ts[ts[0].dataIndex]?.replace("T", " ").slice(0, 16) || ""
+                title: ts => {
+                  const raw = ts[0].raw;
+                  return raw ? raw.ts.replace("T", " ").slice(0,16) : "";
+                }
               }
             }
           },
           scales: {
             x: {
+              type: "time",
+              time: {
+                unit: "day",
+                tooltipFormat: "yyyy-MM-dd HH:mm",
+                displayFormats: { day: "d" }
+              },
               ticks: {
-                autoSkip: false,
+                maxTicksLimit: 31,
                 maxRotation: 0,
-                callback: function(val) {
-                  return this.getLabelForValue(val) || "";
-                }
-              }
+                autoSkip: true
+              },
+              grid: {
+                color: ctx => ctx.tick && ctx.tick.major
+                  ? "rgba(0,0,0,0.15)"
+                  : "transparent",
+                lineWidth: ctx => ctx.tick && ctx.tick.major ? 1 : 0
+              },
+              border: { display: false }
             },
             y: {
               min: 0,
+              grid: {
+                color: "rgba(0,0,0,0.06)",
+                lineWidth: 1
+              },
               ticks: {
                 callback: v => v.toLocaleString("es-MX", {maximumFractionDigits:0}) + " kW"
               }
             }
-          }
+          },
+          backgroundColor: "#ffffff"
         };
 
         if (!cincominutalChart) {
