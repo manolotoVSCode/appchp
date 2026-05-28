@@ -536,7 +536,7 @@
         <td class="small">
           <span class="donut-color-dot" style="background:${colores[l.nombre] || '#999'}"></span>${l.nombre}
         </td>
-        <td class="text-end small">${fmt(l.monto)}${data.total > 0 ? ' (' + l.pct + '%)' : ''}</td>
+        <td class="text-end small">${fmt(l.monto)}</td>
       </tr>`).join("");
     const total = `
       <tr style="border-top:1px solid var(--color-primary-light); background:var(--color-primary-soft)">

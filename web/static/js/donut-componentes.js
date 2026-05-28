@@ -59,15 +59,19 @@ function renderDonutComponentes(containerId, datos) {
     return;
   }
 
+  const rMid = (rOut + rIn) / 2;
   let anguloInicio = -Math.PI / 2;
   const paths = datos.map(d => {
     const fraccion  = d.pct / totalPct;
     const anguloFin = anguloInicio + fraccion * Math.PI * 2;
+    const midAngle  = anguloInicio + (anguloFin - anguloInicio) / 2;
     const seg = {
       path:      arcPath(cx, cy, rOut, rIn, anguloInicio, anguloFin),
       color:     resolveColor(d.color),
       nombre:    d.nombre,
       pct:       d.pct,
+      labelX:    cx + rMid * Math.cos(midAngle),
+      labelY:    cy + rMid * Math.sin(midAngle),
     };
     anguloInicio = anguloFin;
     return seg;
@@ -80,6 +84,13 @@ function renderDonutComponentes(containerId, datos) {
         <path d="${p.path}" fill="${p.color}" stroke="#fff" stroke-width="2">
           <title>${p.nombre}: ${p.pct}%</title>
         </path>`).join('')}
+      ${paths.filter(p => p.pct >= 5).map(p => `
+        <text x="${p.labelX.toFixed(1)}" y="${p.labelY.toFixed(1)}"
+              text-anchor="middle" dominant-baseline="central"
+              font-size="13" font-weight="600" fill="#fff"
+              stroke="#000" stroke-width="2.5"
+              style="paint-order:stroke fill"
+              font-family="system-ui">${p.pct}%</text>`).join('')}
       <text x="${cx}" y="${cy - 6}" text-anchor="middle"
             font-size="14" font-weight="600" fill="#1A1A1A"
             font-family="system-ui">Composición</text>

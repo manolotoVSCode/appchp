@@ -383,6 +383,33 @@
       }));
     };
 
+    const arcLabelsPlugin = {
+      id: "arcLabels",
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        const ds  = chart.data.datasets[0];
+        const tot = ds.data.reduce((a, b) => a + b, 0);
+        chart.getDatasetMeta(0).data.forEach((arc, i) => {
+          const pct = tot > 0 ? Math.round(ds.data[i] / tot * 100) : 0;
+          if (pct < 5) return;
+          const midAngle = (arc.startAngle + arc.endAngle) / 2;
+          const rMid     = (arc.innerRadius + arc.outerRadius) / 2;
+          const lx = arc.x + rMid * Math.cos(midAngle);
+          const ly = arc.y + rMid * Math.sin(midAngle);
+          ctx.save();
+          ctx.font         = "bold 11px system-ui";
+          ctx.textAlign    = "center";
+          ctx.textBaseline = "middle";
+          ctx.strokeStyle  = "rgba(0,0,0,0.55)";
+          ctx.lineWidth    = 2.5;
+          ctx.strokeText(pct + "%", lx, ly);
+          ctx.fillStyle = "#fff";
+          ctx.fillText(pct + "%", lx, ly);
+          ctx.restore();
+        });
+      },
+    };
+
     if (!donutAhorroNetoChart) {
       donutAhorroNetoChart = new Chart(canvas, {
         type: "doughnut",
@@ -409,6 +436,7 @@
             },
           },
         },
+        plugins: [arcLabelsPlugin],
       });
     } else {
       donutAhorroNetoChart.data.datasets[0].data            = newData;
@@ -534,21 +562,20 @@
     const fmtOrig = v => v > 0 ? fmt(v) : "—";
     const _totalAhorro = ah_energia_anual + ah_cap_anual + ah_dist_anual + ah_otros_anual;
     const _pctD = v => _totalAhorro > 0 ? Math.round(v / _totalAhorro * 100) : 0;
-    const _fmtPct = v => _totalAhorro > 0 ? fmt(v) + ' (' + _pctD(v) + '%)' : fmt(v);
     setText("kpi-ah-energia-orig",    fmtOrig(orig_energia_anual));
-    setText("kpi-ah-energia-val",     _fmtPct(ah_energia_anual));
+    setText("kpi-ah-energia-val",     fmt(ah_energia_anual));
     setText("kpi-ah-cap-orig",        fmtOrig(orig_cap_anual));
-    setText("kpi-ah-cap-val",         _fmtPct(ah_cap_anual));
+    setText("kpi-ah-cap-val",         fmt(ah_cap_anual));
     setText("kpi-ah-dist-orig",       fmtOrig(orig_dist_anual));
-    setText("kpi-ah-dist-val",        _fmtPct(ah_dist_anual));
+    setText("kpi-ah-dist-val",        fmt(ah_dist_anual));
     setText("kpi-ah-otros-orig",      fmtOrig(orig_otros_anual));
-    setText("kpi-ah-otros-val",       _fmtPct(ah_otros_anual));
+    setText("kpi-ah-otros-val",       fmt(ah_otros_anual));
     // Donut: porcentajes del ahorro por componente
     renderDonutComponentes("donutAhorroElec", [
-      { nombre: "Energía",         pct: _pctD(ah_energia_anual), color: "#0D3B66" },
-      { nombre: "Capacidad",       pct: _pctD(ah_cap_anual),     color: "#1F6FB2" },
-      { nombre: "Distribución",    pct: _pctD(ah_dist_anual),    color: "#4A9FD8" },
-      { nombre: "Otros Servicios", pct: _pctD(ah_otros_anual),   color: "#A8D0E6" },
+      { nombre: "Energía",         pct: _pctD(ah_energia_anual), color: "var(--color-primary)" },
+      { nombre: "Capacidad",       pct: _pctD(ah_cap_anual),     color: "var(--color-warning)" },
+      { nombre: "Distribución",    pct: _pctD(ah_dist_anual),    color: "var(--color-info)" },
+      { nombre: "Otros Servicios", pct: _pctD(ah_otros_anual),   color: "var(--color-danger)" },
     ]);
 
     // Payback
