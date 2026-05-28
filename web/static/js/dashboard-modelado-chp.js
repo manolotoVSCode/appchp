@@ -21,6 +21,7 @@
   let chpCogenChart    = null;
   let chpCascadaChart  = null;
   let chpFlujoChart    = null;
+  let chpDonutChart    = null;
   let _modeladoId      = null;
   let _abortCtrl       = null;
   let _primerasCarga   = true;
@@ -50,16 +51,20 @@
 
   const _fmtMXN = v => "$" + Math.round(v).toLocaleString("es-MX");
 
-  // ── Cap. unitaria ──────────────────────────────────────────────────────────
-  function actualizarCapUnitaria() {
-    const cap = parseFloat($("param-cap-nominal-input").value) || 0;
-    const n   = parseInt($("param-num-motores").value) || 1;
-    $("param-cap-unitaria").textContent =
-      cap > 0 ? Math.round(cap / n).toLocaleString("es-MX") : "—";
+  // ── Inversión total (precio/kW × cap nominal) ──────────────────────────────
+  function actualizarInversionTotal() {
+    const cap      = parseFloat($("param-cap-nominal-input").value) || 0;
+    const precioKw = parseFloat($("param-inversion-usd").value)    || 1400;
+    const total    = Math.round(cap * precioKw);
+    const lbl      = $("chp-inversion-total-label");
+    if (lbl) lbl.textContent = total > 0
+      ? "$" + total.toLocaleString("es-MX") + " USD total"
+      : "—";
   }
 
-  $("param-cap-nominal-input").addEventListener("input",  actualizarCapUnitaria);
-  $("param-num-motores").addEventListener("change", actualizarCapUnitaria);
+  $("param-cap-nominal-input").addEventListener("input",  actualizarInversionTotal);
+  $("param-inversion-usd").addEventListener("input",      actualizarInversionTotal);
+  $("param-num-motores").addEventListener("change",       actualizarInversionTotal);
 
   // ── Leer parámetros CHP ────────────────────────────────────────────────────
   function getParams() {
@@ -75,11 +80,14 @@
 
   // ── Leer parámetros de cogeneración ────────────────────────────────────────
   function getCogenParams() {
+    const precioKw   = parseFloat($("param-inversion-usd").value)      || 1400;
+    const capNominal = parseFloat($("param-cap-nominal-input").value)   || 0;
+    const inversion_usd = Math.round(capNominal * precioKw);
     return {
-      rendimiento_termico: (parseFloat($("param-rend-termico").value)  || 45) / 100,
-      precio_gas:           parseFloat($("param-precio-gas").value)    || null,
-      inversion_usd:        parseFloat($("param-inversion-usd").value) || null,
-      factor_utilizacion:   parseFloat($("param-factor-util").value)   || 0.9132,
+      rendimiento_termico:  (parseFloat($("param-rend-termico").value)  || 45) / 100,
+      precio_gas:            parseFloat($("param-precio-gas").value)    || null,
+      inversion_usd:         inversion_usd > 0 ? inversion_usd : null,
+      factor_utilizacion:    parseFloat($("param-factor-util").value)   || 0.9132,
     };
   }
 
@@ -144,9 +152,6 @@
         if (_primerasCarga || !capInput.value) {
           capInput.value = Math.round(capNom);
 
-          // Inversión = cap × 1400 USD
-          $("param-inversion-usd").value = Math.round(capNom * 1400);
-
           // Precio gas desde cogen_defaults si viene y el input sigue en 0
           if (data.cogen_defaults && data.cogen_defaults.precio_gas_gj) {
             const inputGas = $("param-precio-gas");
@@ -154,10 +159,12 @@
               inputGas.value = data.cogen_defaults.precio_gas_gj;
             }
           }
+
+          // Actualizar label inversión total (mantiene 1400 USD/kW como default)
+          actualizarInversionTotal();
         }
 
         _primerasCarga = false;
-        actualizarCapUnitaria();
 
         // KPIs modelado
         const k = data.kpis;
@@ -325,10 +332,10 @@
     const chartData = {
       labels,
       datasets: [
-        { label: "Ahorro Electricidad", data: ahorro_elec,         backgroundColor: "rgba(106,138,154,0.65)", stack: "componentes" },
-        { label: "Ahorro Caldera",      data: ah_caldera,          backgroundColor: "rgba(232,181,71,0.65)",  stack: "componentes" },
+        { label: "Ahorro Electricidad", data: ahorro_elec,            backgroundColor: "rgba(106,138,154,0.65)", stack: "componentes" },
+        { label: "Ahorro Caldera",      data: ah_caldera,             backgroundColor: "rgba(232,181,71,0.65)",  stack: "componentes" },
         { label: "Costo Gas Cogen",     data: costo_gas.map(v => -v), backgroundColor: "rgba(216,90,90,0.65)",  stack: "componentes" },
-        { label: "O&M",                 data: om.map(v => -v),     backgroundColor: "rgba(180,100,180,0.65)", stack: "componentes" },
+        { label: "O&M",                 data: om.map(v => -v),        backgroundColor: "rgba(180,100,180,0.65)", stack: "componentes" },
         {
           type: "line",
           label: "Ahorro Neto",
@@ -364,7 +371,7 @@
   }
 
   function _renderCascada(ah_elec, ah_caldera, costo_gas, om, ahorro_neto) {
-    const canvas = $("chp-chartCascada");
+    const canvas = $("chp-waterfallChart");
     if (!canvas) return;
     const labels = ["Ah. Eléctrico", "Ah. Caldera", "Costo Gas", "O&M", "Ahorro Neto"];
     const vals   = [ah_elec, ah_caldera, -costo_gas, -om, ahorro_neto];
@@ -376,7 +383,7 @@
     const opts = {
       indexAxis: "y",
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       animation: false,
       plugins: {
         legend: { display: false },
@@ -396,7 +403,7 @@
   }
 
   function _renderFlujo(flujo_anual, flujo_acum) {
-    const canvas = $("chp-chartFlujo");
+    const canvas = $("chp-chart15Year");
     if (!canvas) return;
     const labels = flujo_anual.map((_, i) => i === 0 ? "Inv." : `Año ${i}`);
     const chartData = {
@@ -443,6 +450,33 @@
     }
   }
 
+  function _renderDonutIngresos(ahElec, ahCaldera) {
+    const canvas = $("chp-chartCompAhorroNeto");
+    if (!canvas) return;
+    const chartData = {
+      labels: ["Ahorro Electricidad", "Ahorro Caldera"],
+      datasets: [{
+        data: [ahElec, ahCaldera],
+        backgroundColor: ["#1F3A5F", "#E8B547"],
+        borderWidth: 0,
+      }],
+    };
+    const opts = {
+      responsive: true,
+      animation: false,
+      plugins: {
+        legend: { display: true, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => `${c.label}: ${_fmtMXN(c.parsed)}` } },
+      },
+    };
+    if (!chpDonutChart) {
+      chpDonutChart = new Chart(canvas, { type: "doughnut", data: chartData, options: opts });
+    } else {
+      chpDonutChart.data = chartData;
+      chpDonutChart.update();
+    }
+  }
+
   function _renderTablaMensual(filas) {
     const tbody = $("chp-tbody-tabla-mensual");
     if (!tbody) return;
@@ -483,11 +517,10 @@
     _showB("chp-cogen-section");
     _show("chp-cogen-spinner");
     _hide("chp-cogen-error-banner");
-    _hide("chp-cogen-kpis");
+    _hideB("chp-seccion-cascada");
+    _hideB("chp-flujo-section");
+    _hideB("chp-seccion-inversion");
     _hide("chp-graficaMensual-section");
-    _hide("chp-cascada-section");
-    _hide("chp-flujo-section");
-    _hide("chp-tabla-mensual-section");
 
     const cp = getCogenParams();
     const qsObj = {
@@ -516,38 +549,57 @@
         const ebitda    = k.ebitda_anual;
         const invMxn    = k.inversion_mxn || 0;
 
-        $("chp-kpi-ahorro-elec").textContent    = _fmt(ahElec,    0);
-        $("chp-kpi-ahorro-caldera").textContent = _fmt(ahCaldera, 0);
-        $("chp-kpi-costo-gas").textContent      = _fmt(costoGas,  0);
-        $("chp-kpi-om").textContent             = _fmt(om,        0);
-        $("chp-kpi-ahorro-neto").textContent    = _fmt(ebitda,    0);
+        // KPIs Ingresos
+        $("chp-kpi-ah-elec-val").textContent        = _fmtMXN(ahElec);
+        $("chp-kpi-caldera-val").textContent        = _fmtMXN(ahCaldera);
+        $("chp-kpi-total-ingresos-val").textContent = _fmtMXN(ahElec + ahCaldera);
 
-        _show("chp-cogen-kpis");
+        // KPIs Gastos
+        $("chp-kpi-gas-val").textContent          = _fmtMXN(costoGas);
+        $("chp-kpi-om-val").textContent           = _fmtMXN(om);
+        $("chp-kpi-total-gastos-val").textContent = _fmtMXN(costoGas + om);
 
+        // Ahorro Neto
+        $("chp-kpi-ahorro-neto-val").textContent = _fmtMXN(ebitda);
+
+        // Donut composición ingresos
+        _renderDonutIngresos(ahElec, ahCaldera);
+
+        // Sección Inversión y Retorno
         if (invMxn > 0) {
-          $("chp-kpi-inversion").textContent = _fmt(invMxn, 0);
-          _show("chp-seccion-inversion");
-          _show("chp-payback-card");
+          const capNom   = parseFloat($("param-cap-nominal-input").value) || 0;
+          const precioKw = parseFloat($("param-inversion-usd").value)    || 1400;
+          const invUsd   = Math.round(capNom * precioKw);
+
+          const capNomEl = $("chp-kpi-cap-nominal-val");
+          if (capNomEl) capNomEl.textContent = Math.round(capNom).toLocaleString("es-MX") + " kW";
+
+          const invUsdEl = $("chp-kpi-inversion-usd-val");
+          if (invUsdEl) invUsdEl.textContent = "$" + invUsd.toLocaleString("es-MX") + " USD";
+
+          const invMxnEl = $("chp-kpi-inversion-mxn-val");
+          if (invMxnEl) invMxnEl.textContent = _fmtMXN(invMxn) + " MXN";
+
           const pb = data.payback_con_beneficio ?? data.payback_inicial;
-          $("chp-kpi-payback").textContent = pb != null
-            ? _fmt(pb, 2) + " años"
-            : "> 15 años";
+          const pbEl = $("chp-kpi-payback-val");
+          if (pbEl) pbEl.textContent = pb != null ? _fmt(pb, 2) + " años*" : "> 15 años";
+
+          _showB("chp-seccion-inversion");
         }
 
         chpRenderGraficaMensual(data);
         _show("chp-graficaMensual-section");
 
         _renderCascada(ahElec, ahCaldera, costoGas, om, ebitda);
-        _show("chp-cascada-section");
+        _showB("chp-seccion-cascada");
 
         if (data.flujo_anual_15 && data.flujo_anual_15.length > 0) {
           _renderFlujo(data.flujo_anual_15, data.flujo_acum_15 || []);
-          _show("chp-flujo-section");
+          _showB("chp-flujo-section");
         }
 
         if (data.tabla_mensual && data.tabla_mensual.length > 0) {
           _renderTablaMensual(data.tabla_mensual);
-          _show("chp-tabla-mensual-section");
         }
       })
       .catch(err => {
@@ -577,8 +629,8 @@
   document.addEventListener("medicionActivaChanged", e => {
     MEDICION_ID    = e.detail.medicion_id;
     _primerasCarga = true;
-    [chpChart, chpCogenChart, chpCascadaChart, chpFlujoChart].forEach(c => { if (c) c.destroy(); });
-    chpChart = chpCogenChart = chpCascadaChart = chpFlujoChart = null;
+    [chpChart, chpCogenChart, chpCascadaChart, chpFlujoChart, chpDonutChart].forEach(c => { if (c) c.destroy(); });
+    chpChart = chpCogenChart = chpCascadaChart = chpFlujoChart = chpDonutChart = null;
     fetchModelado();
   });
 

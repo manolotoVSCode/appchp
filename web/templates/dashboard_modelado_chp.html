@@ -1,6 +1,58 @@
 {% extends "clientes/_base.html" %}
 {% block title %}Modelado CHP — {{ cliente_nombre }}{% endblock %}
 
+{% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/panel-flotante.css') }}">
+<style>
+  .section-label {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--color-text-muted);
+    padding: .6rem 0 .3rem;
+    border-bottom: 1px solid var(--color-border, #e9ecef);
+    margin-bottom: .75rem;
+  }
+  .kpi-section-label {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-text-muted);
+    padding: .4rem 1rem .1rem;
+  }
+  .kpi-card-b2 {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 1.25rem 1rem;
+    height: 100%;
+  }
+  .kpi-card-b2 .kpi-icon { margin-bottom: .5rem; }
+  .kpi-card-b2 .kpi-label {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--color-text-muted);
+    margin-bottom: .35rem;
+  }
+  .kpi-card-b2 .kpi-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .kpi-card-b2 .kpi-sublabel {
+    font-size: .72rem;
+    color: var(--color-text-muted);
+    margin-top: .2rem;
+  }
+  .cascada-wrap { position: relative; height: 280px; }
+</style>
+{% endblock %}
+
 {% block content %}
 <!-- Cabecera con logo -->
 <div class="d-flex align-items-center mb-4 gap-3">
@@ -43,9 +95,6 @@
           <input type="number" step="10" min="0"
                  class="form-control form-control-sm" style="width:120px"
                  id="param-cap-nominal-input" placeholder="—">
-          <div class="text-muted mt-1" style="font-size:.72rem">
-            <span id="param-cap-unitaria">—</span> kW/motor
-          </div>
         </div>
         <div class="col-auto">
           <label class="form-label mb-1" style="font-size:.70rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#6c757d">Núm. motogeneradores</label>
@@ -100,10 +149,12 @@
                  id="param-costo-om" value="0.30">
         </div>
         <div class="col-auto">
-          <label class="form-label mb-1" style="font-size:.70rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#6c757d">Inversión (USD total)</label>
-          <input type="number" step="1000" min="0"
+          <label class="form-label mb-1" style="font-size:.70rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#6c757d">Precio motor (USD/kW)</label>
+          <input type="number" step="100" min="0"
                  class="form-control form-control-sm" style="width:120px"
-                 id="param-inversion-usd" value="0">
+                 id="param-inversion-usd" value="1400">
+          <div class="text-muted mt-1" style="font-size:.70rem"
+               id="chp-inversion-total-label">—</div>
         </div>
         <!-- Factor utilización hidden -->
         <input type="hidden" id="param-factor-util" value="0.9132">
@@ -247,143 +298,228 @@
       <span id="chp-cogen-error-msg">Error al calcular cogeneración.</span>
     </div>
 
-    <div id="chp-cogen-kpis" class="d-none">
-      <div class="card shadow-sm mb-4">
-        <div class="card-header fw-semibold small text-muted">Resultados cogeneración (desde modelado)</div>
-        <div class="card-body">
-          <div class="row g-3 mb-2">
-            <div class="col-6 col-md-3">
-              <div class="card h-100 bg-light border-0">
-                <div class="card-body py-3">
-                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Ahorro eléctrico anual</div>
-                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-ahorro-elec">—</span> <small class="text-muted fw-normal">MXN</small></div>
-                </div>
+    <!-- A) Label sección -->
+    <div class="section-label">Resultado del proyecto</div>
+
+    <!-- B) Fila Ingresos + Ahorro Neto Anual -->
+    <div class="row g-3 mb-3">
+
+      <!-- Columna izquierda: Ingresos + Gastos apilados -->
+      <div class="col-md-6 d-flex flex-column gap-3">
+
+        <!-- Ingresos -->
+        <div class="card shadow-sm">
+          <div class="kpi-section-label">Ingresos</div>
+          <div class="card-body pt-1">
+            <div class="row g-2 mb-0">
+              <div class="col-6">
+                <div class="text-muted small">Ahorro Electricidad</div>
+                <div class="fs-5 fw-bold" style="color:var(--color-info)" id="chp-kpi-ah-elec-val">—</div>
+                <div class="text-muted small">MXN / año</div>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small">Ahorro Caldera</div>
+                <div class="fs-5 fw-bold text-warning" id="chp-kpi-caldera-val">—</div>
+                <div class="text-muted small">MXN / año</div>
               </div>
             </div>
-            <div class="col-6 col-md-3">
-              <div class="card h-100 bg-light border-0">
-                <div class="card-body py-3">
-                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Ahorro caldera anual</div>
-                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-ahorro-caldera">—</span> <small class="text-muted fw-normal">MXN</small></div>
-                </div>
+            <hr class="my-3">
+            <div>
+              <div class="text-muted small">Total Ingresos</div>
+              <div class="fs-5 fw-bold" style="color:var(--color-primary-dark)" id="chp-kpi-total-ingresos-val">—</div>
+              <div class="text-muted small">MXN / año</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- C) Gastos -->
+        <div class="card shadow-sm">
+          <div class="kpi-section-label">Gastos</div>
+          <div class="card-body pt-1">
+            <div class="row g-2">
+              <div class="col-6">
+                <div class="text-muted small">Costo Gas Cogen</div>
+                <div class="fs-5 fw-bold text-danger" id="chp-kpi-gas-val">—</div>
+                <div class="text-muted small">MXN / año</div>
+              </div>
+              <div class="col-6">
+                <div class="text-muted small">O&amp;M estimado</div>
+                <div class="fs-5 fw-bold text-danger" id="chp-kpi-om-val">—</div>
+                <div class="text-muted small">MXN / año</div>
+              </div>
+              <div class="col-12 pt-2 border-top mt-1">
+                <div class="text-muted small">Total Gastos</div>
+                <div class="fs-5 fw-bold text-danger" id="chp-kpi-total-gastos-val">—</div>
+                <div class="text-muted small">MXN / año</div>
               </div>
             </div>
-            <div class="col-6 col-md-3">
-              <div class="card h-100 bg-light border-0">
-                <div class="card-body py-3">
-                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Costo gas adicional</div>
-                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-costo-gas">—</span> <small class="text-muted fw-normal">MXN</small></div>
-                </div>
-              </div>
+          </div>
+        </div>
+
+      </div><!-- /col-md-6 izquierda -->
+
+      <!-- Columna derecha: Ahorro Neto a altura completa -->
+      <div class="col-md-6">
+        <div class="card h-100 shadow-sm">
+          <div class="kpi-section-label">Ahorro Neto Anual</div>
+          <div class="card-body pt-1 d-flex flex-column justify-content-center align-items-center text-center">
+            <i class="bi bi-cash-coin" style="font-size:2rem;color:var(--color-positive)"></i>
+            <div class="kpi-value kpi-valor-primario mt-2" id="chp-kpi-ahorro-neto-val"
+                 style="font-size:2rem;font-weight:700;color:var(--color-positive)">—</div>
+            <div class="text-muted small mb-3">MXN / año (ingresos − gas − O&amp;M)</div>
+            <div id="chp-donut-ingresos" style="max-width:240px;width:100%">
+              <canvas id="chp-chartCompAhorroNeto"
+                      aria-label="Composición del ahorro neto" role="img"></canvas>
             </div>
-            <div class="col-6 col-md-3">
-              <div class="card h-100 bg-light border-0">
-                <div class="card-body py-3">
-                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Costo O&amp;M anual</div>
-                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-om">—</span> <small class="text-muted fw-normal">MXN</small></div>
-                </div>
-              </div>
-            </div>
-            <div class="col-6 col-md-3">
-              <div class="card h-100 shadow-sm">
-                <div class="card-body py-3">
-                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Ahorro neto anual</div>
-                  <div class="fw-bold fs-5 mt-1 text-success">$<span id="chp-kpi-ahorro-neto">—</span> <small class="text-muted fw-normal">MXN</small></div>
-                </div>
-              </div>
-            </div>
-            <div id="chp-seccion-inversion" class="col-6 col-md-3 d-none">
-              <div class="card h-100 shadow-sm">
-                <div class="card-body py-3">
-                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Inversión estimada</div>
-                  <div class="fw-bold fs-5 mt-1">$<span id="chp-kpi-inversion">—</span> <small class="text-muted fw-normal">MXN</small></div>
-                </div>
-              </div>
-            </div>
-            <div id="chp-payback-card" class="col-6 col-md-3 d-none">
-              <div class="card h-100 shadow-sm">
-                <div class="card-body py-3">
-                  <div class="text-muted" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">Payback</div>
-                  <div class="fw-bold fs-5 mt-1"><span id="chp-kpi-payback">—</span> <small class="text-muted fw-normal">años</small></div>
-                </div>
-              </div>
-            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /row -->
+
+    <!-- D) Impacto ambiental y regulatorio -->
+    <div class="section-label">Impacto ambiental y regulatorio</div>
+    <div class="row g-3 mb-4">
+
+      <div class="col-sm-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+          <div class="kpi-card-b2 kpi-nivel-secundario" id="chp-seccion-co2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"
+                 fill="var(--color-positive)" class="kpi-icon">
+              <path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66.95-2.3c.48.17.98.3 1.5.41C16 21 22 15 22 5c-1.5 2.5-5 2.5-8 3z"/>
+            </svg>
+            <div class="kpi-label">Reducción CO₂</div>
+            <div class="kpi-value text-success" id="chp-kpi-co2-val"
+                 style="font-size:1.6rem;font-weight:700;line-height:1.2">—</div>
+            <div class="kpi-sublabel">tCO₂ / año</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+          <div class="kpi-card-b2 kpi-nivel-secundario">
+            <i class="bi bi-award kpi-icon" style="font-size:2rem;color:var(--color-info)"></i>
+            <div class="kpi-label">CELs Generados</div>
+            <div class="kpi-value" id="chp-kpi-cels-val"
+                 style="font-size:1.6rem;font-weight:700;line-height:1.2">—</div>
+            <div class="kpi-sublabel">MWh / año</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-sm-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+          <div class="kpi-card-b2 kpi-nivel-secundario">
+            <i class="bi bi-lightning-charge kpi-icon" style="font-size:2rem;color:var(--color-positive)"></i>
+            <div class="kpi-label">Energía Limpia Generada</div>
+            <div class="kpi-value text-success" id="chp-kpi-energia-limpia-val"
+                 style="font-size:1.6rem;font-weight:700;line-height:1.2">—</div>
+            <div class="kpi-sublabel">% consumo total cubierto con CELs</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- E) Inversión y Retorno -->
+    <div class="section-label">Inversión y retorno</div>
+    <div id="chp-seccion-inversion" class="row g-3 mb-4" style="display:none">
+      <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+          <div class="kpi-section-label">&nbsp;</div>
+          <div class="card-body pt-1">
+            <div class="text-muted small" style="text-transform:uppercase;letter-spacing:.04em;font-size:.7rem">Capacidad Nominal</div>
+            <div class="fw-bold" style="color:var(--color-primary-dark);font-size:1.5rem;line-height:1.1;margin-bottom:.15rem"
+                 id="chp-kpi-cap-nominal-val">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+          <div class="kpi-section-label">&nbsp;</div>
+          <div class="card-body pt-1">
+            <div class="text-muted small" style="text-transform:uppercase;letter-spacing:.04em;font-size:.7rem">Inversión estimada</div>
+            <div class="fw-bold" style="color:var(--color-primary-dark);font-size:1.5rem;line-height:1.1;margin-bottom:.15rem"
+                 id="chp-kpi-inversion-usd-val">—</div>
+            <div class="text-muted" style="font-size:.8rem;line-height:1.1;margin-bottom:.1rem"
+                 id="chp-kpi-inversion-mxn-val"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+          <div class="kpi-section-label">&nbsp;</div>
+          <div class="card-body pt-1">
+            <div class="text-muted small" style="text-transform:uppercase;letter-spacing:.04em;font-size:.7rem">Periodo de Retorno</div>
+            <div class="fw-bold" style="color:var(--color-primary-dark);font-size:1.5rem;line-height:1.1;margin-bottom:.15rem"
+                 id="chp-kpi-payback-val">—</div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Gráfica mensual -->
+    <!-- F) Gráfica mensual -->
+    <div class="section-label">Proyección de flujos y ahorros</div>
     <div id="chp-graficaMensual-section" class="d-none mb-4">
       <div class="card shadow-sm mb-4">
         <div class="card-body">
-          <div class="d-flex align-items-start justify-content-between mb-1">
-            <div>
-              <h5 class="card-title mb-0">Ahorro neto mensual estimado</h5>
-              <p class="text-muted small mt-1 mb-0">
-                MXN — barras por componente, línea ahorro neto
-              </p>
-            </div>
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="card-title mb-0">Ahorro neto mensual estimado</h5>
+            <a href="#" class="small text-decoration-none"
+               onclick="abrirPanel('chp-panelTablaCogen'); return false;">Ver datos</a>
           </div>
-          <canvas id="chp-chartCogen" height="100" class="mt-2"></canvas>
+          <canvas id="chp-chartCogen" height="100"></canvas>
         </div>
       </div>
     </div>
 
-    <div id="chp-cascada-section" class="d-none mb-4">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold small text-muted">Cascada de ahorro</div>
+    <!-- G) Cascada -->
+    <div id="chp-seccion-cascada" style="display:none">
+      <div class="card shadow-sm mb-4">
         <div class="card-body">
-          <canvas id="chp-chartCascada" height="120"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div id="chp-flujo-section" class="d-none mb-4">
-      <div class="card shadow-sm">
-        <div class="card-header fw-semibold small text-muted">Flujo acumulado — 15 años</div>
-        <div class="card-body">
-          <canvas id="chp-chartFlujo" height="120"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div id="chp-tabla-mensual-section" class="d-none mb-4">
-      <div class="accordion" id="acordeonTablaMensual">
-        <div class="accordion-item shadow-sm">
-          <h2 class="accordion-header" id="headingTablaMensual">
-            <button class="accordion-button collapsed fw-semibold small text-muted py-2"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#collapseTablaMensual"
-                    aria-expanded="false"
-                    aria-controls="collapseTablaMensual">
-              Detalle mensual cogeneración
-            </button>
-          </h2>
-          <div id="collapseTablaMensual"
-               class="accordion-collapse collapse"
-               aria-labelledby="headingTablaMensual">
-            <div class="accordion-body p-0">
-              <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle mb-0" style="font-size:.8rem">
-                  <thead class="table-light">
-                    <tr>
-                      <th>Periodo</th>
-                      <th class="text-end">Ah. eléctrico</th>
-                      <th class="text-end">Ah. caldera</th>
-                      <th class="text-end">Costo gas</th>
-                      <th class="text-end">O&amp;M</th>
-                      <th class="text-end">Ahorro neto</th>
-                    </tr>
-                  </thead>
-                  <tbody id="chp-tbody-tabla-mensual"></tbody>
-                </table>
-              </div>
-            </div>
+          <h5 class="card-title mb-2">Composición del Ahorro Neto Anual</h5>
+          <div class="cascada-wrap">
+            <canvas id="chp-waterfallChart"></canvas>
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- H) Flujo 15 años -->
+    <div id="chp-flujo-section" style="display:none">
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <h5 class="card-title mb-2">Flujo de caja a 15 años</h5>
+          <canvas id="chp-chart15Year" height="100"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- I) Panel flotante tabla mensual -->
+    <div class="panel-flotante" id="chp-panelTablaCogen">
+      <div class="panel-header">
+        <span class="panel-titulo">Detalle mensual — Cogeneración (Modelado)</span>
+        <button class="panel-cerrar" aria-label="Cerrar">&#x2715;</button>
+      </div>
+      <div class="panel-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0" style="font-size:.8rem">
+            <thead class="table-light">
+              <tr>
+                <th>Periodo</th>
+                <th class="text-end">Ah. eléctrico</th>
+                <th class="text-end">Ah. caldera</th>
+                <th class="text-end">Costo gas</th>
+                <th class="text-end">O&amp;M</th>
+                <th class="text-end">Ahorro neto</th>
+              </tr>
+            </thead>
+            <tbody id="chp-tbody-tabla-mensual"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="panel-resize"></div>
     </div>
 
   </div><!-- /chp-cogen-section -->
@@ -434,5 +570,6 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/panel-flotante.js') }}"></script>
 <script src="{{ url_for('static', filename='js/dashboard-modelado-chp.js') }}"></script>
 {% endblock %}
