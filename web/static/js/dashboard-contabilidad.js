@@ -866,4 +866,95 @@
   // ── Carga inicial ─────────────────────────────────────────────────────────
   fetchData(false);
 
+  // ── Gráfica cincominutal ──────────────────────────────────────────────────
+  let cincominutalChart = null;
+
+  function cargarCincominutal(medicion_id) {
+    const clienteId = root?.dataset.clienteId;
+    if (!clienteId || !medicion_id) return;
+
+    fetch(`/clientes/${clienteId}/mediciones/${medicion_id}/datos`)
+      .then(r => r.json())
+      .then(data => {
+        const section = document.getElementById("medicion-cincominutal-section");
+        if (!section) return;
+
+        if (!data.ts || data.ts.length === 0) {
+          section.style.display = "none";
+          return;
+        }
+
+        section.style.display = "";
+
+        const subtitulo = document.getElementById("medicion-subtitulo");
+        if (subtitulo && data.ts.length > 0) {
+          const d0 = data.ts[0].slice(0, 10);
+          const d1 = data.ts[data.ts.length - 1].slice(0, 10);
+          subtitulo.textContent = `Potencia media cada 5 minutos (kW) — ${d0} → ${d1}`;
+        }
+
+        const ctx = document.getElementById("chartCincominutal");
+        if (!ctx) return;
+
+        const chartData = {
+          labels: data.ts,
+          datasets: [{
+            label: "Potencia (kW)",
+            data: data.potencia_kw,
+            borderColor: "rgba(31,122,76,0.85)",
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            pointRadius: 0,
+            tension: 0.1,
+          }],
+        };
+
+        const chartOptions = {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: c => `${c.parsed.y.toLocaleString("es-MX", {maximumFractionDigits: 1})} kW`,
+                title: ts => ts[0].label.replace("T", " ").slice(0, 16),
+              },
+            },
+          },
+          scales: {
+            x: {
+              ticks: {
+                maxTicksLimit: 31,
+                callback: function(val) {
+                  const label = this.getLabelForValue(val);
+                  return label ? label.slice(0, 10) : "";
+                },
+                maxRotation: 45,
+              },
+            },
+            y: {
+              ticks: {
+                callback: v => v.toLocaleString("es-MX", {maximumFractionDigits: 0}) + " kW",
+              },
+            },
+          },
+        };
+
+        if (!cincominutalChart) {
+          cincominutalChart = new Chart(ctx, {type: "line", data: chartData, options: chartOptions});
+        } else {
+          cincominutalChart.data = chartData;
+          cincominutalChart.update();
+        }
+      })
+      .catch(err => console.error("cincominutal:", err));
+  }
+
+  document.addEventListener("medicionActivaChanged", e => {
+    cargarCincominutal(e.detail.medicion_id);
+  });
+
+  const _medicionActivaInicial = root?.dataset.medicionActivaId;
+  if (_medicionActivaInicial) cargarCincominutal(parseInt(_medicionActivaInicial, 10));
+
 })();

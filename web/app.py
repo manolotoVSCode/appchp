@@ -504,12 +504,17 @@ def create_app() -> Flask:
     @app.context_processor
     def _inject_globals():
         from storage.repository import get_cliente_con_conteos as _get_cliente
+        from storage.repository import get_mediciones_por_cliente as _get_mediciones
         current_user_data = get_current_user()
         id_ = session.get("cliente_activo_id")
         base = {
             "current_user_data": current_user_data,
             "app_version": _APP_VERSION,
         }
+        try:
+            base["mediciones_sidebar"] = _get_mediciones(id_) if id_ else []
+        except Exception:
+            base["mediciones_sidebar"] = []
         if not id_:
             return {**base, "cliente_activo": None}
 

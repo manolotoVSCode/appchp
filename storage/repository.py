@@ -1307,3 +1307,95 @@ def set_configuracion(clave: str, valor: str) -> None:
         },
         on_conflict="clave",
     ).execute()
+
+
+# ── Mediciones cincominutal ────────────────────────────────────────────────────
+
+def get_mediciones_por_cliente(cliente_id: int) -> list[dict]:
+    """Lista de mediciones cargadas para el cliente, ordenadas por anio DESC, mes DESC."""
+    resp = (
+        _supabase.table("mediciones_cincominutal")
+        .select("id, cliente_id, anio, mes, nombre, uploaded_at, uploaded_by")
+        .eq("cliente_id", cliente_id)
+        .order("anio", desc=True)
+        .order("mes", desc=True)
+        .execute()
+    )
+    return resp.data or []
+
+
+def get_medicion(medicion_id: int) -> dict | None:
+    """Retorna una medición por ID o None si no existe."""
+    resp = (
+        _supabase.table("mediciones_cincominutal")
+        .select("*")
+        .eq("id", medicion_id)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def create_medicion(
+    cliente_id: int, anio: int, mes: int, nombre: str, uploaded_by: str
+) -> int:
+    """Inserta cabecera en mediciones_cincominutal. Retorna el id creado.
+
+    Raises:
+        ValueError: si ya existe una medición para ese mes/año del cliente.
+    """
+    existing = (
+        _supabase.table("mediciones_cincominutal")
+        .select("id")
+        .eq("cliente_id", cliente_id)
+        .eq("anio", anio)
+        .eq("mes", mes)
+        .execute()
+    )
+    if existing.data:
+        raise ValueError("Ya existe una medición para ese mes/año")
+
+    resp = (
+        _supabase.table("mediciones_cincominutal")
+        .insert({
+            "cliente_id":   cliente_id,
+            "anio":         anio,
+            "mes":          mes,
+            "nombre":       nombre,
+            "uploaded_by":  uploaded_by,
+        })
+        .execute()
+    )
+    return resp.data[0]["id"]
+
+
+def save_medicion_datos(medicion_id: int, datos: list[dict]) -> None:
+    """Inserta puntos en mediciones_cincominutal_datos en batches de 1000."""
+    BATCH = 1000
+    for i in range(0, len(datos), BATCH):
+        batch = datos[i : i + BATCH]
+        rows = [
+            {
+                "medicion_id": medicion_id,
+                "ts":          d["ts"].isoformat() if hasattr(d["ts"], "isoformat") else str(d["ts"]),
+                "potencia_kw": d["potencia_kw"],
+            }
+            for d in batch
+        ]
+        _supabase.table("mediciones_cincominutal_datos").insert(rows).execute()
+
+
+def get_medicion_datos(medicion_id: int) -> list[dict]:
+    """Todos los puntos de una medición ordenados por ts ASC."""
+    resp = (
+        _supabase.table("mediciones_cincominutal_datos")
+        .select("ts, potencia_kw")
+        .eq("medicion_id", medicion_id)
+        .order("ts")
+        .execute()
+    )
+    return resp.data or []
+
+
+def delete_medicion(medicion_id: int) -> None:
+    """Borra la cabecera; ON DELETE CASCADE elimina los datos automáticamente."""
+    _supabase.table("mediciones_cincominutal").delete().eq("id", medicion_id).execute()

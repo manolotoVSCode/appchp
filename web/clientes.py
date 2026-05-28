@@ -58,6 +58,12 @@ from storage.repository import (
     update_precio_gas_manual,
     get_ultimas_cfe_invoices,
     get_ultimas_ppa_invoices,
+    get_mediciones_por_cliente,
+    get_medicion,
+    create_medicion,
+    save_medicion_datos,
+    get_medicion_datos,
+    delete_medicion,
 )
 
 logger = logging.getLogger(__name__)
@@ -499,12 +505,14 @@ def ficha(cliente_id: int):
             cre_params = _calcular_cre_params(cliente)
         except Exception:
             pass
+    mediciones_ficha = get_mediciones_por_cliente(cliente_id)
     resp = make_response(render_template(
         "clientes/ficha.html",
         cliente=cliente,
         contratos=contratos,
         ppa_bloques=ppa_bloques,
         cre_params=cre_params,
+        mediciones_ficha=mediciones_ficha,
     ))
     if user and user.get("rol") in ("master_admin", "admin"):
         resp.set_cookie("last_cliente_id", str(cliente_id),
@@ -2011,3 +2019,193 @@ def cliente_gas_manual_actualizar(cliente_id: int):
             log_error("validacion", f"Valor inválido para precio de gas: {exc}")
             flash(f"Valor inválido para precio de gas: {exc}", "danger")
     return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Mediciones cincominutal
+# ══════════════════════════════════════════════════════════════════════════════
+
+_MESES_NOMBRES = [
+    "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
+
+@clientes_bp.route("/<int:cliente_id>/mediciones/cincominutal/subir", methods=["GET", "POST"])
+def medicion_subir(cliente_id: int):
+    from datetime import datetime as _dt
+    user = _get_current_user()
+    if not user or user.get("rol") not in ("master_admin", "admin"):
+        flash("No tienes permiso para subir mediciones.", "danger")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    anio_actual = _dt.now().year
+
+    if request.method == "GET":
+        return render_template(
+            "clientes/mediciones/cincominutal_subir.html",
+            cliente=cliente,
+            anio_actual=anio_actual,
+        )
+
+    # POST — procesar upload
+    file = request.files.get("archivo")
+    if not file or not file.filename:
+        flash("Debes seleccionar un archivo.", "danger")
+        return render_template(
+            "clientes/mediciones/cincominutal_subir.html",
+            cliente=cliente,
+            anio_actual=anio_actual,
+        )
+
+    if not file.filename.lower().endswith(".xlsx"):
+        flash("El archivo debe ser un Excel (.xlsx).", "danger")
+        return render_template(
+            "clientes/mediciones/cincominutal_subir.html",
+            cliente=cliente,
+            anio_actual=anio_actual,
+        )
+
+    try:
+        anio = int(request.form.get("anio", 0))
+        mes  = int(request.form.get("mes", 0))
+    except (ValueError, TypeError):
+        flash("Año o mes inválido.", "danger")
+        return render_template(
+            "clientes/mediciones/cincominutal_subir.html",
+            cliente=cliente,
+            anio_actual=anio_actual,
+        )
+
+    if not (1 <= mes <= 12) or anio < 2000:
+        flash("Año o mes fuera de rango.", "danger")
+        return render_template(
+            "clientes/mediciones/cincominutal_subir.html",
+            cliente=cliente,
+            anio_actual=anio_actual,
+        )
+
+    tmp_path = None
+    medicion_id = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            file.save(tmp.name)
+            tmp_path = Path(tmp.name)
+
+        from web.mediciones_parser import parse_cincominutal
+        datos = parse_cincominutal(tmp_path)
+
+        medicion_id = create_medicion(
+            cliente_id=cliente_id,
+            anio=anio,
+            mes=mes,
+            nombre=file.filename,
+            uploaded_by=user.get("email", ""),
+        )
+
+        save_medicion_datos(medicion_id, datos)
+
+        flash(
+            f"Medición de {_MESES_NOMBRES[mes]} {anio} cargada correctamente ({len(datos):,} registros).",
+            "success",
+        )
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    except ValueError as exc:
+        if medicion_id is not None:
+            try:
+                delete_medicion(medicion_id)
+            except Exception:
+                pass
+        flash(str(exc), "danger")
+        return render_template(
+            "clientes/mediciones/cincominutal_subir.html",
+            cliente=cliente,
+            anio_actual=anio_actual,
+        )
+    except Exception as exc:
+        if medicion_id is not None:
+            try:
+                delete_medicion(medicion_id)
+            except Exception:
+                pass
+        log_error("negocio", f"Error al subir medición cincominutal: {exc}")
+        flash("Error inesperado al procesar el archivo.", "danger")
+        return render_template(
+            "clientes/mediciones/cincominutal_subir.html",
+            cliente=cliente,
+            anio_actual=anio_actual,
+        )
+    finally:
+        if tmp_path and tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
+
+
+@clientes_bp.route("/<int:cliente_id>/mediciones/<int:medicion_id>/borrar", methods=["POST"])
+def medicion_borrar(cliente_id: int, medicion_id: int):
+    user = _get_current_user()
+    if not user or user.get("rol") not in ("master_admin", "admin"):
+        flash("No tienes permiso para borrar mediciones.", "danger")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    medicion = get_medicion(medicion_id)
+    if not medicion or medicion["cliente_id"] != cliente_id:
+        flash("Medición no encontrada.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    delete_medicion(medicion_id)
+    if session.get("medicion_activa_id") == medicion_id:
+        session.pop("medicion_activa_id", None)
+
+    mes_nombre = _MESES_NOMBRES[medicion["mes"]] if 1 <= medicion["mes"] <= 12 else str(medicion["mes"])
+    flash(f"Medición de {mes_nombre} {medicion['anio']} eliminada.", "success")
+    return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+
+@clientes_bp.route("/<int:cliente_id>/mediciones/<int:medicion_id>/datos")
+def medicion_datos(cliente_id: int, medicion_id: int):
+    from flask import jsonify
+    user = _get_current_user()
+    if not user:
+        return jsonify({"error": "No autenticado"}), 401
+
+    medicion = get_medicion(medicion_id)
+    if not medicion or medicion["cliente_id"] != cliente_id:
+        return jsonify({"error": "Medición no encontrada"}), 404
+
+    puntos = get_medicion_datos(medicion_id)
+    ts_list = []
+    for p in puntos:
+        raw = p.get("ts") or ""
+        # Normalizar a "YYYY-MM-DDTHH:MM" — Supabase puede devolver " " o "T"
+        ts_list.append(raw[:16].replace(" ", "T"))
+    kw_list = [float(p["potencia_kw"]) for p in puntos]
+    return jsonify({"ts": ts_list, "potencia_kw": kw_list})
+
+
+@clientes_bp.route("/<int:cliente_id>/mediciones/seleccionar", methods=["POST"])
+def medicion_seleccionar(cliente_id: int):
+    from flask import jsonify
+    user = _get_current_user()
+    if not user:
+        return jsonify({"error": "No autenticado"}), 401
+
+    data = request.get_json() or {}
+    medicion_id = data.get("medicion_id")
+    if medicion_id is None:
+        return jsonify({"error": "medicion_id requerido"}), 400
+
+    medicion = get_medicion(int(medicion_id))
+    if not medicion or medicion["cliente_id"] != cliente_id:
+        return jsonify({"error": "Medición no encontrada"}), 404
+
+    session["medicion_activa_id"] = int(medicion_id)
+    return jsonify({"ok": True})

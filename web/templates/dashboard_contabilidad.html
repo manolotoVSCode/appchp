@@ -30,7 +30,8 @@
 </div>
 
 {# Root del dashboard — data-cliente-id para que el JS sepa a qué endpoint llamar #}
-<div id="dashboard-contabilidad-root" data-cliente-id="{{ cliente_id }}">
+<div id="dashboard-contabilidad-root" data-cliente-id="{{ cliente_id }}"
+     data-medicion-activa-id="{{ session.get('medicion_activa_id', '') }}">
 
   {# Título #}
   <div class="d-flex align-items-center mb-4 gap-3">
@@ -209,6 +210,19 @@
           <div style="max-width:420px; margin:0 auto;">
             <canvas id="chartQueso"></canvas>
           </div>
+        </div>
+      </div>
+
+      {# ── Curva de demanda cincominutal (oculta hasta que se seleccione medición) ── #}
+      <div id="medicion-cincominutal-section" class="card shadow-sm mb-4" style="display:none">
+        <div class="card-body">
+          <div class="d-flex align-items-start justify-content-between mb-1">
+            <div>
+              <h5 class="card-title mb-0">Curva de demanda eléctrica (cinco-minutal)</h5>
+              <p class="text-muted small mt-1 mb-0" id="medicion-subtitulo">Potencia media cada 5 minutos (kW)</p>
+            </div>
+          </div>
+          <canvas id="chartCincominutal" height="80" class="mt-2"></canvas>
         </div>
       </div>
 

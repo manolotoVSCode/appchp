@@ -119,6 +119,48 @@
   {% endif %}
   {% endif %}
 
+  {% if cliente_activo and current_user_data and current_user_data.rol != 'usuario_normal' %}
+  <hr class="sidebar-divider mx-3">
+  <div class="sidebar-section">Mediciones</div>
+
+  <div style="padding:.3rem 1.25rem .1rem 1.5rem; font-size:.72rem; font-weight:600; color:var(--color-text-sidebar-muted); text-transform:uppercase; letter-spacing:.05em;">
+    Electricidad
+  </div>
+
+  <div style="padding:.2rem 1.25rem .1rem 2rem; font-size:.72rem; color:var(--color-text-sidebar-muted); font-weight:600; text-transform:uppercase; letter-spacing:.05em;">
+    Cincominutal
+  </div>
+
+  <div id="sidebar-mediciones-list">
+    {% if mediciones_sidebar %}
+      {% for m in mediciones_sidebar %}
+      <div class="d-flex align-items-center"
+           style="padding:.3rem 1.25rem .3rem 2.5rem; font-size:.78rem;">
+        <input type="radio" name="medicion_activa" value="{{ m.id }}"
+               id="med-{{ m.id }}"
+               class="me-2 sidebar-medicion-radio"
+               {% if session.get('medicion_activa_id') == m.id %}checked{% endif %}
+               style="accent-color:var(--color-primary); cursor:pointer;">
+        <label for="med-{{ m.id }}" style="cursor:pointer; color:#5A5A5A; flex:1;">
+          {{ ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][m.mes-1] }} {{ m.anio }}
+        </label>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="padding:.3rem 1.25rem .3rem 2.5rem; font-size:.75rem; color:var(--color-text-sidebar-muted); font-style:italic;">
+        Sin mediciones cargadas
+      </div>
+    {% endif %}
+  </div>
+
+  {% if current_user_data.rol in ('master_admin', 'admin') %}
+  <a href="{{ url_for('clientes.medicion_subir', cliente_id=cliente_activo.id) }}"
+     class="sidebar-link" style="padding-left:2.5rem; font-size:.75rem; color:var(--color-primary);">
+    <i class="bi bi-upload" style="font-size:.7rem;"></i> Subir medición
+  </a>
+  {% endif %}
+  {% endif %}
+
   {% if not current_user_data or current_user_data.rol != 'usuario_normal' %}
   <hr class="sidebar-divider mx-3">
   <div class="sidebar-section">Administración</div>
@@ -580,6 +622,29 @@ document.addEventListener("DOMContentLoaded", async function () {
     aplicarEstado(!document.body.classList.contains("sidebar-desktop-collapsed"));
   });
 })();
+</script>
+<script>
+// ── Sidebar: selección de medición activa ─────────────────────────────────────
+document.querySelectorAll('.sidebar-medicion-radio').forEach(function(radio) {
+  radio.addEventListener('change', function() {
+    var clienteId = {{ cliente_activo.id if cliente_activo else 'null' }};
+    if (!clienteId) return;
+    fetch('/clientes/' + clienteId + '/mediciones/seleccionar', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      },
+      body: JSON.stringify({medicion_id: parseInt(this.value)})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d.ok) {
+        document.dispatchEvent(new CustomEvent('medicionActivaChanged', {
+          detail: {medicion_id: parseInt(radio.value)}
+        }));
+      }
+    });
+  });
+});
 </script>
 <script>
 // ── Indicador de scroll en sidebar ───────────────────────────────────────────

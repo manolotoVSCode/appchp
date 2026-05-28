@@ -1,0 +1,72 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "clientes" %}
+{% block title %}Subir medición cincominutal — {{ cliente.nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}"
+     class="btn btn-sm btn-outline-secondary">← Volver</a>
+  <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">
+    Subir medición cincominutal — {{ cliente.nombre }}
+  </h4>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-6">
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Se esperan archivos con columnas <strong>Fecha</strong> y <strong>kWh E</strong>.
+          Un mes típico contiene ~8,900 registros (288 lecturas/día).
+          Solo se acepta formato <code>.xlsx</code>.
+        </p>
+
+        <form method="POST"
+              action="{{ url_for('clientes.medicion_subir', cliente_id=cliente.id) }}"
+              enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label for="archivo" class="form-label fw-semibold">Archivo Excel (.xlsx)</label>
+            <input type="file" id="archivo" name="archivo"
+                   class="form-control" accept=".xlsx" required>
+          </div>
+
+          <div class="row g-2 mb-4">
+            <div class="col-6">
+              <label for="mes" class="form-label fw-semibold">Mes</label>
+              <select id="mes" name="mes" class="form-select" required>
+                <option value="">— Selecciona —</option>
+                {% for nombre, val in [
+                    ("Enero",1),("Febrero",2),("Marzo",3),("Abril",4),
+                    ("Mayo",5),("Junio",6),("Julio",7),("Agosto",8),
+                    ("Septiembre",9),("Octubre",10),("Noviembre",11),("Diciembre",12)
+                ] %}
+                <option value="{{ val }}">{{ nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label for="anio" class="form-label fw-semibold">Año</label>
+              <select id="anio" name="anio" class="form-select" required>
+                <option value="">— Selecciona —</option>
+                {% for y in range(anio_actual, anio_actual - 4, -1) %}
+                <option value="{{ y }}">{{ y }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Subir medición</button>
+            <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}"
+               class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

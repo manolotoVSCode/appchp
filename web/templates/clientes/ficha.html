@@ -482,6 +482,66 @@
   {% endif %}
 </div>
 
+<!-- Sección Mediciones Cincominutal -->
+<div class="mt-5">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Mediciones Cincominutal</h5>
+    {% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
+    <a href="{{ url_for('clientes.medicion_subir', cliente_id=cliente.id) }}"
+       class="btn btn-sm btn-primary">+ Subir medición</a>
+    {% endif %}
+  </div>
+
+  {% if mediciones_ficha %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr>
+          <th>Mes / Año</th>
+          <th>Archivo</th>
+          <th>Subido por</th>
+          <th>Fecha de subida</th>
+          {% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
+          <th class="text-end">Acción</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% set _meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"] %}
+        {% for m in mediciones_ficha %}
+        <tr>
+          <td class="fw-semibold">{{ _meses[m.mes - 1] }} {{ m.anio }}</td>
+          <td class="text-muted">{{ m.nombre or "—" }}</td>
+          <td class="text-muted">{{ m.uploaded_by or "—" }}</td>
+          <td class="text-muted">{{ m.uploaded_at[:16].replace("T"," ") if m.uploaded_at else "—" }}</td>
+          {% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
+          <td class="text-end">
+            <form method="POST"
+                  action="{{ url_for('clientes.medicion_borrar', cliente_id=cliente.id, medicion_id=m.id) }}"
+                  style="display:inline"
+                  onsubmit="return confirm('¿Borrar medición de {{ _meses[m.mes - 1] }} {{ m.anio }}? Esta acción no se puede deshacer.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline-danger btn-sm">Borrar</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card shadow-sm">
+    <div class="card-body text-center text-muted py-4">
+      Sin mediciones cargadas.
+      {% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
+      <a href="{{ url_for('clientes.medicion_subir', cliente_id=cliente.id) }}">Subir primera medición</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
 <!-- Modal borrar cliente -->
 <div class="modal fade" id="modalBorrarCliente" tabindex="-1" aria-labelledby="modalBorrarClienteTitulo" aria-hidden="true">
   <div class="modal-dialog">
