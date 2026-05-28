@@ -23,6 +23,15 @@
   // ── Helpers DOM ────────────────────────────────────────────────────────────
   const $  = id => document.getElementById(id);
   const _show = id => $( id)?.classList.remove("d-none");
+
+  // ── Formato de fechas ──────────────────────────────────────────────────────
+  const MESES = ["ENE","FEB","MAR","ABR","MAY","JUN",
+                 "JUL","AGO","SEP","OCT","NOV","DIC"];
+
+  function fmtFecha(isoStr) {
+    const d = new Date(isoStr);
+    return `${String(d.getUTCDate()).padStart(2,"0")} ${MESES[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  }
   const _hide = id => $( id)?.classList.add("d-none");
 
   function _fmt(n, decimals) {
@@ -192,10 +201,10 @@
         }
 
         // Subtítulo: rango de fechas
-        const tsFirst = data.ts[0].slice(0, 10);
-        const tsLast  = data.ts[data.ts.length - 1].slice(0, 10);
-        const sub = $("chp-grafica-subtitulo");
-        if (sub) sub.textContent = tsFirst === tsLast ? tsFirst : `${tsFirst} — ${tsLast}`;
+        const tsFirst = data.ts[0];
+        const tsLast  = data.ts[data.ts.length - 1];
+        document.getElementById("chp-grafica-subtitulo").textContent =
+          `${fmtFecha(tsFirst)} — ${fmtFecha(tsLast)}`;
 
         _show("chp-grafica-section");
 
