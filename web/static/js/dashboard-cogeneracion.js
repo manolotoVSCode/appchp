@@ -464,17 +464,18 @@
     setText("kpi-total-gastos-val",   fmt(costo_gas + om_anual));
     // Desglose 4 componentes del ahorro eléctrico (solo CFE GDMTH)
     const fmtOrig = v => v > 0 ? fmt(v) : "—";
-    setText("kpi-ah-energia-orig",    fmtOrig(orig_energia_anual));
-    setText("kpi-ah-energia-val",     fmt(ah_energia_anual));
-    setText("kpi-ah-cap-orig",        fmtOrig(orig_cap_anual));
-    setText("kpi-ah-cap-val",         fmt(ah_cap_anual));
-    setText("kpi-ah-dist-orig",       fmtOrig(orig_dist_anual));
-    setText("kpi-ah-dist-val",        fmt(ah_dist_anual));
-    setText("kpi-ah-otros-orig",      fmtOrig(orig_otros_anual));
-    setText("kpi-ah-otros-val",       fmt(ah_otros_anual));
-    // Donut: porcentajes del ahorro por componente
     const _totalAhorro = ah_energia_anual + ah_cap_anual + ah_dist_anual + ah_otros_anual;
     const _pctD = v => _totalAhorro > 0 ? Math.round(v / _totalAhorro * 100) : 0;
+    const _fmtPct = v => _totalAhorro > 0 ? fmt(v) + ' (' + _pctD(v) + '%)' : fmt(v);
+    setText("kpi-ah-energia-orig",    fmtOrig(orig_energia_anual));
+    setText("kpi-ah-energia-val",     _fmtPct(ah_energia_anual));
+    setText("kpi-ah-cap-orig",        fmtOrig(orig_cap_anual));
+    setText("kpi-ah-cap-val",         _fmtPct(ah_cap_anual));
+    setText("kpi-ah-dist-orig",       fmtOrig(orig_dist_anual));
+    setText("kpi-ah-dist-val",        _fmtPct(ah_dist_anual));
+    setText("kpi-ah-otros-orig",      fmtOrig(orig_otros_anual));
+    setText("kpi-ah-otros-val",       _fmtPct(ah_otros_anual));
+    // Donut: porcentajes del ahorro por componente
     renderDonutComponentes("donutAhorroElec", [
       { nombre: "Energía",         pct: _pctD(ah_energia_anual), color: "#0D3B66" },
       { nombre: "Capacidad",       pct: _pctD(ah_cap_anual),     color: "#1F6FB2" },
