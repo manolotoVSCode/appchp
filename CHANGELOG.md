@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.67.1] — 2026-05-28
+
+### Corregido — Modelado CHP: CO₂, CELs y energía limpia poblados en frontend
+
+- `web/static/js/dashboard-modelado-chp.js` — bloque añadido en `fetchCogenData().then()`:
+  - Lee `data.co2` y puebla `#chp-kpi-co2-val` (reducción en t/año), `#chp-kpi-co2-sublabel` (% menos + árboles), y `#chp-seccion-co2` (visibilidad).
+  - Llama `renderDonutComponentes` para donuts actual/proyectado si la función está disponible.
+  - Lee `data.cels` y puebla `#chp-kpi-cels-val` (MWh/año) y `#chp-kpi-cels-eficiencia`.
+  - Lee `data.kpis.energia_limpia_pct` y puebla `#chp-kpi-energia-limpia-val`.
+  - Lee `data.kpis.capacidad_nominal_kw` (desde `calcular_cogen`, no del modelado) para actualizar `#chp-kpi-cap-nominal-val`.
+  - Flujo 15 años: usa `flujo_anual_15_fiscal`/`flujo_acum_15_fiscal` cuando existen, con fallback a los arrays sin beneficio.
+- `web/templates/dashboard_modelado_chp.html` — añadido `<script src="donut-componentes.js">` antes de `dashboard-modelado-chp.js` para que `renderDonutComponentes` esté disponible globalmente.
+
 ## [2.66.5] — 2026-05-28
 
 ### Corregido — Modelado CHP: unique constraint, paginación curva, regeneración si falta curva

@@ -311,11 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.67.0 — deducción fiscal ISR 30% en cabecera Modelado CHP:
-checkbox "Aplicar 30%" + selector años 1–5; calcular_cogen_desde_modelado() acepta
-inversion_usd_override (precio USD/kW del usuario ahora llega a r.inversion_mxn),
-deduccion_fiscal y anios_deduccion; endpoint cogen-data lee y pasa los tres params.
-Pendiente: poblar CO2/CELs en fetchCogenData desde data.co2 y data.cels.
+Último tema resuelto: v2.67.1 — fix Modelado CHP — CO2, CELs y energía limpia
+poblados en frontend desde data.co2 y data.cels; donut-componentes.js añadido
+al template; flujo 15 años usa arrays fiscales cuando existen.
+Pendiente: ninguno.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
