@@ -311,9 +311,9 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.67.1 — fix Modelado CHP — CO2, CELs y energía limpia
-poblados en frontend desde data.co2 y data.cels; donut-componentes.js añadido
-al template; flujo 15 años usa arrays fiscales cuando existen.
+Último tema resuelto: v2.67.2 — fix Modelado CHP — energia_limpia_pct calculada
+desde CELs del modelado (paso 6b en endpoint, campo en JSON kpis); curva siempre
+regenerada al cambiar parámetros (bloque explícito cache-hit-sin-curva).
 Pendiente: ninguno.
 
 ### Bugs App

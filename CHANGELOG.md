@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.67.2] — 2026-05-28
+
+### Corregido — Modelado CHP: energia_limpia_pct + regeneración curva al cambiar parámetros
+
+- `calc/modelado_chp.py` — `calcular_cogen_desde_modelado()`: hook `energia_limpia_pct` desde `getattr(r, 'cels_mwh_anual', None)` + `kpis_modelado["consumo_cliente_mes_kwh"]` (guard seguro, activa cuando CELs estén disponibles en `r`).
+- `web/clientes.py` — endpoint `modelado-chp/cogen-data`:
+  - Paso 6b añadido: tras calcular `cels_resultado`, computa `r.energia_limpia_pct = cels_mwh_anual × 1000 / kwh_total × 100`; fallback a `consumo_cliente_mes_kwh × 12` cuando `kwh_total_anual = 0`.
+  - JSON `kpis` incluye ahora `energia_limpia_pct` (float o null).
+- `web/clientes.py` — endpoint `modelado-chp/data`: reestructurado bloque cache+curva. Cache hit con curva perdida → regenera solo la curva sin re-upsert del header (modelado_id estable). Cache miss → calcula, upserta, guarda curva. Lógica más explícita y sin rama condicional compartida.
+
 ## [2.67.1] — 2026-05-28
 
 ### Corregido — Modelado CHP: CO₂, CELs y energía limpia poblados en frontend

@@ -218,6 +218,18 @@ def calcular_cogen_desde_modelado(
         factor_emision_gas=_D(str(factor_emision_gas)) if factor_emision_gas is not None else None,
     )
 
+    # energia_limpia_pct: si calcular_cogen() no lo calculó, intentar desde
+    # kpis del modelado y datos de CELs disponibles en r
+    _cels_mwh = getattr(r, "cels_mwh_anual", None)
+    if r.energia_limpia_pct is None and _cels_mwh is not None:
+        kwh_total = kpis_modelado.get("consumo_cliente_mes_kwh", 0)
+        kwh_anual = float(kwh_total) * 12
+        if kwh_anual > 0:
+            r.energia_limpia_pct = (
+                _D(str(_cels_mwh)) * _D("1000")
+                / _D(str(kwh_anual)) * _D("100")
+            ).quantize(_D("0.01"), rounding=ROUND_HALF_UP)
+
     # Sobreescribir inversión si el usuario proporcionó precio USD/kW manual
     if inversion_usd_override is not None and inversion_usd_override > 0:
         r.inversion_usd = _D(str(round(inversion_usd_override, 2)))

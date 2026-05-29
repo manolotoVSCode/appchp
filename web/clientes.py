@@ -2385,11 +2385,32 @@ def modelado_chp_data(cliente_id: int):
             .limit(1) \
             .execute()
         tiene_curva = bool(curva_check.data)
+        if not tiene_curva:
+            # Cache hit pero curva perdida — regenerar solo la curva
+            datos = get_medicion_datos(medicion_id)
+            if not datos:
+                return jsonify({"error": "Sin datos en la medición"}), 422
+            resultado = modelar_chp(
+                datos=datos,
+                capacidad_nominal_kw=capacidad_nominal_kw,
+                num_motores=num_motores,
+                margen_kw=margen_kw,
+                rendimiento_electrico=rendimiento_electrico,
+                costo_om_kwh=costo_om_kwh,
+                autoconsumo_pct=autoconsumo_pct,
+                consumo_anual_kwh=consumo_anual_kwh,
+            )
+            _sb.table("modelado_chp_curva") \
+                .delete().eq("modelado_id", modelado_id).execute()
+            save_modelado_chp_curva(modelado_id, resultado["curva"])
+        kpis = {k: float(cached.get(k) or 0) for k in [
+            "gen_neta_anual_kwh", "gen_bruta_anual_kwh",
+            "cobertura_pct", "consumo_gas_anual_gj",
+            "costo_om_anual_mxn", "horas_anuales_motor",
+            "capacidad_promedio_kw",
+        ]}
+        kpis["consumo_cliente_mes_kwh"] = 0.0
     else:
-        tiene_curva = False
-        modelado_id = None
-
-    if not cached or not tiene_curva:
         datos = get_medicion_datos(medicion_id)
         if not datos:
             return jsonify({"error": "Sin datos en la medición"}), 422
@@ -2420,14 +2441,6 @@ def modelado_chp_data(cliente_id: int):
             .eq("modelado_id", modelado_id) \
             .execute()
         save_modelado_chp_curva(modelado_id, resultado["curva"])
-    else:
-        kpis = {k: float(cached.get(k) or 0) for k in [
-            "gen_neta_anual_kwh", "gen_bruta_anual_kwh",
-            "cobertura_pct", "consumo_gas_anual_gj",
-            "costo_om_anual_mxn", "horas_anuales_motor",
-            "capacidad_promedio_kw",
-        ]}
-        kpis["consumo_cliente_mes_kwh"] = 0.0
 
     return jsonify({
         "ok": True,
@@ -2590,6 +2603,19 @@ def modelado_chp_cogen_data(cliente_id: int):
     except Exception as _e_cels:
         logger.error("Error calculando CELs en cogen-data: %s", _e_cels)
 
+    # 6b. Energía limpia — se calcula aquí donde tenemos cels_resultado y r
+    if cels_resultado is not None and cels_resultado.cels_mwh_anual is not None and r.energia_limpia_pct is None:
+        kwh_total = float(r.kwh_total_anual) if r.kwh_total_anual else 0.0
+        if kwh_total <= 0:
+            # Fallback: consumo del modelado cuando las facturas no tienen kWh total
+            kwh_total = float(kpis_modelado.get("consumo_cliente_mes_kwh", 0)) * 12
+        if kwh_total > 0:
+            from decimal import ROUND_HALF_UP as _RHU
+            r.energia_limpia_pct = (
+                _D(str(cels_resultado.cels_mwh_anual)) * _D("1000")
+                / _D(str(kwh_total)) * _D("100")
+            ).quantize(_D("0.01"), rounding=_RHU)
+
     # 7. Flujo 15 años y payback
     if r.inversion_mxn is not None and r.inversion_mxn > 0:
         payback_inicial   = calcular_payback_decimal(r.inversion_mxn, r.ebitda_anual_mxn, r.ebitda_anual_mxn)
@@ -2707,6 +2733,7 @@ def modelado_chp_cogen_data(cliente_id: int):
             "gen_neta_anual_kwh":              kpis_modelado["gen_neta_anual_kwh"],
             "gen_bruta_anual_kwh":             kpis_modelado["gen_bruta_anual_kwh"],
             "horas_anuales_motor":             kpis_modelado["horas_anuales_motor"],
+            "energia_limpia_pct":              float(r.energia_limpia_pct) if r.energia_limpia_pct is not None else None,
         },
         "params": {
             "cobertura_electrica":    float(kpis_modelado["cobertura_pct"]),
