@@ -145,8 +145,6 @@
             }
           }
 
-          // Actualizar label inversión total (mantiene 1400 USD/kW como default)
-          actualizarInversionTotal();
         }
 
         _primerasCarga = false;
