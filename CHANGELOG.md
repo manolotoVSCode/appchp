@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.67.4] — 2026-05-29
+
+### Corregido — Modelado CHP: distribución proporcional + límite 8 000 h estricto + versionado cache
+
+- `calc/modelado_chp.py`:
+  - `MODELADO_CHP_VERSION = "2"` — incrementar cuando cambie el algoritmo para invalidar cache anterior.
+  - `_LIMITE_HORAS_MES` calculado con `round(8000/12, 6)` para comparación con precisión decimal.
+  - Dispatch reemplazado por distribución proporcional a capacidad: cada motor disponible recibe `gen_total × (cap_motor / cap_total_disponible)`; se apaga si no alcanza el piso del 60 %. Eliminada ordenación mayor→menor.
+  - Acumulación de horas con `round(..., 6)` por motor para evitar drift de punto flotante.
+- `storage/repository.py`:
+  - `get_modelado_chp()`: añade `.eq("calc_version", _MODELADO_CHP_VERSION)` — registros sin versión o con versión anterior no generan cache hit.
+  - `save_modelado_chp()`: guarda `calc_version` en el payload.
+- `storage/migrations/202606_modelado_chp_calc_version.sql` (nuevo): `ALTER TABLE modelado_chp ADD COLUMN IF NOT EXISTS calc_version TEXT DEFAULT '1'`.
+
+Verificación: 2 motores × 1 006 kW → `horas_anuales_motor = 8000.0`, `cobertura ≈ 66.93 %`.
+
 ## [2.67.3] — 2026-05-28
 
 ### Corregido — Modelado CHP: horas por motor acotadas a 8 000 h + capacidad nominal desde motores_config

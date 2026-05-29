@@ -13,8 +13,12 @@ from typing import Any
 _KWH_A_GJ = 0.0036          # 1 kWh = 0.0036 GJ
 _MIN_CARGA_PCT = 0.60        # Carga mínima del motor (60 %)
 _LIMITE_HORAS_ANUALES = 8_000.0
-_LIMITE_HORAS_MES = _LIMITE_HORAS_ANUALES / 12.0   # ≈ 666.67 h/mes por motor
+_LIMITE_HORAS_MES = round(8_000.0 / 12, 6)  # 666.666667 h/mes por motor
 _INTERVALO_H = 5.0 / 60.0   # 5 min en horas = 1/12 h
+
+# Versión del algoritmo de cálculo — incrementar cuando cambie la lógica
+# para invalidar registros cacheados con la versión anterior.
+MODELADO_CHP_VERSION = "2"
 
 
 def modelar_chp(
@@ -47,11 +51,10 @@ def modelar_chp(
     if not datos or not motores_config:
         return _resultado_vacio()
 
-    # Filtrar motores con capacidad válida y ordenar mayor→menor (dispatch greedy)
+    # Filtrar motores con capacidad válida
     motores = [m for m in motores_config if float(m.get("capacidad_kw", 0)) > 0]
     if not motores:
         return _resultado_vacio()
-    motores_sorted = sorted(motores, key=lambda m: float(m["capacidad_kw"]), reverse=True)
     capacidad_nominal_kw = sum(float(m["capacidad_kw"]) for m in motores)
 
     # Horas acumuladas por motor {motor_id: horas}
@@ -71,24 +74,31 @@ def modelar_chp(
         gen_neta_kw = 0.0
         motores_activos_n = 0
 
-        if objetivo_neto_kw > 0:
-            restante = objetivo_neto_kw
-            for m in motores_sorted:
-                if restante <= 0:
-                    break
-                mid = m["id"]
-                cap = float(m["capacidad_kw"])
-                if horas_motor[mid] >= _LIMITE_HORAS_MES:
-                    continue
-                gen = min(restante, cap)
-                # Verificar piso del 60% para este motor
-                if gen < _MIN_CARGA_PCT * cap:
-                    continue  # Demanda residual menor al piso; probar motor más pequeño
-                gen_por_motor[mid] = gen
-                gen_neta_kw += gen
-                restante -= gen
-                motores_activos_n += 1
-                horas_motor[mid] += _INTERVALO_H
+        # Motores disponibles: aquellos que no han agotado su límite mensual
+        disponibles = [
+            m for m in motores
+            if round(horas_motor[m["id"]], 6) < _LIMITE_HORAS_MES
+        ]
+
+        if objetivo_neto_kw > 0 and disponibles:
+            cap_disponible_total = sum(float(m["capacidad_kw"]) for m in disponibles)
+            gen_total = min(objetivo_neto_kw, cap_disponible_total)
+
+            # Distribución proporcional a la capacidad de cada motor disponible
+            for motor in disponibles:
+                proporcion = float(motor["capacidad_kw"]) / cap_disponible_total
+                gen_motor = gen_total * proporcion
+                # Verificar piso del 60% — motor que no alcanza su mínimo no genera
+                if gen_motor >= _MIN_CARGA_PCT * float(motor["capacidad_kw"]):
+                    gen_por_motor[motor["id"]] = round(gen_motor, 3)
+
+            # Acumular horas con precisión decimal para evitar drift de punto flotante
+            for mid, gen in gen_por_motor.items():
+                if gen > 0:
+                    horas_motor[mid] = round(horas_motor[mid] + _INTERVALO_H, 6)
+
+            gen_neta_kw = sum(gen_por_motor.values())
+            motores_activos_n = sum(1 for g in gen_por_motor.values() if g > 0)
 
         gen_neta_mes_kwh += gen_neta_kw * _INTERVALO_H
         curva.append({

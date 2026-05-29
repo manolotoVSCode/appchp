@@ -311,9 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: fix Modelado CHP — horas por motor acotadas a 8000h,
-capacidad nominal desde suma de motores del modelado.
-Pendiente: ninguno.
+Último tema resuelto: fix Modelado CHP — distribución proporcional entre
+motores, límite 8000h estricto con precisión decimal, versionado cache
+(MODELADO_CHP_VERSION="2"), migración calc_version en modelado_chp.
+Pendiente: ejecutar migration 202606_modelado_chp_calc_version.sql en Supabase.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout

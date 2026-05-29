@@ -16,6 +16,7 @@ from models.contrato import Contrato, TIPO_ELECTRICO_CALIFICADO
 from models.factura_calificado import FacturaCalificado
 from calc.nombre_canonico import generar_nombre_canonico
 from calc.periodo import mes_asociado as _mes_asociado
+from calc.modelado_chp import MODELADO_CHP_VERSION as _MODELADO_CHP_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -1618,6 +1619,7 @@ def get_modelado_chp(
         .eq("costo_om_kwh", float(round(float(costo_om_kwh), 6)))
         .eq("autoconsumo_pct", float(round(float(autoconsumo_pct), 4)))
         .eq("motores_config", _json.dumps(motores_config))
+        .eq("calc_version", _MODELADO_CHP_VERSION)
         .limit(1)
         .execute()
     )
@@ -1649,6 +1651,7 @@ def save_modelado_chp(cliente_id: int, medicion_id: int, params: dict, kpis: dic
         "costo_om_anual_mxn":    kpis.get("costo_om_anual_mxn"),
         "horas_anuales_motor":   kpis.get("horas_anuales_motor"),
         "capacidad_promedio_kw": kpis.get("capacidad_promedio_kw"),
+        "calc_version":          _MODELADO_CHP_VERSION,
     }
     try:
         resp = _supabase.table("modelado_chp").insert(payload).execute()
