@@ -125,7 +125,7 @@
   {% endif %}
   {% endif %}
 
-  {% if cliente_activo and current_user_data and current_user_data.rol != 'usuario_normal' %}
+  {% if cliente_activo and current_user_data %}
   <hr class="sidebar-divider mx-3">
   <div class="sidebar-section">Mediciones</div>
 
