@@ -582,14 +582,104 @@
         _renderCascada(ahElec, ahCaldera, costoGas, om, ebitda);
         _showB("chp-seccion-cascada");
 
-        if (data.flujo_anual_15 && data.flujo_anual_15.length > 0) {
-          _renderFlujo(data.flujo_anual_15, data.flujo_acum_15 || []);
+        // Usar datos fiscales cuando existan (activos con deducción, o iguales sin ella)
+        const _flujoArr = (data.flujo_anual_15_fiscal?.length > 0)
+          ? data.flujo_anual_15_fiscal : data.flujo_anual_15;
+        const _acumArr  = (data.flujo_acum_15_fiscal?.length > 0)
+          ? data.flujo_acum_15_fiscal  : (data.flujo_acum_15 || []);
+        if (_flujoArr && _flujoArr.length > 0) {
+          _renderFlujo(_flujoArr, _acumArr);
           _showB("chp-flujo-section");
         }
 
         if (data.tabla_mensual && data.tabla_mensual.length > 0) {
           _renderTablaMensual(data.tabla_mensual);
         }
+
+        // ── CO2 ───────────────────────────────────────────────────────────
+        const co2 = data.co2 || {};
+        const elCO2Val = document.getElementById("chp-kpi-co2-val");
+        if (elCO2Val) {
+          const reduccion = parseFloat(co2.reduccion_t || 0);
+          elCO2Val.textContent = reduccion > 0
+            ? reduccion.toLocaleString("es-MX", {maximumFractionDigits:1})
+              + " t CO₂/año"
+            : "—";
+        }
+        const elCO2Sub = document.getElementById("chp-kpi-co2-sublabel");
+        if (elCO2Sub && co2.reduccion_pct != null) {
+          const arboles = co2.arboles
+            ? " · ≈" + Math.round(co2.arboles).toLocaleString("es-MX")
+              + " árboles"
+            : "";
+          elCO2Sub.textContent =
+            parseFloat(co2.reduccion_pct).toFixed(1) + "% menos" + arboles;
+        }
+        const secCO2 = document.getElementById("chp-seccion-co2");
+        if (secCO2) secCO2.style.display = co2.reduccion_t ? "" : "none";
+
+        // Donuts CO2 (reusar lógica de dashboard-cogeneracion.js)
+        // Actual
+        if (typeof renderDonutComponentes === "function" && co2.actual_total_t) {
+          const pElec = co2.actual_electricidad_t || 0;
+          const pGas  = co2.actual_gas_t || 0;
+          const totalActual = pElec + pGas;
+          if (totalActual > 0) {
+            renderDonutComponentes("chp-donut-co2-actual", [
+              { label: "Electricidad", value: pElec,
+                color: "rgba(31,122,76,0.75)" },
+              { label: "Gas",          value: pGas,
+                color: "rgba(232,181,71,0.85)" },
+            ]);
+          }
+          // Proyectado
+          const pElecProy = co2.proyectado_electricidad_t || 0;
+          const pGasProy  = co2.proyectado_gas_t || 0;
+          const totalProy = pElecProy + pGasProy;
+          if (totalProy > 0) {
+            renderDonutComponentes("chp-donut-co2-proyectado", [
+              { label: "Electricidad", value: pElecProy,
+                color: "rgba(31,122,76,0.75)" },
+              { label: "Gas",          value: pGasProy,
+                color: "rgba(232,181,71,0.85)" },
+            ]);
+          }
+        }
+
+        // ── CELs ──────────────────────────────────────────────────────────
+        const cels = data.cels || {};
+        const elCels = document.getElementById("chp-kpi-cels-val");
+        if (elCels) {
+          elCels.textContent = cels.cels_mwh_anual != null
+            ? parseFloat(cels.cels_mwh_anual)
+                .toLocaleString("es-MX", {maximumFractionDigits:2})
+            : "—";
+        }
+        const elCelsEfic = document.getElementById("chp-kpi-cels-eficiencia");
+        if (elCelsEfic) {
+          elCelsEfic.textContent = cels.es_eficiente
+            ? "Cogeneración eficiente ✓" : "";
+          elCelsEfic.style.color = cels.es_eficiente ? "var(--color-primary)" : "";
+        }
+
+        // ── Energía limpia ────────────────────────────────────────────────
+        const elEL = document.getElementById("chp-kpi-energia-limpia-val");
+        if (elEL) {
+          const pct = data.kpis?.energia_limpia_pct;
+          elEL.textContent = pct != null
+            ? parseFloat(pct).toLocaleString("es-MX",
+                {minimumFractionDigits:1, maximumFractionDigits:1}) + " %"
+            : "—";
+        }
+
+        // ── Capacidad nominal (desde calcular_cogen, no del modelado) ─────
+        const elCapNom = document.getElementById("chp-kpi-cap-nominal-val");
+        if (elCapNom && data.kpis?.capacidad_nominal_kw) {
+          elCapNom.textContent =
+            parseFloat(data.kpis.capacidad_nominal_kw)
+              .toLocaleString("es-MX", {maximumFractionDigits:0}) + " kW";
+        }
+
       })
       .catch(err => {
         $("chp-cogen-error-msg").textContent = `Error al calcular cogeneración: ${err.message}`;
