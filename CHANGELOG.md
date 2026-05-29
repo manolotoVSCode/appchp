@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.67.3] — 2026-05-28
+
+### Corregido — Modelado CHP: horas por motor acotadas a 8 000 h + capacidad nominal desde motores_config
+
+- `calc/modelado_chp.py` — `modelar_chp()`: horas anuales proyectadas por motor ahora se acotan a `_LIMITE_HORAS_ANUALES` (8 000 h); se expone `horas_por_motor` (dict motor_id → h) y `capacidad_total_kw` en kpis.
+- `web/clientes.py` — endpoint `modelado-chp/cogen-data`: `capacidad_nominal_kw` en JSON calculada como suma de `capacidad_kw` de cada motor en `motores_config`; fallback a `r.capacidad_nominal_kw` si la lista está vacía.
+
 ## [2.67.2] — 2026-05-28
 
 ### Corregido — Modelado CHP: energia_limpia_pct + regeneración curva al cambiar parámetros

@@ -2742,7 +2742,7 @@ def modelado_chp_cogen_data(cliente_id: int):
             "kwh_total_anual":                 float(r.kwh_total_anual),
             "kwh_cubiertos_anual":             float(r.kwh_cubiertos_anual),
             "gj_gas_cogen_anual":              float(r.gj_gas_cogen_anual),
-            "capacidad_nominal_kw":            float(r.capacidad_nominal_kw) if r.capacidad_nominal_kw else None,
+            "capacidad_nominal_kw":            sum(float(m.get("capacidad_kw", 0)) for m in (modelado.get("motores_config") or [])) or (float(r.capacidad_nominal_kw) if r.capacidad_nominal_kw else None),
             "inversion_usd":                   float(r.inversion_usd) if r.inversion_usd else None,
             "inversion_mxn":                   float(r.inversion_mxn) if r.inversion_mxn else None,
             "tipo_cambio":                     float(r.tipo_cambio_mxn_usd) if r.tipo_cambio_mxn_usd else None,

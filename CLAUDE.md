@@ -311,11 +311,9 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.68.0 — motores heterogéneos en Modelado CHP.
-motores_config JSONB reemplaza num_motores+capacidad_nominal_kw. Dispatch greedy
-mayor→menor con min-load 60% por motor. gen_por_motor en curva. UI dinámica
-(añadir/quitar motores, máx 4, colores por posición). Gráfica con línea por motor.
-Pendiente: ejecutar migration 202606_modelado_chp_motores_config.sql en Supabase.
+Último tema resuelto: fix Modelado CHP — horas por motor acotadas a 8000h,
+capacidad nominal desde suma de motores del modelado.
+Pendiente: ninguno.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout

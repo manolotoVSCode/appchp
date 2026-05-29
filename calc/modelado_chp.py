@@ -127,21 +127,36 @@ def modelar_chp(
     gen_bruta_anual_kwh = (
         gen_neta_anual_kwh / (1.0 - autoconsumo_pct) if autoconsumo_pct < 1.0 else 0.0
     )
-    horas_anuales_motor  = horas_mes_motor * 12
+
+    # Horas anuales por motor: acumulado real del mes × 12, acotado a 8,000 h
+    horas_por_motor = {}
+    for m in motores:
+        horas_mes = horas_motor[m["id"]]
+        horas_por_motor[str(m["id"])] = min(round(horas_mes * 12, 1), _LIMITE_HORAS_ANUALES)
+    # KPI global: promedio entre motores
+    horas_anuales_motor = round(
+        sum(horas_por_motor.values()) / len(motores), 1
+    ) if motores else 0.0
+
     consumo_gas_anual_gj = (
         (gen_bruta_anual_kwh * _KWH_A_GJ) / rendimiento_electrico
         if rendimiento_electrico > 0 else 0.0
     )
     costo_om_anual_mxn = gen_bruta_anual_kwh * costo_om_kwh
 
+    # Capacidad total: suma de los motores recibidos como parámetro (valor canónico)
+    capacidad_total_kw = sum(float(m["capacidad_kw"]) for m in motores)
+
     kpis = {
-        "gen_neta_anual_kwh":    gen_neta_anual_kwh,
-        "gen_bruta_anual_kwh":   gen_bruta_anual_kwh,
-        "cobertura_pct":         cobertura_pct,
-        "consumo_gas_anual_gj":  consumo_gas_anual_gj,
-        "costo_om_anual_mxn":    costo_om_anual_mxn,
-        "horas_anuales_motor":   horas_anuales_motor,
-        "capacidad_promedio_kw": cap_promedio_kw,
+        "gen_neta_anual_kwh":      gen_neta_anual_kwh,
+        "gen_bruta_anual_kwh":     gen_bruta_anual_kwh,
+        "cobertura_pct":           cobertura_pct,
+        "consumo_gas_anual_gj":    consumo_gas_anual_gj,
+        "costo_om_anual_mxn":      costo_om_anual_mxn,
+        "horas_anuales_motor":     horas_anuales_motor,
+        "horas_por_motor":         horas_por_motor,
+        "capacidad_promedio_kw":   cap_promedio_kw,
+        "capacidad_total_kw":      capacidad_total_kw,
         "consumo_cliente_mes_kwh": consumo_cliente_mes_kwh,
     }
 
