@@ -311,13 +311,11 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.66.2 — fix Modelado CHP: inversión como precio/kW
-(default 1400) con total calculado dinámico; eliminado kW/motor del template
-y actualizarCapUnitaria del JS; layout sección cogen reemplazado para ser
-idéntico al dashboard de cogeneración (Ingresos, Gastos, Ahorro Neto con
-donut, Impacto Ambiental, Inversión y Retorno, Cascada, Flujo 15 años,
-panel flotante tabla mensual). Canvas: chp-waterfallChart, chp-chart15Year.
-Pendiente: ninguno conocido.
+Último tema resuelto: v2.66.3 — fix modelado CHP: upsert en save_modelado_chp
+(ya estaba), cast explícito en get_modelado_chp (float(round(float(x),n))),
+eliminado .eq capacidad_nominal_kw del select, eliminado label USD total
+del template y actualizarInversionTotal del JS.
+Pendiente: ninguno.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.66.3] — 2026-05-28
+
+### Corregido — Modelado CHP: get_modelado_chp cast explícito, eliminar label inversión total
+- `storage/repository.py` — `get_modelado_chp()`: cast explícito `float(round(float(x), n))` en los cuatro parámetros flotantes (margen_kw, rendimiento_electrico, costo_om_kwh, autoconsumo_pct). Eliminado `.eq("capacidad_nominal_kw", ...)` para alinear con el `on_conflict` del upsert (que no incluye esa columna).
+- `web/templates/dashboard_modelado_chp.html`: eliminado `div#chp-inversion-total-label` bajo el input `param-inversion-usd`.
+- `web/static/js/dashboard-modelado-chp.js`: eliminada función `actualizarInversionTotal()` y sus tres listeners. El total USD se calcula internamente en `getCogenParams()` sin mostrarse.
+
 ## [2.66.2] — 2026-05-28
 
 ### Cambiado — Modelado CHP: inversión USD/kW, kW/motor eliminado, layout sección cogen

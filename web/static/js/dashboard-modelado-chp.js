@@ -51,21 +51,6 @@
 
   const _fmtMXN = v => "$" + Math.round(v).toLocaleString("es-MX");
 
-  // ── Inversión total (precio/kW × cap nominal) ──────────────────────────────
-  function actualizarInversionTotal() {
-    const cap      = parseFloat($("param-cap-nominal-input").value) || 0;
-    const precioKw = parseFloat($("param-inversion-usd").value)    || 1400;
-    const total    = Math.round(cap * precioKw);
-    const lbl      = $("chp-inversion-total-label");
-    if (lbl) lbl.textContent = total > 0
-      ? "$" + total.toLocaleString("es-MX") + " USD total"
-      : "—";
-  }
-
-  $("param-cap-nominal-input").addEventListener("input",  actualizarInversionTotal);
-  $("param-inversion-usd").addEventListener("input",      actualizarInversionTotal);
-  $("param-num-motores").addEventListener("change",       actualizarInversionTotal);
-
   // ── Leer parámetros CHP ────────────────────────────────────────────────────
   function getParams() {
     return {
