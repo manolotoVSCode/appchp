@@ -169,7 +169,7 @@
     const deduccionFiscal = $("param-deduccion-fiscal")?.checked ?? false;
     const aniosDeduccion  = parseInt($("param-anios-deduccion")?.value || "1", 10);
     return {
-      rendimiento_termico:  (parseFloat($("param-rend-termico").value)  || 45) / 100,
+      rendimiento_termico:  (parseFloat($("param-rend-termico").value)  || 25) / 100,
       precio_gas:            parseFloat($("param-precio-gas").value)    || null,
       inversion_usd:         inversion_usd > 0 ? inversion_usd : null,
       factor_utilizacion:    parseFloat($("param-factor-util").value)   || 0.9132,
