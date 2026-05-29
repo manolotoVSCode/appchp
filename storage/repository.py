@@ -1627,10 +1627,11 @@ def get_modelado_chp(
 
 
 def save_modelado_chp(cliente_id: int, medicion_id: int, params: dict, kpis: dict) -> int | None:
-    """Inserta cabecera en modelado_chp. Retorna el id creado.
+    """Upsert de cabecera en modelado_chp. Retorna el id del registro.
 
-    Usa INSERT simple (no upsert) porque el endpoint siempre verifica cache antes de llamar.
-    En caso de violación de unique (carrera), hace fallback a SELECT para devolver el id existente.
+    Usa upsert con on_conflict sobre columnas numéricas del índice único.
+    Si PostgREST devuelve data vacía (conflicto silencioso), hace fallback
+    a SELECT por medicion_id + calc_version para devolver el id existente.
     """
     motores_config      = params["motores_config"]
     capacidad_nominal_kw = sum(float(m.get("capacidad_kw", 0)) for m in motores_config)
@@ -1653,17 +1654,29 @@ def save_modelado_chp(cliente_id: int, medicion_id: int, params: dict, kpis: dic
         "capacidad_promedio_kw": kpis.get("capacidad_promedio_kw"),
         "calc_version":          _MODELADO_CHP_VERSION,
     }
-    try:
-        resp = _supabase.table("modelado_chp").insert(payload).execute()
-        return resp.data[0]["id"] if resp.data else None
-    except Exception:
-        # Violación de unique (carrera) → devolver id del registro existente
-        existing = get_modelado_chp(
-            medicion_id, motores_config,
-            params["margen_kw"], params["rendimiento_electrico"],
-            params["costo_om_kwh"], params["autoconsumo_pct"],
-        )
-        return existing["id"] if existing else None
+    resp = (
+        _supabase.table("modelado_chp")
+        .upsert(payload, on_conflict="medicion_id,margen_kw,rendimiento_electrico,costo_om_kwh,autoconsumo_pct")
+        .execute()
+    )
+
+    if resp.data:
+        return resp.data[0]["id"]
+
+    # Fallback: upsert ejecutado pero PostgREST no devolvió data (conflicto silencioso)
+    busqueda = (
+        _supabase.table("modelado_chp")
+        .select("id")
+        .eq("medicion_id", int(payload["medicion_id"]))
+        .eq("calc_version", payload.get("calc_version", "1"))
+        .order("id", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if busqueda.data:
+        return busqueda.data[0]["id"]
+
+    raise RuntimeError("save_modelado_chp: no se pudo obtener el id del registro")
 
 
 def save_modelado_chp_curva(modelado_id: int, curva: list[dict]) -> None:
