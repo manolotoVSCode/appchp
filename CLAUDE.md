@@ -311,10 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.66.4 — verificado modelado CHP: gen_neta ya usa
-capacidad_nominal total (correcto, sin cambio). Diagnóstico CO2/CELs:
-endpoint cogen-data sí devuelve co2 y cels en JSON pero fetchCogenData()
-en JS no los lee ni puebla los KPI cards.
+Último tema resuelto: v2.66.5 — unique constraint modelado_chp añade
+capacidad_nominal_kw (SQL en migrations/), on_conflict alineado, get_modelado_chp
+filtra por capacidad_nominal_kw, endpoint data regenera curva si falta,
+precio_gas_gj unificado en cogen_defaults.
 Pendiente: poblar CO2/CELs en fetchCogenData desde data.co2 y data.cels.
 
 ### Bugs App

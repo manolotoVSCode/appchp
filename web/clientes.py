@@ -2369,73 +2369,65 @@ def modelado_chp_data(cliente_id: int):
         _precio_gas_gj = float(_precio_manual_str) if _precio_manual_str else 0.0
 
     # Buscar en cache
+    from storage.repository import _supabase as _sb
     cached = get_modelado_chp(
         medicion_id, num_motores, margen_kw,
         rendimiento_electrico, costo_om_kwh, autoconsumo_pct,
         capacidad_nominal_kw,
     )
+
     if cached:
-        kpis = {
-            "gen_neta_anual_kwh":    float(cached.get("gen_neta_anual_kwh") or 0),
-            "gen_bruta_anual_kwh":   float(cached.get("gen_bruta_anual_kwh") or 0),
-            "cobertura_pct":         float(cached.get("cobertura_pct") or 0),
-            "consumo_gas_anual_gj":  float(cached.get("consumo_gas_anual_gj") or 0),
-            "costo_om_anual_mxn":    float(cached.get("costo_om_anual_mxn") or 0),
-            "horas_anuales_motor":   float(cached.get("horas_anuales_motor") or 0),
-            "capacidad_promedio_kw": float(cached.get("capacidad_promedio_kw") or 0),
-            "consumo_cliente_mes_kwh": 0.0,
+        modelado_id = cached["id"]
+        # Verificar que tiene curva
+        curva_check = _sb.table("modelado_chp_curva") \
+            .select("id") \
+            .eq("modelado_id", modelado_id) \
+            .limit(1) \
+            .execute()
+        tiene_curva = bool(curva_check.data)
+    else:
+        tiene_curva = False
+        modelado_id = None
+
+    if not cached or not tiene_curva:
+        datos = get_medicion_datos(medicion_id)
+        if not datos:
+            return jsonify({"error": "Sin datos en la medición"}), 422
+
+        resultado = modelar_chp(
+            datos=datos,
+            capacidad_nominal_kw=capacidad_nominal_kw,
+            num_motores=num_motores,
+            margen_kw=margen_kw,
+            rendimiento_electrico=rendimiento_electrico,
+            costo_om_kwh=costo_om_kwh,
+            autoconsumo_pct=autoconsumo_pct,
+            consumo_anual_kwh=consumo_anual_kwh,
+        )
+        kpis = resultado["kpis"]
+        params_save = {
+            "num_motores":           num_motores,
+            "margen_kw":             margen_kw,
+            "rendimiento_electrico": rendimiento_electrico,
+            "costo_om_kwh":          costo_om_kwh,
+            "autoconsumo_pct":       autoconsumo_pct,
+            "capacidad_nominal_kw":  capacidad_nominal_kw,
         }
-        return jsonify({
-            "ok": True,
-            "modelado_id": cached["id"],
-            "medicion_id": medicion_id,
-            "mes": medicion.get("mes"),
-            "anio": medicion.get("anio"),
-            "params": {
-                "capacidad_nominal_kw": capacidad_nominal_kw,
-                "cap_unitaria_kw": capacidad_nominal_kw / num_motores,
-                "num_motores": num_motores,
-                "margen_kw": margen_kw,
-                "rendimiento_electrico": rendimiento_electrico,
-                "costo_om_kwh": costo_om_kwh,
-                "autoconsumo_pct": autoconsumo_pct,
-                "consumo_anual_kwh": consumo_anual_kwh,
-            },
-            "kpis": kpis,
-            "cogen_defaults": {
-                "rendimiento_termico": 0.25,
-                "eficiencia_caldera": 0.85,
-                "precio_gas_gj": round(_precio_gas_gj, 2),
-            },
-        })
-
-    # Cache miss: calcular
-    datos = get_medicion_datos(medicion_id)
-    if not datos:
-        return jsonify({"error": "Sin datos en la medición"}), 422
-
-    resultado = modelar_chp(
-        datos=datos,
-        capacidad_nominal_kw=capacidad_nominal_kw,
-        num_motores=num_motores,
-        margen_kw=margen_kw,
-        rendimiento_electrico=rendimiento_electrico,
-        costo_om_kwh=costo_om_kwh,
-        autoconsumo_pct=autoconsumo_pct,
-        consumo_anual_kwh=consumo_anual_kwh,
-    )
-
-    kpis = resultado["kpis"]
-    params_save = {
-        "num_motores":           num_motores,
-        "margen_kw":             margen_kw,
-        "rendimiento_electrico": rendimiento_electrico,
-        "costo_om_kwh":          costo_om_kwh,
-        "autoconsumo_pct":       autoconsumo_pct,
-        "capacidad_nominal_kw":  capacidad_nominal_kw,
-    }
-    modelado_id = save_modelado_chp(cliente_id, medicion_id, params_save, kpis)
-    save_modelado_chp_curva(modelado_id, resultado["curva"])
+        modelado_id = save_modelado_chp(cliente_id, medicion_id, params_save, kpis)
+        # Borrar curva anterior si existe (por si el upsert reutilizó id)
+        _sb.table("modelado_chp_curva") \
+            .delete() \
+            .eq("modelado_id", modelado_id) \
+            .execute()
+        save_modelado_chp_curva(modelado_id, resultado["curva"])
+    else:
+        kpis = {k: float(cached.get(k) or 0) for k in [
+            "gen_neta_anual_kwh", "gen_bruta_anual_kwh",
+            "cobertura_pct", "consumo_gas_anual_gj",
+            "costo_om_anual_mxn", "horas_anuales_motor",
+            "capacidad_promedio_kw",
+        ]}
+        kpis["consumo_cliente_mes_kwh"] = 0.0
 
     return jsonify({
         "ok": True,
@@ -2457,6 +2449,7 @@ def modelado_chp_data(cliente_id: int):
         "cogen_defaults": {
             "rendimiento_termico": 0.25,
             "eficiencia_caldera": 0.85,
+            "precio_gas_gj": round(_precio_gas_gj, 2),
         },
     })
 

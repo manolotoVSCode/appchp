@@ -1613,6 +1613,7 @@ def get_modelado_chp(
         .eq("rendimiento_electrico", float(round(float(rendimiento_electrico), 4)))
         .eq("costo_om_kwh", float(round(float(costo_om_kwh), 6)))
         .eq("autoconsumo_pct", float(round(float(autoconsumo_pct), 4)))
+        .eq("capacidad_nominal_kw", float(round(float(capacidad_nominal_kw), 2)))
         .limit(1)
         .execute()
     )
@@ -1640,9 +1641,11 @@ def save_modelado_chp(cliente_id: int, medicion_id: int, params: dict, kpis: dic
     }
     resp = _supabase.table("modelado_chp").upsert(
         payload,
-        on_conflict="medicion_id,num_motores,margen_kw,rendimiento_electrico,costo_om_kwh,autoconsumo_pct",
+        on_conflict="medicion_id,num_motores,margen_kw,"
+                    "rendimiento_electrico,costo_om_kwh,"
+                    "autoconsumo_pct,capacidad_nominal_kw"
     ).execute()
-    return resp.data[0]["id"]
+    return resp.data[0]["id"] if resp.data else None
 
 
 def save_modelado_chp_curva(modelado_id: int, curva: list[dict]) -> None:

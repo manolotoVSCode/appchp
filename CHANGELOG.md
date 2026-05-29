@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.66.5] — 2026-05-28
+
+### Corregido — Modelado CHP: unique constraint, paginación curva, regeneración si falta curva
+- `storage/migrations/202605_modelado_chp_fix_unique.sql` (nuevo): DROP+ADD UNIQUE constraint incluyendo `capacidad_nominal_kw` → alinea la BD con el nuevo `on_conflict`.
+- `storage/repository.py`:
+  - `save_modelado_chp()`: `on_conflict` añade `capacidad_nominal_kw`; return con guarda `None`.
+  - `get_modelado_chp()`: añadido `.eq("capacidad_nominal_kw", float(round(float(x), 2)))`.
+  - `get_modelado_chp_curva()`: ya tenía paginación — sin cambio.
+- `web/clientes.py` — endpoint `modelado-chp/data`: flujo reemplazado por cache-check + curva-check + delete anterior + regeneración; `precio_gas_gj` incluido en `cogen_defaults` en ambos paths (antes faltaba en el path de cálculo).
+
+**SQL a ejecutar en Supabase antes del deploy:**
+```sql
+ALTER TABLE modelado_chp
+  DROP CONSTRAINT IF EXISTS
+    modelado_chp_medicion_id_num_motores_margen_kw_rendimiento__key;
+ALTER TABLE modelado_chp
+  ADD CONSTRAINT modelado_chp_unique_params
+  UNIQUE (medicion_id, num_motores, margen_kw, rendimiento_electrico,
+          costo_om_kwh, autoconsumo_pct, capacidad_nominal_kw);
+```
+
 ## [2.66.4] — 2026-05-28
 
 ### Verificado — Modelado CHP: gen_neta usa capacidad_nominal total (sin cambio)
