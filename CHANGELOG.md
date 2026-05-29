@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.66.4] — 2026-05-28
+
+### Verificado — Modelado CHP: gen_neta usa capacidad_nominal total (sin cambio)
+- `calc/modelado_chp.py` — `modelar_chp()`: verificado que ambos bloques son correctos.
+  - Bloque `objetivo_neto_kw >= capacidad_nominal_kw`: usa `capacidad_nominal_kw` total ✓ (no cap_unitaria_kw).
+  - Bloque `else`: `cap_activa = cap_unitaria_kw * motores_activos` ✓; cuando `motores_activos == num_motores`, `cap_activa == capacidad_nominal_kw`.
+  - No se realizó ningún cambio al archivo.
+- Diagnóstico CO2/CELs: el endpoint `cogen-data` sí devuelve `"co2"` y `"cels"` en el JSON. El problema es que `fetchCogenData()` en `dashboard-modelado-chp.js` no lee esos campos ni puebla `chp-kpi-co2-val`, `chp-kpi-cels-val`, `chp-kpi-energia-limpia-val`. Pendiente de implementar en próxima sesión.
+
 ## [2.66.3] — 2026-05-28
 
 ### Corregido — Modelado CHP: get_modelado_chp cast explícito, eliminar label inversión total

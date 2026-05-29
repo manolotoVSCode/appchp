@@ -311,11 +311,11 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.66.3 — fix modelado CHP: upsert en save_modelado_chp
-(ya estaba), cast explícito en get_modelado_chp (float(round(float(x),n))),
-eliminado .eq capacidad_nominal_kw del select, eliminado label USD total
-del template y actualizarInversionTotal del JS.
-Pendiente: ninguno.
+Último tema resuelto: v2.66.4 — verificado modelado CHP: gen_neta ya usa
+capacidad_nominal total (correcto, sin cambio). Diagnóstico CO2/CELs:
+endpoint cogen-data sí devuelve co2 y cels en JSON pero fetchCogenData()
+en JS no los lee ni puebla los KPI cards.
+Pendiente: poblar CO2/CELs en fetchCogenData desde data.co2 y data.cels.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
