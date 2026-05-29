@@ -311,10 +311,11 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.67.2 — fix Modelado CHP — energia_limpia_pct calculada
-desde CELs del modelado (paso 6b en endpoint, campo en JSON kpis); curva siempre
-regenerada al cambiar parámetros (bloque explícito cache-hit-sin-curva).
-Pendiente: ninguno.
+Último tema resuelto: v2.68.0 — motores heterogéneos en Modelado CHP.
+motores_config JSONB reemplaza num_motores+capacidad_nominal_kw. Dispatch greedy
+mayor→menor con min-load 60% por motor. gen_por_motor en curva. UI dinámica
+(añadir/quitar motores, máx 4, colores por posición). Gráfica con línea por motor.
+Pendiente: ejecutar migration 202606_modelado_chp_motores_config.sql en Supabase.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
