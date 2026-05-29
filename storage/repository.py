@@ -1555,30 +1555,35 @@ def obtener_agregados_15min(
 # ══════════════════════════════════════════════════════════════════════════════
 
 def get_cliente_chp_params(cliente_id: int) -> dict:
-    """Retorna chp_num_motores y chp_margen_kw del cliente.
-    Si los campos son NULL, devuelve defaults {"num_motores": 1, "margen_kw": 0}."""
+    """Retorna chp_num_motores, chp_margen_kw y chp_motores_config del cliente."""
     resp = (
         _supabase.table("clientes")
-        .select("chp_num_motores, chp_margen_kw")
+        .select("chp_num_motores, chp_margen_kw, chp_motores_config")
         .eq("id", cliente_id)
         .single()
         .execute()
     )
     if not resp.data:
-        return {"num_motores": 1, "margen_kw": 0.0}
+        return {"num_motores": 1, "margen_kw": 0.0, "motores_config": None}
     row = resp.data
     return {
-        "num_motores": int(row["chp_num_motores"] or 1),
-        "margen_kw": float(row["chp_margen_kw"] or 0),
+        "num_motores":    int(row["chp_num_motores"] or 1),
+        "margen_kw":      float(row["chp_margen_kw"] or 0),
+        "motores_config": row.get("chp_motores_config"),
     }
 
 
-def update_cliente_chp_params(cliente_id: int, num_motores: int, margen_kw: float) -> None:
-    """Actualiza chp_num_motores y chp_margen_kw en la tabla clientes."""
-    _supabase.table("clientes").update({
-        "chp_num_motores": num_motores,
-        "chp_margen_kw": margen_kw,
-    }).eq("id", cliente_id).execute()
+def update_cliente_chp_params(
+    cliente_id: int,
+    motores_config: list | None,
+    margen_kw: float,
+) -> None:
+    """Actualiza chp_motores_config, chp_margen_kw (y chp_num_motores derivado) en clientes."""
+    update_data: dict = {"chp_margen_kw": margen_kw}
+    if motores_config is not None:
+        update_data["chp_motores_config"] = motores_config
+        update_data["chp_num_motores"] = len(motores_config)
+    _supabase.table("clientes").update(update_data).eq("id", cliente_id).execute()
 
 
 def get_modelado_chp_by_id(modelado_id: int) -> dict | None:
@@ -1595,61 +1600,72 @@ def get_modelado_chp_by_id(modelado_id: int) -> dict | None:
 
 def get_modelado_chp(
     medicion_id: int,
-    num_motores: int,
+    motores_config: list,
     margen_kw: float,
     rendimiento_electrico: float,
     costo_om_kwh: float,
     autoconsumo_pct: float,
-    capacidad_nominal_kw: float,
 ) -> dict | None:
-    """Busca un modelado con esos parámetros exactos en cache.
+    """Busca un modelado con esos parámetros exactos en cache (por motores_config JSONB).
     Retorna el registro completo o None si no existe."""
+    import json as _json
     resp = (
         _supabase.table("modelado_chp")
         .select("*")
         .eq("medicion_id", int(medicion_id))
-        .eq("num_motores", int(num_motores))
         .eq("margen_kw", float(round(float(margen_kw), 2)))
         .eq("rendimiento_electrico", float(round(float(rendimiento_electrico), 4)))
         .eq("costo_om_kwh", float(round(float(costo_om_kwh), 6)))
         .eq("autoconsumo_pct", float(round(float(autoconsumo_pct), 4)))
-        .eq("capacidad_nominal_kw", float(round(float(capacidad_nominal_kw), 2)))
+        .eq("motores_config", _json.dumps(motores_config))
         .limit(1)
         .execute()
     )
     return resp.data[0] if resp.data else None
 
 
-def save_modelado_chp(cliente_id: int, medicion_id: int, params: dict, kpis: dict) -> int:
-    """Inserta cabecera en modelado_chp. Retorna el id creado."""
+def save_modelado_chp(cliente_id: int, medicion_id: int, params: dict, kpis: dict) -> int | None:
+    """Inserta cabecera en modelado_chp. Retorna el id creado.
+
+    Usa INSERT simple (no upsert) porque el endpoint siempre verifica cache antes de llamar.
+    En caso de violación de unique (carrera), hace fallback a SELECT para devolver el id existente.
+    """
+    motores_config      = params["motores_config"]
+    capacidad_nominal_kw = sum(float(m.get("capacidad_kw", 0)) for m in motores_config)
     payload = {
-        "cliente_id":           cliente_id,
-        "medicion_id":          medicion_id,
-        "num_motores":          params["num_motores"],
-        "margen_kw":            params["margen_kw"],
+        "cliente_id":            cliente_id,
+        "medicion_id":           medicion_id,
+        "motores_config":        motores_config,
+        "num_motores":           len(motores_config),
+        "capacidad_nominal_kw":  round(capacidad_nominal_kw, 2),
+        "margen_kw":             params["margen_kw"],
         "rendimiento_electrico": params["rendimiento_electrico"],
-        "costo_om_kwh":         params["costo_om_kwh"],
-        "autoconsumo_pct":      params["autoconsumo_pct"],
-        "capacidad_nominal_kw": params["capacidad_nominal_kw"],
-        "gen_neta_anual_kwh":   kpis.get("gen_neta_anual_kwh"),
-        "gen_bruta_anual_kwh":  kpis.get("gen_bruta_anual_kwh"),
-        "cobertura_pct":        kpis.get("cobertura_pct"),
-        "consumo_gas_anual_gj": kpis.get("consumo_gas_anual_gj"),
-        "costo_om_anual_mxn":   kpis.get("costo_om_anual_mxn"),
-        "horas_anuales_motor":  kpis.get("horas_anuales_motor"),
+        "costo_om_kwh":          params["costo_om_kwh"],
+        "autoconsumo_pct":       params["autoconsumo_pct"],
+        "gen_neta_anual_kwh":    kpis.get("gen_neta_anual_kwh"),
+        "gen_bruta_anual_kwh":   kpis.get("gen_bruta_anual_kwh"),
+        "cobertura_pct":         kpis.get("cobertura_pct"),
+        "consumo_gas_anual_gj":  kpis.get("consumo_gas_anual_gj"),
+        "costo_om_anual_mxn":    kpis.get("costo_om_anual_mxn"),
+        "horas_anuales_motor":   kpis.get("horas_anuales_motor"),
         "capacidad_promedio_kw": kpis.get("capacidad_promedio_kw"),
     }
-    resp = _supabase.table("modelado_chp").upsert(
-        payload,
-        on_conflict="medicion_id,num_motores,margen_kw,"
-                    "rendimiento_electrico,costo_om_kwh,"
-                    "autoconsumo_pct,capacidad_nominal_kw"
-    ).execute()
-    return resp.data[0]["id"] if resp.data else None
+    try:
+        resp = _supabase.table("modelado_chp").insert(payload).execute()
+        return resp.data[0]["id"] if resp.data else None
+    except Exception:
+        # Violación de unique (carrera) → devolver id del registro existente
+        existing = get_modelado_chp(
+            medicion_id, motores_config,
+            params["margen_kw"], params["rendimiento_electrico"],
+            params["costo_om_kwh"], params["autoconsumo_pct"],
+        )
+        return existing["id"] if existing else None
 
 
 def save_modelado_chp_curva(modelado_id: int, curva: list[dict]) -> None:
-    """Inserta la curva modelada en modelado_chp_curva en batches de 1,000."""
+    """Inserta la curva modelada en modelado_chp_curva en batches de 1,000.
+    Incluye gen_por_motor JSONB con generación individual por motor."""
     BATCH = 1000
     rows = [
         {
@@ -1658,6 +1674,8 @@ def save_modelado_chp_curva(modelado_id: int, curva: list[dict]) -> None:
             "demanda_kw":      p["demanda_kw"],
             "gen_neta_kw":     p["gen_neta_kw"],
             "motores_activos": p["motores_activos"],
+            "gen_por_motor":   {str(k): v for k, v in p["gen_por_motor"].items()}
+                               if p.get("gen_por_motor") else None,
         }
         for p in curva
     ]
@@ -1667,14 +1685,14 @@ def save_modelado_chp_curva(modelado_id: int, curva: list[dict]) -> None:
 
 def get_modelado_chp_curva(modelado_id: int) -> list[dict]:
     """Retorna todos los puntos de la curva modelada ordenados por ts ASC.
-    Pagina de 1,000 en 1,000 igual que get_medicion_datos."""
+    Incluye gen_por_motor JSONB. Pagina de 1,000 en 1,000."""
     PAGE = 1000
     result = []
     start = 0
     while True:
         resp = (
             _supabase.table("modelado_chp_curva")
-            .select("ts, demanda_kw, gen_neta_kw, motores_activos")
+            .select("ts, demanda_kw, gen_neta_kw, motores_activos, gen_por_motor")
             .eq("modelado_id", modelado_id)
             .order("ts", desc=False)
             .range(start, start + PAGE - 1)

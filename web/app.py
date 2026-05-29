@@ -2592,6 +2592,7 @@ def create_app() -> Flask:
             flash("Este cliente no tiene mediciones cincominutal cargadas.", "warning")
             return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
 
+        import json as _json_app
         chp_params = get_cliente_chp_params(cliente_id)
 
         medicion_activa_id = session.get("medicion_activa_id") or mediciones[0]["id"]
@@ -2608,6 +2609,7 @@ def create_app() -> Flask:
             mediciones=mediciones,
             medicion_activa=medicion_activa,
             chp_params=chp_params,
+            motores_config_json=_json_app.dumps(chp_params.get("motores_config") or "null"),
             nav_active="modelado_chp",
         )
 

@@ -26,6 +26,104 @@
   let _abortCtrl       = null;
   let _primerasCarga   = true;
 
+  // ── Colores por posición de motor ─────────────────────────────────────────
+  const _MOTOR_COLORS = [
+    "rgba(42,98,168,0.85)",
+    "rgba(210,90,30,0.85)",
+    "rgba(50,155,75,0.85)",
+    "rgba(155,50,155,0.85)",
+  ];
+
+  // ── Gestión dinámica de motores ───────────────────────────────────────────
+  let _nextMotorId = 1;
+
+  function _colorMotor(idx) {
+    return _MOTOR_COLORS[idx % _MOTOR_COLORS.length];
+  }
+
+  function _actualizarTotalKw() {
+    const total = Array.from(document.querySelectorAll(".motor-cap-kw"))
+      .reduce((s, el) => s + (parseFloat(el.value) || 0), 0);
+    const el = $("cap-nominal-total");
+    if (el) el.textContent = total > 0
+      ? Math.round(total).toLocaleString("es-MX") : "—";
+  }
+
+  function _actualizarBtnAddMotor() {
+    const btn = $("btn-add-motor");
+    if (!btn) return;
+    btn.disabled = document.querySelectorAll(".motor-row").length >= 4;
+  }
+
+  function _crearMotorRow(motor, idx) {
+    const div = document.createElement("div");
+    div.className = "motor-row d-flex align-items-center gap-1 border rounded px-2 py-1";
+    div.dataset.motorId = motor.id;
+    div.style.background = "#f8f9fa";
+
+    const dot = document.createElement("span");
+    dot.style.cssText = `width:10px;height:10px;border-radius:50%;`
+      + `background:${_colorMotor(idx)};flex-shrink:0`;
+
+    const nombre = document.createElement("input");
+    nombre.type = "text";
+    nombre.className = "form-control form-control-sm motor-nombre";
+    nombre.style.width = "95px";
+    nombre.placeholder = `Motor ${motor.id}`;
+    nombre.value = motor.nombre || `Motor ${motor.id}`;
+
+    const cap = document.createElement("input");
+    cap.type = "number";
+    cap.className = "form-control form-control-sm motor-cap-kw";
+    cap.style.width = "80px";
+    cap.step = "10"; cap.min = "1";
+    cap.placeholder = "kW";
+    cap.value = motor.capacidad_kw > 0 ? motor.capacidad_kw : "";
+    cap.addEventListener("input", _actualizarTotalKw);
+
+    const lbl = document.createElement("span");
+    lbl.className = "text-muted";
+    lbl.style.fontSize = ".7rem";
+    lbl.textContent = "kW";
+
+    const btnRm = document.createElement("button");
+    btnRm.type = "button";
+    btnRm.className = "btn btn-sm btn-link text-danger p-0 ms-1";
+    btnRm.title = "Quitar motor";
+    btnRm.innerHTML = '<i class="bi bi-x-lg"></i>';
+    btnRm.addEventListener("click", () => {
+      // Al menos un motor debe quedar
+      if (document.querySelectorAll(".motor-row").length <= 1) return;
+      div.remove();
+      _actualizarTotalKw();
+      _actualizarBtnAddMotor();
+    });
+
+    div.append(dot, nombre, cap, lbl, btnRm);
+    return div;
+  }
+
+  function _inicializarMotores(config) {
+    const container = $("motores-config-container");
+    if (!container) return;
+    container.innerHTML = "";
+    _nextMotorId = 0;
+    config.forEach((m, i) => {
+      _nextMotorId = Math.max(_nextMotorId, m.id || i + 1);
+      container.appendChild(_crearMotorRow(m, i));
+    });
+    _actualizarTotalKw();
+    _actualizarBtnAddMotor();
+  }
+
+  function getMotoresConfig() {
+    return Array.from(document.querySelectorAll(".motor-row")).map((row, i) => ({
+      id:           i + 1,
+      nombre:       (row.querySelector(".motor-nombre").value.trim()) || `Motor ${i + 1}`,
+      capacidad_kw: parseFloat(row.querySelector(".motor-cap-kw").value) || 0,
+    })).filter(m => m.capacidad_kw > 0);
+  }
+
   // ── Helpers DOM ────────────────────────────────────────────────────────────
   const $      = id => document.getElementById(id);
   const _show  = id => $(id)?.classList.remove("d-none");
@@ -54,19 +152,19 @@
   // ── Leer parámetros CHP ────────────────────────────────────────────────────
   function getParams() {
     return {
-      num_motores:           parseInt($("param-num-motores").value, 10) || 1,
-      capacidad_nominal_kw:  parseFloat($("param-cap-nominal-input").value) || 0,
-      margen_kw:             parseFloat($("param-margen-kw").value)         || 0,
+      motores_config:        getMotoresConfig(),
+      margen_kw:             parseFloat($("param-margen-kw").value)    || 0,
       rendimiento_electrico: (parseFloat($("param-rendimiento").value) || 40) / 100,
-      costo_om_kwh:          parseFloat($("param-costo-om").value)          || 0.30,
+      costo_om_kwh:          parseFloat($("param-costo-om").value)     || 0.30,
       autoconsumo_pct:       (parseFloat($("param-autoconsumo").value) || 3) / 100,
     };
   }
 
   // ── Leer parámetros de cogeneración ────────────────────────────────────────
   function getCogenParams() {
-    const precioKw   = parseFloat($("param-inversion-usd").value)      || 1400;
-    const capNominal = parseFloat($("param-cap-nominal-input").value)   || 0;
+    const motores    = getMotoresConfig();
+    const capNominal = motores.reduce((s, m) => s + (m.capacidad_kw || 0), 0);
+    const precioKw   = parseFloat($("param-inversion-usd").value) || 1400;
     const inversion_usd = Math.round(capNominal * precioKw);
     const deduccionFiscal = $("param-deduccion-fiscal")?.checked ?? false;
     const aniosDeduccion  = parseInt($("param-anios-deduccion")?.value || "1", 10);
@@ -81,22 +179,36 @@
   }
 
   // ── Agregación horaria ─────────────────────────────────────────────────────
-  function agregarPorHora(ts_arr, demanda_arr, gen_arr) {
+  function agregarPorHora(ts_arr, demanda_arr, gen_arr, motores_data) {
     const buckets = {};
     ts_arr.forEach((t, i) => {
-      const hora = t.slice(0, 13); // "YYYY-MM-DDTHH"
-      if (!buckets[hora]) buckets[hora] = { dem: [], gen: [] };
+      const hora = t.slice(0, 13);
+      if (!buckets[hora]) {
+        buckets[hora] = { dem: [], gen: [] };
+        if (motores_data) motores_data.forEach(m => { buckets[hora][m.id] = []; });
+      }
       buckets[hora].dem.push(demanda_arr[i]);
       buckets[hora].gen.push(gen_arr[i]);
+      if (motores_data) {
+        motores_data.forEach(m => { buckets[hora][m.id].push(m.gen_kw[i] || 0); });
+      }
     });
     const ts_h = [], dem_h = [], gen_h = [];
+    const motor_h = {};
+    if (motores_data) motores_data.forEach(m => { motor_h[m.id] = []; });
     Object.keys(buckets).sort().forEach(hora => {
       const b = buckets[hora];
+      const n = b.dem.length;
       ts_h.push(hora + ":00:00");
-      dem_h.push(b.dem.reduce((a, v) => a + v, 0) / b.dem.length);
-      gen_h.push(b.gen.reduce((a, v) => a + v, 0) / b.gen.length);
+      dem_h.push(b.dem.reduce((a, v) => a + v, 0) / n);
+      gen_h.push(b.gen.reduce((a, v) => a + v, 0) / n);
+      if (motores_data) {
+        motores_data.forEach(m => {
+          motor_h[m.id].push(b[m.id].reduce((a, v) => a + v, 0) / n);
+        });
+      }
     });
-    return { ts_h, dem_h, gen_h };
+    return { ts_h, dem_h, gen_h, motor_h };
   }
 
   // ── fetchModelado ──────────────────────────────────────────────────────────
@@ -115,13 +227,14 @@
     const p = getParams();
     const qsObj = {
       medicion_id:           MEDICION_ID,
-      num_motores:           p.num_motores,
       margen_kw:             p.margen_kw,
       rendimiento_electrico: p.rendimiento_electrico,
       costo_om_kwh:          p.costo_om_kwh,
       autoconsumo_pct:       p.autoconsumo_pct,
     };
-    if (p.capacidad_nominal_kw > 0) qsObj.capacidad_nominal_kw = p.capacidad_nominal_kw;
+    if (p.motores_config && p.motores_config.length > 0) {
+      qsObj.motores_config = JSON.stringify(p.motores_config);
+    }
     const qs = new URLSearchParams(qsObj);
 
     const timeoutId = setTimeout(() => _abortCtrl.abort(), 60_000);
@@ -135,22 +248,16 @@
       .then(data => {
         if (!data.ok) throw new Error(data.error || "Error desconocido");
 
-        const capNom   = data.params.capacidad_nominal_kw;
-        const capInput = $("param-cap-nominal-input");
-
-        if (_primerasCarga || !capInput.value) {
-          capInput.value = Math.round(capNom);
-
-          // Precio gas desde cogen_defaults si viene y el input sigue en 0
-          if (data.cogen_defaults && data.cogen_defaults.precio_gas_gj) {
-            const inputGas = $("param-precio-gas");
-            if (inputGas && parseFloat(inputGas.value) === 0) {
-              inputGas.value = data.cogen_defaults.precio_gas_gj;
-            }
-          }
-
+        // Primera carga: sincronizar motores y precio gas con datos del servidor
+        if (_primerasCarga && data.params.motores_config) {
+          _inicializarMotores(data.params.motores_config);
         }
-
+        if (data.cogen_defaults && data.cogen_defaults.precio_gas_gj) {
+          const inputGas = $("param-precio-gas");
+          if (inputGas && parseFloat(inputGas.value) === 0) {
+            inputGas.value = data.cogen_defaults.precio_gas_gj;
+          }
+        }
         _primerasCarga = false;
 
         // KPIs modelado
@@ -188,31 +295,65 @@
       .then(data => {
         if (!data.ts || data.ts.length === 0) return;
 
-        // Agregar a horas para la gráfica
-        const { ts_h, dem_h, gen_h } = agregarPorHora(data.ts, data.demanda_kw, data.gen_neta_kw);
+        const motores = data.motores || [];
+        const { ts_h, dem_h, gen_h, motor_h } = agregarPorHora(
+          data.ts, data.demanda_kw, data.gen_neta_kw, motores
+        );
 
-        const chartData = {
-          datasets: [
-            {
-              label: "Demanda real (kW)",
-              data: ts_h.map((t, i) => ({ x: t, y: dem_h[i] })),
-              borderColor: "rgba(31,122,76,0.85)",
+        // Dataset demanda
+        const datasets = [
+          {
+            label: "Demanda real (kW)",
+            data: ts_h.map((t, i) => ({ x: t, y: dem_h[i] })),
+            borderColor: "rgba(31,122,76,0.85)",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.1,
+          },
+        ];
+
+        // Datasets por motor (si hay más de uno se muestra individual; si es uno, se usa como total)
+        if (motores.length > 1) {
+          motores.forEach((m, idx) => {
+            datasets.push({
+              label: m.nombre || `Motor ${m.id}`,
+              data: ts_h.map((t, i) => ({ x: t, y: (motor_h[m.id] || [])[i] || 0 })),
+              borderColor: _colorMotor(idx),
               backgroundColor: "transparent",
               borderWidth: 1,
               pointRadius: 0,
               tension: 0.1,
-            },
-            {
-              label: "Generación modelada (kW)",
-              data: ts_h.map((t, i) => ({ x: t, y: gen_h[i] })),
-              borderColor: "rgba(42,98,168,0.85)",
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              pointRadius: 0,
-              tension: 0.1,
-            },
-          ],
-        };
+            });
+          });
+        } else {
+          // Motor único: mostrar como "Generación modelada"
+          datasets.push({
+            label: (motores[0] && motores[0].nombre) || "Generación modelada (kW)",
+            data: ts_h.map((t, i) => ({ x: t, y: gen_h[i] })),
+            borderColor: _colorMotor(0),
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            pointRadius: 0,
+            tension: 0.1,
+          });
+        }
+
+        // Con >1 motor, añadir línea total en trazo grueso/discontinuo
+        if (motores.length > 1) {
+          datasets.push({
+            label: "Total generado (kW)",
+            data: ts_h.map((t, i) => ({ x: t, y: gen_h[i] })),
+            borderColor: "rgba(80,80,80,0.55)",
+            backgroundColor: "transparent",
+            borderWidth: 1.5,
+            borderDash: [4, 3],
+            pointRadius: 0,
+            tension: 0.1,
+          });
+        }
+
+        const chartData = { datasets };
 
         const chartOptions = {
           responsive: true,
@@ -259,6 +400,22 @@
         } else {
           chpChart.data = chartData;
           chpChart.update();
+        }
+
+        // Leyenda dinámica
+        const leyendaEl = $("chp-leyenda-curva");
+        if (leyendaEl) {
+          leyendaEl.innerHTML = "";
+          chartData.datasets.forEach(ds => {
+            const span = document.createElement("span");
+            const color = Array.isArray(ds.borderDash)
+              ? "rgba(80,80,80,0.55)" : ds.borderColor;
+            span.innerHTML = `<span style="display:inline-block;width:20px;height:2px;`
+              + `background:${color};vertical-align:middle;margin-right:4px`
+              + (Array.isArray(ds.borderDash) ? ";border-top:2px dashed " + color + ";height:0" : "")
+              + `"></span>${ds.label}`;
+            leyendaEl.appendChild(span);
+          });
         }
 
         // Subtítulo con rango de fechas
@@ -556,8 +713,8 @@
 
         // Sección Inversión y Retorno
         if (invMxn > 0) {
-          const capNom   = parseFloat($("param-cap-nominal-input").value) || 0;
-          const precioKw = parseFloat($("param-inversion-usd").value)    || 1400;
+          const capNom   = getMotoresConfig().reduce((s, m) => s + (m.capacidad_kw || 0), 0);
+          const precioKw = parseFloat($("param-inversion-usd").value) || 1400;
           const invUsd   = Math.round(capNom * precioKw);
 
           const capNomEl = $("chp-kpi-cap-nominal-val");
@@ -695,7 +852,7 @@
     fetch(`/clientes/${CLIENTE_ID}/dashboard/modelado-chp/params`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
-      body: JSON.stringify({ num_motores: p.num_motores, margen_kw: p.margen_kw }),
+      body: JSON.stringify({ motores_config: p.motores_config, margen_kw: p.margen_kw }),
     }).catch(() => {});
   }
 
@@ -703,6 +860,18 @@
   $("btn-recalcular").addEventListener("click", () => {
     guardarParams();
     fetchModelado();
+  });
+
+  $("btn-add-motor").addEventListener("click", () => {
+    const rows = document.querySelectorAll(".motor-row");
+    if (rows.length >= 4) return;
+    _nextMotorId += 1;
+    const idx = rows.length;
+    const motor = { id: _nextMotorId, nombre: `Motor ${_nextMotorId}`, capacidad_kw: 0 };
+    const container = $("motores-config-container");
+    if (container) container.appendChild(_crearMotorRow(motor, idx));
+    _actualizarTotalKw();
+    _actualizarBtnAddMotor();
   });
 
   $("param-deduccion-fiscal").addEventListener("change", function () {
@@ -719,6 +888,16 @@
   });
 
   // ── Carga inicial ──────────────────────────────────────────────────────────
+  // Inicializar motores desde datos guardados del cliente (o placeholder)
+  (() => {
+    let savedMotores = null;
+    try { savedMotores = JSON.parse(root.dataset.motoresConfig); } catch (_) {}
+    if (!savedMotores || !Array.isArray(savedMotores) || savedMotores.length === 0) {
+      savedMotores = [{ id: 1, nombre: "Motor 1", capacidad_kw: 0 }];
+    }
+    _inicializarMotores(savedMotores);
+  })();
+
   fetchModelado();
 
 })();
