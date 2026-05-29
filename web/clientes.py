@@ -2517,6 +2517,9 @@ def modelado_chp_cogen_data(cliente_id: int):
     # 2. Parámetros técnicos — del QS o defaults
     rendimiento_termico = request.args.get("rendimiento_termico", type=float, default=0.25)
     eficiencia_caldera  = request.args.get("eficiencia_caldera",  type=float, default=0.85)
+    inversion_usd_qs    = request.args.get("inversion_usd",       type=float, default=None)
+    deduccion_fiscal    = request.args.get("deduccion_fiscal", "0") == "1"
+    anios_deduccion     = max(1, min(5, request.args.get("anios_deduccion", type=int, default=1)))
 
     # Del modelado: rendimiento_electrico ya está guardado en la cabecera
     rendimiento_electrico = float(modelado.get("rendimiento_electrico") or 0.40)
@@ -2558,6 +2561,9 @@ def modelado_chp_cogen_data(cliente_id: int):
             tipo_cambio=tipo_cambio,
             factor_emision_elec=factor_emision_elec,
             factor_emision_gas=factor_emision_gas,
+            inversion_usd_override=inversion_usd_qs,
+            deduccion_fiscal=deduccion_fiscal,
+            anios_deduccion=anios_deduccion,
         )
     except Exception as _e:
         logger.exception("Error en modelado-chp/cogen-data: %s", _e)

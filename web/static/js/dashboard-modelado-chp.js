@@ -68,11 +68,15 @@
     const precioKw   = parseFloat($("param-inversion-usd").value)      || 1400;
     const capNominal = parseFloat($("param-cap-nominal-input").value)   || 0;
     const inversion_usd = Math.round(capNominal * precioKw);
+    const deduccionFiscal = $("param-deduccion-fiscal")?.checked ?? false;
+    const aniosDeduccion  = parseInt($("param-anios-deduccion")?.value || "1", 10);
     return {
       rendimiento_termico:  (parseFloat($("param-rend-termico").value)  || 45) / 100,
       precio_gas:            parseFloat($("param-precio-gas").value)    || null,
       inversion_usd:         inversion_usd > 0 ? inversion_usd : null,
       factor_utilizacion:    parseFloat($("param-factor-util").value)   || 0.9132,
+      deduccion_fiscal:      deduccionFiscal,
+      anios_deduccion:       aniosDeduccion,
     };
   }
 
@@ -510,9 +514,11 @@
       modelado_id:         modeladoId,
       rendimiento_termico: cp.rendimiento_termico,
     };
-    if (cp.precio_gas)        qsObj.precio_gas        = cp.precio_gas;
-    if (cp.inversion_usd)     qsObj.inversion_usd     = cp.inversion_usd;
+    if (cp.precio_gas)         qsObj.precio_gas         = cp.precio_gas;
+    if (cp.inversion_usd)      qsObj.inversion_usd      = cp.inversion_usd;
     if (cp.factor_utilizacion) qsObj.factor_utilizacion = cp.factor_utilizacion;
+    qsObj.deduccion_fiscal = cp.deduccion_fiscal ? 1 : 0;
+    qsObj.anios_deduccion  = cp.anios_deduccion;
 
     const qs = new URLSearchParams(qsObj);
 
@@ -607,6 +613,11 @@
   $("btn-recalcular").addEventListener("click", () => {
     guardarParams();
     fetchModelado();
+  });
+
+  $("param-deduccion-fiscal").addEventListener("change", function () {
+    const col = $("col-anios-deduccion");
+    if (col) col.style.display = this.checked ? "" : "none";
   });
 
   document.addEventListener("medicionActivaChanged", e => {

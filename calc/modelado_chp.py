@@ -178,6 +178,9 @@ def calcular_cogen_desde_modelado(
     tipo_cambio: Any,
     factor_emision_elec: Any = None,
     factor_emision_gas: Any = None,
+    inversion_usd_override: float | None = None,
+    deduccion_fiscal: bool = False,
+    anios_deduccion: int = 1,
 ) -> Any:
     """Adapta los KPIs del modelado CHP como inputs del motor de cogeneración.
 
@@ -188,8 +191,15 @@ def calcular_cogen_desde_modelado(
     calcular_cogen() del dashboard estándar.
 
     No modifica calc/cogen.py ni sus interfaces.
+
+    Parámetros opcionales:
+    - inversion_usd_override: si se proporciona, sobreescribe r.inversion_usd
+      y r.inversion_mxn tras el cálculo (precio USD/kW del usuario).
+    - deduccion_fiscal: si True aplica ISR 30% sobre inversion_mxn repartido
+      en anios_deduccion, sobreescribiendo r.beneficio_fiscal_anio_1_mxn.
+    - anios_deduccion: número de años (1-5) en que se reparte la deducción.
     """
-    from decimal import Decimal as _D
+    from decimal import Decimal as _D, ROUND_HALF_UP
     from calc.cogen import calcular_cogen
     from models.cogen_result import CoGenParams
 
@@ -199,7 +209,7 @@ def calcular_cogen_desde_modelado(
         rendimiento_termico=_D(str(rendimiento_termico)),
         eficiencia_caldera=_D(str(eficiencia_caldera)),
     )
-    return calcular_cogen(
+    r = calcular_cogen(
         cfe_invoices=cfe_invoices,
         gas_invoices=gas_invoices,
         params=params,
@@ -207,6 +217,29 @@ def calcular_cogen_desde_modelado(
         factor_emision_elec=_D(str(factor_emision_elec)) if factor_emision_elec is not None else None,
         factor_emision_gas=_D(str(factor_emision_gas)) if factor_emision_gas is not None else None,
     )
+
+    # Sobreescribir inversión si el usuario proporcionó precio USD/kW manual
+    if inversion_usd_override is not None and inversion_usd_override > 0:
+        r.inversion_usd = _D(str(round(inversion_usd_override, 2)))
+        r.inversion_mxn = (r.inversion_usd * _D(str(tipo_cambio))).quantize(
+            _D("0.01"), rounding=ROUND_HALF_UP
+        )
+
+    # Aplicar deducción fiscal ISR 30% repartida en anios_deduccion
+    _anos = max(1, int(anios_deduccion))
+    if deduccion_fiscal and r.inversion_mxn is not None and r.inversion_mxn > 0:
+        beneficio = (r.inversion_mxn * _D("0.30") / _D(str(_anos))).quantize(
+            _D("0.01"), rounding=ROUND_HALF_UP
+        )
+        r.beneficio_fiscal_anio_1_mxn    = beneficio
+        r.flujo_anio_1_con_beneficio_mxn = (r.ebitda_anual_mxn + beneficio).quantize(
+            _D("0.01"), rounding=ROUND_HALF_UP
+        )
+    else:
+        r.beneficio_fiscal_anio_1_mxn    = None
+        r.flujo_anio_1_con_beneficio_mxn = None
+
+    return r
 
 
 def _resultado_vacio() -> dict[str, Any]:
