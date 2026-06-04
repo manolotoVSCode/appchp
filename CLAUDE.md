@@ -311,9 +311,9 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: fix Modelado CHP — distribución proporcional entre
-motores, límite 8000h estricto con precisión decimal, versionado cache
-(MODELADO_CHP_VERSION="2"), migración calc_version en modelado_chp.
+Último tema resuelto: feat Modelado CHP — Excel maestro con fórmulas nativas,
+5 hojas (Parámetros, KPIs Económicos, Tabla Mensual, Flujo 15 Años, Curva
+Mensual), modelo financiero vivo, endpoint /excel, botón en dashboard.
 Pendiente: ejecutar migration 202606_modelado_chp_calc_version.sql en Supabase.
 
 ### Bugs App

@@ -2778,3 +2778,189 @@ def modelado_chp_cogen_data(cliente_id: int):
         "flujo_anual_15_fiscal": flujo_anual_15_fiscal,
         "flujo_acum_15_fiscal": flujo_acum_15_fiscal,
     })
+
+
+@clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/excel")
+def modelado_chp_excel(cliente_id: int):
+    """Genera y descarga el Excel maestro con fórmulas nativas del Modelado CHP.
+
+    Reutiliza exactamente la misma lógica de cálculo de /cogen-data.
+    Solo accesible para admin y master_admin.
+    """
+    from flask import make_response
+    from io import BytesIO
+    from decimal import Decimal as _D
+    from calc.modelado_chp import calcular_cogen_desde_modelado
+    from calc.cogen import calcular_payback_decimal
+    from storage.repository import list_configuracion, get_modelado_chp_curva
+    from reports.excel_modelado_chp import generar_excel_modelado_chp
+
+    user = _get_current_user()
+    if not user:
+        return jsonify({"error": "No autenticado"}), 401
+    if user.get("rol") not in ("master_admin", "admin"):
+        return jsonify({"error": "No autorizado"}), 403
+
+    modelado_id = request.args.get("modelado_id", type=int)
+    if not modelado_id:
+        return jsonify({"error": "modelado_id es obligatorio"}), 422
+
+    modelado = get_modelado_chp_by_id(modelado_id)
+    if not modelado or modelado.get("cliente_id") != cliente_id:
+        return jsonify({"error": "Modelado no encontrado"}), 404
+
+    # Parámetros técnicos (mismos defaults que cogen-data)
+    rendimiento_termico   = request.args.get("rendimiento_termico",  type=float, default=0.25)
+    eficiencia_caldera    = request.args.get("eficiencia_caldera",   type=float, default=0.85)
+    inversion_usd_qs      = request.args.get("inversion_usd",        type=float, default=None)
+    deduccion_fiscal      = request.args.get("deduccion_fiscal", "0") == "1"
+    anios_deduccion       = max(1, min(5, request.args.get("anios_deduccion", type=int, default=1)))
+    rendimiento_electrico = float(modelado.get("rendimiento_electrico") or 0.40)
+
+    kpis_modelado = {
+        "cobertura_pct":         float(modelado.get("cobertura_pct") or 0),
+        "gen_neta_anual_kwh":    float(modelado.get("gen_neta_anual_kwh") or 0),
+        "gen_bruta_anual_kwh":   float(modelado.get("gen_bruta_anual_kwh") or 0),
+        "horas_anuales_motor":   float(modelado.get("horas_anuales_motor") or 0),
+        "capacidad_promedio_kw": float(modelado.get("capacidad_promedio_kw") or 0),
+    }
+
+    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
+    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
+
+    if not cfe_invoices:
+        return jsonify({"error": "Sin facturas CFE disponibles"}), 422
+
+    cfg = {row["clave"]: row["valor"] for row in list_configuracion()}
+    tc_str       = cfg.get("tipo_cambio_mxn_usd")
+    fe_elec_str  = cfg.get("factor_emision_electricidad_kg_co2_kwh")
+    tipo_cambio  = _D(tc_str) if tc_str else _D("17.50")
+    factor_emision_elec = float(fe_elec_str) if fe_elec_str else None
+
+    try:
+        r = calcular_cogen_desde_modelado(
+            kpis_modelado=kpis_modelado,
+            rendimiento_electrico=rendimiento_electrico,
+            rendimiento_termico=rendimiento_termico,
+            eficiencia_caldera=eficiencia_caldera,
+            cfe_invoices=cfe_invoices,
+            gas_invoices=gas_invoices,
+            tipo_cambio=tipo_cambio,
+            factor_emision_elec=_D(str(factor_emision_elec)) if factor_emision_elec else None,
+            inversion_usd_override=inversion_usd_qs,
+            deduccion_fiscal=deduccion_fiscal,
+            anios_deduccion=anios_deduccion,
+        )
+    except Exception as _e:
+        logger.exception("Error generando Excel modelado-chp: %s", _e)
+        return jsonify({"error": str(_e)}), 500
+
+    # CELs (opcional, para CELs fijo en hoja KPIs)
+    cels_mwh_anual = None
+    try:
+        from calc.cels import calcular_cels as _calcular_cels
+        from storage.repository import get_cliente_con_conteos as _gcc
+        cliente = _gcc(cliente_id)
+        calor_recuperado_anual = sum(m.calor_recuperado_gj for m in r.meses)
+        cels_resultado = _calcular_cels(
+            kwh_cubiertos_anual=r.kwh_cubiertos_anual,
+            gj_gas_cogen_pci_anual=r.gj_gas_cogen_pci_anual,
+            calor_recuperado_gj_anual=calor_recuperado_anual,
+            capacidad_nominal_kw=r.capacidad_nominal_kw,
+            medio_termico=cliente.get("medio_termico") if cliente else None,
+            nivel_tension_kv=cliente.get("nivel_tension_kv") if cliente else None,
+            altitud_msnm=cliente.get("altitud_msnm") if cliente else None,
+            tipo_motor=cliente.get("tipo_motor") if cliente else None,
+            medio_termico_vapor_pct=cliente.get("medio_termico_vapor_pct") if cliente else None,
+        )
+        if cels_resultado and cels_resultado.cels_mwh_anual is not None:
+            cels_mwh_anual = float(cels_resultado.cels_mwh_anual)
+    except Exception:
+        pass
+
+    # Precio gas promedio ponderado de los meses calculados
+    total_gj   = sum(float(m.gj_gas_cogen)      for m in r.meses)
+    total_cost = sum(float(m.costo_gas_cogen_mxn) for m in r.meses)
+    precio_gas_gj = (total_cost / total_gj) if total_gj > 0 else 0.0
+
+    # Precio USD/kW (calculado desde inversión total si se pasó override)
+    motores_config_raw = modelado.get("motores_config") or []
+    capacidad_total_kw = sum(float(m.get("capacidad_kw", 0)) for m in motores_config_raw)
+    if inversion_usd_qs and inversion_usd_qs > 0 and capacidad_total_kw > 0:
+        precio_kw_usd = inversion_usd_qs / capacidad_total_kw
+    else:
+        precio_kw_usd = 1400.0  # default _USD_POR_KW
+
+    # Costo promedio CFE ponderado sobre r.meses
+    sum_ah = sum(float(m.ahorro_electricidad_mxn) for m in r.meses)
+    sum_cub = sum(float(m.kwh_cubiertos) for m in r.meses)
+    kwh_costo_promedio = sum_ah / sum_cub if sum_cub > 0 else 0.0
+
+    # Parámetros para hoja "Parámetros"
+    params_excel = {
+        "cobertura_pct":              kpis_modelado["cobertura_pct"],
+        "rendimiento_electrico":      rendimiento_electrico,
+        "rendimiento_termico":        rendimiento_termico,
+        "eficiencia_caldera":         eficiencia_caldera,
+        "precio_gas_gj":              precio_gas_gj,
+        "costo_om_kwh":               0.30,
+        "tipo_cambio":                float(tipo_cambio),
+        "precio_kw_usd":              precio_kw_usd,
+        "deduccion_fiscal":           1 if deduccion_fiscal else 0,
+        "anios_deduccion":            anios_deduccion,
+        "consumo_cliente_anual_kwh":  float(r.kwh_total_anual) if r.kwh_total_anual else 0.0,
+        "kwh_cubiertos_anual":        float(r.kwh_cubiertos_anual),
+        "gen_bruta_anual_kwh":        kpis_modelado["gen_bruta_anual_kwh"],
+        "consumo_gas_anual_gj":       float(r.gj_gas_cogen_anual),
+        "horas_anuales_motor":        kpis_modelado["horas_anuales_motor"],
+        "kwh_costo_promedio_cfe":     kwh_costo_promedio,
+    }
+
+    # Motores config enriquecido con horas del modelado
+    horas_por_motor = modelado.get("horas_por_motor") or {}
+    motores_enrich = []
+    for m in motores_config_raw:
+        mid = str(m.get("id", ""))
+        horas = float(horas_por_motor.get(mid, kpis_modelado["horas_anuales_motor"]))
+        motores_enrich.append({
+            "nombre":       m.get("nombre", f"Motor {mid}"),
+            "capacidad_kw": float(m.get("capacidad_kw", 0)),
+            "horas_anuales": horas,
+        })
+
+    # Curva horaria (opcional — puede ser lenta para archivos grandes)
+    curva_raw = None
+    try:
+        curva_raw = get_modelado_chp_curva(modelado_id)
+    except Exception:
+        pass
+
+    # Generar Excel
+    excel_bytes = generar_excel_modelado_chp(
+        params=params_excel,
+        r=r,
+        motores_config=motores_enrich,
+        cliente_nombre=modelado.get("cliente_nombre") or str(cliente_id),
+        curva=curva_raw,
+        cels_mwh_anual=cels_mwh_anual,
+        factor_emision_elec=factor_emision_elec,
+    )
+
+    # Nombre de archivo descriptivo
+    from storage.repository import get_cliente_con_conteos as _gcc2
+    try:
+        cliente_info = _gcc2(cliente_id)
+        nombre_cliente = (cliente_info.get("nombre") or str(cliente_id)).replace(" ", "_")
+    except Exception:
+        nombre_cliente = str(cliente_id)
+
+    mes_label = modelado.get("mes_label") or ""
+    anio_label = str(modelado.get("anio") or "")
+    filename = f"ModeladoCHP_{nombre_cliente}_{mes_label}_{anio_label}.xlsx".strip("_")
+
+    resp = make_response(excel_bytes)
+    resp.headers["Content-Type"] = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp

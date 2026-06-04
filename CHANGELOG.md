@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.68.0] — 2026-06-03
+
+### Añadido — Modelado CHP: Excel maestro con fórmulas nativas
+
+- `reports/excel_modelado_chp.py` (nuevo): genera un `.xlsx` con 5 hojas.
+  - **Parámetros**: inputs editables (fondo amarillo) + valores fijos de simulación (fondo gris) + tabla de motores. Celdas B4–B20 como referencias canónicas.
+  - **KPIs Económicos**: todas las celdas calculadas son fórmulas Excel que referencian `'Parámetros'!$B$N` — inversión, payback, ahorro eléctrico, caldera, gas, O&M, CO₂ y CELs.
+  - **Tabla Mensual**: datos históricos de `r.meses` con fila TOTAL usando `=SUM()`.
+  - **Flujo 15 Años**: año 0 fijo (inversión negativa), años 1-15 con fórmulas que referencian la celda de ahorro neto de KPIs Económicos.
+  - **Curva Mensual**: datos horarios de la simulación cincominutal (agregados por hora).
+- `web/clientes.py`: endpoint `GET /clientes/<id>/dashboard/modelado-chp/excel` — reutiliza exactamente la lógica de `/cogen-data`; requiere rol admin o master_admin; retorna descarga directa.
+- `web/templates/dashboard_modelado_chp.html`: botón "Descargar Excel" en cabecera, visible solo para admin/master_admin.
+- `web/static/js/dashboard-modelado-chp.js`: función `actualizarLinkExcel()` — construye la URL con parámetros actuales y se llama al final de `fetchCogenData()`.
+- `tests/reports/test_excel_modelado_chp.py` (nuevo): 23 tests TDD que cubren estructura de hojas, fórmulas, referencias canónicas a Parámetros, totales SUM, flujo y curva.
+
 ## [2.67.4] — 2026-05-29
 
 ### Corregido — Modelado CHP: distribución proporcional + límite 8 000 h estricto + versionado cache

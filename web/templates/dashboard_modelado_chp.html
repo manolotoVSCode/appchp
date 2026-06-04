@@ -58,10 +58,17 @@
 <div class="d-flex align-items-center mb-4 gap-3">
   <img src="{{ logo_url }}" alt="{{ cliente_nombre }}"
        style="height:52px;max-width:160px;object-fit:contain;">
-  <div>
+  <div class="flex-grow-1">
     <div class="fw-bold fs-5" style="color:var(--color-primary-dark)">{{ cliente_nombre }}</div>
     <div class="text-muted small">Modelado CHP</div>
   </div>
+  {% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
+  <a href="#" id="btn-excel-modelado"
+     class="btn btn-sm btn-outline-success ms-2"
+     title="Descargar Excel maestro con fórmulas">
+    <i class="bi bi-file-earmark-excel"></i> Descargar Excel
+  </a>
+  {% endif %}
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}

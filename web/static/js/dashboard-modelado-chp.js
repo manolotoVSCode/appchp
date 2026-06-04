@@ -837,12 +837,29 @@
               .toLocaleString("es-MX", {maximumFractionDigits:0}) + " kW";
         }
 
+        // Actualizar link del botón Descargar Excel con los parámetros actuales
+        actualizarLinkExcel(_modeladoId, getCogenParams());
+
       })
       .catch(err => {
         $("chp-cogen-error-msg").textContent = `Error al calcular cogeneración: ${err.message}`;
         _show("chp-cogen-error-banner");
       })
       .finally(() => _hide("chp-cogen-spinner"));
+  }
+
+  // ── Excel maestro ──────────────────────────────────────────────────────────
+  function actualizarLinkExcel(modeladoId, p) {
+    const btn = document.getElementById("btn-excel-modelado");
+    if (!btn) return;
+    btn.href =
+      `/clientes/${CLIENTE_ID}/dashboard/modelado-chp/excel`
+      + `?modelado_id=${modeladoId}`
+      + `&rendimiento_termico=${p.rendimiento_termico}`
+      + (p.precio_gas    ? `&precio_gas_gj=${p.precio_gas}`         : "")
+      + (p.inversion_usd ? `&inversion_usd=${p.inversion_usd}`      : "")
+      + `&deduccion_fiscal=${p.deduccion_fiscal ? 1 : 0}`
+      + `&anios_deduccion=${p.anios_deduccion}`;
   }
 
   // ── guardarParams (fire and forget) ───────────────────────────────────────
