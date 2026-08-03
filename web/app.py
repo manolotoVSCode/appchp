@@ -2276,13 +2276,20 @@ def create_app() -> Flask:
                     "nombre": nombre_ed,
                     "apellido": apellido_ed,
                 }).eq("id", user_id).execute()
-                if rol == "usuario_normal":
-                    from storage.repository import set_clientes_de_usuario as _scdu
-                    _scdu(user_id, cliente_ids)
                 flash(f"Usuario {target['email']} actualizado correctamente.", "success")
             except Exception as exc:
                 logger.error("Error actualizando usuario %s: %s", user_id, exc)
                 flash(f"Error actualizando usuario: {exc}", "danger")
+                return redirect(url_for("admin_usuarios"))
+
+            if rol == "usuario_normal":
+                try:
+                    from storage.repository import set_clientes_de_usuario as _scdu
+                    _scdu(user_id, cliente_ids)
+                except Exception as exc:
+                    logger.error("Error actualizando clientes de usuario %s: %s", user_id, exc)
+                    flash("Los datos del usuario se guardaron, pero hubo un error actualizando los clientes asignados.", "warning")
+
             return redirect(url_for("admin_usuarios"))
 
         clientes_list = get_all_clientes_con_conteos()
