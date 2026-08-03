@@ -311,8 +311,9 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: fix modal "Crear usuario" con checkboxes multi-cliente
-(mismo patrón que editar_usuario). POST /admin/usuarios/crear lee cliente_ids.
+Último tema resuelto: fix redirect post-login usuario_normal — usa min(clientes_ids)
+como destino por defecto; fallback a _empresa_id si lista vacía; debug log en
+set_user_session.
 Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase.
 
 ### Bugs App

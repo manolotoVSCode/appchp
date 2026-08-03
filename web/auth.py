@@ -65,6 +65,11 @@ def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
     else:
         session["_clientes_ids"] = []
 
+    logger.debug(
+        "set_user_session: clientes_ids=%s empresa_id=%s",
+        session.get("_clientes_ids"), session.get("_empresa_id"),
+    )
+
 
 def clear_user_session() -> None:
     """Limpia completamente la sesión Flask del usuario, preservando el token CSRF."""
@@ -189,11 +194,17 @@ def login():
             if error is None:
                 user = get_current_user()
                 if user and user["rol"] == ROL_USUARIO_NORMAL:
-                    clientes_ids = user.get("clientes_ids", [])
+                    clientes_ids = session.get("_clientes_ids", [])
+                    if not clientes_ids:
+                        empresa_id = session.get("_empresa_id")
+                        if empresa_id:
+                            clientes_ids = [empresa_id]
                     if clientes_ids:
+                        cliente_default = min(clientes_ids)
+                        session["_empresa_id"] = cliente_default
                         return redirect(url_for(
                             "cliente_dashboard_contabilidad",
-                            cliente_id=clientes_ids[0],
+                            cliente_id=cliente_default,
                         ))
                     return render_template(
                         "auth/login.html",

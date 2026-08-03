@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.69.2] — 2026-08-03
+
+### Corregido — Redirect post-login usuario_normal con múltiples clientes
+
+- `web/auth.py` — `login()`: redirect post-login para `usuario_normal` usa `min(clientes_ids)` como destino por defecto (en vez del primero de la lista); añade fallback a `_empresa_id` de sesión si `_clientes_ids` está vacío; sincroniza `session["_empresa_id"]` al valor elegido antes de redirigir.
+- `web/auth.py` — `set_user_session()`: añade `logger.debug` con `clientes_ids` y `empresa_id` guardados en sesión para diagnóstico.
+
 ## [2.69.1] — 2026-08-03
 
 ### Corregido — Modal "Crear usuario" soporta asignación múltiple de clientes
