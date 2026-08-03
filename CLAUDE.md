@@ -311,10 +311,9 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.70.1 — auto-carga medición cincominutal en ambos
-dashboards (contabilidad y cogeneración): session["medicion_activa_id"] se
-inicializa en ambas rutas; sidebar radio usa loop.first como fallback checked;
-JS cogeneración dispara change en radio ya marcado o selecciona el primero.
+Último tema resuelto: v2.71.0 — usuario_normal accede a ficha de cliente en
+modo solo lectura: botón info-circle en sidebar, ficha sin controles de edición
+(Editar, Borrar cliente, + Nuevo contrato, Borrar contrato, PPA accordion).
 Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase.
 
 ### Bugs App

@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.71.0] — 2026-08-03
+
+### Añadido — usuario_normal puede acceder a ficha de cliente en modo solo lectura
+
+- `web/templates/clientes/_base.html` — sidebar `usuario_normal`: cada cliente ahora aparece en un `<div class="d-flex">` con el link al dashboard (flex-grow-1) y un botón `<i class="bi bi-info-circle">` a la ficha; el botón de ficha llama `activarCliente(id, null)` y deja navegar (`return true`).
+- `web/templates/clientes/ficha.html` — acceso de `usuario_normal` permitido (el `before_request` ya valida `_clientes_ids`); controles de edición y borrado envueltos en `{% if current_user_data.rol != 'usuario_normal' %}`:
+  - "Acciones cliente" (Editar ficha + Borrar cliente)
+  - "+ Nuevo contrato" en la cabecera de Contratos
+  - "Borrar" en cada fila de contrato (el botón "Detalles" queda visible)
+  - "Crear primer contrato" en el estado vacío de contratos
+  - Acordeón "Suministro Calificado (PPA)" completo (solo formularios de edición, sin valor informativo solo lectura)
+  - Sección "Configuración de gas (proyección)" y mediciones ya estaban protegidas con `rol in ('master_admin', 'admin')`.
+
 ## [2.70.1] — 2026-08-03
 
 ### Añadido — Auto-carga de medición cincominutal al entrar a dashboards contabilidad y cogeneración

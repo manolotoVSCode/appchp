@@ -260,6 +260,7 @@
 {% endif %}
 
 <!-- Suministro Calificado (PPA) — Accordion -->
+{% if current_user_data and current_user_data.rol != 'usuario_normal' %}
 <div class="mt-4">
   <div class="accordion" id="acordeonPPA">
     <div class="accordion-item shadow-sm">
@@ -385,6 +386,7 @@
     </div>
   </div>
 </div>
+{% endif %}{# fin bloque PPA usuario_normal #}
 
 {% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
 <!-- Configuración de gas (proyección) — solo admin/master_admin -->
@@ -418,18 +420,22 @@
 {% endif %}
 
 <!-- Acciones cliente -->
+{% if current_user_data and current_user_data.rol != 'usuario_normal' %}
 <div class="d-flex gap-2 mt-4">
   <a href="{{ url_for('clientes.editar', cliente_id=cliente.id) }}" class="btn btn-outline-primary btn-sm">Editar ficha</a>
   <button class="btn btn-outline-danger btn-sm ms-auto"
           data-bs-toggle="modal" data-bs-target="#modalBorrarCliente">Borrar cliente</button>
 </div>
+{% endif %}
 
 <!-- Sección contratos -->
 <div class="mt-5">
   <div class="d-flex align-items-center justify-content-between mb-2">
     <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Contratos</h5>
+    {% if current_user_data and current_user_data.rol != 'usuario_normal' %}
     <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}"
        class="btn btn-sm btn-primary">+ Nuevo contrato</a>
+    {% endif %}
   </div>
 
   {% if contratos %}
@@ -462,10 +468,12 @@
           <td class="text-end">
             <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=c.id) }}"
                class="btn btn-outline-secondary btn-sm">Detalles</a>
+            {% if current_user_data and current_user_data.rol != 'usuario_normal' %}
             <button class="btn btn-outline-danger btn-sm ms-1"
                     data-bs-toggle="modal" data-bs-target="#modalBorrarContrato"
                     data-contrato-id="{{ c.id }}"
                     data-contrato-nombre="{{ c.nombre }}">Borrar</button>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -476,7 +484,9 @@
   <div class="card shadow-sm">
     <div class="card-body text-center text-muted py-4">
       Sin contratos registrados.
+      {% if current_user_data and current_user_data.rol != 'usuario_normal' %}
       <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}">Crear primer contrato</a>
+      {% endif %}
     </div>
   </div>
   {% endif %}
