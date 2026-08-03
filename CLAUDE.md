@@ -311,9 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.69.3 — sincronización de cliente_activo_id para
-usuario_normal multi-cliente: session en login, _verificar_cliente_activo bypass
-para clientes asignados, endpoint POST /clientes/<id>/activar, sidebar onclick JS.
+Último tema resuelto: v2.70.0 — auto-selección primera medición cincominutal
+en dashboard cogeneración: session["medicion_activa_id"] inicializada en ruta
+cliente_dashboard_cogeneracion si no hay ninguna activa; JS auto-check primer
+radio .sidebar-medicion-radio si ninguno marcado al cargar el IIFE.
 Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase.
 
 ### Bugs App

@@ -80,20 +80,32 @@ def obtener_logo_cliente(cliente: dict) -> str:
 def _verificar_cliente_activo(cliente_id: int):
     """Verifica que cliente_id coincida con la sesión activa y exista en BD.
 
+    Para usuario_normal: si el cliente_id está en su lista asignada,
+    actualiza cliente_activo_id en sesión y continúa sin flash de error.
+
     Retorna (cliente_dict, None) si todo está bien.
     Retorna (None, response) si hay error; el caller debe retornar esa response.
     """
     from flask import flash
     from storage.repository import get_cliente_con_conteos
+    from web.auth import get_current_user as _gcu
 
     activo_id = session.get("cliente_activo_id")
     if activo_id != cliente_id:
-        flash(
-            "El dashboard solicitado no corresponde al cliente activo. "
-            "Selecciona el cliente desde el listado.",
-            "warning",
-        )
-        return None, redirect(url_for("clientes.listado"))
+        current_user_data = _gcu()
+        clientes_ids = session.get("_clientes_ids", [])
+        if (current_user_data
+                and current_user_data.get("rol") == "usuario_normal"
+                and cliente_id in clientes_ids):
+            session["cliente_activo_id"] = cliente_id
+            session["_empresa_id"] = cliente_id
+        else:
+            flash(
+                "El dashboard solicitado no corresponde al cliente activo. "
+                "Selecciona el cliente desde el listado.",
+                "warning",
+            )
+            return None, redirect(url_for("clientes.listado"))
 
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:
@@ -829,6 +841,10 @@ def create_app() -> Flask:
 
         periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices, ppa_invoices if ppa_invoices else None)
         suministrador_ppa = facturas_ppa[0]["suministrador"] if facturas_ppa else ""
+
+        mediciones_cogen = get_mediciones_por_cliente(cliente_id)
+        if mediciones_cogen and not session.get("medicion_activa_id"):
+            session["medicion_activa_id"] = mediciones_cogen[0]["id"]
 
         return render_template(
             "dashboard_cogeneracion.html",

@@ -1031,4 +1031,14 @@
   // ── Carga inicial ─────────────────────────────────────────────────────────
   fetchData(false);
 
+  // Auto-seleccionar primera medición cincominutal si existe
+  const radios = document.querySelectorAll('.sidebar-medicion-radio');
+  if (radios.length > 0) {
+    const checked = document.querySelector('.sidebar-medicion-radio:checked');
+    if (!checked) {
+      radios[0].checked = true;
+      radios[0].dispatchEvent(new Event('change'));
+    }
+  }
+
 })();

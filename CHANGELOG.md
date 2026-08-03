@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.70.0] — 2026-08-03
+
+### Añadido — Auto-selección de primera medición cincominutal en dashboard de cogeneración
+
+- `web/app.py` — `cliente_dashboard_cogeneracion`: llama `get_mediciones_por_cliente(cliente_id)` y guarda `session["medicion_activa_id"]` con el id de la primera medición disponible si la sesión no tiene ninguna activa. No modifica el dashboard de contabilidad ni el de Modelado CHP.
+- `web/static/js/dashboard-cogeneracion.js` — al final del IIFE, después de `fetchData(false)`, añade bloque que selecciona el primer radio `.sidebar-medicion-radio` si ninguno está marcado y dispara su evento `change`. Solo actúa si no hay ninguno previamente marcado.
+
 ## [2.69.3] — 2026-08-03
 
 ### Corregido — Sincronización de cliente_activo_id para usuario_normal multi-cliente
