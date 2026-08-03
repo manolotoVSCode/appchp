@@ -311,10 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: feat Modelado CHP — Excel maestro con fórmulas nativas,
-5 hojas (Parámetros, KPIs Económicos, Tabla Mensual, Flujo 15 Años, Curva
-Mensual), modelo financiero vivo, endpoint /excel, botón en dashboard.
-Pendiente: ejecutar migration 202606_modelado_chp_calc_version.sql en Supabase.
+Último tema resuelto: feat asignación múltiple de clientes a usuario_normal —
+tabla usuario_clientes, sesión con clientes_ids, sidebar dinámico, panel
+edición master_admin con checkboxes.
+Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout

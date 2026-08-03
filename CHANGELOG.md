@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.69.0] — 2026-08-03
+
+### Añadido — Asignación múltiple de clientes a usuario_normal
+
+- `storage/migrations/202606_usuario_clientes.sql`: tabla `usuario_clientes` (PK user_id + cliente_id, FK a auth.users y clientes, dos índices).
+- `storage/repository.py`:
+  - `get_clientes_de_usuario(user_id)`: retorna clientes desde `usuario_clientes`; fallback a `empresa_id` de `user_profiles` para compatibilidad legacy.
+  - `set_clientes_de_usuario(user_id, cliente_ids)`: reemplaza asignación completa (delete + insert).
+  - `get_usuarios_de_cliente(cliente_id)`: lista de usuarios asignados a un cliente.
+- `web/auth_permissions.py`: `usuario_puede_ver_empresa` y `filtrar_empresas_para_usuario` leen `clientes_ids` del dict de usuario; fallback a `empresa_id` si la lista está vacía.
+- `web/auth.py`: `set_user_session()` carga y almacena `_clientes_ids` en sesión Flask para `usuario_normal`; `get_current_user()` incluye `clientes_ids` en el dict retornado; redirect post-login usa `clientes_ids[0]`.
+- `web/app.py`:
+  - `_inject_globals` context_processor inyecta `clientes_usuario` (list[dict]) para `usuario_normal`.
+  - `admin_usuarios_editar`: GET pasa `clientes_asignados_ids`; POST lee `cliente_ids` (checkboxes multi), elimina validación de empresa_id obligatoria, llama a `set_clientes_de_usuario`, mantiene `empresa_id` legacy cuando hay exactamente 1 cliente.
+- `web/templates/admin/editar_usuario.html`: sección "Clientes asignados" con checkboxes scrollables (max-height 300px), reemplaza select de empresa única.
+- `web/templates/clientes/_base.html`: sidebar `usuario_normal` muestra lista dinámica de todos sus clientes asignados con enlace directo al dashboard.
+- `tests/test_usuario_clientes.py` (nuevo): 16 tests cubriendo repositorio, permisos, acceso web y renderizado de template.
+
 ## [2.68.0] — 2026-06-03
 
 ### Añadido — Modelado CHP: Excel maestro con fórmulas nativas
