@@ -311,9 +311,9 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: fix redirect post-login usuario_normal — usa min(clientes_ids)
-como destino por defecto; fallback a _empresa_id si lista vacía; debug log en
-set_user_session.
+Último tema resuelto: v2.69.3 — sincronización de cliente_activo_id para
+usuario_normal multi-cliente: session en login, _verificar_cliente_activo bypass
+para clientes asignados, endpoint POST /clientes/<id>/activar, sidebar onclick JS.
 Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase.
 
 ### Bugs App

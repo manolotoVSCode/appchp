@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.69.3] — 2026-08-03
+
+### Corregido — Sincronización de cliente_activo_id para usuario_normal multi-cliente
+
+- `web/auth.py` — `login()`: guarda `session["cliente_activo_id"]` al redirigir a `usuario_normal` post-login.
+- `web/app.py` — `_verificar_cliente_activo()`: si el usuario es `usuario_normal` y el `cliente_id` solicitado está en sus `_clientes_ids`, actualiza `cliente_activo_id` en sesión en lugar de rechazar con flash; sin bypass de la verificación de perfil en BD.
+- `web/clientes.py` — POST `/clientes/<cliente_id>/activar`: nuevo endpoint que actualiza `cliente_activo_id` y `_empresa_id` en sesión; retorna JSON `{"ok": true}`; bloquea si el rol es `usuario_normal` y el cliente no está en sus clientes asignados.
+- `web/templates/clientes/_base.html` — sidebar `usuario_normal`: links de clientes usan `onclick="activarCliente(...)"` que llama al endpoint antes de navegar; función JS `activarCliente()` usa CSRF token del meta tag.
+
 ## [2.69.2] — 2026-08-03
 
 ### Corregido — Redirect post-login usuario_normal con múltiples clientes

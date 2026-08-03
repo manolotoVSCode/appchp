@@ -2964,3 +2964,18 @@ def modelado_chp_excel(cliente_id: int):
     )
     resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
+
+
+@clientes_bp.route("/<int:cliente_id>/activar", methods=["POST"])
+def activar_cliente(cliente_id: int):
+    """Actualiza cliente_activo_id en sesión para usuario_normal multi-cliente."""
+    from flask import jsonify
+    actor = _get_current_user()
+    if not actor:
+        return jsonify({"ok": False}), 401
+    clientes_ids = session.get("_clientes_ids", [])
+    if actor["rol"] == "usuario_normal" and cliente_id not in clientes_ids:
+        return jsonify({"ok": False}), 403
+    session["cliente_activo_id"] = cliente_id
+    session["_empresa_id"] = cliente_id
+    return jsonify({"ok": True})
