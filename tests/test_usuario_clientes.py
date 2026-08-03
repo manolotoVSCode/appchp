@@ -181,3 +181,57 @@ def test_get_usuarios_de_cliente_retorna_lista_vacia():
         from storage.repository import get_usuarios_de_cliente
         result = get_usuarios_de_cliente(99)
     assert result == []
+
+
+# ── Permisos multi-cliente ─────────────────────────────────────────────────────
+
+from web.auth_permissions import usuario_puede_ver_empresa, filtrar_empresas_para_usuario
+
+
+def test_usuario_puede_ver_empresa_admin_ve_todo():
+    user = {"rol": "admin", "clientes_ids": [], "empresa_id": None}
+    assert usuario_puede_ver_empresa(99, user) is True
+
+
+def test_usuario_puede_ver_empresa_master_admin_ve_todo():
+    user = {"rol": "master_admin", "clientes_ids": [], "empresa_id": None}
+    assert usuario_puede_ver_empresa(5, user) is True
+
+
+def test_usuario_puede_ver_empresa_normal_con_lista():
+    user = {"rol": "usuario_normal", "clientes_ids": [3, 7], "empresa_id": None}
+    assert usuario_puede_ver_empresa(7, user) is True
+    assert usuario_puede_ver_empresa(99, user) is False
+
+
+def test_usuario_puede_ver_empresa_normal_fallback_empresa_id():
+    """Sin clientes_ids, usa empresa_id legado."""
+    user = {"rol": "usuario_normal", "clientes_ids": [], "empresa_id": 4}
+    assert usuario_puede_ver_empresa(4, user) is True
+    assert usuario_puede_ver_empresa(5, user) is False
+
+
+def test_filtrar_empresas_admin_sin_filtro():
+    clientes = [{"id": 1}, {"id": 2}, {"id": 3}]
+    user = {"rol": "admin", "clientes_ids": [], "empresa_id": None}
+    assert filtrar_empresas_para_usuario(clientes, user) == clientes
+
+
+def test_filtrar_empresas_normal_multi():
+    clientes = [{"id": 1}, {"id": 2}, {"id": 3}]
+    user = {"rol": "usuario_normal", "clientes_ids": [1, 3], "empresa_id": None}
+    result = filtrar_empresas_para_usuario(clientes, user)
+    assert [c["id"] for c in result] == [1, 3]
+
+
+def test_filtrar_empresas_normal_fallback():
+    clientes = [{"id": 1}, {"id": 2}, {"id": 3}]
+    user = {"rol": "usuario_normal", "clientes_ids": [], "empresa_id": 2}
+    result = filtrar_empresas_para_usuario(clientes, user)
+    assert [c["id"] for c in result] == [2]
+
+
+def test_filtrar_empresas_normal_sin_asignacion():
+    clientes = [{"id": 1}, {"id": 2}]
+    user = {"rol": "usuario_normal", "clientes_ids": [], "empresa_id": None}
+    assert filtrar_empresas_para_usuario(clientes, user) == []
