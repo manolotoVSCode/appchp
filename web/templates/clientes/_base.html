@@ -55,15 +55,17 @@
   <div id="sidebar-content">
 
   {% if current_user_data and current_user_data.rol == 'usuario_normal' %}
-  <div class="sidebar-section">Mi empresa</div>
-  {% if current_user_data.empresa_id %}
-  <a href="{{ url_for('clientes.ficha', cliente_id=current_user_data.empresa_id) }}"
-     class="sidebar-link{% if nav_active == 'clientes' %} active{% endif %}">
-    <i class="bi bi-building"></i>{{ current_user_data.empresa_nombre or 'Mi empresa' }}
-  </a>
+  <div class="sidebar-section">Clientes</div>
+  {% if clientes_usuario %}
+    {% for c in clientes_usuario %}
+    <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=c.id) }}"
+       class="sidebar-link{% if cliente_activo and cliente_activo.id == c.id %} active{% endif %}">
+      <i class="bi bi-building"></i>{{ c.nombre }}
+    </a>
+    {% endfor %}
   {% else %}
   <span class="sidebar-link" style="color:#8A9BB0;cursor:default">
-    <i class="bi bi-building"></i>Sin empresa asignada
+    <i class="bi bi-building"></i>Sin clientes asignados
   </span>
   {% endif %}
   {% else %}
