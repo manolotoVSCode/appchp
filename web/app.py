@@ -2650,6 +2650,8 @@ def create_app() -> Flask:
 
         import json as _json_app
         chp_params = get_cliente_chp_params(cliente_id)
+        from storage.repository import get_chp_session_params as _get_chp_session_params
+        chp_session_params = _get_chp_session_params(cliente_id)
 
         medicion_activa_id = session.get("medicion_activa_id") or mediciones[0]["id"]
         medicion_activa = next(
@@ -2666,6 +2668,7 @@ def create_app() -> Flask:
             medicion_activa=medicion_activa,
             chp_params=chp_params,
             motores_config_json=_json_app.dumps(chp_params.get("motores_config") or "null"),
+            chp_session_params=chp_session_params or {},
             nav_active="modelado_chp",
         )
 

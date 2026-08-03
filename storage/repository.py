@@ -1587,6 +1587,26 @@ def update_cliente_chp_params(
     _supabase.table("clientes").update(update_data).eq("id", cliente_id).execute()
 
 
+def get_chp_session_params(cliente_id: int) -> dict | None:
+    """Retorna chp_session_params del cliente o None si vacío."""
+    resp = (
+        _supabase.table("clientes")
+        .select("chp_session_params")
+        .eq("id", cliente_id)
+        .single()
+        .execute()
+    )
+    return resp.data.get("chp_session_params") if resp.data else None
+
+
+def save_chp_session_params(cliente_id: int, params: dict) -> None:
+    """Guarda chp_session_params en el cliente."""
+    _supabase.table("clientes") \
+        .update({"chp_session_params": params}) \
+        .eq("id", cliente_id) \
+        .execute()
+
+
 def get_modelado_chp_by_id(modelado_id: int) -> dict | None:
     """Retorna la cabecera del modelado por su PK. None si no existe."""
     resp = (

@@ -311,9 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.71.0 — usuario_normal accede a ficha de cliente en
-modo solo lectura: botón info-circle en sidebar, ficha sin controles de edición
-(Editar, Borrar cliente, + Nuevo contrato, Borrar contrato, PPA accordion).
+Último tema resuelto: v2.72.0 — feat Modelado CHP: persistencia de parámetros
+de cabecera en BD (chp_session_params JSONB), se restauran al volver al
+dashboard. Requiere: ALTER TABLE clientes ADD COLUMN IF NOT EXISTS
+chp_session_params JSONB; en Supabase.
 Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase.
 
 ### Bugs App

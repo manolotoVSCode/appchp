@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.72.0] — 2026-08-03
+
+### Añadido — Modelado CHP: persistencia de parámetros de cabecera entre sesiones
+
+- SQL (ejecutar en Supabase): `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;`
+- `storage/repository.py` — `get_chp_session_params(cliente_id)` y `save_chp_session_params(cliente_id, params)`: leen/escriben la columna JSONB con los 10 parámetros de sesión.
+- `web/clientes.py` — POST `/clientes/<id>/dashboard/modelado-chp/params`: endpoint reescrito para guardar todos los parámetros (`motores`, `margen_kw`, `rendimiento_electrico`, `rendimiento_termico`, `precio_gas_gj`, `costo_om_kwh`, `precio_motor_usd_kw`, `autoconsumo_pct`, `deduccion_fiscal`, `anios_deduccion`) vía `save_chp_session_params`; sin restricción de rol (antes rechazaba a `usuario_normal`).
+- `web/app.py` — `cliente_dashboard_modelado_chp`: carga `chp_session_params` y lo pasa al template.
+- `web/templates/dashboard_modelado_chp.html` — root div: añadido `data-session-params="{{ chp_session_params | tojson }}"`.
+- `web/static/js/dashboard-modelado-chp.js`:
+  - Al inicializar: lee `root.dataset.sessionParams`; si hay motores guardados los usa (prioridad sobre `chp_motores_config` legacy); aplica el resto de inputs numéricos y el checkbox de deducción fiscal.
+  - `guardarParams()` ampliado: envía los 10 parámetros al endpoint en cada "Recalcular".
+- Tests: 484 unitarios pasan; fallos restantes son `ConnectError` a Supabase (sin red local, pre-existentes).
+
 ## [2.71.0] — 2026-08-03
 
 ### Añadido — usuario_normal puede acceder a ficha de cliente en modo solo lectura

@@ -864,12 +864,24 @@
 
   // ── guardarParams (fire and forget) ───────────────────────────────────────
   function guardarParams() {
-    const p    = getParams();
-    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    const p      = getParams();
+    const cogenP = getCogenParams();
+    const csrf   = document.querySelector('meta[name="csrf-token"]')?.content || "";
     fetch(`/clientes/${CLIENTE_ID}/dashboard/modelado-chp/params`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
-      body: JSON.stringify({ motores_config: p.motores_config, margen_kw: p.margen_kw }),
+      body: JSON.stringify({
+        motores:               p.motores_config,
+        margen_kw:             p.margen_kw,
+        rendimiento_electrico: parseFloat(document.getElementById("param-rendimiento")?.value) || 40,
+        rendimiento_termico:   cogenP.rendimiento_termico * 100,
+        precio_gas_gj:         cogenP.precio_gas || 0,
+        costo_om_kwh:          p.costo_om_kwh,
+        precio_motor_usd_kw:   parseFloat(document.getElementById("param-inversion-usd")?.value) || 1400,
+        autoconsumo_pct:       p.autoconsumo_pct * 100,
+        deduccion_fiscal:      document.getElementById("param-deduccion-fiscal")?.checked ?? false,
+        anios_deduccion:       parseInt(document.getElementById("param-anios-deduccion")?.value || "1", 10),
+      }),
     }).catch(() => {});
   }
 
@@ -905,14 +917,79 @@
   });
 
   // ── Carga inicial ──────────────────────────────────────────────────────────
-  // Inicializar motores desde datos guardados del cliente (o placeholder)
-  (() => {
-    let savedMotores = null;
-    try { savedMotores = JSON.parse(root.dataset.motoresConfig); } catch (_) {}
-    if (!savedMotores || !Array.isArray(savedMotores) || savedMotores.length === 0) {
-      savedMotores = [{ id: 1, nombre: "Motor 1", capacidad_kw: 0 }];
+  // Leer parámetros guardados de sesión
+  const _sessionParamsRaw = root.dataset.sessionParams;
+  let _sessionParams = {};
+  try {
+    _sessionParams = _sessionParamsRaw ? JSON.parse(_sessionParamsRaw) : {};
+  } catch(e) { _sessionParams = {}; }
+
+  // Aplicar parámetros guardados si existen (antes de inicializar motores)
+  function aplicarSessionParams(p) {
+    if (!p || Object.keys(p).length === 0) return;
+
+    // Motores: preferir session params sobre chp_motores_config legacy
+    if (p.motores && p.motores.length > 0) {
+      _inicializarMotores(p.motores);
     }
-    _inicializarMotores(savedMotores);
+
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && val !== undefined && val !== null) el.value = val;
+    };
+    setVal("param-margen-kw",      p.margen_kw);
+    setVal("param-rendimiento",    p.rendimiento_electrico);
+    setVal("param-rend-termico",   p.rendimiento_termico);
+    setVal("param-precio-gas",     p.precio_gas_gj);
+    setVal("param-costo-om",       p.costo_om_kwh);
+    setVal("param-inversion-usd",  p.precio_motor_usd_kw);
+    setVal("param-autoconsumo",    p.autoconsumo_pct);
+    setVal("param-anios-deduccion",p.anios_deduccion);
+
+    const chk = document.getElementById("param-deduccion-fiscal");
+    if (chk && p.deduccion_fiscal !== undefined) {
+      chk.checked = !!p.deduccion_fiscal;
+      const col = document.getElementById("col-anios-deduccion");
+      if (col) col.style.display = chk.checked ? "" : "none";
+    }
+  }
+
+  // Inicializar motores: session params tienen prioridad; fallback a chp_motores_config legacy
+  (() => {
+    if (_sessionParams.motores && _sessionParams.motores.length > 0) {
+      _inicializarMotores(_sessionParams.motores);
+    } else {
+      let savedMotores = null;
+      try { savedMotores = JSON.parse(root.dataset.motoresConfig); } catch (_) {}
+      if (!savedMotores || !Array.isArray(savedMotores) || savedMotores.length === 0) {
+        savedMotores = [{ id: 1, nombre: "Motor 1", capacidad_kw: 0 }];
+      }
+      _inicializarMotores(savedMotores);
+    }
+  })();
+
+  // Aplicar resto de parámetros de sesión (sin motores, ya inicializados arriba)
+  (() => {
+    const p = _sessionParams;
+    if (!p || Object.keys(p).length === 0) return;
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && val !== undefined && val !== null) el.value = val;
+    };
+    setVal("param-margen-kw",      p.margen_kw);
+    setVal("param-rendimiento",    p.rendimiento_electrico);
+    setVal("param-rend-termico",   p.rendimiento_termico);
+    setVal("param-precio-gas",     p.precio_gas_gj);
+    setVal("param-costo-om",       p.costo_om_kwh);
+    setVal("param-inversion-usd",  p.precio_motor_usd_kw);
+    setVal("param-autoconsumo",    p.autoconsumo_pct);
+    setVal("param-anios-deduccion",p.anios_deduccion);
+    const chk = document.getElementById("param-deduccion-fiscal");
+    if (chk && p.deduccion_fiscal !== undefined) {
+      chk.checked = !!p.deduccion_fiscal;
+      const col = document.getElementById("col-anios-deduccion");
+      if (col) col.style.display = chk.checked ? "" : "none";
+    }
   })();
 
   fetchModelado();

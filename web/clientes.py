@@ -68,6 +68,8 @@ from storage.repository import (
     delete_medicion,
     get_cliente_chp_params,
     update_cliente_chp_params,
+    get_chp_session_params,
+    save_chp_session_params,
     get_modelado_chp,
     get_modelado_chp_by_id,
     save_modelado_chp,
@@ -2507,17 +2509,28 @@ def modelado_chp_curva(cliente_id: int, modelado_id: int):
 
 @clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/params", methods=["POST"])
 def modelado_chp_params(cliente_id: int):
-    """Guarda los parámetros CHP por defecto del cliente."""
+    """Guarda los parámetros de cabecera de la sesión del Modelado CHP."""
     from flask import jsonify
 
-    user = _get_current_user()
-    if not user or user.get("rol") not in ("master_admin", "admin"):
-        return jsonify({"error": "No autorizado"}), 403
+    actor = _get_current_user()
+    if not actor:
+        return jsonify({"ok": False}), 401
 
     data = request.get_json(silent=True) or {}
-    motores_config = data.get("motores_config")  # list | None
-    margen_kw      = float(data.get("margen_kw", 0))
-    update_cliente_chp_params(cliente_id, motores_config, margen_kw)
+
+    params = {
+        "motores":               data.get("motores", []),
+        "margen_kw":             data.get("margen_kw", 100),
+        "rendimiento_electrico": data.get("rendimiento_electrico", 40),
+        "rendimiento_termico":   data.get("rendimiento_termico", 45),
+        "precio_gas_gj":         data.get("precio_gas_gj", 0),
+        "costo_om_kwh":          data.get("costo_om_kwh", 0.30),
+        "precio_motor_usd_kw":   data.get("precio_motor_usd_kw", 1400),
+        "autoconsumo_pct":       data.get("autoconsumo_pct", 3),
+        "deduccion_fiscal":      data.get("deduccion_fiscal", False),
+        "anios_deduccion":       data.get("anios_deduccion", 1),
+    }
+    save_chp_session_params(cliente_id, params)
     return jsonify({"ok": True})
 
 
