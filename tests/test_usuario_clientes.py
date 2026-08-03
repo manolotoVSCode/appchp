@@ -287,3 +287,31 @@ def test_usuario_normal_bloqueado_en_cliente_no_asignado(web_client):
          patch("web.auth._verificar_session_version_con_cache", return_value=True):
         resp = web_client.get("/clientes/99/dashboard/contabilidad", follow_redirects=False)
     assert resp.status_code == 302
+
+
+def test_editar_usuario_carga_correctamente(web_client):
+    """GET /admin/usuarios/<id>/editar retorna 200 y contiene 'Clientes asignados'."""
+    from unittest.mock import patch
+    with web_client.session_transaction() as sess:
+        sess["_user_id"] = "master-uuid"
+        sess["_user_email"] = "master@test.com"
+        sess["_user_rol"] = "master_admin"
+        sess["_empresa_id"] = None
+        sess["_clientes_ids"] = []
+        sess["_session_version"] = 1
+
+    target_data = {
+        "id": "target-uuid", "email": "cli@test.com",
+        "rol": "usuario_normal", "empresa_id": 5,
+        "nombre": "Test", "apellido": "User", "activo": True,
+    }
+    with patch("web.auth._verificar_activo_con_cache", return_value=True), \
+         patch("web.auth._verificar_session_version_con_cache", return_value=True), \
+         patch("storage.repository._supabase") as mock_sb, \
+         patch("storage.repository.get_all_clientes_con_conteos", return_value=[{"id": 5, "nombre": "Empresa A", "num_facturas_cfe": 0, "num_facturas_gas": 0}]), \
+         patch("storage.repository.get_clientes_de_usuario", return_value=[{"id": 5, "nombre": "Empresa A"}]):
+        mock_sb.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [target_data]
+        mock_sb.postgrest.auth.return_value = None
+        resp = web_client.get("/admin/usuarios/target-uuid/editar", follow_redirects=False)
+    assert resp.status_code == 200
+    assert b"Clientes asignados" in resp.data

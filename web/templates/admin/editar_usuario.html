@@ -40,13 +40,26 @@
       {% endif %}
 
       <div class="mb-3" id="empresa-field" style="{{ '' if form_rol == 'usuario_normal' else 'display:none' }}">
-        <label for="ed_empresa" class="form-label fw-semibold">Empresa asignada</label>
-        <select id="ed_empresa" name="empresa_id" class="form-select">
-          <option value="">— Sin empresa asignada —</option>
+        <label class="form-label fw-semibold">Clientes asignados</label>
+        <div class="border rounded p-3" style="max-height:300px;overflow-y:auto">
           {% for c in clientes %}
-          <option value="{{ c.id }}" {% if form_empresa_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox"
+                   name="cliente_ids" value="{{ c.id }}"
+                   id="cli-{{ c.id }}"
+                   {% if c.id in (clientes_asignados_ids or []) %}checked{% endif %}>
+            <label class="form-check-label small" for="cli-{{ c.id }}">
+              {{ c.nombre }}
+            </label>
+          </div>
           {% endfor %}
-        </select>
+          {% if not clientes %}
+          <p class="text-muted small mb-0">No hay clientes registrados.</p>
+          {% endif %}
+        </div>
+        <div class="form-text text-muted">
+          El usuario verá estos clientes en su sidebar y podrá acceder a sus dashboards en modo solo lectura.
+        </div>
       </div>
 
       <div class="row g-2 mb-3">
