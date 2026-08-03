@@ -2070,12 +2070,19 @@ def create_app() -> Flask:
 
         email = request.form.get("email", "").strip().lower()
         rol = request.form.get("rol", "").strip()
-        empresa_id_raw = request.form.get("empresa_id", "").strip()
-        empresa_id = int(empresa_id_raw) if empresa_id_raw.isdigit() else None
         password_input = request.form.get("password", "").strip()
         generar = request.form.get("generar_password") == "on"
         nombre_nuevo = request.form.get("nombre", "").strip() or None
         apellido_nuevo = request.form.get("apellido", "").strip() or None
+
+        # Multi-cliente para usuario_normal
+        if rol == "usuario_normal":
+            cliente_ids_raw = request.form.getlist("cliente_ids")
+            cliente_ids = [int(x) for x in cliente_ids_raw if x.isdigit()]
+            empresa_id = cliente_ids[0] if len(cliente_ids) == 1 else None
+        else:
+            cliente_ids = []
+            empresa_id = None
 
         # Validaciones
         if not email or "@" not in email:
@@ -2087,9 +2094,6 @@ def create_app() -> Flask:
         # admin solo puede crear usuario_normal
         if user["rol"] == ROL_ADMIN and rol != "usuario_normal":
             flash("Solo puedes crear usuarios de tipo Cliente.", "danger")
-            return redirect(url_for("admin_usuarios"))
-        if rol == "usuario_normal" and not empresa_id:
-            flash("Usuario normal requiere empresa asignada.", "danger")
             return redirect(url_for("admin_usuarios"))
 
         # Verificar duplicado
@@ -2147,6 +2151,15 @@ def create_app() -> Flask:
                 pass
             flash(f"Error creando perfil: {exc}", "danger")
             return redirect(url_for("admin_usuarios"))
+
+        # Asignar clientes en usuario_clientes (para usuario_normal)
+        if rol == "usuario_normal" and cliente_ids:
+            try:
+                from storage.repository import set_clientes_de_usuario as _scdu
+                _scdu(user_id, cliente_ids)
+            except Exception as exc:
+                logger.error("Error asignando clientes a usuario %s: %s", user_id, exc)
+                flash("Usuario creado, pero hubo un error asignando los clientes. Edita el usuario para corregirlo.", "warning")
 
         if password_generada:
             flash(

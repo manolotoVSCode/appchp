@@ -167,16 +167,28 @@
               {% endif %}
               <option value="usuario_normal">Cliente</option>
             </select>
-            <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve su empresa asignada.</div>
+            <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve los clientes asignados.</div>
           </div>
           <div class="mb-3" id="empresa-field" style="display:none">
-            <label for="cr_empresa" class="form-label fw-semibold">Empresa asignada</label>
-            <select id="cr_empresa" name="empresa_id" class="form-select">
-              <option value="">— Sin empresa asignada —</option>
+            <label class="form-label fw-semibold">Clientes asignados</label>
+            <div class="border rounded p-3" style="max-height:300px;overflow-y:auto">
               {% for c in clientes %}
-              <option value="{{ c.id }}">{{ c.nombre }}</option>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       name="cliente_ids" value="{{ c.id }}"
+                       id="cli-crear-{{ c.id }}">
+                <label class="form-check-label small" for="cli-crear-{{ c.id }}">
+                  {{ c.nombre }}
+                </label>
+              </div>
               {% endfor %}
-            </select>
+              {% if not clientes %}
+              <p class="text-muted small mb-0">No hay clientes registrados.</p>
+              {% endif %}
+            </div>
+            <div class="form-text text-muted">
+              El usuario verá estos clientes en su sidebar en modo solo lectura.
+            </div>
           </div>
           <div class="mb-3">
             <label for="cr_password" class="form-label fw-semibold">Contraseña</label>

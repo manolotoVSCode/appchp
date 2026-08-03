@@ -311,9 +311,8 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: feat asignación múltiple de clientes a usuario_normal —
-tabla usuario_clientes, sesión con clientes_ids, sidebar dinámico, panel
-edición master_admin con checkboxes.
+Último tema resuelto: fix modal "Crear usuario" con checkboxes multi-cliente
+(mismo patrón que editar_usuario). POST /admin/usuarios/crear lee cliente_ids.
 Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase.
 
 ### Bugs App

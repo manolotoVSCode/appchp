@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.69.1] — 2026-08-03
+
+### Corregido — Modal "Crear usuario" soporta asignación múltiple de clientes
+
+- `web/templates/admin/usuarios.html`: reemplazado `<select name="empresa_id">` en el modal de creación por checkboxes scrollables `name="cliente_ids"` (mismo patrón que `editar_usuario.html`). IDs de checkboxes con prefijo `cli-crear-` para evitar conflictos. Help text actualizado.
+- `web/app.py` — POST `/admin/usuarios/crear`:
+  - Lee `request.form.getlist("cliente_ids")` en lugar de `empresa_id` del form.
+  - Calcula `empresa_id` legacy (solo cuando hay exactamente 1 cliente seleccionado).
+  - Elimina validación que exigía `empresa_id` para `usuario_normal`.
+  - Llama `set_clientes_de_usuario(user_id, cliente_ids)` tras crear el perfil, en try/except independiente con flash warning si falla.
+
 ## [2.69.0] — 2026-08-03
 
 ### Añadido — Asignación múltiple de clientes a usuario_normal
