@@ -235,3 +235,55 @@ def test_filtrar_empresas_normal_sin_asignacion():
     clientes = [{"id": 1}, {"id": 2}]
     user = {"rol": "usuario_normal", "clientes_ids": [], "empresa_id": None}
     assert filtrar_empresas_para_usuario(clientes, user) == []
+
+
+# ── Tests de acceso web ────────────────────────────────────────────────────────
+
+@pytest.fixture()
+def app_fixture(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "fake_key")
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    from web.app import create_app
+    flask_app = create_app()
+    flask_app.config["TESTING"] = True
+    flask_app.config["WTF_CSRF_ENABLED"] = False
+    return flask_app
+
+
+@pytest.fixture()
+def web_client(app_fixture):
+    return app_fixture.test_client()
+
+
+def _inject_usuario_normal(client, clientes_ids, empresa_id=None):
+    with client.session_transaction() as sess:
+        sess["_user_id"] = "test-user-uuid"
+        sess["_user_email"] = "cliente@test.com"
+        sess["_user_rol"] = "usuario_normal"
+        sess["_empresa_id"] = empresa_id or (clientes_ids[0] if clientes_ids else None)
+        sess["_empresa_nombre"] = "Test Empresa"
+        sess["_clientes_ids"] = clientes_ids
+        sess["_session_version"] = 1
+
+
+def test_usuario_normal_puede_acceder_a_cliente_asignado(web_client):
+    """usuario_normal con clientes_ids=[3] pasa el check de _require_login (no redirige a login)."""
+    from unittest.mock import patch
+    _inject_usuario_normal(web_client, clientes_ids=[3], empresa_id=3)
+    with patch("web.auth._verificar_activo_con_cache", return_value=True), \
+         patch("web.auth._verificar_session_version_con_cache", return_value=True):
+        resp = web_client.get("/clientes/3/dashboard/contabilidad", follow_redirects=False)
+    # El _require_login no debe redirigir a login ni a una ruta de acceso denegado
+    location = resp.headers.get("Location", "")
+    assert "/auth/login" not in location, f"Redirigido a login: {location}"
+
+
+def test_usuario_normal_bloqueado_en_cliente_no_asignado(web_client):
+    """usuario_normal con clientes_ids=[3] recibe redirect al intentar /clientes/99/..."""
+    from unittest.mock import patch
+    _inject_usuario_normal(web_client, clientes_ids=[3], empresa_id=3)
+    with patch("web.auth._verificar_activo_con_cache", return_value=True), \
+         patch("web.auth._verificar_session_version_con_cache", return_value=True):
+        resp = web_client.get("/clientes/99/dashboard/contabilidad", follow_redirects=False)
+    assert resp.status_code == 302

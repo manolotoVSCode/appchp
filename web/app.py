@@ -517,6 +517,16 @@ def create_app() -> Flask:
             base["mediciones_sidebar"] = _get_mediciones(id_) if id_ else []
         except Exception:
             base["mediciones_sidebar"] = []
+        # Inyectar lista de clientes para usuario_normal (sidebar dinámico)
+        if current_user_data and current_user_data.get("rol") == "usuario_normal":
+            from storage.repository import get_clientes_de_usuario as _gcdu
+            uid = current_user_data.get("user_id")
+            try:
+                base["clientes_usuario"] = _gcdu(uid) if uid else []
+            except Exception:
+                base["clientes_usuario"] = []
+        else:
+            base["clientes_usuario"] = []
         if not id_:
             return {**base, "cliente_activo": None}
 
@@ -2248,27 +2258,27 @@ def create_app() -> Flask:
                     return redirect(url_for("admin_usuarios_editar", user_id=user_id))
             else:
                 rol = target["rol"]  # mantener el rol actual
-            empresa_id = request.form.get("empresa_id", "").strip() or None
             nombre_ed = request.form.get("nombre", "").strip() or None
             apellido_ed = request.form.get("apellido", "").strip() or None
-            if rol == "usuario_normal" and not empresa_id:
-                flash("El rol usuario_normal requiere empresa asignada.", "danger")
-                clientes_list = get_all_clientes_con_conteos()
-                return render_template("admin/editar_usuario.html",
-                                       target=target, clientes=clientes_list,
-                                       form_rol=rol, form_empresa_id=empresa_id,
-                                       form_nombre=nombre_ed, form_apellido=apellido_ed,
-                                       actor_puede_cambiar_rol=actor_puede_cambiar_rol)
-            if rol == "admin":
-                empresa_id = None
+            if rol == "usuario_normal":
+                cliente_ids_raw = request.form.getlist("cliente_ids")
+                cliente_ids = [int(x) for x in cliente_ids_raw if x.isdigit()]
+                # empresa_id legacy: apuntar al único si hay exactamente uno
+                empresa_id_legacy = cliente_ids[0] if len(cliente_ids) == 1 else None
+            else:
+                cliente_ids = []
+                empresa_id_legacy = None
             try:
                 _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
                 _supabase.table("user_profiles").update({
                     "rol": rol,
-                    "empresa_id": int(empresa_id) if empresa_id else None,
+                    "empresa_id": empresa_id_legacy,
                     "nombre": nombre_ed,
                     "apellido": apellido_ed,
                 }).eq("id", user_id).execute()
+                if rol == "usuario_normal":
+                    from storage.repository import set_clientes_de_usuario as _scdu
+                    _scdu(user_id, cliente_ids)
                 flash(f"Usuario {target['email']} actualizado correctamente.", "success")
             except Exception as exc:
                 logger.error("Error actualizando usuario %s: %s", user_id, exc)
@@ -2276,8 +2286,12 @@ def create_app() -> Flask:
             return redirect(url_for("admin_usuarios"))
 
         clientes_list = get_all_clientes_con_conteos()
+        from storage.repository import get_clientes_de_usuario as _gcdu
+        clientes_asignados = _gcdu(user_id)
+        clientes_asignados_ids = [c["id"] for c in clientes_asignados]
         return render_template("admin/editar_usuario.html",
                                target=target, clientes=clientes_list,
+                               clientes_asignados_ids=clientes_asignados_ids,
                                form_rol=target["rol"],
                                form_empresa_id=target.get("empresa_id"),
                                form_nombre=target.get("nombre"),
