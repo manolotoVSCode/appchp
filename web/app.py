@@ -655,6 +655,10 @@ def create_app() -> Flask:
             else:
                 aviso_datos = None
 
+        mediciones_cont = get_mediciones_por_cliente(cliente_id)
+        if mediciones_cont and not session.get("medicion_activa_id"):
+            session["medicion_activa_id"] = mediciones_cont[0]["id"]
+
         return render_template(
             "dashboard_contabilidad.html",
             aviso_datos=aviso_datos,

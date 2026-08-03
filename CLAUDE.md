@@ -311,10 +311,10 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.70.0 — auto-selección primera medición cincominutal
-en dashboard cogeneración: session["medicion_activa_id"] inicializada en ruta
-cliente_dashboard_cogeneracion si no hay ninguna activa; JS auto-check primer
-radio .sidebar-medicion-radio si ninguno marcado al cargar el IIFE.
+Último tema resuelto: v2.70.1 — auto-carga medición cincominutal en ambos
+dashboards (contabilidad y cogeneración): session["medicion_activa_id"] se
+inicializa en ambas rutas; sidebar radio usa loop.first como fallback checked;
+JS cogeneración dispara change en radio ya marcado o selecciona el primero.
 Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase.
 
 ### Bugs App

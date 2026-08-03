@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.70.1] — 2026-08-03
+
+### Añadido — Auto-carga de medición cincominutal al entrar a dashboards contabilidad y cogeneración
+
+- `web/app.py` — `cliente_dashboard_contabilidad`: mismo bloque `get_mediciones_por_cliente` + `session["medicion_activa_id"]` que cogeneración; inicializa la sesión con la primera medición disponible si no hay ninguna activa.
+- `web/templates/clientes/_base.html` — radio buttons del sidebar: condición `loop.first and not session.get('medicion_activa_id')` añadida como fallback a `checked`; muestra el primero marcado cuando la sesión no tiene medición activa.
+- `web/static/js/dashboard-cogeneracion.js` — bloque de auto-disparo mejorado: si hay un radio ya `checked` lo dispara; si no, marca el primero y dispara `change`. Sustituye el bloque anterior de v2.70.0.
+- `web/templates/dashboard_contabilidad.html` — ya tenía `data-medicion-activa-id` en el root div; `dashboard-contabilidad.js` ya leía ese atributo para auto-carga (sin cambios necesarios).
+
 ## [2.70.0] — 2026-08-03
 
 ### Añadido — Auto-selección de primera medición cincominutal en dashboard de cogeneración

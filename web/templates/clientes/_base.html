@@ -148,7 +148,9 @@
         <input type="radio" name="medicion_activa" value="{{ m.id }}"
                id="med-{{ m.id }}"
                class="me-2 sidebar-medicion-radio"
-               {% if session.get('medicion_activa_id') == m.id %}checked{% endif %}
+               {% if session.get('medicion_activa_id') == m.id
+                  or (loop.first and not session.get('medicion_activa_id'))
+               %}checked{% endif %}
                style="accent-color:var(--color-primary); cursor:pointer;">
         <label for="med-{{ m.id }}" style="cursor:pointer; color:#5A5A5A; flex:1;">
           {{ ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][m.mes-1] }} {{ m.anio }}
