@@ -38,7 +38,8 @@ def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
                      access_token: str, remember: bool = False,
                      empresa_nombre: str | None = None,
                      nombre: str | None = None,
-                     apellido: str | None = None) -> None:
+                     apellido: str | None = None,
+                     clientes_ids: list[int] | None = None) -> None:
     from storage.repository import get_session_version
     session.permanent = remember
     session["_user_id"] = user_id
@@ -51,6 +52,19 @@ def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
     session["_access_token"] = access_token
     session["_session_version"] = get_session_version(user_id) or 1
 
+    if clientes_ids is not None:
+        session["_clientes_ids"] = clientes_ids
+    elif rol == ROL_USUARIO_NORMAL:
+        from storage.repository import get_clientes_de_usuario
+        ids = [c["id"] for c in get_clientes_de_usuario(user_id)]
+        session["_clientes_ids"] = ids
+        if len(ids) == 1:
+            session["_empresa_id"] = ids[0]
+        else:
+            session["_empresa_id"] = empresa_id  # puede quedar NULL
+    else:
+        session["_clientes_ids"] = []
+
 
 def clear_user_session() -> None:
     """Limpia completamente la sesión Flask del usuario, preservando el token CSRF."""
@@ -61,7 +75,7 @@ def clear_user_session() -> None:
 
 
 def get_current_user() -> dict | None:
-    """Retorna dict con user_id, email, rol, empresa_id, empresa_nombre o None si no autenticado."""
+    """Retorna dict con user_id, email, rol, empresa_id, empresa_nombre, clientes_ids o None si no autenticado."""
     user_id = session.get("_user_id")
     if not user_id:
         return None
@@ -73,6 +87,7 @@ def get_current_user() -> dict | None:
         "empresa_nombre": session.get("_empresa_nombre"),
         "nombre": session.get("_nombre"),
         "apellido": session.get("_apellido"),
+        "clientes_ids": session.get("_clientes_ids", []),
     }
 
 
@@ -174,12 +189,15 @@ def login():
             if error is None:
                 user = get_current_user()
                 if user and user["rol"] == ROL_USUARIO_NORMAL:
-                    empresa_id = user.get("empresa_id")
-                    if empresa_id:
-                        return redirect(url_for("clientes.ficha", cliente_id=empresa_id))
+                    clientes_ids = user.get("clientes_ids", [])
+                    if clientes_ids:
+                        return redirect(url_for(
+                            "cliente_dashboard_contabilidad",
+                            cliente_id=clientes_ids[0],
+                        ))
                     return render_template(
                         "auth/login.html",
-                        error="Sin empresa asignada. Contacta al administrador.",
+                        error="Sin clientes asignados. Contacta al administrador.",
                     )
                 raw_next = request.args.get("next", "")
                 if _es_url_segura(raw_next):

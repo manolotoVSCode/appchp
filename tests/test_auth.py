@@ -23,7 +23,8 @@ def client(app):
     return app.test_client()
 
 
-def _inject_session(client, rol="admin", empresa_id=None, empresa_nombre=None):
+def _inject_session(client, rol="admin", empresa_id=None, empresa_nombre=None,
+                    clientes_ids=None):
     """Inyecta sesión de usuario autenticado directamente (sin llamar a Supabase)."""
     with client.session_transaction() as sess:
         sess["_user_id"] = "test-user-uuid"
@@ -31,6 +32,9 @@ def _inject_session(client, rol="admin", empresa_id=None, empresa_nombre=None):
         sess["_user_rol"] = rol
         sess["_empresa_id"] = empresa_id
         sess["_empresa_nombre"] = empresa_nombre
+        sess["_clientes_ids"] = clientes_ids if clientes_ids is not None else (
+            [empresa_id] if rol == "usuario_normal" and empresa_id else []
+        )
 
 
 # ── Tests de acceso sin autenticación ─────────────────────────────────────────
