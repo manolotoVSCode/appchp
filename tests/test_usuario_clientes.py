@@ -93,6 +93,35 @@ def test_get_clientes_de_usuario_retorna_lista_vacia_sin_asignaciones():
     assert result == []
 
 
+def test_get_clientes_de_usuario_fallback_user_profiles_vacio():
+    """Sin filas en usuario_clientes y user_profiles devuelve vacío → lista vacía."""
+    mock_sb = _mock_supabase()
+    call_count = {"n": 0}
+    results = [
+        MagicMock(**{"select.return_value.eq.return_value.execute.return_value.data": []}),
+        MagicMock(**{"select.return_value.eq.return_value.limit.return_value.execute.return_value.data": []}),
+    ]
+    def table_side_effect(name):
+        idx = call_count["n"]
+        call_count["n"] += 1
+        return results[idx] if idx < len(results) else MagicMock()
+    mock_sb.table.side_effect = table_side_effect
+    with patch("storage.repository._supabase", mock_sb):
+        from storage.repository import get_clientes_de_usuario
+        result = get_clientes_de_usuario("user-uuid-4")
+    assert result == []
+
+
+def test_get_clientes_de_usuario_retorna_lista_vacia_en_excepcion():
+    """Si _supabase lanza excepción, retorna [] sin propagar."""
+    mock_sb = _mock_supabase()
+    mock_sb.table.side_effect = Exception("DB connection failed")
+    with patch("storage.repository._supabase", mock_sb):
+        from storage.repository import get_clientes_de_usuario
+        result = get_clientes_de_usuario("user-uuid-err")
+    assert result == []
+
+
 # ── set_clientes_de_usuario ────────────────────────────────────────────────────
 
 def test_set_clientes_de_usuario_borra_e_inserta():
