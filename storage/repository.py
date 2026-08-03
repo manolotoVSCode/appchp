@@ -1720,3 +1720,90 @@ def get_modelado_chp_curva(modelado_id: int) -> list[dict]:
             break
         start += PAGE
     return result
+
+
+# ── Usuario ↔ Cliente (N:N) ───────────────────────────────────────────────────
+
+def get_clientes_de_usuario(user_id: str) -> list[dict]:
+    """
+    Retorna lista de clientes asignados a un usuario_normal vía usuario_clientes.
+    Ordena por nombre ASC. Si no hay filas en usuario_clientes, hace fallback a
+    empresa_id de user_profiles (compatibilidad legacy).
+    Cada dict tiene al menos {id, nombre, ...campos básicos de clientes}.
+    """
+    try:
+        res = _supabase.table("usuario_clientes").select("cliente_id").eq("user_id", user_id).execute()
+        rows = res.data or []
+        if rows:
+            ids = [r["cliente_id"] for r in rows]
+            clientes_res = (
+                _supabase.table("clientes")
+                .select("id, nombre, rfc, sector_industrial, tarifa_cfe")
+                .in_("id", ids)
+                .order("nombre", desc=False)
+                .execute()
+            )
+            return clientes_res.data or []
+        # Fallback legacy: leer empresa_id de user_profiles
+        profile_res = (
+            _supabase.table("user_profiles")
+            .select("empresa_id")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+        )
+        profile_rows = profile_res.data or []
+        empresa_id = profile_rows[0].get("empresa_id") if profile_rows else None
+        if not empresa_id:
+            return []
+        cli_res = (
+            _supabase.table("clientes")
+            .select("id, nombre, rfc, sector_industrial, tarifa_cfe")
+            .eq("id", empresa_id)
+            .execute()
+        )
+        return cli_res.data or []
+    except Exception as exc:
+        logger.error("Error en get_clientes_de_usuario user_id=%s: %s", user_id, exc)
+        return []
+
+
+def set_clientes_de_usuario(user_id: str, cliente_ids: list[int]) -> None:
+    """
+    Reemplaza la asignación completa de clientes para un usuario.
+    Borra todas las filas existentes en usuario_clientes para ese user_id
+    e inserta las nuevas. Si cliente_ids está vacío, solo borra.
+    """
+    _supabase.table("usuario_clientes").delete().eq("user_id", user_id).execute()
+    if not cliente_ids:
+        return
+    rows = [{"user_id": user_id, "cliente_id": cid} for cid in cliente_ids]
+    _supabase.table("usuario_clientes").insert(rows).execute()
+
+
+def get_usuarios_de_cliente(cliente_id: int) -> list[dict]:
+    """
+    Retorna lista de usuario_normal asignados a un cliente.
+    Cada dict: {user_id, email, nombre, apellido}.
+    """
+    try:
+        res = (
+            _supabase.table("usuario_clientes")
+            .select("user_id, user_profiles(email, nombre, apellido)")
+            .eq("cliente_id", cliente_id)
+            .execute()
+        )
+        rows = res.data or []
+        result = []
+        for r in rows:
+            profile = r.get("user_profiles") or {}
+            result.append({
+                "user_id": r["user_id"],
+                "email": profile.get("email", ""),
+                "nombre": profile.get("nombre"),
+                "apellido": profile.get("apellido"),
+            })
+        return result
+    except Exception as exc:
+        logger.error("Error en get_usuarios_de_cliente cliente_id=%s: %s", cliente_id, exc)
+        return []
