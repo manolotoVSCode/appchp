@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.76.1] — 2026-08-03
+
+### Corregido — Spinner perpetuo en dashboard de telemetría
+
+- `web/static/js/dashboard-telemetria.js` — `fetchDatos()` refactorizado: `_mostrarLoading(false)` movido de los callbacks `.then()` y `.catch()` a un bloque `.finally()` con guard `!_abort.signal.aborted`. La ruta `AbortError` retornaba antes sin ocultar el spinner, dejándolo visible indefinidamente tras cualquier fetch cancelado.
+
 ## [2.76.0] — 2026-08-04
 
 ### Añadido — Fase 2 D4: unifilar SVG interactivo reemplaza sunburst

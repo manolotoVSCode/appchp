@@ -70,7 +70,6 @@
     fetch(`${ENDPOINT}?${params}`, { signal: _abort.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((data) => {
-        _mostrarLoading(false);
         if (data.error) { _mostrarError(data.error); return; }
         _arbolCache = data.arbol_sunburst;
         _renderTodo(data);
@@ -79,8 +78,10 @@
       })
       .catch((e) => {
         if (e.name === "AbortError") return;
-        _mostrarLoading(false);
         _mostrarError("Error al cargar datos de telemetría: " + e.message);
+      })
+      .finally(() => {
+        if (!_abort.signal.aborted) _mostrarLoading(false);
       });
   }
 
