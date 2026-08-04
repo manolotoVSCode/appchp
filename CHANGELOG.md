@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.75.0] — 2026-08-03
+
+### Añadido — Fase 2 D3: costo en pesos y comparativa mes anterior en telemetría
+
+- `calc/telemetria_costos.py` — módulo nuevo: `obtener_precio_unitario_mxn_kwh` (CFE o PPA, fallback a mes anterior o últimas 12 facturas), `calcular_costo_periodo` (wrapper con `_mes_principal`).
+- `storage/repository.py` — 4 funciones nuevas: `obtener_factura_cfe_cliente_mes`, `obtener_ultimas_facturas_cfe`, `obtener_factura_ppa_cliente_mes`, `obtener_ultimas_facturas_ppa`.
+- `web/app.py` — endpoint `cliente_dashboard_telemetria_data` extendido: KPIs + `costo_mxn`, `precio_fuente`, `precio_mes_referencia`; bloque `comparativa_mes_anterior` (rango desplazado -30 días, `disponible` si ≥50% de muestras); `arbol_sunburst` ahora incluye `costo_mxn` por nodo.
+- `web/templates/telemetria/dashboard.html` — 2 tarjetas KPI nuevas: "Costo en el periodo" (MXN) y "vs. mes anterior" (Δ%).
+- `web/static/js/dashboard-telemetria.js` — `_renderKPIs` actualizada (costo + hint de fuente); `_renderComparativa` nueva (delta coloreado verde/rojo); `_renderTodo` llama a ambas; tooltip sunburst muestra kWh + MXN por segmento; `_costosPorId` mapeo id→costo para tooltip.
+- `tests/test_telemetria_costos.py` — 7 tests: precio CFE mes exacto, fallback anterior, sin facturas, PPA, cálculo de costo, claves JSON del endpoint, aritmética de delta.
+
 ## [2.74.1] — 2026-08-03
 
 ### Corregido — CDN de Chart.js faltante en template de telemetría

@@ -116,15 +116,36 @@ def test_telemetria_fase2_deshabilitada_404(client, app):
     assert resp.status_code == 404
 
 
+# Patches comunes para el endpoint /data (D3 añade 4 funciones de repo de costos)
+_PATCHES_COSTO = dict(
+    obtener_factura_cfe_cliente_mes=None,
+    obtener_ultimas_facturas_cfe=[],
+    obtener_factura_ppa_cliente_mes=None,
+    obtener_ultimas_facturas_ppa=[],
+)
+
+
+def _patch_costo():
+    """Retorna context managers de patch para las funciones de costos (sin facturas → N/D)."""
+    return [
+        patch("storage.repository.obtener_factura_cfe_cliente_mes", return_value=None),
+        patch("storage.repository.obtener_ultimas_facturas_cfe", return_value=[]),
+        patch("storage.repository.obtener_factura_ppa_cliente_mes", return_value=None),
+        patch("storage.repository.obtener_ultimas_facturas_ppa", return_value=[]),
+    ]
+
+
 # ── Test e ─────────────────────────────────────────────────────────────────
 def test_telemetria_data_json_claves_esperadas(client, app):
     """GET .../data devuelve JSON con nodo_seleccionado, serie_temporal, kpis, arbol_sunburst."""
     app.config["FASE2_HABILITADA"] = True
     _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+    patches = _patch_costo()
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
          patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_descendientes_ids", return_value=DESC_IDS_MOCK), \
-         patch("storage.repository.obtener_mediciones_recientes", return_value=MEDICIONES_MOCK):
+         patch("storage.repository.obtener_mediciones_recientes", return_value=MEDICIONES_MOCK), \
+         patches[0], patches[1], patches[2], patches[3]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
     assert resp.status_code == 200
     data = resp.get_json()
@@ -137,10 +158,12 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
     """Suma de kWh de cargas del anillo externo es consistente con su transformador (tolerancia 0.1%)."""
     app.config["FASE2_HABILITADA"] = True
     _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+    patches = _patch_costo()
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
          patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_descendientes_ids", return_value=DESC_IDS_MOCK), \
-         patch("storage.repository.obtener_mediciones_recientes", return_value=MEDICIONES_MOCK):
+         patch("storage.repository.obtener_mediciones_recientes", return_value=MEDICIONES_MOCK), \
+         patches[0], patches[1], patches[2], patches[3]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
     data = resp.get_json()
     arbol = data["arbol_sunburst"]
@@ -155,21 +178,23 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
 
 # ── Test g ─────────────────────────────────────────────────────────────────
 def test_telemetria_data_nodo_carga_final_sin_agregacion(client, app):
-    """Con nodo_id de una carga_final, la serie refleja solo esa carga."""
+    """Con nodo_id de una carga_final, la serie del periodo actual refleja solo esa carga."""
     app.config["FASE2_HABILITADA"] = True
     _injectar_sesion(client, "master_admin", cliente_activo_id=44)
     carga_mock = MEDICIONES_MOCK
+    patches = _patch_costo()
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
          patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_descendientes_ids", return_value=[]), \
-         patch("storage.repository.obtener_mediciones_recientes", return_value=carga_mock) as mock_omr:
+         patch("storage.repository.obtener_mediciones_recientes", return_value=carga_mock) as mock_omr, \
+         patches[0], patches[1], patches[2], patches[3]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h&nodo_id=3")
     assert resp.status_code == 200
     data = resp.get_json()
-    # Solo se consultó el medidor 3
+    # El medidor 3 se consulta para el periodo actual y para la comparativa (-30d)
+    # Verificar que solo el medidor 3 fue consultado (no otros medidores)
     calls = mock_omr.call_args_list
-    assert len(calls) == 1
-    assert calls[0][0][0] == 3
+    assert all(c[0][0] == 3 for c in calls), "Solo debe consultarse el medidor 3"
 
 
 # ── Test h ─────────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@
   let _chartSerie = null;
   let _abort      = null;
   let _segmentoIds = []; // mapa: index de dataset → medidor_id
+  let _costosPorId = {}; // mapa: medidor_id → costo_mxn
 
   // ── Helpers DOM ────────────────────────────────────────────────────────────
   const $  = (id) => document.getElementById(id);
@@ -82,6 +83,7 @@
     _renderSunburst(data.arbol_sunburst);
     _renderSerie(data.serie_temporal, data.nodo_seleccionado.nombre);
     $("titulo-nodo").textContent = data.nodo_seleccionado.nombre;
+    _renderComparativa(data.comparativa_mes_anterior);
   }
 
   // ── Breadcrumbs ────────────────────────────────────────────────────────────
@@ -116,6 +118,24 @@
     $("kpi-fp").textContent       = fmt(kpis.factor_potencia_promedio, 3);
     $("kpi-muestras").textContent = kpis.num_muestras != null
       ? kpis.num_muestras.toLocaleString("es-MX") : "—";
+
+    // Costo
+    const costEl = $("kpi-costo");
+    const hintEl = $("kpi-costo-hint");
+    if (costEl) {
+      costEl.textContent = kpis.costo_mxn != null ? fmt(kpis.costo_mxn) : "N/D";
+    }
+    if (hintEl) {
+      const fuente = kpis.precio_fuente;
+      const ref = kpis.precio_mes_referencia;
+      const hints = {
+        "factura_mes_exacto": `Precio de ${ref || ""}`,
+        "factura_mes_anterior": `Precio est. último mes disponible (${ref || ""})`,
+        "promedio_12m": "Precio promedio de los últimos 12 meses",
+        "sin_datos": "Sin facturas registradas para este cliente",
+      };
+      hintEl.textContent = hints[fuente] || "";
+    }
   }
 
   // ── Sunburst (Chart.js doughnut multi-anillo) ──────────────────────────────
@@ -129,9 +149,12 @@
     // Dataset 1: anillo medio — transformadores
     // Dataset 2: anillo externo — cargas finales
 
+    _costosPorId = {};
+    _costosPorId[raiz.id] = raiz.costo_mxn;
+
     const ds0 = { data: [energiaAcometida], backgroundColor: ["#1F3A5F"],
       hoverBackgroundColor: ["#2E5C8A"], borderWidth: 1,
-      borderColor: "#fff", label: "Acometida" };
+      borderColor: "#fff", label: "Acometida", _segIds: [raiz.id] };
 
     const ds1Data = [], ds1Colors = [], ds1Hover = [], ds1Labels = [];
     const ds2Data = [], ds2Colors = [], ds2Hover = [], ds2Labels = [];
@@ -145,6 +168,7 @@
       ds1Hover.push(_variante(colorBase, 0.15));
       ds1Labels.push(t.nombre);
       _segmentoIds.anillo1.push(t.id);
+      _costosPorId[t.id] = t.costo_mxn;
 
       const cargas = t.hijos || [];
       // Agrupar cargas < 5% de la energía del transformador en "Otros"
@@ -161,6 +185,7 @@
           ds2Hover.push(_variante(colorBase, 0.55));
           ds2Labels.push(c.nombre);
           _segmentoIds.anillo2.push(c.id);
+          _costosPorId[c.id] = c.costo_mxn;
         }
       }
       if (otrosKwh > 0) {
@@ -174,10 +199,12 @@
 
     const ds1 = { data: ds1Data, backgroundColor: ds1Colors,
       hoverBackgroundColor: ds1Hover, borderWidth: 1, borderColor: "#fff",
-      label: "Transformadores", labels: ds1Labels };
+      label: "Transformadores", labels: ds1Labels,
+      _segIds: _segmentoIds.anillo1 };
     const ds2 = { data: ds2Data, backgroundColor: ds2Colors,
       hoverBackgroundColor: ds2Hover, borderWidth: 1, borderColor: "#fff",
-      label: "Cargas", labels: ds2Labels };
+      label: "Cargas", labels: ds2Labels,
+      _segIds: _segmentoIds.anillo2 };
 
     const config = {
       type: "doughnut",
@@ -194,7 +221,13 @@
                 const ds = ctx.dataset;
                 const lbl = ds.labels ? ds.labels[ctx.dataIndex] : raiz.nombre;
                 const kwh = ctx.raw.toLocaleString("es-MX", {maximumFractionDigits: 1});
-                return ` ${lbl}: ${kwh} kWh`;
+                // Buscar costo del segmento en el árbol
+                const segId = ds._segIds ? ds._segIds[ctx.dataIndex] : null;
+                let costoStr = "";
+                if (segId && _costosPorId[segId] != null) {
+                  costoStr = ` | $${_costosPorId[segId].toLocaleString("es-MX", {maximumFractionDigits: 0})} MXN`;
+                }
+                return ` ${lbl}: ${kwh} kWh${costoStr}`;
               }
             }
           }
@@ -256,6 +289,34 @@
     if (_chartSerie) { _chartSerie.destroy(); }
     const ctx = $("serieTemporalChart");
     if (ctx) _chartSerie = new Chart(ctx, config);
+  }
+
+  function _renderComparativa(comp) {
+    const deltaEl = $("kpi-delta");
+    const hintEl  = $("kpi-delta-hint");
+    if (!deltaEl) return;
+    if (!comp || !comp.disponible) {
+      deltaEl.textContent = "N/D";
+      deltaEl.style.color = "";
+      if (hintEl) hintEl.textContent = "Sin datos del mes anterior";
+      return;
+    }
+    const pct = comp.energia_delta_pct;
+    if (pct == null) {
+      deltaEl.textContent = "N/D";
+      deltaEl.style.color = "";
+    } else {
+      const signo = pct >= 0 ? "+" : "";
+      deltaEl.textContent = `${signo}${pct.toLocaleString("es-MX", {maximumFractionDigits: 1})}%`;
+      deltaEl.style.color = pct > 0 ? "#dc3545" : "#198754";  // rojo=más consumo, verde=menos
+    }
+    if (hintEl) {
+      const eStr = comp.energia_delta_pct != null
+        ? `Energía: ${comp.energia_delta_pct >= 0 ? "+" : ""}${comp.energia_delta_pct}%` : "";
+      const cStr = comp.costo_delta_pct != null
+        ? ` | Costo: ${comp.costo_delta_pct >= 0 ? "+" : ""}${comp.costo_delta_pct}%` : "";
+      hintEl.textContent = eStr + cStr;
+    }
   }
 
   // ── Controles ──────────────────────────────────────────────────────────────

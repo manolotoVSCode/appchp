@@ -2842,19 +2842,88 @@ def create_app() -> Flask:
                 hijos_ids = [m["id"] for m in todos if m.get("medidor_padre_id") == mid]
                 return round(sum(_energia_nodo(h) for h in hijos_ids), 3)
 
-        def _arbol_sunburst(mid):
+        # ── Costo del periodo actual ───────────────────────────────────────
+        from calc.telemetria_costos import calcular_costo_periodo as _ccp
+        costo_info = _ccp(cliente_id, energia_kwh, desde, ahora)
+
+        # ── Comparativa mes anterior ───────────────────────────────────────
+        desde_ant = desde - timedelta(days=30)
+        hasta_ant = ahora - timedelta(days=30)
+        desde_ant_iso = desde_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
+        hasta_ant_iso = hasta_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        mediciones_ant = {}
+        for hid in hojas_ids:
+            if rango == "24h":
+                rows_ant = _omr(hid, desde_ant_iso, hasta_ant_iso)
+                mediciones_ant[hid] = [
+                    {"ts": r["timestamp"], "kw": float(r.get("potencia_activa_kw") or 0)}
+                    for r in rows_ant
+                ]
+            else:
+                rows_ant = _oa15(hid, desde_ant_iso, hasta_ant_iso)
+                mediciones_ant[hid] = [
+                    {"ts": r["bucket_15min"], "kw": float(r.get("potencia_activa_kw") or 0)}
+                    for r in rows_ant
+                ]
+
+        # Agregar serie anterior y calcular energía
+        bucket_ant = defaultdict(float)
+        for hid, rows in mediciones_ant.items():
+            for r in rows:
+                bucket_ant[r["ts"]] += r["kw"]
+
+        ts_ant = sorted(bucket_ant.keys())
+        pot_ant = [bucket_ant[ts] for ts in ts_ant]
+
+        # Muestras esperadas: misma cantidad que el periodo actual
+        muestras_esperadas = max(num_muestras, 1)
+        disponible_ant = len(ts_ant) >= muestras_esperadas * 0.5
+
+        energia_ant = 0.0
+        if len(ts_ant) >= 2:
+            from datetime import datetime as _dt3
+            for i in range(1, len(ts_ant)):
+                try:
+                    t0 = _dt3.fromisoformat(ts_ant[i-1].replace("Z", "+00:00"))
+                    t1 = _dt3.fromisoformat(ts_ant[i].replace("Z", "+00:00"))
+                    dt_h = (t1 - t0).total_seconds() / 3600.0
+                    energia_ant += (pot_ant[i-1] + pot_ant[i]) / 2.0 * dt_h
+                except Exception:
+                    pass
+
+        if disponible_ant and energia_kwh > 0:
+            energia_delta_pct = round((energia_kwh - energia_ant) / energia_ant * 100, 1) if energia_ant > 0 else None
+        else:
+            energia_delta_pct = None
+
+        costo_ant_info = _ccp(cliente_id, energia_ant, desde_ant, hasta_ant) if disponible_ant else None
+        costo_ant = costo_ant_info["costo_mxn"] if costo_ant_info else None
+        costo_delta_pct = None
+        if costo_info.get("costo_mxn") and costo_ant and costo_ant > 0:
+            costo_delta_pct = round((costo_info["costo_mxn"] - costo_ant) / costo_ant * 100, 1)
+
+        # ── Sunburst con costo por nodo ────────────────────────────────────
+        precio_kwh = costo_info.get("precio_mxn_kwh")
+
+        def _costo_nodo(kwh):
+            return round(kwh * precio_kwh, 2) if precio_kwh is not None else None
+
+        def _arbol_sunburst_con_costo(mid):
             m = por_id.get(mid, {})
-            hijos_ids = [x["id"] for x in todos if x.get("medidor_padre_id") == mid]
+            hijos_ids_local = [x["id"] for x in todos if x.get("medidor_padre_id") == mid]
+            kwh = _energia_nodo(mid)
             return {
                 "id": mid,
                 "nombre": m.get("nombre", ""),
                 "punto_medicion": m.get("punto_medicion", ""),
                 "tipo_carga": m.get("tipo_carga"),
-                "energia_kwh": _energia_nodo(mid),
-                "hijos": [_arbol_sunburst(h) for h in hijos_ids],
+                "energia_kwh": kwh,
+                "costo_mxn": _costo_nodo(kwh),
+                "hijos": [_arbol_sunburst_con_costo(h) for h in hijos_ids_local],
             }
 
-        arbol_sunburst = _arbol_sunburst(acometida["id"])
+        arbol_sunburst = _arbol_sunburst_con_costo(acometida["id"])
 
         return jsonify({
             "nodo_seleccionado": {
@@ -2871,6 +2940,17 @@ def create_app() -> Flask:
                 "demanda_pico_kw": round(demanda_pico, 2),
                 "factor_potencia_promedio": round(fp_prom, 3),
                 "num_muestras": num_muestras,
+                "costo_mxn": costo_info.get("costo_mxn"),
+                "precio_mxn_kwh": costo_info.get("precio_mxn_kwh"),
+                "precio_fuente": costo_info.get("fuente"),
+                "precio_mes_referencia": costo_info.get("mes_referencia"),
+            },
+            "comparativa_mes_anterior": {
+                "energia_kwh_anterior": round(energia_ant, 2),
+                "energia_delta_pct": energia_delta_pct,
+                "costo_mxn_anterior": costo_ant,
+                "costo_delta_pct": costo_delta_pct,
+                "disponible": disponible_ant,
             },
             "arbol_sunburst": arbol_sunburst,
         })

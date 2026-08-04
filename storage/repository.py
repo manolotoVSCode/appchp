@@ -1899,3 +1899,61 @@ def get_usuarios_de_cliente(cliente_id: int) -> list[dict]:
     except Exception as exc:
         logger.error("Error en get_usuarios_de_cliente cliente_id=%s: %s", cliente_id, exc)
         return []
+
+
+# ── Fase 2 D3: lookup de facturas para costo en pesos en telemetría ────────────
+
+def obtener_factura_cfe_cliente_mes(cliente_id: int, anio: int, mes: int) -> dict | None:
+    """Factura CFE del cliente en (anio, mes) con cfe_periodos embebidos, o None."""
+    resp = (
+        _supabase.table("cfe_facturas")
+        .select("*, cfe_periodos(*)")
+        .eq("cliente_id", cliente_id)
+        .eq("anio", anio)
+        .eq("mes", mes)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def obtener_ultimas_facturas_cfe(cliente_id: int, n: int = 12) -> list[dict]:
+    """Últimas n facturas CFE del cliente con cfe_periodos, ordenadas DESC."""
+    resp = (
+        _supabase.table("cfe_facturas")
+        .select("*, cfe_periodos(*)")
+        .eq("cliente_id", cliente_id)
+        .order("anio", desc=True)
+        .order("mes", desc=True)
+        .limit(n)
+        .execute()
+    )
+    return resp.data or []
+
+
+def obtener_factura_ppa_cliente_mes(cliente_id: int, anio: int, mes: int) -> dict | None:
+    """Factura PPA del cliente en (anio, mes), o None."""
+    resp = (
+        _supabase.table("facturas_electricidad_calificado")
+        .select("*")
+        .eq("cliente_id", cliente_id)
+        .eq("anio", anio)
+        .eq("mes", mes)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def obtener_ultimas_facturas_ppa(cliente_id: int, n: int = 12) -> list[dict]:
+    """Últimas n facturas PPA del cliente, ordenadas DESC."""
+    resp = (
+        _supabase.table("facturas_electricidad_calificado")
+        .select("*")
+        .eq("cliente_id", cliente_id)
+        .order("anio", desc=True)
+        .order("mes", desc=True)
+        .limit(n)
+        .execute()
+    )
+    return resp.data or []
