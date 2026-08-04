@@ -227,15 +227,6 @@
     return m ? `SE-${m[1]}` : "Otros";
   }
 
-  /** Suma energia_kwh y potencia nominal de un subárbol. */
-  function _agregarRama(nodo) {
-    if (!nodo.hijos || nodo.hijos.length === 0) {
-      return { energia_kwh: nodo.energia_kwh || 0, potencia_kw: nodo.energia_kwh || 0 };
-    }
-    let e = 0;
-    (nodo.hijos || []).forEach((h) => { e += _agregarRama(h).energia_kwh; });
-    return { energia_kwh: e };
-  }
 
   // ── SVG helpers ────────────────────────────────────────────────────────────
 
@@ -577,8 +568,25 @@
   }
 
   // ── Controles ──────────────────────────────────────────────────────────────
+  /**
+   * Navega a un nodo por su id (llamado desde breadcrumbs).
+   * También actualiza _nodoRaizId para que el unifilar refleje el nivel correcto.
+   */
   function setNodo(id) {
     _nodoId = id;
+    // Resetear la raíz del unifilar según el tipo del nodo en caché
+    if (_arbolCache) {
+      const idx = _indexarArbol(_arbolCache);
+      const nodo = idx[id];
+      if (nodo) {
+        if (nodo.punto_medicion === "acometida_cfe") {
+          _nodoRaizId = null;          // vista inicial (acometida + SEs)
+        } else if (nodo.punto_medicion === "transformador") {
+          _nodoRaizId = id;            // vista transformador + cargas
+        }
+        // carga_final: no cambia _nodoRaizId (el usuario sigue viendo el Tx padre)
+      }
+    }
     fetchDatos();
   }
   function setRango(r) {
