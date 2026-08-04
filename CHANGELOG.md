@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.74.1] — 2026-08-03
+
+### Corregido — CDN de Chart.js faltante en template de telemetría
+
+- `web/templates/telemetria/dashboard.html` — agregado `<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js">` antes del módulo propio en `{% block scripts %}`. Sin este CDN, el IIFE de `dashboard-telemetria.js` lanzaba "Chart is not defined" al intentar crear los gráficos de sunburst y serie temporal.
+
 ## [2.74.0] — 2026-08-03
 
 ### Añadido — Fase 2 D2: dashboard de telemetría para cliente
