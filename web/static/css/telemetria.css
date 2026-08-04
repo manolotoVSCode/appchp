@@ -1,0 +1,45 @@
+/* Dashboard de Telemetría — Fase 2 D4 */
+
+.unifilar-nodo {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+.unifilar-nodo:hover .unifilar-fondo {
+  filter: brightness(0.95);
+}
+.unifilar-wrapper.hovering .unifilar-nodo:not(.unifilar-highlight) {
+  opacity: 0.4;
+}
+.unifilar-linea-normal  { stroke: #6b7280; stroke-width: 2;   fill: none; }
+.unifilar-linea-alta    { stroke: #eab308; stroke-width: 2.5; fill: none; }
+.unifilar-linea-critica { stroke: #dc2626; stroke-width: 3;   fill: none; }
+.unifilar-label {
+  text-anchor: middle;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  fill: #1F3A5F;
+}
+.unifilar-label-small {
+  text-anchor: middle;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 10px;
+  fill: #6b7280;
+}
+.unifilar-valor-linea {
+  text-anchor: middle;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 10px;
+  fill: #374151;
+  font-weight: 600;
+}
+.unifilar-nodo-seleccionado > .unifilar-fondo {
+  stroke-width: 4 !important;
+}
+.unifilar-carga-ficticia > .unifilar-fondo {
+  fill: rgba(245, 158, 11, 0.08);
+  stroke: #f59e0b;
+  stroke-width: 2;
+}
+.unifilar-se-agrupacion > .unifilar-fondo {
+  stroke-dasharray: 4 3;
+}

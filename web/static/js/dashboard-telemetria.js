@@ -1,19 +1,26 @@
 (function () {
   "use strict";
 
-  // ── Paleta de colores ──────────────────────────────────────────────────────
-  // Derivada de --color-primary del proyecto (#1F3A5F) y complementarios.
-  const PALETA_RAMAS = [
-    "#2E5C8A", "#3D7AB5", "#1F6B5C", "#2E8A6B",
-    "#6B3D1F", "#8A5C2E", "#6B1F3D", "#8A2E5C",
-    "#3D6B1F", "#5C8A2E", "#1F3D6B", "#2E5C8A",
-  ];
-  function _variante(hex, factor) {
-    // Aclara un color hex mezclando con blanco (factor 0..1 = sin cambio..blanco)
-    const r = parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
-    const mix = (c) => Math.round(c + (255 - c) * factor).toString(16).padStart(2,"0");
-    return `#${mix(r)}${mix(g)}${mix(b)}`;
-  }
+  // ── Constantes visuales ────────────────────────────────────────────────────
+  const C_PRIMARIO   = "#1F3A5F";
+  const C_PRIMARIO_L = "#2E5C8A";
+  const C_CARGA      = "#f59e0b";   // naranja para cargas ficticias
+  const C_SE_FILL    = "rgba(31,58,95,0.04)";
+  const C_LINEA_NORM = "#6b7280";
+  const C_LINEA_ALTA = "#eab308";
+  const C_LINEA_CRIT = "#dc2626";
+
+  // Dimensiones de nodos (px)
+  const W_ACOM = 180; const H_ACOM = 64;
+  const W_SE   = 140; const H_SE   = 48;
+  const R_TX   = 22;                       // radio del círculo transformador
+  const W_CARG = 160; const H_CARG = 56;
+
+  // Layout
+  const NIVEL_H = 140;    // separación vertical entre niveles (px)
+  const MIN_SEP = 210;    // separación mínima horizontal entre nodos hermanos (px)
+  const PAD_X   = 60;     // padding lateral del SVG (px)
+  const PAD_Y   = 40;     // padding superior del SVG (px)
 
   // ── Estado ─────────────────────────────────────────────────────────────────
   const root = document.getElementById("dashboard-telemetria-root");
@@ -22,30 +29,32 @@
   const CLIENTE_ID = root.dataset.clienteId;
   const ENDPOINT   = root.dataset.endpoint;
 
-  let _rango      = "24h";
-  let _nodoId     = null;
-  let _chartSun   = null;
-  let _chartSerie = null;
-  let _abort      = null;
-  let _segmentoIds = []; // mapa: index de dataset → medidor_id
-  let _costosPorId = {}; // mapa: medidor_id → costo_mxn
+  let _rango         = "24h";
+  let _nodoId        = null;   // nodo cuyo time-series se muestra en la gráfica
+  let _nodoRaizId    = null;   // raíz del unifilar: null | número | "grupo:SE-N"
+  let _arbolCache    = null;   // último arbol_sunburst recibido del backend
+  let _chartSerie    = null;
+  let _abort         = null;
 
   // ── Helpers DOM ────────────────────────────────────────────────────────────
-  const $  = (id) => document.getElementById(id);
-  const fmt = (n, dec=2) => n == null ? "—" :
-    Number(n).toLocaleString("es-MX", {maximumFractionDigits: dec, minimumFractionDigits: dec});
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n, dec = 2) =>
+    n == null ? "—" :
+    Number(n).toLocaleString("es-MX", { maximumFractionDigits: dec, minimumFractionDigits: dec });
 
   function _mostrarError(msg) {
-    const banner = $("telemetria-error-banner");
-    if (banner) { $("telemetria-error-msg").textContent = msg; banner.classList.remove("d-none"); }
+    const b = $("telemetria-error-banner");
+    if (b) { $("telemetria-error-msg").textContent = msg; b.classList.remove("d-none"); }
   }
   function _ocultarError() {
-    const banner = $("telemetria-error-banner");
-    if (banner) banner.classList.add("d-none");
+    const b = $("telemetria-error-banner");
+    if (b) b.classList.add("d-none");
   }
   function _mostrarLoading(visible) {
-    const el = $("sunburst-loading");
-    if (el) el.classList.toggle("d-none", !visible);
+    const loading = $("unifilar-loading");
+    const svg     = $("unifilarSvg");
+    if (loading) loading.style.display = visible ? "flex" : "none";
+    if (svg)     svg.style.display     = visible ? "none" : "block";
   }
 
   // ── Fetch central ──────────────────────────────────────────────────────────
@@ -59,15 +68,14 @@
     if (_nodoId) params.set("nodo_id", _nodoId);
 
     fetch(`${ENDPOINT}?${params}`, { signal: _abort.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((data) => {
         _mostrarLoading(false);
         if (data.error) { _mostrarError(data.error); return; }
+        _arbolCache = data.arbol_sunburst;
         _renderTodo(data);
-        $("ultima-actualizacion").textContent = "Actualizado " + new Date().toLocaleTimeString("es-MX");
+        $("ultima-actualizacion").textContent =
+          "Actualizado " + new Date().toLocaleTimeString("es-MX");
       })
       .catch((e) => {
         if (e.name === "AbortError") return;
@@ -80,7 +88,7 @@
   function _renderTodo(data) {
     _renderBreadcrumbs(data.nodo_seleccionado);
     _renderKPIs(data.kpis);
-    _renderSunburst(data.arbol_sunburst);
+    _renderUnifilar(data.arbol_sunburst);
     _renderSerie(data.serie_temporal, data.nodo_seleccionado.nombre);
     $("titulo-nodo").textContent = data.nodo_seleccionado.nombre;
     _renderComparativa(data.comparativa_mes_anterior);
@@ -119,135 +127,43 @@
     $("kpi-muestras").textContent = kpis.num_muestras != null
       ? kpis.num_muestras.toLocaleString("es-MX") : "—";
 
-    // Costo
     const costEl = $("kpi-costo");
     const hintEl = $("kpi-costo-hint");
-    if (costEl) {
-      costEl.textContent = kpis.costo_mxn != null ? fmt(kpis.costo_mxn) : "N/D";
-    }
+    if (costEl) costEl.textContent = kpis.costo_mxn != null ? fmt(kpis.costo_mxn) : "N/D";
     if (hintEl) {
-      const fuente = kpis.precio_fuente;
       const ref = kpis.precio_mes_referencia;
       const hints = {
-        "factura_mes_exacto": `Precio de ${ref || ""}`,
+        "factura_mes_exacto":   `Precio de ${ref || ""}`,
         "factura_mes_anterior": `Precio est. último mes disponible (${ref || ""})`,
-        "promedio_12m": "Precio promedio de los últimos 12 meses",
-        "sin_datos": "Sin facturas registradas para este cliente",
+        "promedio_12m":         "Precio promedio de los últimos 12 meses",
+        "sin_datos":            "Sin facturas registradas para este cliente",
       };
-      hintEl.textContent = hints[fuente] || "";
+      hintEl.textContent = hints[kpis.precio_fuente] || "";
     }
   }
 
-  // ── Sunburst (Chart.js doughnut multi-anillo) ──────────────────────────────
-  function _renderSunburst(raiz) {
-    // Extraer transformadores (hijos de la acometida) y sus cargas
-    const transformadores = raiz.hijos || [];
-    const energiaAcometida = raiz.energia_kwh || 1;
-
-    // Construir datasets
-    // Dataset 0: anillo interno — acometida
-    // Dataset 1: anillo medio — transformadores
-    // Dataset 2: anillo externo — cargas finales
-
-    _costosPorId = {};
-    _costosPorId[raiz.id] = raiz.costo_mxn;
-
-    const ds0 = { data: [energiaAcometida], backgroundColor: ["#1F3A5F"],
-      hoverBackgroundColor: ["#2E5C8A"], borderWidth: 1,
-      borderColor: "#fff", label: "Acometida", _segIds: [raiz.id] };
-
-    const ds1Data = [], ds1Colors = [], ds1Hover = [], ds1Labels = [];
-    const ds2Data = [], ds2Colors = [], ds2Hover = [], ds2Labels = [];
-    _segmentoIds = { anillo1: [], anillo2: [] };
-
-    let tIdx = 0;
-    for (const t of transformadores) {
-      const colorBase = PALETA_RAMAS[tIdx % PALETA_RAMAS.length];
-      ds1Data.push(t.energia_kwh || 0);
-      ds1Colors.push(colorBase);
-      ds1Hover.push(_variante(colorBase, 0.15));
-      ds1Labels.push(t.nombre);
-      _segmentoIds.anillo1.push(t.id);
-      _costosPorId[t.id] = t.costo_mxn;
-
-      const cargas = t.hijos || [];
-      // Agrupar cargas < 5% de la energía del transformador en "Otros"
-      const totalT = t.energia_kwh || 1;
-      let otrosKwh = 0;
-      for (const c of cargas) {
-        const pct = (c.energia_kwh || 0) / totalT;
-        if (pct < 0.05) {
-          otrosKwh += c.energia_kwh || 0;
-          _segmentoIds.anillo2.push(null); // "Otros" no navega
-        } else {
-          ds2Data.push(c.energia_kwh || 0);
-          ds2Colors.push(_variante(colorBase, 0.4));
-          ds2Hover.push(_variante(colorBase, 0.55));
-          ds2Labels.push(c.nombre);
-          _segmentoIds.anillo2.push(c.id);
-          _costosPorId[c.id] = c.costo_mxn;
-        }
-      }
-      if (otrosKwh > 0) {
-        ds2Data.push(otrosKwh);
-        ds2Colors.push(_variante(colorBase, 0.6));
-        ds2Hover.push(_variante(colorBase, 0.7));
-        ds2Labels.push("Otros");
-      }
-      tIdx++;
+  // ── Comparativa ────────────────────────────────────────────────────────────
+  function _renderComparativa(comp) {
+    const deltaEl = $("kpi-delta");
+    const hintEl  = $("kpi-delta-hint");
+    if (!deltaEl) return;
+    if (!comp || !comp.disponible) {
+      deltaEl.textContent = "N/D"; deltaEl.style.color = "";
+      if (hintEl) hintEl.textContent = "Sin datos del mes anterior";
+      return;
     }
-
-    const ds1 = { data: ds1Data, backgroundColor: ds1Colors,
-      hoverBackgroundColor: ds1Hover, borderWidth: 1, borderColor: "#fff",
-      label: "Transformadores", labels: ds1Labels,
-      _segIds: _segmentoIds.anillo1 };
-    const ds2 = { data: ds2Data, backgroundColor: ds2Colors,
-      hoverBackgroundColor: ds2Hover, borderWidth: 1, borderColor: "#fff",
-      label: "Cargas", labels: ds2Labels,
-      _segIds: _segmentoIds.anillo2 };
-
-    const config = {
-      type: "doughnut",
-      data: { datasets: [ds0, ds1, ds2] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: "20%",
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label(ctx) {
-                const ds = ctx.dataset;
-                const lbl = ds.labels ? ds.labels[ctx.dataIndex] : raiz.nombre;
-                const kwh = ctx.raw.toLocaleString("es-MX", {maximumFractionDigits: 1});
-                // Buscar costo del segmento en el árbol
-                const segId = ds._segIds ? ds._segIds[ctx.dataIndex] : null;
-                let costoStr = "";
-                if (segId && _costosPorId[segId] != null) {
-                  costoStr = ` | $${_costosPorId[segId].toLocaleString("es-MX", {maximumFractionDigits: 0})} MXN`;
-                }
-                return ` ${lbl}: ${kwh} kWh${costoStr}`;
-              }
-            }
-          }
-        },
-        onClick(evt, elements) {
-          if (!elements.length) return;
-          const el = elements[0];
-          const dsIdx = el.datasetIndex;
-          const idx = el.index;
-          let id = null;
-          if (dsIdx === 1) id = (_segmentoIds.anillo1 || [])[idx];
-          if (dsIdx === 2) id = (_segmentoIds.anillo2 || [])[idx];
-          if (id) setNodo(id);
-        }
-      }
-    };
-
-    if (_chartSun) { _chartSun.destroy(); }
-    const ctx = $("sunburstChart");
-    if (ctx) _chartSun = new Chart(ctx, config);
+    const pct = comp.energia_delta_pct;
+    if (pct == null) { deltaEl.textContent = "N/D"; deltaEl.style.color = ""; }
+    else {
+      deltaEl.textContent = `${pct >= 0 ? "+" : ""}${pct.toLocaleString("es-MX", { maximumFractionDigits: 1 })}%`;
+      deltaEl.style.color = pct > 0 ? "#dc3545" : "#198754";
+    }
+    if (hintEl) {
+      const eStr = pct != null ? `Energía: ${pct >= 0 ? "+" : ""}${pct}%` : "";
+      const cStr = comp.costo_delta_pct != null
+        ? ` | Costo: ${comp.costo_delta_pct >= 0 ? "+" : ""}${comp.costo_delta_pct}%` : "";
+      hintEl.textContent = eStr + cStr;
+    }
   }
 
   // ── Serie temporal ─────────────────────────────────────────────────────────
@@ -255,11 +171,11 @@
     const labels = (serie.labels || []).map((ts) => {
       try {
         const d = new Date(ts);
-        if (_rango === "24h") return d.toLocaleTimeString("es-MX", {hour:"2-digit",minute:"2-digit"});
-        return d.toLocaleDateString("es-MX", {day:"2-digit",month:"short"});
+        return _rango === "24h"
+          ? d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
+          : d.toLocaleDateString("es-MX", { day: "2-digit", month: "short" });
       } catch { return ts; }
     });
-
     const config = {
       type: "line",
       data: {
@@ -267,17 +183,14 @@
         datasets: [{
           label: `Potencia activa — ${nombreNodo}`,
           data: serie.potencia_kw || [],
-          borderColor: "#2E5C8A",
+          borderColor: C_PRIMARIO_L,
           backgroundColor: "rgba(46,92,138,0.08)",
           pointRadius: labels.length > 200 ? 0 : 2,
-          borderWidth: 1.5,
-          tension: 0.2,
-          fill: true,
+          borderWidth: 1.5, tension: 0.2, fill: true,
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { maxTicksLimit: 12, maxRotation: 0 } },
@@ -285,38 +198,382 @@
         }
       }
     };
-
     if (_chartSerie) { _chartSerie.destroy(); }
     const ctx = $("serieTemporalChart");
     if (ctx) _chartSerie = new Chart(ctx, config);
   }
 
-  function _renderComparativa(comp) {
-    const deltaEl = $("kpi-delta");
-    const hintEl  = $("kpi-delta-hint");
-    if (!deltaEl) return;
-    if (!comp || !comp.disponible) {
-      deltaEl.textContent = "N/D";
-      deltaEl.style.color = "";
-      if (hintEl) hintEl.textContent = "Sin datos del mes anterior";
+  // ════════════════════════════════════════════════════════════════════════════
+  // UNIFILAR SVG
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // ── Helpers de árbol ───────────────────────────────────────────────────────
+
+  /** Construye índice id → nodo del arbol_sunburst (BFS). */
+  function _indexarArbol(raiz) {
+    const idx = {};
+    const cola = [raiz];
+    while (cola.length) {
+      const n = cola.shift();
+      idx[n.id] = n;
+      (n.hijos || []).forEach((h) => cola.push(h));
+    }
+    return idx;
+  }
+
+  /** Agrupa transformadores por subestación derivada del nombre. */
+  function _derivarSE(nombre) {
+    const m = nombre.match(/^T-(\d+)/);
+    return m ? `SE-${m[1]}` : "Otros";
+  }
+
+  /** Suma energia_kwh y potencia nominal de un subárbol. */
+  function _agregarRama(nodo) {
+    if (!nodo.hijos || nodo.hijos.length === 0) {
+      return { energia_kwh: nodo.energia_kwh || 0, potencia_kw: nodo.energia_kwh || 0 };
+    }
+    let e = 0;
+    (nodo.hijos || []).forEach((h) => { e += _agregarRama(h).energia_kwh; });
+    return { energia_kwh: e };
+  }
+
+  // ── SVG helpers ────────────────────────────────────────────────────────────
+
+  const NS = "http://www.w3.org/2000/svg";
+
+  function _el(tag, attrs = {}) {
+    const e = document.createElementNS(NS, tag);
+    Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v));
+    return e;
+  }
+
+  function _text(txt, x, y, cls) {
+    const t = _el("text", { x, y, class: cls || "unifilar-label" });
+    t.textContent = txt;
+    return t;
+  }
+
+  function _multilineText(lines, cx, baseY, lineH, cls) {
+    const g = _el("g");
+    lines.forEach((l, i) => {
+      if (l == null || l === "") return;
+      g.appendChild(_text(l, cx, baseY + i * lineH, cls));
+    });
+    return g;
+  }
+
+  /** Clase CSS de la línea según % de carga. */
+  function _claseLinea(kwActivo, kwNominal) {
+    if (!kwNominal || kwNominal <= 0) return "unifilar-linea-normal";
+    const pct = kwActivo / kwNominal;
+    if (pct >= 0.95) return "unifilar-linea-critica";
+    if (pct >= 0.80) return "unifilar-linea-alta";
+    return "unifilar-linea-normal";
+  }
+
+  // ── Dibujo de nodos ────────────────────────────────────────────────────────
+
+  /** Acometida CFE: rectángulo 180x64 con borde primario. */
+  function _dibujarAcometida(g, nodo, cx, cy, seleccionado) {
+    const x = cx - W_ACOM / 2;
+    const y = cy - H_ACOM / 2;
+    const rect = _el("rect", {
+      x, y, width: W_ACOM, height: H_ACOM, rx: 6,
+      fill: "#eef2f7", stroke: C_PRIMARIO,
+      "stroke-width": seleccionado ? 4 : 2,
+      class: "unifilar-fondo",
+    });
+    g.appendChild(rect);
+    const kwh = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
+    g.appendChild(_multilineText(
+      [nodo.nombre, kwh], cx, cy - 10, 16, "unifilar-label"
+    ));
+    // punto de conexión inferior
+    return { x: cx, y: cy + H_ACOM / 2 };
+  }
+
+  /** SE agrupada: rectángulo redondeado con borde punteado. */
+  function _dibujarSE(g, nombre, nTx, kwh, cx, cy, seleccionado) {
+    const x = cx - W_SE / 2;
+    const y = cy - H_SE / 2;
+    const rect = _el("rect", {
+      x, y, width: W_SE, height: H_SE, rx: 8,
+      fill: C_SE_FILL, stroke: C_PRIMARIO,
+      "stroke-width": seleccionado ? 4 : 1.5,
+      "stroke-dasharray": "4 3",
+      class: "unifilar-fondo",
+    });
+    g.appendChild(rect);
+    const kwhStr = kwh != null ? fmt(kwh) + " kWh" : "";
+    g.appendChild(_multilineText(
+      [nombre, `${nTx} transformadores`, kwhStr], cx, cy - 8, 14, "unifilar-label-small"
+    ));
+    return { x: cx, y: cy + H_SE / 2 };
+  }
+
+  /** Transformador: doble círculo. */
+  function _dibujarTransformador(g, nodo, cx, cy, seleccionado) {
+    const cy1 = cy - 6; const cy2 = cy + 6;
+    const sw = seleccionado ? 3 : 1.5;
+    g.appendChild(_el("circle", {
+      cx, cy: cy1, r: R_TX, fill: "white",
+      stroke: C_PRIMARIO, "stroke-width": sw, class: "unifilar-fondo",
+    }));
+    g.appendChild(_el("circle", {
+      cx, cy: cy2, r: R_TX, fill: "rgba(255,255,255,0.7)",
+      stroke: C_PRIMARIO, "stroke-width": sw, class: "unifilar-fondo",
+    }));
+    // Etiqueta a la derecha
+    const ex = cx + R_TX + 8;
+    const kwh = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
+    const nom = nodo.potencia_nominal_kw ? fmt(nodo.potencia_nominal_kw) + " kW nom." : "";
+    [nodo.nombre, kwh, nom].forEach((l, i) => {
+      const t = _el("text", { x: ex, y: cy - 10 + i * 14, class: "unifilar-label-small",
+        "text-anchor": "start", "font-size": "11" });
+      t.textContent = l || "";
+      g.appendChild(t);
+    });
+    return { x: cx, y: cy2 + R_TX };
+  }
+
+  /** Carga final: rectángulo naranja. */
+  function _dibujarCarga(g, nodo, cx, cy, seleccionado) {
+    const x = cx - W_CARG / 2;
+    const y = cy - H_CARG / 2;
+    const rect = _el("rect", {
+      x, y, width: W_CARG, height: H_CARG, rx: 6,
+      fill: "rgba(245,158,11,0.08)", stroke: seleccionado ? "#b45309" : C_CARGA,
+      "stroke-width": seleccionado ? 4 : 2,
+      class: "unifilar-fondo",
+    });
+    g.appendChild(rect);
+    const tipo = nodo.tipo_carga ? nodo.tipo_carga.replace(/_/g, " ") : "";
+    const kwh  = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
+    g.appendChild(_multilineText(
+      [nodo.nombre, tipo, kwh], cx, cy - 12, 16, "unifilar-label-small"
+    ));
+    return { x: cx, y: cy + H_CARG / 2 };
+  }
+
+  /** Línea ortogonal de padre a hijo con etiqueta kW · kWh. */
+  function _dibujarLinea(svgEl, px, py, hx, hy, kwhHijo, kwNomHijo) {
+    const miY = py + (hy - py) / 2;
+    const d = `M ${px} ${py} L ${px} ${miY} L ${hx} ${miY} L ${hx} ${hy}`;
+    const cls = _claseLinea(kwhHijo, kwNomHijo);
+    svgEl.appendChild(_el("path", { d, class: cls }));
+    // Etiqueta sobre el segmento horizontal
+    if (kwhHijo != null) {
+      const lx = (px + hx) / 2;
+      const ly = miY - 4;
+      const t = _el("text", { x: lx, y: ly, class: "unifilar-valor-linea" });
+      t.textContent = fmt(kwhHijo) + " kWh";
+      svgEl.appendChild(t);
+    }
+  }
+
+  // ── Motor de layout ────────────────────────────────────────────────────────
+
+  /**
+   * renderUnifilar — función principal.
+   * Determina la vista según _nodoRaizId y dibuja el SVG.
+   */
+  function _renderUnifilar(raiz) {
+    if (!raiz) return;
+    const svg = $("unifilarSvg");
+    if (!svg) return;
+    svg.innerHTML = "";
+
+    const wrapper = $("unifilar-wrapper");
+    const wrapW  = wrapper ? wrapper.clientWidth - 48 : 800;
+
+    // ── Determinar modo de vista ──────────────────────────────────────────
+    const idx = _indexarArbol(raiz);
+
+    let vistaAcometida = null;  // nodo acometida actual (si aplica)
+    let vistaSE        = null;  // nombre "SE-N" (si aplica)
+    let vistaTx        = null;  // nodo transformador (si aplica)
+
+    if (_nodoRaizId === null) {
+      // Vista inicial: mostrar la acometida raíz y sus SEs
+      vistaAcometida = raiz;
+    } else if (typeof _nodoRaizId === "string" && _nodoRaizId.startsWith("grupo:")) {
+      // Vista SE: la acometida padre + la SE seleccionada con sus transformadores
+      vistaSE = _nodoRaizId.replace("grupo:", "");
+      vistaAcometida = raiz;
+    } else {
+      // nodoRaizId es un id numérico → puede ser acometida o transformador
+      const n = idx[_nodoRaizId];
+      if (!n) { vistaAcometida = raiz; }
+      else if (n.punto_medicion === "transformador") { vistaTx = n; vistaAcometida = raiz; }
+      else { vistaAcometida = n; }
+    }
+
+    // ── Calcular SEs a mostrar ────────────────────────────────────────────
+    const transformadoresActivos = vistaAcometida ? (vistaAcometida.hijos || []) : [];
+
+    // Agrupar transformadores por SE
+    const seMap = {}; // SE-N → [tx, ...]
+    transformadoresActivos.forEach((tx) => {
+      const se = _derivarSE(tx.nombre);
+      if (!seMap[se]) seMap[se] = [];
+      seMap[se].push(tx);
+    });
+    const seKeys = Object.keys(seMap).sort();
+
+    // ── Posicionar nodos ──────────────────────────────────────────────────
+    // Cada modo dibuja 2 o 3 niveles según la vista.
+
+    let svgH = PAD_Y * 2;
+    let svgW = wrapW;
+
+    if (vistaTx) {
+      // Vista transformador: Tx arriba, cargas abajo
+      const cargas = vistaTx.hijos || [];
+      const nCargas = Math.max(cargas.length, 1);
+      svgW  = Math.max(wrapW, nCargas * MIN_SEP + PAD_X * 2);
+      svgH  = PAD_Y + NIVEL_H * 2 + H_CARG + PAD_Y;
+
+      svg.setAttribute("width", svgW);
+      svg.setAttribute("height", svgH);
+      svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
+
+      const txX = svgW / 2; const txY = PAD_Y + R_TX + 6;
+      const gTx = _crearGrupoNodo(vistaTx.id, vistaTx.punto_medicion, false);
+      const { x: txOutX, y: txOutY } = _dibujarTransformador(gTx, vistaTx, txX, txY,
+        _nodoId === vistaTx.id);
+      svg.appendChild(gTx);
+
+      const paso = svgW / (nCargas + 1);
+      cargas.forEach((c, i) => {
+        const cx = paso * (i + 1); const cy = txY + NIVEL_H;
+        _dibujarLinea(svg, txOutX, txOutY, cx, cy - H_CARG / 2,
+          c.energia_kwh, c.potencia_nominal_kw);
+        const gC = _crearGrupoNodo(c.id, c.punto_medicion, true);
+        _dibujarCarga(gC, c, cx, cy, _nodoId === c.id);
+        svg.appendChild(gC);
+      });
+
+    } else if (vistaSE) {
+      // Vista SE: acometida arriba, la SE seleccionada en nivel 2, sus Txs abajo
+      const txsSE = seMap[vistaSE] || [];
+      const nTx   = Math.max(txsSE.length, 1);
+      svgW  = Math.max(wrapW, nTx * MIN_SEP + PAD_X * 2);
+      svgH  = PAD_Y + NIVEL_H * 3 + H_CARG + PAD_Y;
+
+      svg.setAttribute("width", svgW);
+      svg.setAttribute("height", svgH);
+      svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
+
+      // Nivel 0: acometida
+      const aX = svgW / 2; const aY = PAD_Y + H_ACOM / 2;
+      const gA = _crearGrupoNodo(vistaAcometida.id, "acometida_cfe", false);
+      const { x: aOutX, y: aOutY } = _dibujarAcometida(gA, vistaAcometida, aX, aY,
+        _nodoId === vistaAcometida.id);
+      svg.appendChild(gA);
+
+      // Nivel 1: SE
+      const seX = svgW / 2; const seY = aY + NIVEL_H;
+      const kwhSE = txsSE.reduce((s, t) => s + (t.energia_kwh || 0), 0);
+      const gSE = _crearGrupoNodo("grupo:" + vistaSE, "se_agrupacion", true);
+      const { x: seOutX, y: seOutY } = _dibujarSE(gSE, vistaSE, txsSE.length, kwhSE,
+        seX, seY, _nodoRaizId === "grupo:" + vistaSE);
+      _dibujarLinea(svg, aOutX, aOutY, seX, seY - H_SE / 2, kwhSE, null);
+      svg.appendChild(gSE);
+
+      // Nivel 2: transformadores
+      const paso = svgW / (nTx + 1);
+      txsSE.forEach((tx, i) => {
+        const txX = paso * (i + 1); const txY = seY + NIVEL_H;
+        _dibujarLinea(svg, seOutX, seOutY, txX, txY - R_TX - 6,
+          tx.energia_kwh, tx.potencia_nominal_kw);
+        const gT = _crearGrupoNodo(tx.id, "transformador", false);
+        _dibujarTransformador(gT, tx, txX, txY, _nodoId === tx.id);
+        svg.appendChild(gT);
+      });
+
+    } else {
+      // Vista inicial / acometida seleccionada: acometida + SEs agrupadas
+      const nSE  = Math.max(seKeys.length, 1);
+      svgW  = Math.max(wrapW, nSE * MIN_SEP + PAD_X * 2);
+      svgH  = PAD_Y + NIVEL_H * 2 + H_SE + PAD_Y;
+
+      svg.setAttribute("width", svgW);
+      svg.setAttribute("height", svgH);
+      svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
+
+      // Nivel 0: acometida
+      const aX = svgW / 2; const aY = PAD_Y + H_ACOM / 2;
+      const gA = _crearGrupoNodo(vistaAcometida.id, "acometida_cfe", false);
+      const { x: aOutX, y: aOutY } = _dibujarAcometida(gA, vistaAcometida, aX, aY,
+        _nodoId === vistaAcometida.id);
+      svg.appendChild(gA);
+
+      // Nivel 1: SEs
+      const paso = svgW / (nSE + 1);
+      seKeys.forEach((se, i) => {
+        const txs  = seMap[se];
+        const seX  = paso * (i + 1); const seY = aY + NIVEL_H;
+        const kwhSE = txs.reduce((s, t) => s + (t.energia_kwh || 0), 0);
+        _dibujarLinea(svg, aOutX, aOutY, seX, seY - H_SE / 2, kwhSE, null);
+        const gSE = _crearGrupoNodo("grupo:" + se, "se_agrupacion", false);
+        _dibujarSE(gSE, se, txs.length, kwhSE, seX, seY,
+          _nodoRaizId === "grupo:" + se);
+        svg.appendChild(gSE);
+      });
+    }
+  }
+
+  /**
+   * Crea un <g> con clase y data-nodo-id.
+   * Añade event listeners de click y hover.
+   */
+  function _crearGrupoNodo(id, tipo, esCargaFicticia) {
+    const g = _el("g", { class: "unifilar-nodo", "data-nodo-id": String(id) });
+    if (esCargaFicticia) g.classList.add("unifilar-carga-ficticia");
+    if (tipo === "se_agrupacion") g.classList.add("unifilar-se-agrupacion");
+
+    g.addEventListener("click", () => _handleClickNodo(id, tipo));
+
+    const wrapper = $("unifilar-wrapper");
+    g.addEventListener("mouseenter", () => {
+      if (wrapper) wrapper.classList.add("hovering");
+      g.classList.add("unifilar-highlight");
+    });
+    g.addEventListener("mouseleave", () => {
+      if (wrapper) wrapper.classList.remove("hovering");
+      g.classList.remove("unifilar-highlight");
+    });
+    return g;
+  }
+
+  /** Maneja click en un nodo del unifilar. */
+  function _handleClickNodo(id, tipo) {
+    if (tipo === "carga_final") {
+      // Click en carga: actualiza KPIs/gráfica sin cambiar nodoRaiz
+      _nodoId = typeof id === "number" ? id : parseInt(id, 10);
+      fetchDatos();
       return;
     }
-    const pct = comp.energia_delta_pct;
-    if (pct == null) {
-      deltaEl.textContent = "N/D";
-      deltaEl.style.color = "";
-    } else {
-      const signo = pct >= 0 ? "+" : "";
-      deltaEl.textContent = `${signo}${pct.toLocaleString("es-MX", {maximumFractionDigits: 1})}%`;
-      deltaEl.style.color = pct > 0 ? "#dc3545" : "#198754";  // rojo=más consumo, verde=menos
+    if (tipo === "se_agrupacion") {
+      _nodoRaizId = String(id); // "grupo:SE-N"
+      if (!_nodoId) {
+        // Usar el primer Tx de la SE como nodo para KPIs
+        if (_arbolCache) {
+          const seNombre = String(id).replace("grupo:", "");
+          const txs = (_arbolCache.hijos || []).filter(
+            (n) => _derivarSE(n.nombre) === seNombre
+          );
+          if (txs.length) _nodoId = txs[0].id;
+        }
+      }
+    } else if (tipo === "transformador") {
+      _nodoRaizId = typeof id === "number" ? id : parseInt(id, 10);
+      _nodoId = _nodoRaizId;
+    } else if (tipo === "acometida_cfe") {
+      _nodoRaizId = typeof id === "number" ? id : parseInt(id, 10);
+      _nodoId = _nodoRaizId;
     }
-    if (hintEl) {
-      const eStr = comp.energia_delta_pct != null
-        ? `Energía: ${comp.energia_delta_pct >= 0 ? "+" : ""}${comp.energia_delta_pct}%` : "";
-      const cStr = comp.costo_delta_pct != null
-        ? ` | Costo: ${comp.costo_delta_pct >= 0 ? "+" : ""}${comp.costo_delta_pct}%` : "";
-      hintEl.textContent = eStr + cStr;
-    }
+    fetchDatos();
   }
 
   // ── Controles ──────────────────────────────────────────────────────────────

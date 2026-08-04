@@ -41,15 +41,31 @@
     <button class="btn btn-sm btn-outline-danger ms-2" id="btn-reintentar">Reintentar</button>
   </div>
 
-  <div class="row telemetria-grid">
+  <!-- Unifilar SVG -->
+  <div id="unifilar-wrapper" style="position:relative;min-height:520px;
+       overflow-x:auto;background:#f8fafc;border-radius:8px;padding:24px;
+       margin-bottom:1rem">
+    <div id="unifilar-loading" class="d-flex align-items-center justify-content-center"
+         style="min-height:480px">
+      <div class="spinner-border text-primary" role="status"></div>
+    </div>
+    <svg id="unifilarSvg" xmlns="http://www.w3.org/2000/svg"
+         style="display:none;min-height:480px"></svg>
+    <p class="unifilar-nota" style="text-align:center;font-size:.75rem;
+       color:#6b7280;margin-top:12px;margin-bottom:0">
+      Cargas mostradas en naranja son representativas y se ajustarán en la
+      visita técnica.
+    </p>
+  </div>
+
+  <!-- Fila inferior: gráfica temporal + KPIs -->
+  <div class="row mt-1">
     <div class="col-lg-8 mb-3">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-body p-2">
-          <div id="sunburst-wrapper" style="position:relative;height:480px">
-            <canvas id="sunburstChart"></canvas>
-            <div id="sunburst-loading" class="d-flex align-items-center justify-content-center h-100 w-100 position-absolute top-0 start-0 bg-white bg-opacity-75">
-              <div class="spinner-border text-primary" role="status"></div>
-            </div>
+        <div class="card-body">
+          <h5 class="card-title">Perfil de potencia — <span id="titulo-nodo" class="text-primary">—</span></h5>
+          <div style="height:240px">
+            <canvas id="serieTemporalChart"></canvas>
           </div>
         </div>
       </div>
@@ -106,24 +122,12 @@
     </div>
   </div>
 
-  <div class="row mt-1">
-    <div class="col-12">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body">
-          <h5 class="card-title">Perfil de potencia — <span id="titulo-nodo" class="text-primary">—</span></h5>
-          <div style="height:260px">
-            <canvas id="serieTemporalChart"></canvas>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/telemetria.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/dashboard-telemetria.js') }}"></script>
 {% endblock %}

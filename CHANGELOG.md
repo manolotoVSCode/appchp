@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.76.0] — 2026-08-04
+
+### Añadido — Fase 2 D4: unifilar SVG interactivo reemplaza sunburst
+
+- `web/static/js/dashboard-telemetria.js` — `_renderSunburst` eliminado; nuevo `_renderUnifilar` dibuja SVG puro top-down (sin D3 ni librerías): acometidas (rect), SEs agrupadas (rect punteado), transformadores (doble círculo), cargas ficticias (rect naranja). Navegación por zoom semántico: click en SE despliega transformadores, click en Tx despliega cargas, click en carga actualiza KPIs sin cambiar raíz. Hover resalta rama. Líneas ortogonales coloreadas por % de carga nominal (normal/amarillo/rojo) con etiqueta kWh.
+- `web/templates/telemetria/dashboard.html` — layout reorganizado: unifilar ocupa la fila superior, gráfica temporal y panel KPIs en fila inferior (70/30). Estado vacío y breadcrumbs conservados.
+- `web/static/css/telemetria.css` — CSS nuevo para clases del unifilar (hover, highlight, líneas coloreadas, cargas ficticias).
+
 ## [2.75.0] — 2026-08-03
 
 ### Añadido — Fase 2 D3: costo en pesos y comparativa mes anterior en telemetría
