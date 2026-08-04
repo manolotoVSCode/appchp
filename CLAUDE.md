@@ -311,11 +311,11 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.72.0 — feat Modelado CHP: persistencia de parámetros
-de cabecera en BD (chp_session_params JSONB), se restauran al volver al
-dashboard. Requiere: ALTER TABLE clientes ADD COLUMN IF NOT EXISTS
-chp_session_params JSONB; en Supabase.
-Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase.
+Último tema resuelto: v2.72.1 — fix Modelado CHP: _primerasCarga ya no
+sobreescribe motores guardados en sesión; _primerasCarga=false movido dentro
+del bloque if; logs de diagnóstico eliminados.
+Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase +
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout

@@ -248,18 +248,23 @@
       .then(data => {
         if (!data.ok) throw new Error(data.error || "Error desconocido");
 
-        // Primera carga: sincronizar motores y precio gas con datos del servidor
-        console.log("[CHP] _primerasCarga: sobreescribiendo con:", data.params, data.cogen_defaults);
-        if (_primerasCarga && data.params.motores_config) {
-          _inicializarMotores(data.params.motores_config);
-        }
-        if (data.cogen_defaults && data.cogen_defaults.precio_gas_gj) {
-          const inputGas = $("param-precio-gas");
-          if (inputGas && parseFloat(inputGas.value) === 0) {
-            inputGas.value = data.cogen_defaults.precio_gas_gj;
+        // Primera carga: poblar precio gas desde defaults del servidor
+        // NO sobreescribir motores — ya fueron aplicados por aplicarSessionParams()
+        if (_primerasCarga) {
+          if (data.cogen_defaults?.precio_gas_gj) {
+            const inputGas = $("param-precio-gas");
+            if (inputGas && parseFloat(inputGas.value) === 0) {
+              inputGas.value = data.cogen_defaults.precio_gas_gj;
+            }
           }
+          if (!_sessionParams.motores || _sessionParams.motores.length === 0) {
+            const inputCap = $("param-cap-nominal-input");
+            if (inputCap && data.params?.capacidad_total_kw) {
+              inputCap.value = data.params.capacidad_total_kw;
+            }
+          }
+          _primerasCarga = false;
         }
-        _primerasCarga = false;
 
         // KPIs modelado
         const k = data.kpis;
@@ -275,7 +280,6 @@
         _show("chp-kpis-section");
 
         _modeladoId = data.modelado_id;
-        console.log("[CHP] fetchModelado completo. _motores:", JSON.stringify(getMotoresConfig()));
         return fetchCurva(_modeladoId);
       })
       .catch(err => {
@@ -869,17 +873,6 @@
     const p      = getParams();
     const cogenP = getCogenParams();
     const csrf   = document.querySelector('meta[name="csrf-token"]')?.content || "";
-    const _dbgPayload = {
-      motores: p.motores_config, margen_kw: p.margen_kw,
-      rendimiento_electrico: parseFloat(document.getElementById("param-rendimiento")?.value) || 40,
-      rendimiento_termico: cogenP.rendimiento_termico * 100,
-      precio_gas_gj: cogenP.precio_gas || 0, costo_om_kwh: p.costo_om_kwh,
-      precio_motor_usd_kw: parseFloat(document.getElementById("param-inversion-usd")?.value) || 1400,
-      autoconsumo_pct: p.autoconsumo_pct * 100,
-      deduccion_fiscal: document.getElementById("param-deduccion-fiscal")?.checked ?? false,
-      anios_deduccion: parseInt(document.getElementById("param-anios-deduccion")?.value || "1", 10),
-    };
-    console.log("[CHP] guardarParams enviando:", _dbgPayload);
     fetch(`/clientes/${CLIENTE_ID}/dashboard/modelado-chp/params`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
@@ -965,7 +958,6 @@
       const col = document.getElementById("col-anios-deduccion");
       if (col) col.style.display = chk.checked ? "" : "none";
     }
-    console.log("[CHP] aplicarSessionParams aplicado:", p);
   }
 
   // Inicializar motores: session params tienen prioridad; fallback a chp_motores_config legacy

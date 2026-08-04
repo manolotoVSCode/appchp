@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.72.1] — 2026-08-03
+
+### Corregido — _primerasCarga no sobreescribe motores guardados en sesión
+
+- `web/static/js/dashboard-modelado-chp.js`:
+  - Bloque `_primerasCarga` dentro de `fetchModelado()` refactorizado: eliminada la llamada a `_inicializarMotores(data.params.motores_config)` que sobreescribía los motores ya restaurados por `aplicarSessionParams()`. Los motores solo se modifican desde `aplicarSessionParams()` al inicio o desde la UI.
+  - `_primerasCarga = false` movido dentro del bloque `if (_primerasCarga)` (estaba fuera).
+  - Bloque `_primerasCarga` conserva solo: poblar precio gas desde `cogen_defaults` (si el input vale 0) y poblar capacidad nominal (solo si `_sessionParams` no tenía motores propios).
+  - Eliminados los 4 `console.log` de diagnóstico del commit anterior.
+
 ## [2.72.0] — 2026-08-03
 
 ### Añadido — Modelado CHP: persistencia de parámetros de cabecera entre sesiones
