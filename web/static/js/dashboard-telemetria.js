@@ -35,6 +35,7 @@
   let _arbolCache    = null;   // último arbol_sunburst recibido del backend
   let _chartSerie    = null;
   let _abort         = null;
+  let _primeraCarga  = true;   // true hasta el primer render exitoso
 
   // ── Helpers DOM ────────────────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
@@ -50,39 +51,48 @@
     const b = $("telemetria-error-banner");
     if (b) b.classList.add("d-none");
   }
-  function _mostrarLoading(visible) {
-    const loading = $("unifilar-loading");
-    const svg     = $("unifilarSvg");
-    if (loading) loading.style.display = visible ? "flex" : "none";
-    if (svg)     svg.style.display     = visible ? "none" : "block";
+  function _mostrarLoading(visible, esInicial = false) {
+    const badge = $("header-loading-badge");
+    if (badge)  badge.style.display = visible ? "inline" : "none";
+    // El spinner grande y el SVG solo se tocan en la carga inicial.
+    // Cargas subsiguientes (cambio de rango/nodo) muestran solo el badge.
+    if (esInicial) {
+      const loading = $("unifilar-loading");
+      const svg     = $("unifilarSvg");
+      if (loading) loading.style.display = visible ? "flex" : "none";
+      if (svg)     svg.style.display     = visible ? "none" : "block";
+    }
   }
 
   // ── Fetch central ──────────────────────────────────────────────────────────
-  function fetchDatos() {
+  async function fetchDatos() {
     if (_abort) _abort.abort();
-    _abort = new AbortController();
-    _mostrarLoading(true);
+    const controller = new AbortController();
+    _abort           = controller;
+    const esInicial  = _primeraCarga;  // capturado antes de cualquier await
+
+    _mostrarLoading(true, esInicial);
     _ocultarError();
 
     const params = new URLSearchParams({ rango: _rango });
     if (_nodoId) params.set("nodo_id", _nodoId);
 
-    fetch(`${ENDPOINT}?${params}`, { signal: _abort.signal })
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((data) => {
-        if (data.error) { _mostrarError(data.error); return; }
-        _arbolCache = data.arbol_sunburst;
-        _renderTodo(data);
-        $("ultima-actualizacion").textContent =
-          "Actualizado " + new Date().toLocaleTimeString("es-MX");
-      })
-      .catch((e) => {
-        if (e.name === "AbortError") return;
-        _mostrarError("Error al cargar datos de telemetría: " + e.message);
-      })
-      .finally(() => {
-        if (!_abort.signal.aborted) _mostrarLoading(false);
-      });
+    try {
+      const resp = await fetch(`${ENDPOINT}?${params}`, { signal: controller.signal });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      if (data.error) { _mostrarError(data.error); return; }
+      _arbolCache   = data.arbol_sunburst;
+      _primeraCarga = false;
+      _renderTodo(data);
+      $("ultima-actualizacion").textContent =
+        "Actualizado " + new Date().toLocaleTimeString("es-MX");
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      _mostrarError("Error al cargar datos de telemetría: " + e.message);
+    } finally {
+      if (!controller.signal.aborted) _mostrarLoading(false, esInicial);
+    }
   }
 
   // ── Render completo ────────────────────────────────────────────────────────

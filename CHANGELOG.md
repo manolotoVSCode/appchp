@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.76.2] — 2026-08-04
+
+### Corregido — Spinner residual, layout comprimido e indicador de carga en cabecera
+
+- `web/static/js/dashboard-telemetria.js` — `fetchDatos` reescrito como `async/await`: captura una referencia local `controller` al AbortController antes del primer `await`, eliminando el bug de cierre donde el `.finally()` leía `_abort` del módulo (ya reemplazado por un nuevo controlador). El guard en `finally` ahora comprueba `controller.signal.aborted` (este fetch específico) en lugar del módulo compartido. Variable `_primeraCarga` nueva: controla si el spinner grande (`#unifilar-loading`) se muestra u oculta, o solo el badge de cabecera.
+- `web/static/js/dashboard-telemetria.js` — `_mostrarLoading(visible, esInicial=false)`: cuando `esInicial=false` (cambios de rango o nodo sobre un SVG ya renderizado), solo hace toggle del badge de cabecera; el SVG y el spinner grande no se tocan. Elimina el parpadeo del diagrama en cargas incrementales.
+- `web/templates/telemetria/dashboard.html` — Badge `#header-loading-badge` en la cabecera junto a `#ultima-actualizacion`: pequeño spinner `spinner-border-sm` con texto "Cargando…" visible durante todos los fetches. `#unifilar-wrapper` min-height 520 → 380 px; `#unifilar-loading` y `#unifilarSvg` min-height 480 → 340 px. Canvas `#serieTemporalChart` height 240 → 180 px. Libera el fold para que los 6 KPI cards y la gráfica temporal sean visibles sin scroll en viewports estándar.
+- `web/static/css/telemetria.css` — `.kpi-panel .kpi-card` padding vertical `.375rem`; `.kpi-panel .kpi-value` font-size `1.35rem`. Las 6 tarjetas caben en la columna derecha sin scroll interno.
+
 ## [2.76.1] — 2026-08-03
 
 ### Corregido — Spinner perpetuo en dashboard de telemetría

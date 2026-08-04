@@ -15,6 +15,13 @@
         <button type="button" class="btn btn-outline-primary" data-rango="30d">30d</button>
       </div>
       <small class="text-muted" id="ultima-actualizacion">—</small>
+      <span id="header-loading-badge" style="display:none;font-size:.75rem;
+            color:#6b7280;margin-left:.25rem;vertical-align:middle">
+        <span class="spinner-border spinner-border-sm"
+              style="width:.85rem;height:.85rem;border-width:.13em"
+              role="status"></span>
+        <span style="margin-left:.25rem">Cargando…</span>
+      </span>
     </div>
   </div>
 
@@ -42,15 +49,15 @@
   </div>
 
   <!-- Unifilar SVG -->
-  <div id="unifilar-wrapper" style="position:relative;min-height:520px;
+  <div id="unifilar-wrapper" style="position:relative;min-height:380px;
        overflow-x:auto;background:#f8fafc;border-radius:8px;padding:24px;
        margin-bottom:1rem">
     <div id="unifilar-loading" class="d-flex align-items-center justify-content-center"
-         style="min-height:480px">
+         style="min-height:340px">
       <div class="spinner-border text-primary" role="status"></div>
     </div>
     <svg id="unifilarSvg" xmlns="http://www.w3.org/2000/svg"
-         style="display:none;min-height:480px"></svg>
+         style="display:none;min-height:340px"></svg>
     <p class="unifilar-nota" style="text-align:center;font-size:.75rem;
        color:#6b7280;margin-top:12px;margin-bottom:0">
       Cargas mostradas en naranja son representativas y se ajustarán en la
@@ -64,7 +71,7 @@
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
           <h5 class="card-title">Perfil de potencia — <span id="titulo-nodo" class="text-primary">—</span></h5>
-          <div style="height:240px">
+          <div style="height:180px">
             <canvas id="serieTemporalChart"></canvas>
           </div>
         </div>

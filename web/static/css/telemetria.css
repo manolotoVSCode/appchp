@@ -1,5 +1,14 @@
 /* Dashboard de Telemetría — Fase 2 D4 */
 
+/* KPI panel compacto: 6 tarjetas caben en la columna sin scroll */
+.kpi-panel .kpi-card {
+  padding-top: .375rem;
+  padding-bottom: .375rem;
+}
+.kpi-panel .kpi-value {
+  font-size: 1.35rem !important;
+}
+
 .unifilar-nodo {
   cursor: pointer;
   transition: opacity 0.2s ease;
