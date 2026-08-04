@@ -311,11 +311,16 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.72.1 — fix Modelado CHP: _primerasCarga ya no
-sobreescribe motores guardados en sesión; _primerasCarga=false movido dentro
-del bloque if; logs de diagnóstico eliminados.
-Pendiente: ejecutar migration 202606_usuario_clientes.sql en Supabase +
-ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB.
+Último tema resuelto: v2.73.0 — Fase 2 D1 telemetría: modelo jerárquico de
+medidores (medidor_padre_id FK self-ref), perfiles por tipo de carga en
+seed.py (horno_tunel, atomizador, prensa, default), seed masivo Iberica
+(2 plantas, 12 transformadores, 34 cargas), 11 tests pasan.
+Pendiente: ejecutar migrations en Supabase:
+  - 202606_usuario_clientes.sql
+  - 202607_telemetria_jerarquia.sql
+  - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
+Luego ejecutar: python3 scripts/seed_iberica.py
+D2 (UI árbol medidores) y D3 (costo en pesos) pendientes.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
@@ -333,8 +338,6 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.60.1 — fix generador sintético alineado al esquema
-real (18 columnas exactas: potencia_activa_kw, factor_potencia, voltaje_l1_v,
-etc.). Previo seed.py usaba columnas que no existen (kw_total, v_an, pf_total…)
-causando PGRST204. Template medidor.html actualizado. Tests reforzados.
-Pendiente: integración MQTT/pipeline real (entrega B2).
+Último tema resuelto: v2.73.0 — D1 completo: jerarquía medidores, perfiles
+de carga sintéticos, seed Iberica idempotente, 11 tests.
+Pendiente: D2 UI árbol, D3 costo en pesos, integración MQTT/pipeline real.

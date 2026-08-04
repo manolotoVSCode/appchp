@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.73.0] — 2026-08-03
+
+### Añadido — Fase 2 D1: modelo jerárquico de medidores, perfiles por tipo de carga y seed masivo
+
+- `storage/migrations/202607_telemetria_jerarquia.sql` — DDL: columnas `medidor_padre_id` (FK self-referencial), `tipo_carga` (TEXT), `potencia_nominal_kw` (NUMERIC 10,2) en tabla `medidores`; índice `idx_medidores_padre`.
+- `storage/repository.py` — 4 funciones nuevas para telemetría jerárquica:
+  - `crear_medidor_jerarquico(cliente_id, nombre, tipo_medidor, tipo_carga, potencia_nominal_kw, padre_id)` → dict con `id`.
+  - `obtener_arbol_medidores(cliente_id)` → lista plana de medidores con campo `nivel` calculado en Python (0=raíz).
+  - `obtener_hijos(padre_id)` → lista directa de hijos.
+  - `obtener_descendientes_ids(raiz_id)` → lista plana de IDs de todos los descendientes (BFS).
+- `telemetria/seed.py` — `_fraccion_carga(tipo_carga, t)` con perfiles por tipo: `horno_tunel` (carga plana 0.75–0.90), `atomizador` (ciclo escalonado 30→50→60→70 min), `prensa` (turno 16h pico 0.85), default (sinusoidal industrial). `generar_mediciones_por_carga(medidor_id, tipo_carga, potencia_nominal_kw, voltaje_base, inicio, fin, intervalo_min)` genera lecturas sintéticas con voltaje, corriente, fp y potencia coherentes; RNG seeded por `medidor_id` para reproducibilidad.
+- `scripts/seed_iberica.py` — script CLI idempotente (verifica por nombre+cliente_id, `--forzar` re-seed). Crea jerarquía para clientes 44 (Planta 1) y 45 (Planta 2): 2 acometidas MT 13.8 kV, 12 transformadores, 34 cargas finales; siembra 7 días × intervalos de 15 min por carga final.
+- `tests/test_telemetria_jerarquia.py` — 11 tests: a–d (mocks repository), e–j (verificación de perfiles de carga). Todos pasan sin red.
+
 ## [2.72.1] — 2026-08-03
 
 ### Corregido — _primerasCarga no sobreescribe motores guardados en sesión

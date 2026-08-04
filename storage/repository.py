@@ -1551,6 +1551,78 @@ def obtener_agregados_15min(
     return resp.data or []
 
 
+def crear_medidor_jerarquico(
+    cliente_id: int,
+    nombre: str,
+    punto_medicion: str | None = None,
+    medidor_padre_id: int | None = None,
+    tipo_carga: str | None = None,
+    potencia_nominal_kw: float | None = None,
+    ubicacion: str | None = None,
+    numero_serie: str | None = None,
+    relacion_tc: str | None = None,
+    marca: str = "Accuenergy",
+    modelo: str = "Acuvim II",
+) -> dict:
+    """Inserta un medidor con campos jerárquicos. Coexiste con crear_medidor."""
+    payload = {
+        "cliente_id":         cliente_id,
+        "nombre":             nombre,
+        "punto_medicion":     punto_medicion,
+        "medidor_padre_id":   medidor_padre_id,
+        "tipo_carga":         tipo_carga,
+        "potencia_nominal_kw": potencia_nominal_kw,
+        "ubicacion":          ubicacion,
+        "numero_serie":       numero_serie,
+        "relacion_tc":        relacion_tc,
+        "marca":              marca,
+        "modelo":             modelo,
+    }
+    resp = _supabase.table("medidores").insert(payload).execute()
+    return resp.data[0]
+
+
+def obtener_arbol_medidores(cliente_id: int) -> list[dict]:
+    """Todos los medidores del cliente con limit(20000), orden estable por id."""
+    resp = (
+        _supabase.table("medidores")
+        .select("*")
+        .eq("cliente_id", cliente_id)
+        .order("id", desc=False)
+        .limit(20000)
+        .execute()
+    )
+    return resp.data or []
+
+
+def obtener_hijos(medidor_id: int) -> list[dict]:
+    """Medidores con medidor_padre_id = medidor_id, limit(20000)."""
+    resp = (
+        _supabase.table("medidores")
+        .select("*")
+        .eq("medidor_padre_id", medidor_id)
+        .order("id", desc=False)
+        .limit(20000)
+        .execute()
+    )
+    return resp.data or []
+
+
+def obtener_descendientes_ids(medidor_id: int) -> list[int]:
+    """IDs de todos los descendientes (recursivo en Python, máx 3 niveles)."""
+    ids: list[int] = []
+    hijos = obtener_hijos(medidor_id)
+    for hijo in hijos:
+        ids.append(hijo["id"])
+        nietos = obtener_hijos(hijo["id"])
+        for nieto in nietos:
+            ids.append(nieto["id"])
+            biznietos = obtener_hijos(nieto["id"])
+            for biznieto in biznietos:
+                ids.append(biznieto["id"])
+    return ids
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Modelado CHP — cache de resultados
 # ══════════════════════════════════════════════════════════════════════════════
