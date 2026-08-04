@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.74.0] — 2026-08-03
+
+### Añadido — Fase 2 D2: dashboard de telemetría para cliente
+
+- `web/app.py` — dos rutas nuevas dentro de `create_app()`:
+  - `GET /clientes/<id>/dashboard/telemetria` — vista HTML; guarda en sesión `nav_active="telemetria_cliente"`.
+  - `GET /clientes/<id>/dashboard/telemetria/data` — endpoint JSON con sunburst, serie temporal y KPIs.
+  - Ambas: respetan `FASE2_HABILITADA` (404 si False), usan `_verificar_cliente_activo` para auth.
+- `web/templates/clientes/_base.html` — enlace "Telemetría (Beta)" en sidebar, visible cuando `fase2_habilitada`, usa `nav_active == 'telemetria_cliente'` para evitar colisión con el link admin.
+- `web/templates/telemetria/dashboard.html` — template nuevo; extiende `clientes/_base.html`; muestra estado vacío si no hay medidores; breadcrumbs dinámicos, sunburst-wrapper, panel KPIs y gráfica de serie temporal.
+- `web/static/js/dashboard-telemetria.js` — módulo IIFE nuevo; Chart.js doughnut multi-anillo (acometida / transformadores / cargas); colores por rama con variantes; click en segmento navega al nodo; gráfica de serie temporal adaptada al rango; breadcrumbs interactivos; manejo de errores con banner + reintentar.
+- `tests/test_dashboard_telemetria.py` — 8 tests: acceso por rol, flag FASE2, estructura JSON, consistencia de energía sunburst, aislamiento de carga_final, estado vacío.
+
 ## [2.73.0] — 2026-08-03
 
 ### Añadido — Fase 2 D1: modelo jerárquico de medidores, perfiles por tipo de carga y seed masivo

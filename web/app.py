@@ -2672,4 +2672,207 @@ def create_app() -> Flask:
             nav_active="modelado_chp",
         )
 
+    # ── Dashboard Telemetría (Fase 2 D2) ─────────────────────────────────────
+
+    @app.route("/clientes/<int:cliente_id>/dashboard/telemetria")
+    def cliente_dashboard_telemetria(cliente_id: int):
+        """Vista de Telemetría: árbol de medidores del cliente."""
+        if not app.config.get("FASE2_HABILITADA", False):
+            abort(404)
+        cliente, err = _verificar_cliente_activo(cliente_id)
+        if err:
+            return err
+
+        from storage.repository import obtener_arbol_medidores as _oam
+        arbol_medidores = _oam(cliente_id)
+
+        return render_template(
+            "telemetria/dashboard.html",
+            cliente=cliente,
+            arbol_medidores=arbol_medidores,
+            nav_active="telemetria_cliente",
+        )
+
+    @app.route("/clientes/<int:cliente_id>/dashboard/telemetria/data")
+    def cliente_dashboard_telemetria_data(cliente_id: int):
+        """JSON para el dashboard de telemetría: sunburst, serie temporal y KPIs."""
+        from flask import jsonify
+        if not app.config.get("FASE2_HABILITADA", False):
+            abort(404)
+        cliente, err = _verificar_cliente_activo(cliente_id)
+        if err:
+            return jsonify({"error": "acceso denegado"}), 403
+
+        from storage.repository import (
+            obtener_arbol_medidores as _oam,
+            obtener_descendientes_ids as _odi,
+            obtener_mediciones_recientes as _omr,
+            obtener_agregados_15min as _oa15,
+        )
+        from datetime import datetime, timedelta, timezone
+
+        nodo_id = request.args.get("nodo_id", type=int)
+        rango = request.args.get("rango", "24h")
+
+        # Cargar árbol completo
+        todos = _oam(cliente_id)
+        if not todos:
+            return jsonify({"error": "sin_medidores"}), 404
+
+        # Indexar por id
+        por_id = {m["id"]: m for m in todos}
+
+        # Acometida raíz: primer medidor sin padre (punto_medicion == 'acometida_cfe')
+        acometida = next(
+            (m for m in todos if m.get("punto_medicion") == "acometida_cfe"),
+            todos[0]
+        )
+        if nodo_id is None:
+            nodo_id = acometida["id"]
+
+        nodo = por_id.get(nodo_id, acometida)
+
+        # Calcular ruta de breadcrumbs (hacia arriba)
+        def _breadcrumbs(nodo_dict):
+            ruta = []
+            cur = nodo_dict
+            while cur:
+                ruta.append({"id": cur["id"], "nombre": cur["nombre"]})
+                padre_id = cur.get("medidor_padre_id")
+                cur = por_id.get(padre_id) if padre_id else None
+            return list(reversed(ruta))
+
+        # Cargar hojas de carga_final bajo el nodo seleccionado
+        if nodo.get("punto_medicion") == "carga_final":
+            hojas_ids = [nodo_id]
+        else:
+            desc_ids = _odi(nodo_id)
+            hojas_ids = [
+                mid for mid in desc_ids
+                if por_id.get(mid, {}).get("punto_medicion") == "carga_final"
+            ]
+            if not hojas_ids:
+                hojas_ids = [nodo_id]
+
+        # Calcular ventana temporal
+        ahora = datetime.now(timezone.utc)
+        if rango == "7d":
+            desde = ahora - timedelta(days=7)
+        elif rango == "30d":
+            desde = ahora - timedelta(days=30)
+        else:
+            desde = ahora - timedelta(hours=24)
+
+        desde_iso = desde.strftime("%Y-%m-%dT%H:%M:%SZ")
+        hasta_iso = ahora.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Fetch mediciones de cada hoja
+        mediciones_por_hoja = {}
+        for hid in hojas_ids:
+            if rango == "24h":
+                rows = _omr(hid, desde_iso, hasta_iso)
+                mediciones_por_hoja[hid] = [
+                    {"ts": r["timestamp"], "kw": float(r.get("potencia_activa_kw") or 0),
+                     "fp": float(r.get("factor_potencia") or 0)}
+                    for r in rows
+                ]
+            else:
+                rows = _oa15(hid, desde_iso, hasta_iso)
+                mediciones_por_hoja[hid] = [
+                    {"ts": r["bucket_15min"], "kw": float(r.get("potencia_activa_kw") or 0),
+                     "fp": float(r.get("factor_potencia") or 0)}
+                    for r in rows
+                ]
+
+        # Agregar serie temporal: sumar kW de todas las hojas por bucket
+        from collections import defaultdict
+        bucket_kw = defaultdict(float)
+        bucket_fp_peso = defaultdict(float)
+        bucket_kw_peso = defaultdict(float)
+        for hid, rows in mediciones_por_hoja.items():
+            for r in rows:
+                bucket_kw[r["ts"]] += r["kw"]
+                bucket_kw_peso[r["ts"]] += r["kw"]
+                bucket_fp_peso[r["ts"]] += r["fp"] * r["kw"]
+
+        ts_sorted = sorted(bucket_kw.keys())
+        potencia_serie = [round(bucket_kw[ts], 3) for ts in ts_sorted]
+
+        # KPIs
+        num_muestras = len(ts_sorted)
+        demanda_pico = max(potencia_serie) if potencia_serie else 0.0
+
+        # Integral trapezoidal para energía (kW × h)
+        energia_kwh = 0.0
+        if len(ts_sorted) >= 2:
+            from datetime import datetime as _dt
+            for i in range(1, len(ts_sorted)):
+                try:
+                    t0 = _dt.fromisoformat(ts_sorted[i-1].replace("Z", "+00:00"))
+                    t1 = _dt.fromisoformat(ts_sorted[i].replace("Z", "+00:00"))
+                    dt_h = (t1 - t0).total_seconds() / 3600.0
+                    energia_kwh += (potencia_serie[i-1] + potencia_serie[i]) / 2.0 * dt_h
+                except Exception:
+                    pass
+
+        # FP promedio ponderado
+        total_peso_kw = sum(bucket_kw_peso[ts] for ts in ts_sorted)
+        fp_prom = (
+            sum(bucket_fp_peso[ts] for ts in ts_sorted) / total_peso_kw
+            if total_peso_kw > 0 else 0.0
+        )
+
+        # Estructura sunburst: reconstruir árbol desde todos los medidores
+        def _energia_nodo(mid):
+            """Suma de kWh de las hojas descendientes del nodo mid."""
+            if por_id.get(mid, {}).get("punto_medicion") == "carga_final":
+                rows = mediciones_por_hoja.get(mid, [])
+                kwh = 0.0
+                for i in range(1, len(rows)):
+                    try:
+                        from datetime import datetime as _dt2
+                        t0 = _dt2.fromisoformat(rows[i-1]["ts"].replace("Z", "+00:00"))
+                        t1 = _dt2.fromisoformat(rows[i]["ts"].replace("Z", "+00:00"))
+                        dt_h = (t1 - t0).total_seconds() / 3600.0
+                        kwh += (rows[i-1]["kw"] + rows[i]["kw"]) / 2.0 * dt_h
+                    except Exception:
+                        pass
+                return round(kwh, 3)
+            else:
+                hijos_ids = [m["id"] for m in todos if m.get("medidor_padre_id") == mid]
+                return round(sum(_energia_nodo(h) for h in hijos_ids), 3)
+
+        def _arbol_sunburst(mid):
+            m = por_id.get(mid, {})
+            hijos_ids = [x["id"] for x in todos if x.get("medidor_padre_id") == mid]
+            return {
+                "id": mid,
+                "nombre": m.get("nombre", ""),
+                "punto_medicion": m.get("punto_medicion", ""),
+                "tipo_carga": m.get("tipo_carga"),
+                "energia_kwh": _energia_nodo(mid),
+                "hijos": [_arbol_sunburst(h) for h in hijos_ids],
+            }
+
+        arbol_sunburst = _arbol_sunburst(acometida["id"])
+
+        return jsonify({
+            "nodo_seleccionado": {
+                "id": nodo["id"],
+                "nombre": nodo["nombre"],
+                "ruta_breadcrumbs": _breadcrumbs(nodo),
+            },
+            "serie_temporal": {
+                "labels": ts_sorted,
+                "potencia_kw": potencia_serie,
+            },
+            "kpis": {
+                "energia_total_kwh": round(energia_kwh, 2),
+                "demanda_pico_kw": round(demanda_pico, 2),
+                "factor_potencia_promedio": round(fp_prom, 3),
+                "num_muestras": num_muestras,
+            },
+            "arbol_sunburst": arbol_sunburst,
+        })
+
     return app
