@@ -86,7 +86,7 @@
      data-medicion-id="{{ medicion_activa.id }}"
      data-medicion-label="{{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][medicion_activa.mes-1] }} {{ medicion_activa.anio }}"
      data-motores-config="{{ motores_config_json }}"
-     data-session-params="{{ chp_session_params | tojson }}">
+     data-session-params="{{ chp_session_params | tojson | forceescape }}">
 
   <!-- 1. Parámetros del modelado -->
   <div class="card shadow-sm mb-4">
