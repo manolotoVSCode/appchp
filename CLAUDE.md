@@ -311,16 +311,15 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.73.0 — Fase 2 D1 telemetría: modelo jerárquico de
-medidores (medidor_padre_id FK self-ref), perfiles por tipo de carga en
-seed.py (horno_tunel, atomizador, prensa, default), seed masivo Iberica
-(2 plantas, 12 transformadores, 34 cargas), 11 tests pasan.
+Último tema resuelto: v2.74.0 — Fase 2 D2 dashboard telemetría cliente:
+ruta GET /clientes/<id>/dashboard/telemetria + endpoint /data JSON, sunburst
+Chart.js multi-anillo (acometida/transformadores/cargas), breadcrumbs clickables,
+KPIs, serie temporal de potencia, 8 tests pasan.
 Pendiente: ejecutar migrations en Supabase:
   - 202606_usuario_clientes.sql
   - 202607_telemetria_jerarquia.sql
   - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
-Luego ejecutar: python3 scripts/seed_iberica.py
-D2 (UI árbol medidores) y D3 (costo en pesos) pendientes.
+D3 (costo en pesos) pendiente.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
