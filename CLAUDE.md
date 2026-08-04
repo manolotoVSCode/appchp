@@ -311,15 +311,12 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.74.0 — Fase 2 D2 dashboard telemetría cliente:
-ruta GET /clientes/<id>/dashboard/telemetria + endpoint /data JSON, sunburst
-Chart.js multi-anillo (acometida/transformadores/cargas), breadcrumbs clickables,
-KPIs, serie temporal de potencia, 8 tests pasan.
+Último tema resuelto: v2.76.0 — D4 telemetría completo: D2 dashboard,
+D3 costos+comparativa, D4 unifilar SVG interactivo. 15 tests pasan.
 Pendiente: ejecutar migrations en Supabase:
   - 202606_usuario_clientes.sql
   - 202607_telemetria_jerarquia.sql
   - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
-D3 (costo en pesos) pendiente.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
@@ -337,6 +334,8 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.73.0 — D1 completo: jerarquía medidores, perfiles
-de carga sintéticos, seed Iberica idempotente, 11 tests.
-Pendiente: D2 UI árbol, D3 costo en pesos, integración MQTT/pipeline real.
+Último tema resuelto: v2.76.0 — D4 unifilar SVG interactivo: sustituye
+sunburst por diagrama top-down en SVG puro (sin D3), navegación por zoom
+semántico (acometida → SE → Tx → Cargas), breadcrumbs corregidos, cargas
+en naranja, líneas coloreadas por carga nominal.
+Pendiente: integración MQTT/pipeline real.
