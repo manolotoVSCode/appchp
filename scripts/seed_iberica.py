@@ -313,24 +313,22 @@ def _sembrar_produccion_diaria(planta: dict, dias: int, forzar: bool) -> int:
     return n
 
 
-def _sembrar_historico_mes_anterior(planta: dict, forzar: bool) -> int:
-    """Genera 96 muestras por CBT correspondientes al mismo día del mes anterior.
+def _sembrar_historico_60_dias(planta: dict, forzar: bool) -> int:
+    """Genera 60 días de mediciones históricas para cada CBT del cliente.
 
-    Retorna total de muestras insertadas.
+    60 días × 96 muestras/día = 5,760 muestras por CBT.
+    12 CBTs × 5,760 = 69,120 muestras totales (para dos plantas combinadas).
+    Usa semilla determinista por medidor.id para reproducibilidad.
+    Chunks de 1,000 manejados por insertar_mediciones_batch (ya existente).
     """
     from storage.repository import _supabase
 
     cid = planta["cliente_id"]
-    hoy = datetime.now(timezone.utc)
-    # Mismo día del mes anterior: restar 30 días, truncar a inicio de día UTC
-    hoy_date = hoy.date()
-    desde_ant = datetime(
-        hoy_date.year if hoy_date.month > 1 else hoy_date.year - 1,
-        (hoy_date.month - 1) if hoy_date.month > 1 else 12,
-        min(hoy_date.day, 28),
-        0, 0, 0,
-        tzinfo=timezone.utc,
+    ahora_utc = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
     )
+    desde_60d = ahora_utc - timedelta(days=60)
+    desde_60d_iso = desde_60d.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Obtener cargas finales
     resp = (
@@ -345,24 +343,43 @@ def _sembrar_historico_mes_anterior(planta: dict, forzar: bool) -> int:
     if not cargas:
         return 0
 
-    if forzar:
-        # Borrar mediciones del rango del mes anterior para este cliente
-        ids_medidores = [c["id"] for c in cargas]
-        hasta_ant_iso = (desde_ant + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        desde_ant_iso = desde_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
-        (
-            _supabase.table("mediciones_tiempo_real")
-            .delete()
-            .in_("medidor_id", ids_medidores)
-            .gte("timestamp", desde_ant_iso)
-            .lt("timestamp", hasta_ant_iso)
-            .execute()
-        )
-
     total = 0
     for carga in cargas:
-        meds = generar_mediciones_por_carga(carga, desde_ant, n=96, intervalo=15)
-        total += insertar_mediciones_batch(meds)
+        mid = carga["id"]
+
+        if forzar:
+            # Borrar todo el rango de 60 días para este medidor
+            _supabase.table("mediciones_tiempo_real").delete().eq(
+                "medidor_id", mid
+            ).gte("timestamp", desde_60d_iso).execute()
+        else:
+            # Saltar si ya hay más de 5000 muestras en el rango
+            resp_cnt = (
+                _supabase.table("mediciones_tiempo_real")
+                .select("medidor_id", count="exact")
+                .eq("medidor_id", mid)
+                .gte("timestamp", desde_60d_iso)
+                .limit(1)
+                .execute()
+            )
+            if (resp_cnt.count or 0) > 5000:
+                print(
+                    f"    CBT {mid} ({carga.get('nombre', '')}): "
+                    f"ya tiene {resp_cnt.count} muestras en los últimos 60d, saltando."
+                )
+                continue
+
+        # Generar día a día: 96 muestras/día × 60 días
+        for dia in range(60):
+            dia_desde = desde_60d + timedelta(days=dia)
+            meds = generar_mediciones_por_carga(carga, dia_desde, n=96, intervalo=15)
+            total += insertar_mediciones_batch(meds)
+            if (dia + 1) % 10 == 0:
+                print(
+                    f"    CBT {mid} ({carga.get('nombre', '')}): "
+                    f"{dia + 1}/60 días procesados..."
+                )
+
     return total
 
 
@@ -400,11 +417,11 @@ def main() -> None:
         totales["transformadores"] += nt
         totales["cargas"]         += nc
         totales["mediciones"]     += nm
-        np = _sembrar_produccion_diaria(planta, dias=8, forzar=args.forzar)
-        nh = _sembrar_historico_mes_anterior(planta, forzar=args.forzar)
+        np = _sembrar_produccion_diaria(planta, dias=60, forzar=args.forzar)
+        nh = _sembrar_historico_60_dias(planta, forzar=args.forzar)
         totales["produccion"] = totales.get("produccion", 0) + np
         totales["historico"]  = totales.get("historico", 0)  + nh
-        print(f"    Producción diaria: {np} registros  |  Histórico mes anterior: {nh} muestras")
+        print(f"    Producción diaria: {np} registros  |  Histórico 60 días: {nh} muestras")
 
     elapsed = time.time() - t0
     print(f"\n=== Completado en {elapsed:.1f}s ===")
@@ -413,7 +430,7 @@ def main() -> None:
     print(f"  Cargas finales:  {totales['cargas']}")
     print(f"  Mediciones:      {totales['mediciones']}")
     print(f"  Producción diaria: {totales.get('produccion', 0)} registros")
-    print(f"  Histórico mes ant: {totales.get('historico', 0)} muestras")
+    print(f"  Histórico 60 días: {totales.get('historico', 0)} muestras")
 
 
 if __name__ == "__main__":
