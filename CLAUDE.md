@@ -311,15 +311,14 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.77.0 — D5 telemetría: seed refactorizado a 12 CBTs
-(1 por transformador), layout unifilar vertical fijo 3 niveles sin zoom
-semántico, corrección edge-case 0 kWh. 8/8 tests pasan.
+Último tema resuelto: v2.78.0 — D6 telemetría: nivel visual SE virtual
+entre Acometida y Transformador (agrupación frontend por regex T-(\d+)),
+etiquetas Tx reubicadas a la derecha del símbolo, layout 4 niveles ~424px,
+wrapper 500px. 8/8 tests pasan.
 Pendiente: ejecutar migrations en Supabase:
   - 202606_usuario_clientes.sql
   - 202607_telemetria_jerarquia.sql
   - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
-Pendiente: correr `scripts/seed_iberica.py --forzar` contra Supabase para
-  reseed con 12 CBTs y 8064 mediciones.
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
@@ -337,6 +336,6 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.77.0 — D5 completo: un CBT por transformador (12
-total), layout vertical fijo 3 niveles, sin navegación por zoom semántico.
+Último tema resuelto: v2.78.0 — D6 completo: nivel SE virtual, etiquetas
+Tx laterales, layout 4 niveles Acometida›SE›Tx›CBT.
 Pendiente: integración MQTT/pipeline real.
