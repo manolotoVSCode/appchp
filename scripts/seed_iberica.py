@@ -42,50 +42,42 @@ PLANTA_1 = {
             "nombre": "T-1.1 (2500 kVA, MMC1)",
             "potencia_nominal_kw": 2425,
             "cargas": [
-                {"nombre": "Molino 1A",              "tipo_carga": "molino",   "potencia_nominal_kw": 900},
-                {"nombre": "Molino 1B",              "tipo_carga": "molino",   "potencia_nominal_kw": 900},
-                {"nombre": "Bombas y bandas MMC1",   "tipo_carga": "motor",    "potencia_nominal_kw": 600},
+                {"nombre": "CBT-MMC1", "tipo_carga": "motor", "potencia_nominal_kw": 2400},
             ],
         },
         {
             "nombre": "T-1.2 (800 kVA, Vent. Atomizador 1)",
             "potencia_nominal_kw": 776,
             "cargas": [
-                {"nombre": "Ventilador principal Atomizador 1",  "tipo_carga": "ventilador", "potencia_nominal_kw": 500},
-                {"nombre": "Ventilador secundario Atomizador 1", "tipo_carga": "ventilador", "potencia_nominal_kw": 250},
+                {"nombre": "CBT-Vent. Atomizador 1", "tipo_carga": "ventilador", "potencia_nominal_kw": 750},
             ],
         },
         {
             "nombre": "T-1.3 (1600 kVA, Zona Atomizado 1)",
             "potencia_nominal_kw": 1552,
             "cargas": [
-                {"nombre": "Atomizador 1",                      "tipo_carga": "atomizador", "potencia_nominal_kw": 1200},
-                {"nombre": "Bombas de alta presión Atomizado 1","tipo_carga": "motor",      "potencia_nominal_kw": 300},
+                {"nombre": "CBT-Zona Atomizado 1", "tipo_carga": "atomizador", "potencia_nominal_kw": 1500},
             ],
         },
         {
             "nombre": "T-2.1 (2000 kVA, Zona Prensas)",
             "potencia_nominal_kw": 1940,
             "cargas": [
-                {"nombre": "Prensa 1",                         "tipo_carga": "prensa", "potencia_nominal_kw": 700},
-                {"nombre": "Prensa 2",                         "tipo_carga": "prensa", "potencia_nominal_kw": 700},
-                {"nombre": "Compresores y auxiliares Prensas", "tipo_carga": "motor",  "potencia_nominal_kw": 500},
+                {"nombre": "CBT-Zona Prensas", "tipo_carga": "prensa", "potencia_nominal_kw": 1900},
             ],
         },
         {
             "nombre": "T-3.1 (2000 kVA, Zona Hornos)",
             "potencia_nominal_kw": 1940,
             "cargas": [
-                {"nombre": "Horno túnel 1",                "tipo_carga": "horno_tunel", "potencia_nominal_kw": 1500},
-                {"nombre": "Sistema de extracción Horno 1","tipo_carga": "ventilador",  "potencia_nominal_kw": 400},
+                {"nombre": "CBT-Zona Hornos", "tipo_carga": "horno_tunel", "potencia_nominal_kw": 1900},
             ],
         },
         {
             "nombre": "T-SA (112.5 kVA, Serv. Auxiliares)",
             "potencia_nominal_kw": 109.125,
             "cargas": [
-                {"nombre": "Iluminación y tomas planta",       "tipo_carga": "generico", "potencia_nominal_kw": 60},
-                {"nombre": "Sistemas de control y oficinas",   "tipo_carga": "generico", "potencia_nominal_kw": 45},
+                {"nombre": "CBT-Serv. Auxiliares", "tipo_carga": "generico", "potencia_nominal_kw": 105},
             ],
         },
     ],
@@ -102,52 +94,42 @@ PLANTA_2 = {
             "nombre": "T-4.1 (2500 kVA, MMC2)",
             "potencia_nominal_kw": 2425,
             "cargas": [
-                {"nombre": "Molino 2A",            "tipo_carga": "molino", "potencia_nominal_kw": 900},
-                {"nombre": "Molino 2B",            "tipo_carga": "molino", "potencia_nominal_kw": 900},
-                {"nombre": "Bombas y bandas MMC2", "tipo_carga": "motor",  "potencia_nominal_kw": 600},
+                {"nombre": "CBT-MMC2", "tipo_carga": "motor", "potencia_nominal_kw": 2400},
             ],
         },
         {
             "nombre": "T-4.2 (800 kVA, Vent. Atomizador 2)",
             "potencia_nominal_kw": 776,
             "cargas": [
-                {"nombre": "Ventilador principal Atomizador 2",  "tipo_carga": "ventilador", "potencia_nominal_kw": 500},
-                {"nombre": "Ventilador secundario Atomizador 2", "tipo_carga": "ventilador", "potencia_nominal_kw": 250},
+                {"nombre": "CBT-Vent. Atomizador 2", "tipo_carga": "ventilador", "potencia_nominal_kw": 750},
             ],
         },
         {
             "nombre": "T-4.3 (1000 kVA, Zona Atomizado 2)",
             "potencia_nominal_kw": 970,
             "cargas": [
-                {"nombre": "Atomizador 2",                       "tipo_carga": "atomizador", "potencia_nominal_kw": 800},
-                {"nombre": "Bombas de alta presión Atomizado 2", "tipo_carga": "motor",      "potencia_nominal_kw": 150},
+                {"nombre": "CBT-Zona Atomizado 2", "tipo_carga": "atomizador", "potencia_nominal_kw": 950},
             ],
         },
         {
             "nombre": "T-5.1 (2500 kVA, Zona Prensas P2)",
             "potencia_nominal_kw": 2425,
             "cargas": [
-                {"nombre": "Prensa 3",                            "tipo_carga": "prensa", "potencia_nominal_kw": 700},
-                {"nombre": "Prensa 4",                            "tipo_carga": "prensa", "potencia_nominal_kw": 700},
-                {"nombre": "Prensa 5",                            "tipo_carga": "prensa", "potencia_nominal_kw": 700},
-                {"nombre": "Compresores y auxiliares Prensas P2", "tipo_carga": "motor",  "potencia_nominal_kw": 300},
+                {"nombre": "CBT-Zona Prensas P2", "tipo_carga": "prensa", "potencia_nominal_kw": 2400},
             ],
         },
         {
             "nombre": "T-6.1 (2000 kVA, Zona Hornos P2)",
             "potencia_nominal_kw": 1940,
             "cargas": [
-                {"nombre": "Horno túnel 2",                "tipo_carga": "horno_tunel", "potencia_nominal_kw": 1500},
-                {"nombre": "Sistema de extracción Horno 2","tipo_carga": "ventilador",  "potencia_nominal_kw": 400},
+                {"nombre": "CBT-Zona Hornos P2", "tipo_carga": "horno_tunel", "potencia_nominal_kw": 1900},
             ],
         },
         {
             "nombre": "T-6.2 (2500 kVA, Pulido y Líneas 7-8)",
             "potencia_nominal_kw": 2425,
             "cargas": [
-                {"nombre": "Línea de pulido 7",      "tipo_carga": "pulidora", "potencia_nominal_kw": 800},
-                {"nombre": "Línea de pulido 8",      "tipo_carga": "pulidora", "potencia_nominal_kw": 800},
-                {"nombre": "Bombas y bandas pulido", "tipo_carga": "motor",    "potencia_nominal_kw": 700},
+                {"nombre": "CBT-Pulido y Líneas 7-8", "tipo_carga": "pulidora", "potencia_nominal_kw": 2400},
             ],
         },
     ],
