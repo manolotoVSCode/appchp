@@ -251,6 +251,121 @@ def _sembrar_mediciones(planta: dict, dias: int = 7) -> int:
     return total
 
 
+def _sembrar_produccion_diaria(planta: dict, dias: int, forzar: bool) -> int:
+    """Genera registros de produccion_diaria para el cliente. Retorna n insertados."""
+    import random as _rnd
+    from storage.repository import _supabase
+
+    cid   = planta["cliente_id"]
+    hoy   = datetime.now(timezone.utc).date()
+    fechas = [hoy - timedelta(days=i) for i in range(dias)]
+    # También incluir el mismo día del mes anterior (para comparativa)
+    from datetime import date as _date
+    mes_anterior_dia = _date(hoy.year if hoy.month > 1 else hoy.year - 1,
+                             (hoy.month - 1) if hoy.month > 1 else 12,
+                             min(hoy.day, 28))
+    if mes_anterior_dia not in fechas:
+        fechas.append(mes_anterior_dia)
+
+    # Verificar registros existentes si no --forzar
+    if forzar:
+        fechas_str = [f.isoformat() for f in fechas]
+        _supabase.table("produccion_diaria").delete().eq("cliente_id", cid).in_(
+            "fecha", fechas_str
+        ).execute()
+    else:
+        # Obtener las fechas ya sembradas
+        resp = (
+            _supabase.table("produccion_diaria")
+            .select("fecha")
+            .eq("cliente_id", cid)
+            .limit(20000)
+            .execute()
+        )
+        ya_sembradas = {r["fecha"] for r in (resp.data or [])}
+        fechas = [f for f in fechas if f.isoformat() not in ya_sembradas]
+
+    if not fechas:
+        return 0
+
+    registros = []
+    for fecha in fechas:
+        rng = _rnd.Random(cid * 10_000 + fecha.toordinal())
+        dia_semana = fecha.weekday()   # 0=lunes, 6=domingo
+        if dia_semana == 6:            # domingo
+            m2 = 0.0
+        elif dia_semana == 5:          # sábado
+            m2 = rng.uniform(2_500, 3_500)
+        else:                          # lunes-viernes
+            m2 = rng.uniform(4_200, 5_500) * rng.uniform(0.9, 1.1)
+        registros.append({
+            "cliente_id": cid,
+            "fecha": fecha.isoformat(),
+            "m2_producidos": round(m2, 2),
+        })
+
+    # Insertar por lotes de 100
+    n = 0
+    for inicio in range(0, len(registros), 100):
+        lote = registros[inicio:inicio + 100]
+        _supabase.table("produccion_diaria").upsert(lote, on_conflict="cliente_id,fecha").execute()
+        n += len(lote)
+    return n
+
+
+def _sembrar_historico_mes_anterior(planta: dict, forzar: bool) -> int:
+    """Genera 96 muestras por CBT correspondientes al mismo día del mes anterior.
+
+    Retorna total de muestras insertadas.
+    """
+    from storage.repository import _supabase
+
+    cid = planta["cliente_id"]
+    hoy = datetime.now(timezone.utc)
+    # Mismo día del mes anterior: restar 30 días, truncar a inicio de día UTC
+    hoy_date = hoy.date()
+    desde_ant = datetime(
+        hoy_date.year if hoy_date.month > 1 else hoy_date.year - 1,
+        (hoy_date.month - 1) if hoy_date.month > 1 else 12,
+        min(hoy_date.day, 28),
+        0, 0, 0,
+        tzinfo=timezone.utc,
+    )
+
+    # Obtener cargas finales
+    resp = (
+        _supabase.table("medidores")
+        .select("*")
+        .eq("cliente_id", cid)
+        .eq("punto_medicion", "carga_final")
+        .limit(20000)
+        .execute()
+    )
+    cargas = resp.data or []
+    if not cargas:
+        return 0
+
+    if forzar:
+        # Borrar mediciones del rango del mes anterior para este cliente
+        ids_medidores = [c["id"] for c in cargas]
+        hasta_ant_iso = (desde_ant + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        desde_ant_iso = desde_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
+        (
+            _supabase.table("mediciones_tiempo_real")
+            .delete()
+            .in_("medidor_id", ids_medidores)
+            .gte("timestamp", desde_ant_iso)
+            .lt("timestamp", hasta_ant_iso)
+            .execute()
+        )
+
+    total = 0
+    for carga in cargas:
+        meds = generar_mediciones_por_carga(carga, desde_ant, n=96, intervalo=15)
+        total += insertar_mediciones_batch(meds)
+    return total
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Seed masivo de telemetría jerárquica Ibérica Tiles."
@@ -285,6 +400,11 @@ def main() -> None:
         totales["transformadores"] += nt
         totales["cargas"]         += nc
         totales["mediciones"]     += nm
+        np = _sembrar_produccion_diaria(planta, dias=8, forzar=args.forzar)
+        nh = _sembrar_historico_mes_anterior(planta, forzar=args.forzar)
+        totales["produccion"] = totales.get("produccion", 0) + np
+        totales["historico"]  = totales.get("historico", 0)  + nh
+        print(f"    Producción diaria: {np} registros  |  Histórico mes anterior: {nh} muestras")
 
     elapsed = time.time() - t0
     print(f"\n=== Completado en {elapsed:.1f}s ===")
@@ -292,6 +412,8 @@ def main() -> None:
     print(f"  Transformadores: {totales['transformadores']}")
     print(f"  Cargas finales:  {totales['cargas']}")
     print(f"  Mediciones:      {totales['mediciones']}")
+    print(f"  Producción diaria: {totales.get('produccion', 0)} registros")
+    print(f"  Histórico mes ant: {totales.get('historico', 0)} muestras")
 
 
 if __name__ == "__main__":

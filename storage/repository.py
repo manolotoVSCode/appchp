@@ -1957,3 +1957,25 @@ def obtener_ultimas_facturas_ppa(cliente_id: int, n: int = 12) -> list[dict]:
         .execute()
     )
     return resp.data or []
+
+
+def obtener_produccion_diaria(
+    cliente_id: int,
+    desde_fecha: str,
+    hasta_fecha: str,
+) -> list[dict]:
+    """Retorna registros de produccion_diaria para el cliente en el rango de fechas.
+
+    desde_fecha, hasta_fecha: "YYYY-MM-DD" (ambos inclusivos).
+    """
+    resp = (
+        _supabase.table("produccion_diaria")
+        .select("fecha, m2_producidos")
+        .eq("cliente_id", cliente_id)
+        .gte("fecha", desde_fecha)
+        .lte("fecha", hasta_fecha)
+        .order("fecha")
+        .limit(20000)
+        .execute()
+    )
+    return resp.data or []
