@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.77.0] — 2026-08-04
+
+### Añadido/Refactorizado — Fase 2 D5: reestructuración completa de telemetría piloto
+
+- `scripts/seed_iberica.py` — PLANTA_1 y PLANTA_2 refactorizadas: de N cargas inventadas por transformador a 1 CBT (Cuadro de Baja Tensión) por transformador. Planta 1: 6 CBTs (CBT-MMC1, CBT-Vent. Atomizador 1, CBT-Zona Atomizado 1, CBT-Zona Prensas, CBT-Zona Hornos, CBT-Serv. Auxiliares). Planta 2: 6 CBTs (CBT-MMC2, CBT-Vent. Atomizador 2, CBT-Zona Atomizado 2, CBT-Zona Prensas P2, CBT-Zona Hornos P2, CBT-Pulido y Líneas 7-8). Total: 12 CBTs, 8064 mediciones sintéticas (7d × 4/h).
+- `web/app.py` — endpoint `cliente_dashboard_telemetria_data`: fallback defensivo para el caso donde `hojas_ids_nodo` incluye IDs que no están en `todas_hojas_ids` (transformador sin cargas hijo). Los IDs faltantes se fetchan individualmente y se agregan a `mediciones_por_hoja` antes de la agregación.
+- `web/static/js/dashboard-telemetria.js` — layout del unifilar completamente reescrito: se elimina la navegación por zoom semántico (nodoRaiz, vistaAcometida/vistaSE/vistaTx, grupos SE, breadcrumbs jerárquicos). El diagrama muestra SIEMPRE los 3 niveles completos: Acometida › Transformadores (fila) › CBT hijo (1:1). Click en cualquier nodo selecciona y actualiza KPIs/serie sin restructurar el árbol. Constantes: W_ACOM=220, R_TX=28, W_CBT=200×H_CBT=64, NIVEL_H_TX=160, NIVEL_H_CBT=160, MIN_SEP=220.
+- `web/static/js/dashboard-telemetria.js` — nueva función `_dibujarCBT` (reemplaza `_dibujarCarga`): rectángulo 200×64 naranja con 3 líneas de texto (nombre CBT, potencia nominal, kWh). `_dibujarTransformador`: radio R_TX aumentado de 22 a 28. `_dibujarAcometida`: W_ACOM aumentado de 180 a 220.
+- `web/templates/telemetria/dashboard.html` — `#unifilar-wrapper` min-height 280 → 380 px para acomodar el nuevo SVG de ~564 px.
+
 ## [2.76.3] — 2026-08-04
 
 ### Corregido — Fix integral D4: spinner, espacio SVG, texto de transformadores y energía en árbol
