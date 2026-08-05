@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.78.3] — 2026-08-05
+
+### Fix — Fase 2 D6: desactiva click en nodos de transformador
+
+- `web/static/js/dashboard-telemetria.js` — nueva función `_crearGrupoNodoVisual`: crea un `<g>` con hover (opacidad) pero sin listener de click y con `cursor:default`, sobreescribiendo el `cursor:pointer` de la clase `unifilar-nodo`. Los transformadores usan esta función en lugar de `_crearGrupoNodo`; acometida, SEs y CBTs conservan su comportamiento clickable.
+
 ## [2.78.2] — 2026-08-05
 
 ### Fix — Fase 2 D6: ampliar offset lateral de etiquetas de transformador

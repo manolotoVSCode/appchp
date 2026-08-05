@@ -456,7 +456,7 @@
           tx.energia_kwh, tx.potencia_nominal_kw);
 
         // Símbolo Tx
-        const gTx = _crearGrupoNodo(tx.id, "transformador");
+        const gTx = _crearGrupoNodoVisual(tx.id);
         _dibujarTransformador(gTx, tx, txX, yTx, _nodoId === tx.id);
         svg.appendChild(gTx);
 
@@ -482,6 +482,25 @@
 
     g.addEventListener("click", () => _handleClickNodo(id, tipo));
 
+    const wrapper = $("unifilar-wrapper");
+    g.addEventListener("mouseenter", () => {
+      if (wrapper) wrapper.classList.add("hovering");
+      g.classList.add("unifilar-highlight");
+    });
+    g.addEventListener("mouseleave", () => {
+      if (wrapper) wrapper.classList.remove("hovering");
+      g.classList.remove("unifilar-highlight");
+    });
+    return g;
+  }
+
+  /** Grupo visual sin click (hover únicamente). Usado para transformadores. */
+  function _crearGrupoNodoVisual(id) {
+    const g = _el("g", {
+      class: "unifilar-nodo",
+      "data-nodo-id": String(id),
+      style: "cursor:default",
+    });
     const wrapper = $("unifilar-wrapper");
     g.addEventListener("mouseenter", () => {
       if (wrapper) wrapper.classList.add("hovering");
