@@ -311,13 +311,15 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.78.0 — D6 telemetría: nivel visual SE virtual
-entre Acometida y Transformador (agrupación frontend por regex T-(\d+)),
-etiquetas Tx reubicadas a la derecha del símbolo, layout 4 niveles ~424px,
-wrapper 500px. 8/8 tests pasan.
+Último tema resuelto: v2.79.0 — D7-A backend KPIs telemetría: módulo
+calc/telemetria_kpis.py (6 funciones puras), tabla produccion_diaria,
+seed extendido con producción diaria + histórico mes anterior, endpoint
+extendido con bloque kpis_paneles (5+4+4 KPIs + sparklines + deltas).
+18/18 tests pasan.
 Pendiente: ejecutar migrations en Supabase:
   - 202606_usuario_clientes.sql
   - 202607_telemetria_jerarquia.sql
+  - 202608_produccion_diaria.sql (nueva)
   - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
 
 ### Bugs App
@@ -336,6 +338,7 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.78.0 — D6 completo: nivel SE virtual, etiquetas
-Tx laterales, layout 4 niveles Acometida›SE›Tx›CBT.
-Pendiente: integración MQTT/pipeline real.
+Último tema resuelto: v2.79.0 — D7-A backend KPIs completo: produccion_diaria,
+kpis_paneles en endpoint (energéticos, económicos, producción + sparklines
+24 puntos + deltas vs mes anterior). Pendiente: frontend que consuma
+kpis_paneles; integración MQTT/pipeline real.
