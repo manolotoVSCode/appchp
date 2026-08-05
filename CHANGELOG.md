@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.78.0] — 2026-08-04
+
+### Refactorizado — Fase 2 D6: unifilar 4 niveles y etiquetas laterales
+
+- `web/static/js/dashboard-telemetria.js` — nueva función `_agruparPorSE`: agrupa los transformadores hijo de la acometida por el prefijo `/^T-(\d+)/` y genera nodos SE virtuales con ID string `"grupo:SE-N"` (no existen en BD). Nueva función `_dibujarSE`: rectángulo 100×40 punteado, fondo azul claro, 2 líneas de texto (nombre SE y kWh del periodo).
+- `web/static/js/dashboard-telemetria.js` — `_renderUnifilar` reescrito de 3 a 4 niveles: Acometida › SE › Transformador › CBT. Las SEs se distribuyen horizontalmente centradas sobre el grupo de Txs hijos; los Txs se distribuyen uniformemente. Constantes actualizadas: R_TX 28→26, MIN_SEP 220→180, NIVEL_H=100 (reemplaza NIVEL_H_TX=160 y NIVEL_H_CBT=160), PAD_Y 40→30.
+- `web/static/js/dashboard-telemetria.js` — `_dibujarTransformador` actualizado: etiquetas (nombre corto, kVA, kWh) reubicadas a la derecha del símbolo doble círculo (text-anchor=start, x=cx+R_TX+12) eliminando el solape visual con las líneas de conexión.
+- `web/static/js/dashboard-telemetria.js` — `fetchDatos`, `_handleClickNodo`, `setNodo` actualizados para manejar IDs virtuales (prefijo `"grupo:"`): no se envía `nodo_id` al backend para nodos SE; clic en SE muestra el agregado completo del árbol.
+- `web/templates/telemetria/dashboard.html` — `#unifilar-wrapper` min-height 380→500 px para acomodar SVG de ~424 px.
+
 ## [2.77.0] — 2026-08-04
 
 ### Añadido/Refactorizado — Fase 2 D5: reestructuración completa de telemetría piloto
