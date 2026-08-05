@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.78.1] — 2026-08-05
+
+### Fix — Fase 2 D6: kWh duplicado en líneas y colisión visual etiquetas Tx
+
+- `web/static/js/dashboard-telemetria.js` — eliminado el `<text class="unifilar-valor-linea">` que dibujaba el kWh sobre cada línea de conexión del unifilar; el valor kWh ya aparece en el bloque de etiquetas laterales del nodo destino, por lo que era información duplicada.
+- `web/static/js/dashboard-telemetria.js` — offset horizontal de etiquetas del transformador aumentado de `cx + R_TX + 12` a `cx + R_TX + 28` (cx + 54 px), eliminando la superposición visual sobre el segundo círculo del símbolo doble. `MIN_SEP` ajustado de 180 a 200 px para mantener la holgura entre transformadores adyacentes.
+
 ## [2.78.0] — 2026-08-04
 
 ### Refactorizado — Fase 2 D6: unifilar 4 niveles y etiquetas laterales

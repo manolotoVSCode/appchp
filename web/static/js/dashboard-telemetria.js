@@ -17,7 +17,7 @@
 
   // Layout
   const NIVEL_H = 100;   // separación entre centros de nivel (px)
-  const MIN_SEP = 180;   // separación mínima entre centros de Tx (px)
+  const MIN_SEP = 200;   // separación mínima entre centros de Tx (px)
   const PAD_X   = 60;
   const PAD_Y   = 30;
 
@@ -313,7 +313,7 @@
     const nombreCorto = nombreMatch ? nombreMatch[1] : nodo.nombre.substring(0, 12);
     const kvaCorto    = kvaMatch ? kvaMatch[1] : "";
     const kwh         = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
-    const lx = cx + R_TX + 12;
+    const lx = cx + R_TX + 28;
     [
       [nombreCorto, "12", "bold"],
       [kvaCorto,    "10", "normal"],
@@ -360,13 +360,6 @@
     const cls = _claseLinea(kwhHijo, kwNomHijo);
     svgEl.appendChild(_el("path", { d, class: cls }));
     // Etiqueta sobre el segmento horizontal
-    if (kwhHijo != null) {
-      const lx = (px + hx) / 2;
-      const ly = miY - 4;
-      const t = _el("text", { x: lx, y: ly, class: "unifilar-valor-linea" });
-      t.textContent = fmt(kwhHijo) + " kWh";
-      svgEl.appendChild(t);
-    }
   }
 
   // ── Motor de layout ────────────────────────────────────────────────────────
