@@ -226,3 +226,30 @@ def test_i_anterior_null_sin_datos_historicos(_client_fase2):
     kpi = data["kpis_paneles"]["energeticos"]["energia_kwh"]
     assert kpi["anterior"] is None
     assert kpi["delta_pct"] is None
+
+
+def test_g_determinar_periodo_anterior():
+    """Para cada rango, la ventana anterior termina 30 días antes de ahora
+    y tiene la misma anchura que el rango."""
+    from datetime import datetime, timezone, timedelta
+    from calc.telemetria_kpis import determinar_periodo_anterior
+
+    ahora = datetime(2024, 3, 15, 12, 0, 0, tzinfo=timezone.utc)
+
+    # 24h: anterior termina en ahora-30d, dura 24h
+    d, h, etiq = determinar_periodo_anterior("24h", ahora)
+    esperado_hasta = ahora - timedelta(days=30)
+    esperado_desde = esperado_hasta - timedelta(hours=24)
+    assert abs((h - esperado_hasta).total_seconds()) < 1
+    assert abs((d - esperado_desde).total_seconds()) < 1
+    assert "30" in etiq or "anterior" in etiq.lower()
+
+    # 7d: dura 7 días
+    d7, h7, _ = determinar_periodo_anterior("7d", ahora)
+    assert abs((h7 - esperado_hasta).total_seconds()) < 1
+    assert abs((d7 - (esperado_hasta - timedelta(days=7))).total_seconds()) < 1
+
+    # 30d: dura 30 días
+    d30, h30, _ = determinar_periodo_anterior("30d", ahora)
+    assert abs((h30 - esperado_hasta).total_seconds()) < 1
+    assert abs((d30 - (esperado_hasta - timedelta(days=30))).total_seconds()) < 1

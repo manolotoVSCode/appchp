@@ -120,13 +120,15 @@ def calcular_kpis_produccion(
 
     consumo_esp = round(energia_kwh / m2_producidos_atribuidos, 4)
     costo_esp: float | None = None
-    if costo_total_mxn is not None:
+    pct_costo_esp: float | None = None
+    if costo_total_mxn is not None and costo_total_mxn > 0:
         costo_esp = round(costo_total_mxn / m2_producidos_atribuidos, 4)
+        pct_costo_esp = round(costo_esp / costo_total_mxn * 100, 2)
 
     return {
         "consumo_especifico_kwh_m2": consumo_esp,
         "costo_especifico_mxn_m2": costo_esp,
-        "pct_costo_especifico": None,   # fórmula final por definir por el usuario
+        "pct_costo_especifico": pct_costo_esp,
         "m2_producidos": round(m2_producidos_atribuidos, 2),
     }
 
@@ -170,12 +172,18 @@ def calcular_baseline_movil(mediciones_historicas: list[dict]) -> float | None:
     return round(energia, 3) if energia > 0 else None
 
 
-def generar_sparkline(mediciones: list[dict], n_puntos: int) -> list[float]:
+def generar_sparkline(
+    mediciones: list[dict],
+    n_puntos: int,
+    tipo: str = "energia",
+) -> list[float]:
     """Reduce mediciones a n_puntos agrupando por bucket temporal.
 
-    mediciones: lista de dicts {"ts": str ISO, "kw": float}
-    Retorna lista de n_puntos floats con kWh acumulados por bucket.
-    Para 24h y n_puntos=24: cada bucket es una hora.
+    mediciones: lista de dicts {"ts": str ISO, "kw": float, "fp": float (opcional)}
+    tipo='energia':         kWh acumulados por bucket (integral trapezoidal).
+    tipo='potencia':        promedio de kw por bucket.
+    tipo='factor_potencia': promedio ponderado de fp por kw, por bucket.
+    Retorna lista de n_puntos floats.
     """
     if not mediciones or n_puntos <= 0:
         return [0.0] * max(n_puntos, 0)
@@ -191,20 +199,78 @@ def generar_sparkline(mediciones: list[dict], n_puntos: int) -> list[float]:
         return [0.0] * n_puntos
 
     bucket_size = duracion / n_puntos
-    buckets = [0.0] * n_puntos
 
-    for i in range(1, len(mediciones)):
-        try:
-            t0 = datetime.fromisoformat(mediciones[i - 1]["ts"].replace("Z", "+00:00"))
-            t1 = datetime.fromisoformat(mediciones[i]["ts"].replace("Z", "+00:00"))
-            dt_h = (t1 - t0).total_seconds() / 3600.0
-            kwh = (mediciones[i - 1]["kw"] + mediciones[i]["kw"]) / 2.0 * dt_h
-            # Midpoint del intervalo determina el bucket
-            t_mid = t0 + (t1 - t0) / 2
-            offset = (t_mid - t_inicio).total_seconds()
-            idx = min(int(offset / bucket_size), n_puntos - 1)
-            buckets[idx] += kwh
-        except Exception:
-            pass
+    if tipo == "energia":
+        buckets = [0.0] * n_puntos
+        for i in range(1, len(mediciones)):
+            try:
+                t0 = datetime.fromisoformat(mediciones[i - 1]["ts"].replace("Z", "+00:00"))
+                t1 = datetime.fromisoformat(mediciones[i]["ts"].replace("Z", "+00:00"))
+                dt_h = (t1 - t0).total_seconds() / 3600.0
+                kwh = (mediciones[i - 1]["kw"] + mediciones[i]["kw"]) / 2.0 * dt_h
+                t_mid = t0 + (t1 - t0) / 2
+                idx = min(int((t_mid - t_inicio).total_seconds() / bucket_size), n_puntos - 1)
+                buckets[idx] += kwh
+            except Exception:
+                pass
+        return [round(b, 3) for b in buckets]
 
-    return [round(b, 3) for b in buckets]
+    elif tipo == "potencia":
+        # Promedio de kw por bucket
+        sumas = [0.0] * n_puntos
+        conteos = [0] * n_puntos
+        for m in mediciones:
+            try:
+                t = datetime.fromisoformat(m["ts"].replace("Z", "+00:00"))
+                idx = min(int((t - t_inicio).total_seconds() / bucket_size), n_puntos - 1)
+                sumas[idx] += m["kw"]
+                conteos[idx] += 1
+            except Exception:
+                pass
+        return [round(sumas[i] / conteos[i], 3) if conteos[i] > 0 else 0.0 for i in range(n_puntos)]
+
+    else:  # factor_potencia: promedio ponderado por kw
+        fp_peso = [0.0] * n_puntos
+        kw_peso = [0.0] * n_puntos
+        for m in mediciones:
+            try:
+                t = datetime.fromisoformat(m["ts"].replace("Z", "+00:00"))
+                idx = min(int((t - t_inicio).total_seconds() / bucket_size), n_puntos - 1)
+                kw = m.get("kw", 0.0)
+                fp = m.get("fp", 0.0)
+                fp_peso[idx] += fp * kw
+                kw_peso[idx] += kw
+            except Exception:
+                pass
+        return [
+            round(fp_peso[i] / kw_peso[i], 4) if kw_peso[i] > 0 else 0.0
+            for i in range(n_puntos)
+        ]
+
+
+def determinar_periodo_anterior(
+    rango: str,
+    ahora: datetime,
+) -> tuple[datetime, datetime, str]:
+    """Calcula el periodo anterior equivalente al rango, desplazado 30 días atrás.
+
+    - 24h: hasta = ahora - 30d; desde = hasta - 24h
+    - 7d:  hasta = ahora - 30d; desde = hasta - 7d
+    - 30d: hasta = ahora - 30d; desde = hasta - 30d
+
+    Retorna (desde_ant, hasta_ant, etiqueta).
+    """
+    from datetime import timedelta
+
+    hasta_ant = ahora - timedelta(days=30)
+    if rango == "7d":
+        desde_ant = hasta_ant - timedelta(days=7)
+        etiqueta = "misma semana 30 días antes"
+    elif rango == "30d":
+        desde_ant = hasta_ant - timedelta(days=30)
+        etiqueta = "mismo mes 30 días antes"
+    else:  # 24h (default)
+        desde_ant = hasta_ant - timedelta(hours=24)
+        etiqueta = "mismo momento 30 días antes"
+
+    return desde_ant, hasta_ant, etiqueta
