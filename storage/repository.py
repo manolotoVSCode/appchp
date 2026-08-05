@@ -1979,3 +1979,45 @@ def obtener_produccion_diaria(
         .execute()
     )
     return resp.data or []
+
+
+def obtener_mediciones_para_rango(
+    medidor_id: int,
+    desde: str,
+    hasta: str,
+    rango: str,
+) -> list[dict]:
+    """Selecciona la tabla correcta según el rango y devuelve dicts homogeneizados.
+
+    rango='24h': mediciones_tiempo_real (resolución real, campo 'timestamp').
+    rango='7d' o '30d': mediciones_agregadas_15min (campo 'bucket_15min').
+
+    Campos del dict retornado:
+      timestamp, potencia_activa_kw, factor_potencia, energia_activa_importada_kwh.
+    """
+    if rango == "24h":
+        rows = obtener_mediciones_recientes(medidor_id, desde, hasta)
+        return [
+            {
+                "timestamp": r["timestamp"],
+                "potencia_activa_kw": float(r.get("potencia_activa_kw") or 0),
+                "factor_potencia": float(r.get("factor_potencia") or 0),
+                "energia_activa_importada_kwh": float(
+                    r.get("energia_activa_importada_kwh") or 0
+                ),
+            }
+            for r in rows
+        ]
+    else:  # 7d, 30d
+        rows = obtener_agregados_15min(medidor_id, desde, hasta)
+        return [
+            {
+                "timestamp": r["bucket_15min"],
+                "potencia_activa_kw": float(r.get("potencia_activa_kw") or 0),
+                "factor_potencia": float(r.get("factor_potencia") or 0),
+                "energia_activa_importada_kwh": float(
+                    r.get("energia_activa_importada_kwh") or 0
+                ),
+            }
+            for r in rows
+        ]

@@ -253,3 +253,42 @@ def test_g_determinar_periodo_anterior():
     d30, h30, _ = determinar_periodo_anterior("30d", ahora)
     assert abs((h30 - esperado_hasta).total_seconds()) < 1
     assert abs((d30 - (esperado_hasta - timedelta(days=30))).total_seconds()) < 1
+
+
+def test_h_obtener_mediciones_para_rango_elige_tabla():
+    """rango='24h' llama a obtener_mediciones_recientes; '7d' llama a obtener_agregados_15min."""
+    from unittest.mock import patch, MagicMock
+    from storage.repository import obtener_mediciones_para_rango
+
+    fila_real = {"timestamp": "2024-01-01T00:00:00Z", "potencia_activa_kw": 100.0,
+                 "factor_potencia": 0.90, "energia_activa_importada_kwh": 25.0}
+    fila_agg  = {"bucket_15min": "2024-01-01T00:00:00Z", "potencia_activa_kw": 90.0,
+                 "factor_potencia": 0.88, "energia_activa_importada_kwh": 22.5}
+
+    with patch("storage.repository.obtener_mediciones_recientes", return_value=[fila_real]) as mock_omr, \
+         patch("storage.repository.obtener_agregados_15min", return_value=[fila_agg]) as mock_oa15:
+
+        # 24h → mediciones_recientes
+        r24 = obtener_mediciones_para_rango(1, "2024-01-01T00:00:00Z", "2024-01-02T00:00:00Z", "24h")
+        mock_omr.assert_called_once()
+        mock_oa15.assert_not_called()
+        assert r24[0]["timestamp"] == "2024-01-01T00:00:00Z"
+        assert r24[0]["potencia_activa_kw"] == 100.0
+
+        mock_omr.reset_mock()
+        mock_oa15.reset_mock()
+
+        # 7d → agregados_15min
+        r7 = obtener_mediciones_para_rango(1, "2024-01-01T00:00:00Z", "2024-01-08T00:00:00Z", "7d")
+        mock_oa15.assert_called_once()
+        mock_omr.assert_not_called()
+        assert r7[0]["timestamp"] == "2024-01-01T00:00:00Z"   # campo normalizado
+        assert r7[0]["potencia_activa_kw"] == 90.0
+
+        mock_omr.reset_mock()
+        mock_oa15.reset_mock()
+
+        # 30d → también agregados_15min
+        obtener_mediciones_para_rango(1, "2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z", "30d")
+        mock_oa15.assert_called_once()
+        mock_omr.assert_not_called()
