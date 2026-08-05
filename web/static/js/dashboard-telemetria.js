@@ -11,15 +11,15 @@
 
   // Dimensiones de nodos (px)
   const W_ACOM = 220; const H_ACOM = 64;
-  const R_TX   = 28;                       // radio del círculo transformador
-  const W_CBT  = 200; const H_CBT  = 64;  // rectángulo cuadro de baja tensión
+  const W_SE   = 100; const H_SE   = 40;   // subestación virtual (no existe en BD)
+  const R_TX   = 26;                        // radio del círculo transformador
+  const W_CBT  = 200; const H_CBT  = 64;   // cuadro de baja tensión
 
   // Layout
-  const NIVEL_H_TX  = 160;   // separación acometida → nivel transformador
-  const NIVEL_H_CBT = 160;   // separación transformador → nivel CBT
-  const MIN_SEP = 220;       // separación mínima entre centros de transformador
-  const PAD_X   = 60;        // padding lateral del SVG (px)
-  const PAD_Y   = 40;        // padding superior del SVG (px)
+  const NIVEL_H = 100;   // separación entre centros de nivel (px)
+  const MIN_SEP = 180;   // separación mínima entre centros de Tx (px)
+  const PAD_X   = 60;
+  const PAD_Y   = 30;
 
   // ── Estado ─────────────────────────────────────────────────────────────────
   const root = document.getElementById("dashboard-telemetria-root");
@@ -63,7 +63,10 @@
     _ocultarError();
 
     const params = new URLSearchParams({ rango: _rango });
-    if (_nodoId) params.set("nodo_id", _nodoId);
+    if (_nodoId !== null && _nodoId !== undefined &&
+        !String(_nodoId).startsWith("grupo:")) {
+      params.set("nodo_id", String(_nodoId));
+    }
 
     try {
       const resp = await fetch(`${ENDPOINT}?${params}`, { signal: controller.signal });
@@ -262,7 +265,37 @@
     return { x: cx, y: cy + H_ACOM / 2 };
   }
 
-  /** Transformador: doble círculo con etiquetas centradas debajo del símbolo. */
+  /** Subestación virtual: rectángulo punteado 100×40, borde azul primario. */
+  function _dibujarSE(g, nodo, cx, cy, seleccionado) {
+    const x = cx - W_SE / 2;
+    const y = cy - H_SE / 2;
+    g.appendChild(_el("rect", {
+      x, y, width: W_SE, height: H_SE, rx: 6,
+      fill: "rgba(31,58,95,0.06)",
+      stroke: seleccionado ? C_PRIMARIO : C_PRIMARIO_L,
+      "stroke-width": seleccionado ? 3 : 1.5,
+      "stroke-dasharray": "5,3",
+      class: "unifilar-fondo",
+    }));
+    const t1 = _el("text", {
+      x: cx, y: cy - 5,
+      class: "unifilar-label", "text-anchor": "middle",
+      "font-size": "12", "font-weight": "bold",
+    });
+    t1.textContent = nodo.nombre;
+    g.appendChild(t1);
+    if (nodo.energia_kwh != null) {
+      const t2 = _el("text", {
+        x: cx, y: cy + 9,
+        class: "unifilar-label-small", "text-anchor": "middle", "font-size": "10",
+      });
+      t2.textContent = fmt(nodo.energia_kwh) + " kWh";
+      g.appendChild(t2);
+    }
+    return { x: cx, y: cy + H_SE / 2 };
+  }
+
+  /** Transformador: doble círculo con etiquetas a la derecha del símbolo. */
   function _dibujarTransformador(g, nodo, cx, cy, seleccionado) {
     const cy1 = cy - 6; const cy2 = cy + 6;
     const sw = seleccionado ? 3 : 1.5;
@@ -274,18 +307,23 @@
       cx, cy: cy2, r: R_TX, fill: "rgba(255,255,255,0.7)",
       stroke: C_PRIMARIO, "stroke-width": sw, class: "unifilar-fondo",
     }));
-    // Etiquetas centradas debajo del símbolo (evita colisión horizontal entre Txs)
+    // Etiquetas a la derecha: elimina solape con líneas de conexión
     const nombreMatch = nodo.nombre.match(/^(T-\d+\.\d+)/);
     const kvaMatch    = nodo.nombre.match(/(\d+\s*kVA)/);
     const nombreCorto = nombreMatch ? nombreMatch[1] : nodo.nombre.substring(0, 12);
     const kvaCorto    = kvaMatch ? kvaMatch[1] : "";
     const kwh         = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
-    const labels      = [nombreCorto, kvaCorto, kwh].filter((x) => x);
-    const labelY      = cy2 + R_TX + 14;
-    labels.forEach((l, i) => {
+    const lx = cx + R_TX + 12;
+    [
+      [nombreCorto, "12", "bold"],
+      [kvaCorto,    "10", "normal"],
+      [kwh,         "10", "bold"],
+    ].forEach(([l, fs, fw], i) => {
+      if (!l) return;
       const t = _el("text", {
-        x: cx, y: labelY + i * 13,
-        class: "unifilar-label-small", "text-anchor": "middle", "font-size": "11",
+        x: lx, y: cy - 8 + i * 14,
+        class: "unifilar-label-small", "text-anchor": "start",
+        "font-size": fs, "font-weight": fw,
       });
       t.textContent = l;
       g.appendChild(t);
@@ -334,10 +372,34 @@
   // ── Motor de layout ────────────────────────────────────────────────────────
 
   /**
-   * renderUnifilar — layout vertical fijo 3 niveles.
+   * Agrupa transformadores por SE derivada del nombre (regex /^T-(\d+)/).
+   * Devuelve nodos SE virtuales con IDs string "grupo:SE-N".
+   */
+  function _agruparPorSE(transformadores) {
+    const grupos = new Map();
+    transformadores.forEach((tx) => {
+      const m = tx.nombre.match(/^T-(\d+)/);
+      const key = m ? m[1] : "X";
+      if (!grupos.has(key)) grupos.set(key, []);
+      grupos.get(key).push(tx);
+    });
+    return Array.from(grupos.entries()).map(([num, txs]) => ({
+      id: `grupo:SE-${num}`,
+      nombre: `SE-${num}`,
+      punto_medicion: "subestacion",
+      energia_kwh: txs.reduce((s, t) => s + (t.energia_kwh || 0), 0),
+      potencia_nominal_kw: txs.reduce((s, t) => s + (t.potencia_nominal_kw || 0), 0),
+      costo_mxn: txs.reduce((s, t) => s + (t.costo_mxn || 0), 0),
+      hijos: txs,
+    }));
+  }
+
+  /**
+   * renderUnifilar — layout vertical fijo 4 niveles.
    * Nivel 0: Acometida (centrada)
-   * Nivel 1: Transformadores
-   * Nivel 2: CBTs (1:1 con cada Tx)
+   * Nivel 1: Subestaciones virtuales SE (agrupan Txs por prefijo T-N)
+   * Nivel 2: Transformadores (distribuidos uniformemente)
+   * Nivel 3: CBTs (1:1 con cada Tx, alineados verticalmente)
    */
   function _renderUnifilar(raiz) {
     if (!raiz) return;
@@ -348,54 +410,73 @@
     const wrapper = $("unifilar-wrapper");
     const wrapW  = wrapper ? wrapper.clientWidth - 48 : 900;
 
-    // Nivel 0: acometida
-    const transformadores = raiz.hijos || [];
-    const nTx = Math.max(transformadores.length, 1);
+    const gruposSE    = _agruparPorSE(raiz.hijos || []);
+    const todosLosTxs = gruposSE.flatMap((se) => se.hijos);
+    const nTx = Math.max(todosLosTxs.length, 1);
 
     const svgW = Math.max(wrapW, nTx * MIN_SEP + PAD_X * 2);
-    const svgH = PAD_Y + H_ACOM / 2 + NIVEL_H_TX + (R_TX * 2 + 12) + NIVEL_H_CBT + H_CBT + PAD_Y;
 
-    svg.setAttribute("width", svgW);
-    svg.setAttribute("height", svgH);
+    // Y de cada nivel (centros)
+    const yAcom = PAD_Y + H_ACOM / 2;
+    const ySE   = yAcom + NIVEL_H;
+    const yTx   = ySE   + NIVEL_H;
+    const yCbt  = yTx   + NIVEL_H;
+    const svgH  = yCbt  + H_CBT / 2 + PAD_Y;
+
+    svg.setAttribute("width",   svgW);
+    svg.setAttribute("height",  svgH);
     svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
 
-    // Nivel 0: Acometida (centrada)
+    // X de cada Tx: distribuidos uniformemente sobre el ancho del SVG
+    const pasoTx = svgW / (nTx + 1);
+    const txXmap = new Map();
+    todosLosTxs.forEach((tx, i) => txXmap.set(tx.id, pasoTx * (i + 1)));
+
+    // Nivel 0: Acometida
     const aX = svgW / 2;
-    const aY = PAD_Y + H_ACOM / 2;
     const gA = _crearGrupoNodo(raiz.id, "acometida_cfe");
-    const { x: aOutX, y: aOutY } = _dibujarAcometida(gA, raiz, aX, aY, _nodoId === raiz.id);
+    const { x: aOutX, y: aOutY } =
+      _dibujarAcometida(gA, raiz, aX, yAcom, _nodoId === raiz.id);
     svg.appendChild(gA);
 
-    // Nivel 1: Transformadores + Nivel 2: CBTs (1:1)
-    const paso = svgW / (nTx + 1);
-    transformadores.forEach((tx, i) => {
-      const txX = paso * (i + 1);
-      const txY = aY + NIVEL_H_TX + R_TX + 6;   // centro Tx entre los dos círculos
+    // Niveles 1-3: SE → Tx → CBT
+    gruposSE.forEach((se) => {
+      // SE se centra en el promedio X de sus Txs hijos
+      const seXs = se.hijos.map((tx) => txXmap.get(tx.id));
+      const seX  = seXs.reduce((a, b) => a + b, 0) / seXs.length;
 
-      // Línea acometida → Tx
-      _dibujarLinea(svg, aOutX, aOutY, txX, txY - R_TX - 6,
-        tx.energia_kwh, tx.potencia_nominal_kw);
+      // Línea Acometida → SE
+      _dibujarLinea(svg, aOutX, aOutY, seX, ySE - H_SE / 2,
+        se.energia_kwh, se.potencia_nominal_kw);
 
-      // Símbolo Tx
-      const gTx = _crearGrupoNodo(tx.id, "transformador");
-      _dibujarTransformador(gTx, tx, txX, txY, _nodoId === tx.id);
-      svg.appendChild(gTx);
+      // Símbolo SE
+      const gSE = _crearGrupoNodo(se.id, "subestacion");
+      _dibujarSE(gSE, se, seX, ySE, String(_nodoId) === se.id);
+      svg.appendChild(gSE);
 
-      // CBT hijo (1:1)
-      const cbt = (tx.hijos || [])[0];
-      if (cbt) {
-        const cbtX = txX;
-        const cbtY = txY + R_TX + 6 + NIVEL_H_CBT;   // centro del CBT
+      // Cada Tx hijo de esta SE
+      se.hijos.forEach((tx) => {
+        const txX = txXmap.get(tx.id);
 
-        // Línea Tx → CBT (vertical)
-        _dibujarLinea(svg, txX, txY + R_TX + 6, cbtX, cbtY - H_CBT / 2,
-          cbt.energia_kwh, cbt.potencia_nominal_kw);
+        // Línea SE → Tx
+        _dibujarLinea(svg, seX, ySE + H_SE / 2, txX, yTx - R_TX - 6,
+          tx.energia_kwh, tx.potencia_nominal_kw);
 
-        // Rectángulo CBT
-        const gCBT = _crearGrupoNodo(cbt.id, "carga_final");
-        _dibujarCBT(gCBT, cbt, cbtX, cbtY, _nodoId === cbt.id);
-        svg.appendChild(gCBT);
-      }
+        // Símbolo Tx
+        const gTx = _crearGrupoNodo(tx.id, "transformador");
+        _dibujarTransformador(gTx, tx, txX, yTx, _nodoId === tx.id);
+        svg.appendChild(gTx);
+
+        // CBT hijo (1:1)
+        const cbt = (tx.hijos || [])[0];
+        if (cbt) {
+          _dibujarLinea(svg, txX, yTx + R_TX + 6, txX, yCbt - H_CBT / 2,
+            cbt.energia_kwh, cbt.potencia_nominal_kw);
+          const gCBT = _crearGrupoNodo(cbt.id, "carga_final");
+          _dibujarCBT(gCBT, cbt, txX, yCbt, _nodoId === cbt.id);
+          svg.appendChild(gCBT);
+        }
+      });
     });
   }
 
@@ -422,14 +503,13 @@
 
   /** Maneja click en un nodo del unifilar. */
   function _handleClickNodo(id, tipo) {
-    const nId = typeof id === "number" ? id : parseInt(id, 10);
-    _nodoId = nId;
+    _nodoId = typeof id === "string" && id.startsWith("grupo:") ? id : parseInt(id, 10);
     fetchDatos();
   }
 
   // ── Controles ──────────────────────────────────────────────────────────────
   function setNodo(id) {
-    _nodoId = typeof id === "number" ? id : parseInt(id, 10);
+    _nodoId = typeof id === "string" && id.startsWith("grupo:") ? id : parseInt(id, 10);
     fetchDatos();
   }
 
