@@ -2791,6 +2791,31 @@ def create_app() -> Flask:
                     for r in rows
                 ]
 
+        # Diagnóstico: contar filas por hoja para detectar ventanas vacías
+        _n_filas_total = sum(len(v) for v in mediciones_por_hoja.values())
+        # Si todas las hojas están vacías, el sunburst mostrará 0 kWh
+        # (datos fuera del rango de fechas — re-ejecutar seed_iberica.py --forzar)
+
+        # Garantizar que hojas_ids_nodo esté cubierto en mediciones_por_hoja
+        # (edge case: nodo seleccionado es un tx sin cargas hijo — fallback a nodo_id
+        # que no es carga_final y por tanto no está en todas_hojas_ids)
+        ids_sin_datos = [hid for hid in hojas_ids_nodo if hid not in mediciones_por_hoja]
+        for hid in ids_sin_datos:
+            if rango == "24h":
+                rows = _omr(hid, desde_iso, hasta_iso)
+                mediciones_por_hoja[hid] = [
+                    {"ts": r["timestamp"], "kw": float(r.get("potencia_activa_kw") or 0),
+                     "fp": float(r.get("factor_potencia") or 0)}
+                    for r in rows
+                ]
+            else:
+                rows = _oa15(hid, desde_iso, hasta_iso)
+                mediciones_por_hoja[hid] = [
+                    {"ts": r["bucket_15min"], "kw": float(r.get("potencia_activa_kw") or 0),
+                     "fp": float(r.get("factor_potencia") or 0)}
+                    for r in rows
+                ]
+
         # Agregar serie temporal: sumar kW solo de las hojas del nodo seleccionado
         from collections import defaultdict
         bucket_kw = defaultdict(float)
