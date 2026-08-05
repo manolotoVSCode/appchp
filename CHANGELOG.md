@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.76.3] — 2026-08-04
+
+### Corregido — Fix integral D4: spinner, espacio SVG, texto de transformadores y energía en árbol
+
+- `web/templates/telemetria/dashboard.html` — eliminado `#unifilar-loading` (div spinner 340 px que dominaba el viewport). El SVG permanece siempre visible; durante el primer fetch el wrapper muestra su fondo y el badge de cabecera indica actividad. Wrapper `min-height` 380 → 280 px. SVG `style` limpiado (sin `display:none`).
+- `web/static/js/dashboard-telemetria.js` — `_mostrarLoading(visible)` simplificado: solo controla el badge de cabecera, sin lógica `esInicial`/`_primeraCarga`. Eliminadas las variables `_primeraCarga` y el parámetro `esInicial`. `fetchDatos` simplificado en consecuencia.
+- `web/static/js/dashboard-telemetria.js` — alturas del SVG corregidas: cada fórmula tenía un `NIVEL_H` extra (140 px) sobre el contenido real. Nuevo: `vistaAcometida` 408 → 268 px, `vistaTx` 416 → 276 px, `vistaSE` 556 → 456 px (con margen para etiquetas bajo símbolo).
+- `web/static/js/dashboard-telemetria.js` — `_dibujarTransformador`: etiquetas movidas de la derecha del símbolo (colisionaban con `MIN_SEP=210 px`) a debajo del símbolo, centradas (`text-anchor:middle`). Se parsea nombre corto `T-N.N` y potencia `N kVA` con regex; se filtra líneas vacías.
+- `web/app.py` — endpoint `cliente_dashboard_telemetria_data`: `mediciones_por_hoja` ahora se construye para **todas** las `carga_final` del árbol completo (`todas_hojas_ids`), no solo las del nodo seleccionado. `_energia_nodo` puede así calcular kWh correctos para todos los nodos del sunburst en cualquier vista. KPIs, serie temporal y comparativa siguen filtrando solo las hojas del nodo seleccionado (`hojas_ids_nodo`).
+- `web/app.py` — `_arbol_sunburst_con_costo` incluye ahora `potencia_nominal_kw` en cada nodo (estaba ausente; JS recibía `undefined`).
+- `tests/test_dashboard_telemetria.py` — test `test_telemetria_data_nodo_carga_final_sin_agregacion` actualizado: la nueva lógica consulta todos los medidores `carga_final` del árbol para el periodo actual; el test verifica que ambos medidores (3 y 4) son consultados y que solo medidores válidos del árbol aparecen en las llamadas.
+
 ## [2.76.2] — 2026-08-04
 
 ### Corregido — Spinner residual, layout comprimido e indicador de carga en cabecera

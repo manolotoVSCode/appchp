@@ -29,13 +29,12 @@
   const CLIENTE_ID = root.dataset.clienteId;
   const ENDPOINT   = root.dataset.endpoint;
 
-  let _rango         = "24h";
-  let _nodoId        = null;   // nodo cuyo time-series se muestra en la gráfica
-  let _nodoRaizId    = null;   // raíz del unifilar: null | número | "grupo:SE-N"
-  let _arbolCache    = null;   // último arbol_sunburst recibido del backend
-  let _chartSerie    = null;
-  let _abort         = null;
-  let _primeraCarga  = true;   // true hasta el primer render exitoso
+  let _rango      = "24h";
+  let _nodoId     = null;   // nodo cuyo time-series se muestra en la gráfica
+  let _nodoRaizId = null;   // raíz del unifilar: null | número | "grupo:SE-N"
+  let _arbolCache = null;   // último arbol_sunburst recibido del backend
+  let _chartSerie = null;
+  let _abort      = null;
 
   // ── Helpers DOM ────────────────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
@@ -51,27 +50,18 @@
     const b = $("telemetria-error-banner");
     if (b) b.classList.add("d-none");
   }
-  function _mostrarLoading(visible, esInicial = false) {
+  function _mostrarLoading(visible) {
     const badge = $("header-loading-badge");
-    if (badge)  badge.style.display = visible ? "inline" : "none";
-    // El spinner grande y el SVG solo se tocan en la carga inicial.
-    // Cargas subsiguientes (cambio de rango/nodo) muestran solo el badge.
-    if (esInicial) {
-      const loading = $("unifilar-loading");
-      const svg     = $("unifilarSvg");
-      if (loading) loading.style.display = visible ? "flex" : "none";
-      if (svg)     svg.style.display     = visible ? "none" : "block";
-    }
+    if (badge) badge.style.display = visible ? "inline" : "none";
   }
 
   // ── Fetch central ──────────────────────────────────────────────────────────
   async function fetchDatos() {
     if (_abort) _abort.abort();
     const controller = new AbortController();
-    _abort           = controller;
-    const esInicial  = _primeraCarga;  // capturado antes de cualquier await
+    _abort = controller;
 
-    _mostrarLoading(true, esInicial);
+    _mostrarLoading(true);
     _ocultarError();
 
     const params = new URLSearchParams({ rango: _rango });
@@ -82,8 +72,7 @@
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       if (data.error) { _mostrarError(data.error); return; }
-      _arbolCache   = data.arbol_sunburst;
-      _primeraCarga = false;
+      _arbolCache = data.arbol_sunburst;
       _renderTodo(data);
       $("ultima-actualizacion").textContent =
         "Actualizado " + new Date().toLocaleTimeString("es-MX");
@@ -91,7 +80,7 @@
       if (e.name === "AbortError") return;
       _mostrarError("Error al cargar datos de telemetría: " + e.message);
     } finally {
-      if (!controller.signal.aborted) _mostrarLoading(false, esInicial);
+      if (!controller.signal.aborted) _mostrarLoading(false);
     }
   }
 
@@ -313,7 +302,7 @@
     return { x: cx, y: cy + H_SE / 2 };
   }
 
-  /** Transformador: doble círculo. */
+  /** Transformador: doble círculo con etiquetas centradas debajo del símbolo. */
   function _dibujarTransformador(g, nodo, cx, cy, seleccionado) {
     const cy1 = cy - 6; const cy2 = cy + 6;
     const sw = seleccionado ? 3 : 1.5;
@@ -325,14 +314,20 @@
       cx, cy: cy2, r: R_TX, fill: "rgba(255,255,255,0.7)",
       stroke: C_PRIMARIO, "stroke-width": sw, class: "unifilar-fondo",
     }));
-    // Etiqueta a la derecha
-    const ex = cx + R_TX + 8;
-    const kwh = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
-    const nom = nodo.potencia_nominal_kw ? fmt(nodo.potencia_nominal_kw) + " kW nom." : "";
-    [nodo.nombre, kwh, nom].forEach((l, i) => {
-      const t = _el("text", { x: ex, y: cy - 10 + i * 14, class: "unifilar-label-small",
-        "text-anchor": "start", "font-size": "11" });
-      t.textContent = l || "";
+    // Etiquetas centradas debajo del símbolo (evita colisión horizontal entre Txs)
+    const nombreMatch = nodo.nombre.match(/^(T-\d+\.\d+)/);
+    const kvaMatch    = nodo.nombre.match(/(\d+\s*kVA)/);
+    const nombreCorto = nombreMatch ? nombreMatch[1] : nodo.nombre.substring(0, 12);
+    const kvaCorto    = kvaMatch ? kvaMatch[1] : "";
+    const kwh         = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
+    const labels      = [nombreCorto, kvaCorto, kwh].filter((x) => x);
+    const labelY      = cy2 + R_TX + 14;
+    labels.forEach((l, i) => {
+      const t = _el("text", {
+        x: cx, y: labelY + i * 13,
+        class: "unifilar-label-small", "text-anchor": "middle", "font-size": "11",
+      });
+      t.textContent = l;
       g.appendChild(t);
     });
     return { x: cx, y: cy2 + R_TX };
@@ -429,11 +424,11 @@
     let svgW = wrapW;
 
     if (vistaTx) {
-      // Vista transformador: Tx arriba, cargas abajo
+      // Vista transformador: Tx arriba, cargas abajo (2 niveles → 1 salto de NIVEL_H)
       const cargas = vistaTx.hijos || [];
       const nCargas = Math.max(cargas.length, 1);
       svgW  = Math.max(wrapW, nCargas * MIN_SEP + PAD_X * 2);
-      svgH  = PAD_Y + NIVEL_H * 2 + H_CARG + PAD_Y;
+      svgH  = PAD_Y + NIVEL_H + H_CARG + PAD_Y;   // 276 px
 
       svg.setAttribute("width", svgW);
       svg.setAttribute("height", svgH);
@@ -456,11 +451,12 @@
       });
 
     } else if (vistaSE) {
-      // Vista SE: acometida arriba, la SE seleccionada en nivel 2, sus Txs abajo
+      // Vista SE: acometida, SE, Txs (3 niveles → 2 saltos de NIVEL_H)
+      // svgH extra 40 px para que las etiquetas de Tx quepan bajo el símbolo
       const txsSE = seMap[vistaSE] || [];
       const nTx   = Math.max(txsSE.length, 1);
       svgW  = Math.max(wrapW, nTx * MIN_SEP + PAD_X * 2);
-      svgH  = PAD_Y + NIVEL_H * 3 + H_CARG + PAD_Y;
+      svgH  = PAD_Y + NIVEL_H * 2 + H_CARG + 40 + PAD_Y;  // 456 px
 
       svg.setAttribute("width", svgW);
       svg.setAttribute("height", svgH);
@@ -494,10 +490,10 @@
       });
 
     } else {
-      // Vista inicial / acometida seleccionada: acometida + SEs agrupadas
+      // Vista inicial / acometida seleccionada: acometida + SEs (2 niveles → 1 salto)
       const nSE  = Math.max(seKeys.length, 1);
       svgW  = Math.max(wrapW, nSE * MIN_SEP + PAD_X * 2);
-      svgH  = PAD_Y + NIVEL_H * 2 + H_SE + PAD_Y;
+      svgH  = PAD_Y + NIVEL_H + H_SE + PAD_Y;   // 268 px
 
       svg.setAttribute("width", svgW);
       svg.setAttribute("height", svgH);

@@ -178,7 +178,14 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
 
 # ── Test g ─────────────────────────────────────────────────────────────────
 def test_telemetria_data_nodo_carga_final_sin_agregacion(client, app):
-    """Con nodo_id de una carga_final, la serie del periodo actual refleja solo esa carga."""
+    """Con nodo_id de una carga_final la serie refleja solo esa carga.
+
+    Fix 4: el endpoint ahora consulta TODAS las cargas del árbol para que el
+    sunburst muestre energía correcta en cualquier vista.  Los KPIs siguen
+    proviniendo únicamente de la carga seleccionada.  En ARBOL_MOCK, los
+    medidores 3 y 4 son carga_final; el endpoint consulta ambos para el
+    periodo actual (sunburst) y solo el 3 para la comparativa (-30 d).
+    """
     app.config["FASE2_HABILITADA"] = True
     _injectar_sesion(client, "master_admin", cliente_activo_id=44)
     carga_mock = MEDICIONES_MOCK
@@ -190,11 +197,14 @@ def test_telemetria_data_nodo_carga_final_sin_agregacion(client, app):
          patches[0], patches[1], patches[2], patches[3]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h&nodo_id=3")
     assert resp.status_code == 200
-    data = resp.get_json()
-    # El medidor 3 se consulta para el periodo actual y para la comparativa (-30d)
-    # Verificar que solo el medidor 3 fue consultado (no otros medidores)
+    # El medidor 3 debe consultarse (periodo actual + comparativa)
     calls = mock_omr.call_args_list
-    assert all(c[0][0] == 3 for c in calls), "Solo debe consultarse el medidor 3"
+    consulted_ids = {c[0][0] for c in calls}
+    assert 3 in consulted_ids, "El medidor 3 debe consultarse"
+    # El medidor 4 también se consulta para completar el sunburst del árbol completo
+    assert 4 in consulted_ids, "El medidor 4 debe consultarse para el sunburst"
+    # Solo medidores válidos del árbol
+    assert consulted_ids <= {3, 4}, f"Solo deben consultarse medidores 3 y 4, no {consulted_ids}"
 
 
 # ── Test h ─────────────────────────────────────────────────────────────────

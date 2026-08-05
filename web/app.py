@@ -2742,17 +2742,24 @@ def create_app() -> Flask:
                 cur = por_id.get(padre_id) if padre_id else None
             return list(reversed(ruta))
 
-        # Cargar hojas de carga_final bajo el nodo seleccionado
+        # Hojas del nodo seleccionado: determinan KPIs, serie y comparativa
         if nodo.get("punto_medicion") == "carga_final":
-            hojas_ids = [nodo_id]
+            hojas_ids_nodo = [nodo_id]
         else:
             desc_ids = _odi(nodo_id)
-            hojas_ids = [
+            hojas_ids_nodo = [
                 mid for mid in desc_ids
                 if por_id.get(mid, {}).get("punto_medicion") == "carga_final"
             ]
-            if not hojas_ids:
-                hojas_ids = [nodo_id]
+            if not hojas_ids_nodo:
+                hojas_ids_nodo = [nodo_id]
+
+        # Todas las hojas del árbol completo: necesarias para que el sunburst
+        # muestre energía correcta en todos los nodos, independientemente del
+        # nodo seleccionado.
+        todas_hojas_ids = [m["id"] for m in todos if m.get("punto_medicion") == "carga_final"]
+        if not todas_hojas_ids:
+            todas_hojas_ids = hojas_ids_nodo
 
         # Calcular ventana temporal
         ahora = datetime.now(timezone.utc)
@@ -2766,9 +2773,9 @@ def create_app() -> Flask:
         desde_iso = desde.strftime("%Y-%m-%dT%H:%M:%SZ")
         hasta_iso = ahora.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Fetch mediciones de cada hoja
+        # Fetch mediciones para TODAS las hojas del árbol (sunburst correcto en cualquier vista)
         mediciones_por_hoja = {}
-        for hid in hojas_ids:
+        for hid in todas_hojas_ids:
             if rango == "24h":
                 rows = _omr(hid, desde_iso, hasta_iso)
                 mediciones_por_hoja[hid] = [
@@ -2784,13 +2791,13 @@ def create_app() -> Flask:
                     for r in rows
                 ]
 
-        # Agregar serie temporal: sumar kW de todas las hojas por bucket
+        # Agregar serie temporal: sumar kW solo de las hojas del nodo seleccionado
         from collections import defaultdict
         bucket_kw = defaultdict(float)
         bucket_fp_peso = defaultdict(float)
         bucket_kw_peso = defaultdict(float)
-        for hid, rows in mediciones_por_hoja.items():
-            for r in rows:
+        for hid in hojas_ids_nodo:
+            for r in mediciones_por_hoja.get(hid, []):
                 bucket_kw[r["ts"]] += r["kw"]
                 bucket_kw_peso[r["ts"]] += r["kw"]
                 bucket_fp_peso[r["ts"]] += r["fp"] * r["kw"]
@@ -2853,7 +2860,7 @@ def create_app() -> Flask:
         hasta_ant_iso = hasta_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         mediciones_ant = {}
-        for hid in hojas_ids:
+        for hid in hojas_ids_nodo:
             if rango == "24h":
                 rows_ant = _omr(hid, desde_ant_iso, hasta_ant_iso)
                 mediciones_ant[hid] = [
@@ -2918,6 +2925,7 @@ def create_app() -> Flask:
                 "nombre": m.get("nombre", ""),
                 "punto_medicion": m.get("punto_medicion", ""),
                 "tipo_carga": m.get("tipo_carga"),
+                "potencia_nominal_kw": m.get("potencia_nominal_kw"),
                 "energia_kwh": kwh,
                 "costo_mxn": _costo_nodo(kwh),
                 "hijos": [_arbol_sunburst_con_costo(h) for h in hijos_ids_local],
