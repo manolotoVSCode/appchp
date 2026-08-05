@@ -4,23 +4,22 @@
   // ── Constantes visuales ────────────────────────────────────────────────────
   const C_PRIMARIO   = "#1F3A5F";
   const C_PRIMARIO_L = "#2E5C8A";
-  const C_CARGA      = "#f59e0b";   // naranja para cargas ficticias
-  const C_SE_FILL    = "rgba(31,58,95,0.04)";
+  const C_CARGA      = "#f59e0b";   // naranja para cargas
   const C_LINEA_NORM = "#6b7280";
   const C_LINEA_ALTA = "#eab308";
   const C_LINEA_CRIT = "#dc2626";
 
   // Dimensiones de nodos (px)
-  const W_ACOM = 180; const H_ACOM = 64;
-  const W_SE   = 140; const H_SE   = 48;
-  const R_TX   = 22;                       // radio del círculo transformador
-  const W_CARG = 160; const H_CARG = 56;
+  const W_ACOM = 220; const H_ACOM = 64;
+  const R_TX   = 28;                       // radio del círculo transformador
+  const W_CBT  = 200; const H_CBT  = 64;  // rectángulo cuadro de baja tensión
 
   // Layout
-  const NIVEL_H = 140;    // separación vertical entre niveles (px)
-  const MIN_SEP = 210;    // separación mínima horizontal entre nodos hermanos (px)
-  const PAD_X   = 60;     // padding lateral del SVG (px)
-  const PAD_Y   = 40;     // padding superior del SVG (px)
+  const NIVEL_H_TX  = 160;   // separación acometida → nivel transformador
+  const NIVEL_H_CBT = 160;   // separación transformador → nivel CBT
+  const MIN_SEP = 220;       // separación mínima entre centros de transformador
+  const PAD_X   = 60;        // padding lateral del SVG (px)
+  const PAD_Y   = 40;        // padding superior del SVG (px)
 
   // ── Estado ─────────────────────────────────────────────────────────────────
   const root = document.getElementById("dashboard-telemetria-root");
@@ -31,7 +30,6 @@
 
   let _rango      = "24h";
   let _nodoId     = null;   // nodo cuyo time-series se muestra en la gráfica
-  let _nodoRaizId = null;   // raíz del unifilar: null | número | "grupo:SE-N"
   let _arbolCache = null;   // último arbol_sunburst recibido del backend
   let _chartSerie = null;
   let _abort      = null;
@@ -100,11 +98,13 @@
     if (!nav) return;
     const ol = nav.querySelector("ol");
     ol.innerHTML = "";
+    // Mostrar solo los 2 últimos segmentos de la ruta
     const ruta = nodo.ruta_breadcrumbs || [];
-    ruta.forEach((seg, idx) => {
+    const segmentos = ruta.length > 2 ? ruta.slice(-2) : ruta;
+    segmentos.forEach((seg, idx) => {
       const li = document.createElement("li");
       li.className = "breadcrumb-item";
-      if (idx === ruta.length - 1) {
+      if (idx === segmentos.length - 1) {
         li.classList.add("active");
         li.setAttribute("aria-current", "page");
         li.textContent = seg.nombre;
@@ -207,27 +207,6 @@
   // UNIFILAR SVG
   // ════════════════════════════════════════════════════════════════════════════
 
-  // ── Helpers de árbol ───────────────────────────────────────────────────────
-
-  /** Construye índice id → nodo del arbol_sunburst (BFS). */
-  function _indexarArbol(raiz) {
-    const idx = {};
-    const cola = [raiz];
-    while (cola.length) {
-      const n = cola.shift();
-      idx[n.id] = n;
-      (n.hijos || []).forEach((h) => cola.push(h));
-    }
-    return idx;
-  }
-
-  /** Agrupa transformadores por subestación derivada del nombre. */
-  function _derivarSE(nombre) {
-    const m = nombre.match(/^T-(\d+)/);
-    return m ? `SE-${m[1]}` : "Otros";
-  }
-
-
   // ── SVG helpers ────────────────────────────────────────────────────────────
 
   const NS = "http://www.w3.org/2000/svg";
@@ -264,7 +243,7 @@
 
   // ── Dibujo de nodos ────────────────────────────────────────────────────────
 
-  /** Acometida CFE: rectángulo 180x64 con borde primario. */
+  /** Acometida CFE: rectángulo 220x64 con borde primario. */
   function _dibujarAcometida(g, nodo, cx, cy, seleccionado) {
     const x = cx - W_ACOM / 2;
     const y = cy - H_ACOM / 2;
@@ -281,25 +260,6 @@
     ));
     // punto de conexión inferior
     return { x: cx, y: cy + H_ACOM / 2 };
-  }
-
-  /** SE agrupada: rectángulo redondeado con borde punteado. */
-  function _dibujarSE(g, nombre, nTx, kwh, cx, cy, seleccionado) {
-    const x = cx - W_SE / 2;
-    const y = cy - H_SE / 2;
-    const rect = _el("rect", {
-      x, y, width: W_SE, height: H_SE, rx: 8,
-      fill: C_SE_FILL, stroke: C_PRIMARIO,
-      "stroke-width": seleccionado ? 4 : 1.5,
-      "stroke-dasharray": "4 3",
-      class: "unifilar-fondo",
-    });
-    g.appendChild(rect);
-    const kwhStr = kwh != null ? fmt(kwh) + " kWh" : "";
-    g.appendChild(_multilineText(
-      [nombre, `${nTx} transformadores`, kwhStr], cx, cy - 8, 14, "unifilar-label-small"
-    ));
-    return { x: cx, y: cy + H_SE / 2 };
   }
 
   /** Transformador: doble círculo con etiquetas centradas debajo del símbolo. */
@@ -333,26 +293,29 @@
     return { x: cx, y: cy2 + R_TX };
   }
 
-  /** Carga final: rectángulo naranja. */
-  function _dibujarCarga(g, nodo, cx, cy, seleccionado) {
-    const x = cx - W_CARG / 2;
-    const y = cy - H_CARG / 2;
+  /** Cuadro de Baja Tensión (CBT): rectángulo naranja 200×64. */
+  function _dibujarCBT(g, nodo, cx, cy, seleccionado) {
+    const x = cx - W_CBT / 2;
+    const y = cy - H_CBT / 2;
     const rect = _el("rect", {
-      x, y, width: W_CARG, height: H_CARG, rx: 6,
-      fill: "rgba(245,158,11,0.08)", stroke: seleccionado ? "#b45309" : C_CARGA,
+      x, y, width: W_CBT, height: H_CBT, rx: 6,
+      fill: "rgba(245,158,11,0.08)",
+      stroke: seleccionado ? "#b45309" : C_CARGA,
       "stroke-width": seleccionado ? 4 : 2,
       class: "unifilar-fondo",
     });
     g.appendChild(rect);
-    const tipo = nodo.tipo_carga ? nodo.tipo_carga.replace(/_/g, " ") : "";
-    const kwh  = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
+    const nom = nodo.potencia_nominal_kw != null
+      ? fmt(nodo.potencia_nominal_kw, 0) + " kW nom."
+      : "";
+    const kwh = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
     g.appendChild(_multilineText(
-      [nodo.nombre, tipo, kwh], cx, cy - 12, 16, "unifilar-label-small"
+      [nodo.nombre, nom, kwh], cx, cy - 12, 16, "unifilar-label-small"
     ));
-    return { x: cx, y: cy + H_CARG / 2 };
+    return { x: cx, y: cy + H_CBT / 2 };
   }
 
-  /** Línea ortogonal de padre a hijo con etiqueta kW · kWh. */
+  /** Línea ortogonal de padre a hijo con etiqueta kWh. */
   function _dibujarLinea(svgEl, px, py, hx, hy, kwhHijo, kwNomHijo) {
     const miY = py + (hy - py) / 2;
     const d = `M ${px} ${py} L ${px} ${miY} L ${hx} ${miY} L ${hx} ${hy}`;
@@ -371,8 +334,10 @@
   // ── Motor de layout ────────────────────────────────────────────────────────
 
   /**
-   * renderUnifilar — función principal.
-   * Determina la vista según _nodoRaizId y dibuja el SVG.
+   * renderUnifilar — layout vertical fijo 3 niveles.
+   * Nivel 0: Acometida (centrada)
+   * Nivel 1: Transformadores
+   * Nivel 2: CBTs (1:1 con cada Tx)
    */
   function _renderUnifilar(raiz) {
     if (!raiz) return;
@@ -381,154 +346,65 @@
     svg.innerHTML = "";
 
     const wrapper = $("unifilar-wrapper");
-    const wrapW  = wrapper ? wrapper.clientWidth - 48 : 800;
+    const wrapW  = wrapper ? wrapper.clientWidth - 48 : 900;
 
-    // ── Determinar modo de vista ──────────────────────────────────────────
-    const idx = _indexarArbol(raiz);
+    // Nivel 0: acometida
+    const transformadores = raiz.hijos || [];
+    const nTx = Math.max(transformadores.length, 1);
 
-    let vistaAcometida = null;  // nodo acometida actual (si aplica)
-    let vistaSE        = null;  // nombre "SE-N" (si aplica)
-    let vistaTx        = null;  // nodo transformador (si aplica)
+    const svgW = Math.max(wrapW, nTx * MIN_SEP + PAD_X * 2);
+    const svgH = PAD_Y + H_ACOM / 2 + NIVEL_H_TX + (R_TX * 2 + 12) + NIVEL_H_CBT + H_CBT + PAD_Y;
 
-    if (_nodoRaizId === null) {
-      // Vista inicial: mostrar la acometida raíz y sus SEs
-      vistaAcometida = raiz;
-    } else if (typeof _nodoRaizId === "string" && _nodoRaizId.startsWith("grupo:")) {
-      // Vista SE: la acometida padre + la SE seleccionada con sus transformadores
-      vistaSE = _nodoRaizId.replace("grupo:", "");
-      vistaAcometida = raiz;
-    } else {
-      // nodoRaizId es un id numérico → puede ser acometida o transformador
-      const n = idx[_nodoRaizId];
-      if (!n) { vistaAcometida = raiz; }
-      else if (n.punto_medicion === "transformador") { vistaTx = n; vistaAcometida = raiz; }
-      else { vistaAcometida = n; }
-    }
+    svg.setAttribute("width", svgW);
+    svg.setAttribute("height", svgH);
+    svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
 
-    // ── Calcular SEs a mostrar ────────────────────────────────────────────
-    const transformadoresActivos = vistaAcometida ? (vistaAcometida.hijos || []) : [];
+    // Nivel 0: Acometida (centrada)
+    const aX = svgW / 2;
+    const aY = PAD_Y + H_ACOM / 2;
+    const gA = _crearGrupoNodo(raiz.id, "acometida_cfe");
+    const { x: aOutX, y: aOutY } = _dibujarAcometida(gA, raiz, aX, aY, _nodoId === raiz.id);
+    svg.appendChild(gA);
 
-    // Agrupar transformadores por SE
-    const seMap = {}; // SE-N → [tx, ...]
-    transformadoresActivos.forEach((tx) => {
-      const se = _derivarSE(tx.nombre);
-      if (!seMap[se]) seMap[se] = [];
-      seMap[se].push(tx);
-    });
-    const seKeys = Object.keys(seMap).sort();
+    // Nivel 1: Transformadores + Nivel 2: CBTs (1:1)
+    const paso = svgW / (nTx + 1);
+    transformadores.forEach((tx, i) => {
+      const txX = paso * (i + 1);
+      const txY = aY + NIVEL_H_TX + R_TX + 6;   // centro Tx entre los dos círculos
 
-    // ── Posicionar nodos ──────────────────────────────────────────────────
-    // Cada modo dibuja 2 o 3 niveles según la vista.
+      // Línea acometida → Tx
+      _dibujarLinea(svg, aOutX, aOutY, txX, txY - R_TX - 6,
+        tx.energia_kwh, tx.potencia_nominal_kw);
 
-    let svgH = PAD_Y * 2;
-    let svgW = wrapW;
-
-    if (vistaTx) {
-      // Vista transformador: Tx arriba, cargas abajo (2 niveles → 1 salto de NIVEL_H)
-      const cargas = vistaTx.hijos || [];
-      const nCargas = Math.max(cargas.length, 1);
-      svgW  = Math.max(wrapW, nCargas * MIN_SEP + PAD_X * 2);
-      svgH  = PAD_Y + NIVEL_H + H_CARG + PAD_Y;   // 276 px
-
-      svg.setAttribute("width", svgW);
-      svg.setAttribute("height", svgH);
-      svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
-
-      const txX = svgW / 2; const txY = PAD_Y + R_TX + 6;
-      const gTx = _crearGrupoNodo(vistaTx.id, vistaTx.punto_medicion, false);
-      const { x: txOutX, y: txOutY } = _dibujarTransformador(gTx, vistaTx, txX, txY,
-        _nodoId === vistaTx.id);
+      // Símbolo Tx
+      const gTx = _crearGrupoNodo(tx.id, "transformador");
+      _dibujarTransformador(gTx, tx, txX, txY, _nodoId === tx.id);
       svg.appendChild(gTx);
 
-      const paso = svgW / (nCargas + 1);
-      cargas.forEach((c, i) => {
-        const cx = paso * (i + 1); const cy = txY + NIVEL_H;
-        _dibujarLinea(svg, txOutX, txOutY, cx, cy - H_CARG / 2,
-          c.energia_kwh, c.potencia_nominal_kw);
-        const gC = _crearGrupoNodo(c.id, c.punto_medicion, true);
-        _dibujarCarga(gC, c, cx, cy, _nodoId === c.id);
-        svg.appendChild(gC);
-      });
+      // CBT hijo (1:1)
+      const cbt = (tx.hijos || [])[0];
+      if (cbt) {
+        const cbtX = txX;
+        const cbtY = txY + R_TX + 6 + NIVEL_H_CBT;   // centro del CBT
 
-    } else if (vistaSE) {
-      // Vista SE: acometida, SE, Txs (3 niveles → 2 saltos de NIVEL_H)
-      // svgH extra 40 px para que las etiquetas de Tx quepan bajo el símbolo
-      const txsSE = seMap[vistaSE] || [];
-      const nTx   = Math.max(txsSE.length, 1);
-      svgW  = Math.max(wrapW, nTx * MIN_SEP + PAD_X * 2);
-      svgH  = PAD_Y + NIVEL_H * 2 + H_CARG + 40 + PAD_Y;  // 456 px
+        // Línea Tx → CBT (vertical)
+        _dibujarLinea(svg, txX, txY + R_TX + 6, cbtX, cbtY - H_CBT / 2,
+          cbt.energia_kwh, cbt.potencia_nominal_kw);
 
-      svg.setAttribute("width", svgW);
-      svg.setAttribute("height", svgH);
-      svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
-
-      // Nivel 0: acometida
-      const aX = svgW / 2; const aY = PAD_Y + H_ACOM / 2;
-      const gA = _crearGrupoNodo(vistaAcometida.id, "acometida_cfe", false);
-      const { x: aOutX, y: aOutY } = _dibujarAcometida(gA, vistaAcometida, aX, aY,
-        _nodoId === vistaAcometida.id);
-      svg.appendChild(gA);
-
-      // Nivel 1: SE
-      const seX = svgW / 2; const seY = aY + NIVEL_H;
-      const kwhSE = txsSE.reduce((s, t) => s + (t.energia_kwh || 0), 0);
-      const gSE = _crearGrupoNodo("grupo:" + vistaSE, "se_agrupacion", true);
-      const { x: seOutX, y: seOutY } = _dibujarSE(gSE, vistaSE, txsSE.length, kwhSE,
-        seX, seY, _nodoRaizId === "grupo:" + vistaSE);
-      _dibujarLinea(svg, aOutX, aOutY, seX, seY - H_SE / 2, kwhSE, null);
-      svg.appendChild(gSE);
-
-      // Nivel 2: transformadores
-      const paso = svgW / (nTx + 1);
-      txsSE.forEach((tx, i) => {
-        const txX = paso * (i + 1); const txY = seY + NIVEL_H;
-        _dibujarLinea(svg, seOutX, seOutY, txX, txY - R_TX - 6,
-          tx.energia_kwh, tx.potencia_nominal_kw);
-        const gT = _crearGrupoNodo(tx.id, "transformador", false);
-        _dibujarTransformador(gT, tx, txX, txY, _nodoId === tx.id);
-        svg.appendChild(gT);
-      });
-
-    } else {
-      // Vista inicial / acometida seleccionada: acometida + SEs (2 niveles → 1 salto)
-      const nSE  = Math.max(seKeys.length, 1);
-      svgW  = Math.max(wrapW, nSE * MIN_SEP + PAD_X * 2);
-      svgH  = PAD_Y + NIVEL_H + H_SE + PAD_Y;   // 268 px
-
-      svg.setAttribute("width", svgW);
-      svg.setAttribute("height", svgH);
-      svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
-
-      // Nivel 0: acometida
-      const aX = svgW / 2; const aY = PAD_Y + H_ACOM / 2;
-      const gA = _crearGrupoNodo(vistaAcometida.id, "acometida_cfe", false);
-      const { x: aOutX, y: aOutY } = _dibujarAcometida(gA, vistaAcometida, aX, aY,
-        _nodoId === vistaAcometida.id);
-      svg.appendChild(gA);
-
-      // Nivel 1: SEs
-      const paso = svgW / (nSE + 1);
-      seKeys.forEach((se, i) => {
-        const txs  = seMap[se];
-        const seX  = paso * (i + 1); const seY = aY + NIVEL_H;
-        const kwhSE = txs.reduce((s, t) => s + (t.energia_kwh || 0), 0);
-        _dibujarLinea(svg, aOutX, aOutY, seX, seY - H_SE / 2, kwhSE, null);
-        const gSE = _crearGrupoNodo("grupo:" + se, "se_agrupacion", false);
-        _dibujarSE(gSE, se, txs.length, kwhSE, seX, seY,
-          _nodoRaizId === "grupo:" + se);
-        svg.appendChild(gSE);
-      });
-    }
+        // Rectángulo CBT
+        const gCBT = _crearGrupoNodo(cbt.id, "carga_final");
+        _dibujarCBT(gCBT, cbt, cbtX, cbtY, _nodoId === cbt.id);
+        svg.appendChild(gCBT);
+      }
+    });
   }
 
   /**
    * Crea un <g> con clase y data-nodo-id.
    * Añade event listeners de click y hover.
    */
-  function _crearGrupoNodo(id, tipo, esCargaFicticia) {
+  function _crearGrupoNodo(id, tipo) {
     const g = _el("g", { class: "unifilar-nodo", "data-nodo-id": String(id) });
-    if (esCargaFicticia) g.classList.add("unifilar-carga-ficticia");
-    if (tipo === "se_agrupacion") g.classList.add("unifilar-se-agrupacion");
 
     g.addEventListener("click", () => _handleClickNodo(id, tipo));
 
@@ -546,56 +422,17 @@
 
   /** Maneja click en un nodo del unifilar. */
   function _handleClickNodo(id, tipo) {
-    if (tipo === "carga_final") {
-      // Click en carga: actualiza KPIs/gráfica sin cambiar nodoRaiz
-      _nodoId = typeof id === "number" ? id : parseInt(id, 10);
-      fetchDatos();
-      return;
-    }
-    if (tipo === "se_agrupacion") {
-      _nodoRaizId = String(id); // "grupo:SE-N"
-      if (!_nodoId) {
-        // Usar el primer Tx de la SE como nodo para KPIs
-        if (_arbolCache) {
-          const seNombre = String(id).replace("grupo:", "");
-          const txs = (_arbolCache.hijos || []).filter(
-            (n) => _derivarSE(n.nombre) === seNombre
-          );
-          if (txs.length) _nodoId = txs[0].id;
-        }
-      }
-    } else if (tipo === "transformador") {
-      _nodoRaizId = typeof id === "number" ? id : parseInt(id, 10);
-      _nodoId = _nodoRaizId;
-    } else if (tipo === "acometida_cfe") {
-      _nodoRaizId = typeof id === "number" ? id : parseInt(id, 10);
-      _nodoId = _nodoRaizId;
-    }
+    const nId = typeof id === "number" ? id : parseInt(id, 10);
+    _nodoId = nId;
     fetchDatos();
   }
 
   // ── Controles ──────────────────────────────────────────────────────────────
-  /**
-   * Navega a un nodo por su id (llamado desde breadcrumbs).
-   * También actualiza _nodoRaizId para que el unifilar refleje el nivel correcto.
-   */
   function setNodo(id) {
-    _nodoId = id;
-    // Resetear la raíz del unifilar según el tipo del nodo en caché
-    if (_arbolCache) {
-      const idx = _indexarArbol(_arbolCache);
-      const nodo = idx[id];
-      if (nodo) {
-        if (nodo.punto_medicion === "acometida_cfe") {
-          _nodoRaizId = null;          // vista inicial (acometida + SEs)
-        } else if (nodo.punto_medicion === "transformador") {
-          _nodoRaizId = id;            // vista transformador + cargas
-        }
-        // carga_final: no cambia _nodoRaizId (el usuario sigue viendo el Tx padre)
-      }
-    }
+    _nodoId = typeof id === "number" ? id : parseInt(id, 10);
     fetchDatos();
   }
+
   function setRango(r) {
     _rango = r;
     document.querySelectorAll("#rango-selector button").forEach((btn) => {
