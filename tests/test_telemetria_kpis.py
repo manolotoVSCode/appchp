@@ -95,3 +95,134 @@ def test_f_sparkline_96_a_24_puntos():
     r = generar_sparkline(meds, 24)
     assert len(r) == 24
     assert all(isinstance(v, float) for v in r)
+
+
+# ── Tests g-i (integración con endpoint) ─────────────────────────────────────
+
+import json
+from unittest.mock import MagicMock, patch
+
+
+@pytest.fixture()
+def _app_fase2(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "fake_key")
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("FASE2_HABILITADA", "true")
+    from web.app import create_app
+    app = create_app()
+    app.config["TESTING"] = True
+    return app
+
+
+@pytest.fixture()
+def _client_fase2(_app_fase2):
+    return _app_fase2.test_client()
+
+
+def _inyectar_sesion(client):
+    from time import time
+    now = time()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = "test-uid"
+        sess["_user_email"] = "test@test.com"
+        sess["_user_rol"] = "master_admin"
+        sess["_empresa_id"] = 44
+        sess["_access_token"] = "fake-token"
+        sess["cliente_activo_id"] = 44
+        sess["_session_version"] = 1
+        sess["_activo_check"] = {"user_id": "test-uid", "ts": now, "activo": True}
+        sess["_sv_check"] = {"user_id": "test-uid", "ts": now, "version": 1}
+
+
+def _mock_get_cliente(cid):
+    if cid == 44:
+        return {"id": 44, "nombre": "Test Cliente", "num_cfe": 0,
+                "num_gas": 0, "num_electricidad": 0, "contratos": []}
+    return None
+
+
+_ARBOL = [
+    {"id": 1, "nombre": "Acometida", "punto_medicion": "acometida_cfe",
+     "medidor_padre_id": None, "cliente_id": 44, "tipo_carga": None, "potencia_nominal_kw": None},
+    {"id": 2, "nombre": "T-1.1", "punto_medicion": "transformador",
+     "medidor_padre_id": 1, "cliente_id": 44, "tipo_carga": None, "potencia_nominal_kw": 500.0},
+    {"id": 3, "nombre": "CBT-Horno", "punto_medicion": "carga_final",
+     "medidor_padre_id": 2, "cliente_id": 44, "tipo_carga": "horno_tunel", "potencia_nominal_kw": 200.0},
+]
+
+_MEDS = [
+    {"timestamp": "2024-01-01T00:00:00Z", "potencia_activa_kw": 100.0, "factor_potencia": 0.90},
+    {"timestamp": "2024-01-01T01:00:00Z", "potencia_activa_kw": 120.0, "factor_potencia": 0.91},
+]
+
+
+def _mock_repo(mock_arbol, mock_meds_act, mock_meds_ant, mock_prod):
+    """Retorna dict de patches para el endpoint de telemetría."""
+    return {
+        "storage.repository.get_cliente_con_conteos": MagicMock(side_effect=_mock_get_cliente),
+        "storage.repository.obtener_arbol_medidores": MagicMock(return_value=mock_arbol),
+        "storage.repository.obtener_descendientes_ids": MagicMock(return_value=[3]),
+        "storage.repository.obtener_mediciones_recientes": MagicMock(side_effect=[
+            mock_meds_act,   # periodo actual (hoja 3)
+            mock_meds_ant,   # periodo anterior (hoja 3)
+        ]),
+        "storage.repository.obtener_produccion_diaria": MagicMock(return_value=mock_prod),
+        "calc.telemetria_costos.calcular_costo_periodo": MagicMock(return_value={
+            "costo_mxn": 5000.0, "precio_mxn_kwh": 2.5,
+            "fuente": "factura_mes_exacto", "mes_referencia": "2024-01",
+        }),
+    }
+
+
+def test_g_endpoint_devuelve_kpis_paneles(_client_fase2):
+    """Endpoint /telemetria/data incluye kpis_paneles con las tres subclaves y meta."""
+    _inyectar_sesion(_client_fase2)
+    patches = _mock_repo(_ARBOL, _MEDS, _MEDS, [{"fecha": "2024-01-01", "m2_producidos": 5000.0}])
+    with patch.multiple("storage.repository", **{
+        k.split(".")[-1]: v for k, v in patches.items() if k.startswith("storage.repository")
+    }), patch("calc.telemetria_costos.calcular_costo_periodo",
+               patches["calc.telemetria_costos.calcular_costo_periodo"]):
+        resp = _client_fase2.get(
+            "/clientes/44/dashboard/telemetria/data?rango=24h",
+            headers={"Accept": "application/json"},
+        )
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert "kpis_paneles" in data
+    kp = data["kpis_paneles"]
+    assert "energeticos" in kp
+    assert "economicos" in kp
+    assert "produccion" in kp
+    assert "meta" in kp
+
+
+def test_h_kpis_flags_aplica_y_oculto(_client_fase2):
+    """indice_utilizacion_pct tiene aplica_a_nodo; pct_sobre_factura tiene oculto_en_nodo."""
+    _inyectar_sesion(_client_fase2)
+    patches = _mock_repo(_ARBOL, _MEDS, _MEDS, [])
+    with patch.multiple("storage.repository", **{
+        k.split(".")[-1]: v for k, v in patches.items() if k.startswith("storage.repository")
+    }), patch("calc.telemetria_costos.calcular_costo_periodo",
+               patches["calc.telemetria_costos.calcular_costo_periodo"]):
+        resp = _client_fase2.get("/clientes/44/dashboard/telemetria/data?rango=24h")
+    data = json.loads(resp.data)
+    idx = data["kpis_paneles"]["energeticos"]["indice_utilizacion_pct"]
+    assert idx["aplica_a_nodo"] == ["carga_final"]
+    pct = data["kpis_paneles"]["economicos"]["pct_sobre_factura"]
+    assert pct["oculto_en_nodo"] == ["acometida_cfe"]
+
+
+def test_i_anterior_null_sin_datos_historicos(_client_fase2):
+    """Si no hay mediciones históricas, los valores 'anterior' y 'delta_pct' son null."""
+    _inyectar_sesion(_client_fase2)
+    patches = _mock_repo(_ARBOL, _MEDS, [], [])   # anterior vacío
+    with patch.multiple("storage.repository", **{
+        k.split(".")[-1]: v for k, v in patches.items() if k.startswith("storage.repository")
+    }), patch("calc.telemetria_costos.calcular_costo_periodo",
+               patches["calc.telemetria_costos.calcular_costo_periodo"]):
+        resp = _client_fase2.get("/clientes/44/dashboard/telemetria/data?rango=24h")
+    data = json.loads(resp.data)
+    kpi = data["kpis_paneles"]["energeticos"]["energia_kwh"]
+    assert kpi["anterior"] is None
+    assert kpi["delta_pct"] is None

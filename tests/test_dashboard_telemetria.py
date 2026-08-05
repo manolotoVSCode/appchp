@@ -132,6 +132,7 @@ def _patch_costo():
         patch("storage.repository.obtener_ultimas_facturas_cfe", return_value=[]),
         patch("storage.repository.obtener_factura_ppa_cliente_mes", return_value=None),
         patch("storage.repository.obtener_ultimas_facturas_ppa", return_value=[]),
+        patch("storage.repository.obtener_produccion_diaria", return_value=[]),
     ]
 
 
@@ -145,7 +146,7 @@ def test_telemetria_data_json_claves_esperadas(client, app):
          patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_descendientes_ids", return_value=DESC_IDS_MOCK), \
          patch("storage.repository.obtener_mediciones_recientes", return_value=MEDICIONES_MOCK), \
-         patches[0], patches[1], patches[2], patches[3]:
+         patches[0], patches[1], patches[2], patches[3], patches[4]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
     assert resp.status_code == 200
     data = resp.get_json()
@@ -163,7 +164,7 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
          patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_descendientes_ids", return_value=DESC_IDS_MOCK), \
          patch("storage.repository.obtener_mediciones_recientes", return_value=MEDICIONES_MOCK), \
-         patches[0], patches[1], patches[2], patches[3]:
+         patches[0], patches[1], patches[2], patches[3], patches[4]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
     data = resp.get_json()
     arbol = data["arbol_sunburst"]
@@ -194,7 +195,7 @@ def test_telemetria_data_nodo_carga_final_sin_agregacion(client, app):
          patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_descendientes_ids", return_value=[]), \
          patch("storage.repository.obtener_mediciones_recientes", return_value=carga_mock) as mock_omr, \
-         patches[0], patches[1], patches[2], patches[3]:
+         patches[0], patches[1], patches[2], patches[3], patches[4]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h&nodo_id=3")
     assert resp.status_code == 200
     # El medidor 3 debe consultarse (periodo actual + comparativa)

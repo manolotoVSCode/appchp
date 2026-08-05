@@ -2875,6 +2875,15 @@ def create_app() -> Flask:
                 return round(sum(_energia_nodo(h) for h in hijos_ids), 3)
 
         # ── Costo del periodo actual ───────────────────────────────────────
+        from calc.telemetria_kpis import (
+            atribuir_produccion_a_nodo as _apn,
+            calcular_baseline_movil as _cbm,
+            calcular_kpis_economicos as _cke,
+            calcular_kpis_energeticos as _cken,
+            calcular_kpis_produccion as _ckp,
+            generar_sparkline as _gs,
+        )
+        from storage.repository import obtener_produccion_diaria as _opd
         from calc.telemetria_costos import calcular_costo_periodo as _ccp
         costo_info = _ccp(cliente_id, energia_kwh, desde, ahora)
 
@@ -2958,6 +2967,178 @@ def create_app() -> Flask:
 
         arbol_sunburst = _arbol_sunburst_con_costo(acometida["id"])
 
+        # ── KPIs de paneles ────────────────────────────────────────────────
+        _N_SPARK = 24
+
+        # Serie agregada actual (ya disponible como bucket_kw + bucket_fp_peso)
+        meds_actuales = [
+            {
+                "ts": ts,
+                "kw": bucket_kw[ts],
+                "fp": (bucket_fp_peso[ts] / bucket_kw_peso[ts]
+                       if bucket_kw_peso[ts] > 0 else 0.0),
+            }
+            for ts in ts_sorted
+        ]
+        meds_anteriores = [
+            {"ts": ts, "kw": bucket_ant[ts], "fp": 0.0}
+            for ts in sorted(bucket_ant.keys())
+        ]
+
+        # Potencia nominal del nodo seleccionado (solo carga_final la tiene)
+        pot_nom = nodo.get("potencia_nominal_kw")
+        pot_nom = float(pot_nom) if pot_nom else None
+
+        # Calcular KPIs energéticos
+        ken_act = _cken(meds_actuales, pot_nom)
+        ken_ant = _cken(meds_anteriores, None) if disponible_ant else {}
+
+        def _delta_pct(act_val, ant_val):
+            if act_val is None or ant_val is None or ant_val == 0:
+                return None
+            return round((act_val - ant_val) / abs(ant_val) * 100, 1)
+
+        # Producción diaria
+        desde_str = desde.strftime("%Y-%m-%d")
+        hasta_str = ahora.strftime("%Y-%m-%d")
+        desde_ant_str = desde_ant.strftime("%Y-%m-%d")
+        hasta_ant_str = hasta_ant.strftime("%Y-%m-%d")
+
+        prod_act = _opd(cliente_id, desde_str, hasta_str)
+        prod_ant = _opd(cliente_id, desde_ant_str, hasta_ant_str)
+
+        m2_planta_act = sum(float(r.get("m2_producidos") or 0) for r in prod_act)
+        m2_planta_ant = sum(float(r.get("m2_producidos") or 0) for r in prod_ant)
+
+        # Energía total de la acometida (para atribuir producción proporcionalmente)
+        energia_total_planta = _energia_nodo(acometida["id"])
+
+        m2_nodo_act = _apn(m2_planta_act, energia_kwh, energia_total_planta)
+        m2_nodo_ant = _apn(m2_planta_ant, energia_ant, energia_total_planta)
+
+        # Baseline = energía del mismo periodo del mes anterior
+        baseline_kwh = _cbm(meds_anteriores) if disponible_ant else None
+
+        # KPIs económicos
+        precio = costo_info.get("precio_mxn_kwh")
+        costo_total_act = costo_info.get("costo_mxn")
+        costo_total_ant = costo_ant_info.get("costo_mxn") if costo_ant_info else None
+        costo_planta_act = (
+            round(energia_total_planta * precio, 2) if precio else None
+        )
+        kec_act = _cke(energia_kwh, precio, costo_planta_act, baseline_kwh)
+        kec_ant = _cke(energia_ant, precio, None, None) if disponible_ant else {}
+
+        # KPIs producción
+        kp_act = _ckp(energia_kwh, costo_total_act, m2_nodo_act)
+        kp_ant = _ckp(energia_ant, costo_total_ant, m2_nodo_ant) if disponible_ant else {}
+
+        # Sparklines (24 puntos)
+        sp_energia_act = _gs(meds_actuales, _N_SPARK)
+        sp_energia_ant = _gs(meds_anteriores, _N_SPARK) if disponible_ant else None
+
+        def _kpi_bloque(act_val, ant_val, spark_act, spark_ant, **extra):
+            return {
+                "actual": act_val,
+                "anterior": ant_val if disponible_ant else None,
+                "delta_pct": _delta_pct(act_val, ant_val) if disponible_ant else None,
+                "sparkline_actual": spark_act,
+                "sparkline_anterior": spark_ant,
+                **extra,
+            }
+
+        kpis_paneles = {
+            "energeticos": {
+                "energia_kwh": _kpi_bloque(
+                    ken_act.get("energia_kwh"), ken_ant.get("energia_kwh"),
+                    sp_energia_act, sp_energia_ant,
+                    es_favorable_menor=True,
+                ),
+                "demanda_pico_kw": _kpi_bloque(
+                    ken_act.get("demanda_pico_kw"), ken_ant.get("demanda_pico_kw"),
+                    None, None,
+                    es_favorable_menor=True,
+                ),
+                "demanda_promedio_kw": _kpi_bloque(
+                    ken_act.get("demanda_promedio_kw"), ken_ant.get("demanda_promedio_kw"),
+                    None, None,
+                    es_favorable_menor=True,
+                ),
+                "factor_potencia": _kpi_bloque(
+                    ken_act.get("factor_potencia_promedio"),
+                    ken_ant.get("factor_potencia_promedio"),
+                    None, None,
+                    es_favorable_menor=False,
+                    es_gauge=True,
+                    rango_min=0.0,
+                    rango_max=1.0,
+                ),
+                "indice_utilizacion_pct": _kpi_bloque(
+                    ken_act.get("indice_utilizacion_pct"),
+                    ken_ant.get("indice_utilizacion_pct"),
+                    None, None,
+                    es_favorable_menor=True,
+                    aplica_a_nodo=["carga_final"],
+                ),
+            },
+            "economicos": {
+                "costo_total_mxn": _kpi_bloque(
+                    kec_act.get("costo_total_mxn"), kec_ant.get("costo_total_mxn"),
+                    None, None,
+                    es_favorable_menor=True,
+                ),
+                "costo_unitario_mxn_kwh": _kpi_bloque(
+                    kec_act.get("costo_unitario_mxn_kwh"), kec_ant.get("costo_unitario_mxn_kwh"),
+                    None, None,
+                    es_favorable_menor=True,
+                ),
+                "pct_sobre_factura": _kpi_bloque(
+                    kec_act.get("pct_sobre_factura"), kec_ant.get("pct_sobre_factura"),
+                    None, None,
+                    es_favorable_menor=True,
+                    oculto_en_nodo=["acometida_cfe"],
+                ),
+                "ahorro_potencial_mxn": _kpi_bloque(
+                    kec_act.get("ahorro_potencial_mxn"), kec_ant.get("ahorro_potencial_mxn"),
+                    None, None,
+                    es_favorable_menor=False,
+                    baseline_nota="baseline provisional, criterio final por definir",
+                ),
+            },
+            "produccion": {
+                "consumo_especifico_kwh_m2": _kpi_bloque(
+                    kp_act.get("consumo_especifico_kwh_m2"),
+                    kp_ant.get("consumo_especifico_kwh_m2"),
+                    None, None,
+                    es_favorable_menor=True,
+                ),
+                "costo_especifico_mxn_m2": _kpi_bloque(
+                    kp_act.get("costo_especifico_mxn_m2"),
+                    kp_ant.get("costo_especifico_mxn_m2"),
+                    None, None,
+                    es_favorable_menor=True,
+                ),
+                "pct_costo_especifico": _kpi_bloque(
+                    kp_act.get("pct_costo_especifico"),
+                    kp_ant.get("pct_costo_especifico"),
+                    None, None,
+                    es_favorable_menor=True,
+                ),
+                "produccion_m2": _kpi_bloque(
+                    kp_act.get("m2_producidos"), kp_ant.get("m2_producidos"),
+                    None, None,
+                    es_favorable_menor=False,
+                ),
+            },
+            "meta": {
+                "periodo_actual_desde": desde_iso,
+                "periodo_actual_hasta": hasta_iso,
+                "periodo_anterior_desde": desde_ant_iso,
+                "periodo_anterior_hasta": hasta_ant_iso,
+                "periodo_anterior_etiqueta": "mismo día del mes anterior",
+            },
+        }
+
         return jsonify({
             "nodo_seleccionado": {
                 "id": nodo["id"],
@@ -2986,6 +3167,7 @@ def create_app() -> Flask:
                 "disponible": disponible_ant,
             },
             "arbol_sunburst": arbol_sunburst,
+            "kpis_paneles": kpis_paneles,
         })
 
     return app
