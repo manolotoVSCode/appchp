@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.78.2] — 2026-08-05
+
+### Fix — Fase 2 D6: ampliar offset lateral de etiquetas de transformador
+
+- `web/static/js/dashboard-telemetria.js` — offset horizontal de etiquetas del transformador aumentado de `cx + R_TX + 28` a `cx + R_TX + 44` (cx + 70 px), eliminando la superposición residual sobre el símbolo doble círculo. `MIN_SEP` ajustado de 200 a 220 px.
+
 ## [2.78.1] — 2026-08-05
 
 ### Fix — Fase 2 D6: kWh duplicado en líneas y colisión visual etiquetas Tx

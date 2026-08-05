@@ -17,7 +17,7 @@
 
   // Layout
   const NIVEL_H = 100;   // separación entre centros de nivel (px)
-  const MIN_SEP = 200;   // separación mínima entre centros de Tx (px)
+  const MIN_SEP = 220;   // separación mínima entre centros de Tx (px)
   const PAD_X   = 60;
   const PAD_Y   = 30;
 
@@ -313,7 +313,7 @@
     const nombreCorto = nombreMatch ? nombreMatch[1] : nodo.nombre.substring(0, 12);
     const kvaCorto    = kvaMatch ? kvaMatch[1] : "";
     const kwh         = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
-    const lx = cx + R_TX + 28;
+    const lx = cx + R_TX + 44;
     [
       [nombreCorto, "12", "bold"],
       [kvaCorto,    "10", "normal"],
