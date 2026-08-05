@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.79.0] — 2026-08-05
+
+### Añadido — Fase 2 D7-A: backend de KPIs de paneles de telemetría
+
+- `storage/migrations/202608_produccion_diaria.sql` — nueva tabla `produccion_diaria (id, cliente_id, fecha, m2_producidos, created_at)` con UNIQUE(cliente_id, fecha) e índice por fecha. Requiere ejecución manual en Supabase.
+- `calc/telemetria_kpis.py` — nuevo módulo con 6 funciones puras de cálculo: `calcular_kpis_energeticos` (energía trapezoidal, demanda pico/prom, FP ponderado por kW, índice utilización), `calcular_kpis_economicos` (costo total, unitario, % factura, ahorro potencial), `calcular_kpis_produccion` (consumo y costo específicos por m²), `atribuir_produccion_a_nodo` (m² proporcional al consumo), `calcular_baseline_movil` (energía del periodo histórico, fórmula provisional), `generar_sparkline` (reduce mediciones a N puntos por bucket temporal).
+- `storage/repository.py` — nueva función `obtener_produccion_diaria(cliente_id, desde_fecha, hasta_fecha)`.
+- `scripts/seed_iberica.py` — extendido con `_sembrar_produccion_diaria` (registros diarios con perfil L-V/Sáb/Dom, semilla determinista) y `_sembrar_historico_mes_anterior` (96 muestras por CBT del mismo día del mes anterior). Ambos bloques son idempotentes y respetan `--forzar`.
+- `web/app.py` — endpoint `cliente_dashboard_telemetria_data` extendido: nuevo bloque `kpis_paneles` con subclaves `energeticos` (5 KPIs), `economicos` (4 KPIs), `produccion` (4 KPIs) y `meta`. Cada KPI incluye `actual`, `anterior`, `delta_pct`, `sparkline_actual`, `sparkline_anterior` y flags de renderizado (`es_favorable_menor`, `aplica_a_nodo`, `oculto_en_nodo`, `es_gauge`).
+- `tests/test_telemetria_kpis.py` — 9 nuevos tests: a-f unitarios (sin DB), g-i de integración contra el endpoint mockeado.
+
 ## [2.78.3] — 2026-08-05
 
 ### Fix — Fase 2 D6: desactiva click en nodos de transformador
