@@ -29,6 +29,55 @@ from storage.repository import (
 )
 from telemetria.seed import generar_mediciones_por_carga
 
+
+def _verificar_migraciones() -> bool:
+    """Verifica que las vistas materializadas 5-min y horaria existen en Supabase.
+
+    Intenta hacer un SELECT de 1 fila en cada vista. Si la tabla no existe,
+    Supabase lanza una excepción con "relation ... does not exist".
+    Retorna True si ambas vistas están accesibles, False en caso contrario.
+    """
+    from storage.repository import _supabase
+
+    vistas = ["mediciones_agregadas_5min", "mediciones_agregadas_horarias"]
+    for vista in vistas:
+        try:
+            _supabase.table(vista).select("medidor_id").limit(1).execute()
+        except Exception as e:
+            msg = str(e).lower()
+            if "does not exist" in msg or "relation" in msg or "42p01" in msg:
+                print(f"⛔  Vista materializada faltante: {vista}")
+                print("    Ejecutar primero: storage/migrations/202609_mediciones_5min_horarias.sql")
+                return False
+    return True
+
+
+import json as _json_mod
+
+_CHECKPOINT_FILE = "/tmp/seed_iberica_progress.json"
+
+
+def _leer_checkpoint() -> dict:
+    """Retorna checkpoint guardado o estructura vacía."""
+    try:
+        with open(_CHECKPOINT_FILE) as _f:
+            return _json_mod.load(_f)
+    except (FileNotFoundError, _json_mod.JSONDecodeError):
+        return {"medidor_ids_completados": [], "ultimo_dia_por_medidor": {}}
+
+
+def _guardar_checkpoint(completados: list[int], ultimo_dia: dict) -> None:
+    """Escribe checkpoint en disco."""
+    with open(_CHECKPOINT_FILE, "w") as _f:
+        _json_mod.dump(
+            {
+                "medidor_ids_completados": completados,
+                "ultimo_dia_por_medidor": {str(k): v for k, v in ultimo_dia.items()},
+            },
+            _f,
+        )
+
+
 # ── Definición de la jerarquía ─────────────────────────────────────────────────
 
 PLANTA_1 = {
@@ -243,10 +292,10 @@ def _sembrar_mediciones(planta: dict, dias: int = 7) -> int:
     )
     cargas = resp.data or []
 
-    n_intervalo = dias * 24 * 4   # 15-min → 4/h → 672 por día × días
+    n_intervalo = dias * 24 * 12   # 5-min → 12/h → 2016 por 7 días
     total = 0
     for carga in cargas:
-        meds = generar_mediciones_por_carga(carga, desde, n=n_intervalo, intervalo=15)
+        meds = generar_mediciones_por_carga(carga, desde, n=n_intervalo, intervalo=5)
         total += insertar_mediciones_batch(meds)
     return total
 
@@ -314,14 +363,18 @@ def _sembrar_produccion_diaria(planta: dict, dias: int, forzar: bool) -> int:
 
 
 def _sembrar_historico_60_dias(planta: dict, forzar: bool) -> int:
-    """Genera 60 días de mediciones históricas para cada CBT del cliente.
+    """Genera 60 días de mediciones a resolución 5-min (288 muestras/día) por CBT.
 
-    60 días × 96 muestras/día = 5,760 muestras por CBT.
-    12 CBTs × 5,760 = 69,120 muestras totales (para dos plantas combinadas).
-    Usa semilla determinista por medidor.id para reproducibilidad.
-    Chunks de 1,000 manejados por insertar_mediciones_batch (ya existente).
+    12 CBTs × 60 días × 288 = 207,360 muestras totales (ambas plantas).
+    Checkpointing en /tmp/seed_iberica_progress.json.
+    Retry con backoff exponencial (hasta 5 intentos) en errores de red.
+    Si forzar=False y el medidor ya aparece en el checkpoint, salta.
     """
     from storage.repository import _supabase
+
+    if not _verificar_migraciones():
+        print("  ⚠  Migraciones pendientes: seed histórico abortado.")
+        return 0
 
     cid = planta["cliente_id"]
     ahora_utc = datetime.now(timezone.utc).replace(
@@ -330,7 +383,7 @@ def _sembrar_historico_60_dias(planta: dict, forzar: bool) -> int:
     desde_60d = ahora_utc - timedelta(days=60)
     desde_60d_iso = desde_60d.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Obtener cargas finales
+    # Cargas finales
     resp = (
         _supabase.table("medidores")
         .select("*")
@@ -343,42 +396,72 @@ def _sembrar_historico_60_dias(planta: dict, forzar: bool) -> int:
     if not cargas:
         return 0
 
+    checkpoint = (
+        {"medidor_ids_completados": [], "ultimo_dia_por_medidor": {}}
+        if forzar
+        else _leer_checkpoint()
+    )
+    completados: set[int] = set(checkpoint["medidor_ids_completados"])
+    ultimo_dia: dict[int, int] = {
+        int(k): v
+        for k, v in checkpoint.get("ultimo_dia_por_medidor", {}).items()
+    }
+
     total = 0
+
     for carga in cargas:
         mid = carga["id"]
+        nombre = carga.get("nombre", str(mid))
+
+        if mid in completados and not forzar:
+            print(f"    CBT {mid} ({nombre}): ya completado, saltando.")
+            continue
 
         if forzar:
-            # Borrar todo el rango de 60 días para este medidor
             _supabase.table("mediciones_tiempo_real").delete().eq(
                 "medidor_id", mid
             ).gte("timestamp", desde_60d_iso).execute()
-        else:
-            # Saltar si ya hay más de 5000 muestras en el rango
-            resp_cnt = (
-                _supabase.table("mediciones_tiempo_real")
-                .select("medidor_id", count="exact")
-                .eq("medidor_id", mid)
-                .gte("timestamp", desde_60d_iso)
-                .limit(1)
-                .execute()
-            )
-            if (resp_cnt.count or 0) > 5000:
-                print(
-                    f"    CBT {mid} ({carga.get('nombre', '')}): "
-                    f"ya tiene {resp_cnt.count} muestras en los últimos 60d, saltando."
-                )
-                continue
+            ultimo_dia.pop(mid, None)
 
-        # Generar día a día: 96 muestras/día × 60 días
-        for dia in range(60):
+        dia_inicio = 0 if forzar else ultimo_dia.get(mid, 0)
+
+        for dia in range(dia_inicio, 60):
             dia_desde = desde_60d + timedelta(days=dia)
-            meds = generar_mediciones_por_carga(carga, dia_desde, n=96, intervalo=15)
-            total += insertar_mediciones_batch(meds)
+            meds = generar_mediciones_por_carga(carga, dia_desde, n=288, intervalo=5)
+
+            for intento in range(5):
+                try:
+                    n_ins = insertar_mediciones_batch(meds)
+                    total += n_ins
+                    break
+                except Exception as exc:
+                    espera = 2 ** intento
+                    print(
+                        f"    CBT {mid}: error intento {intento + 1}/5, "
+                        f"reintentando en {espera}s — {exc}"
+                    )
+                    time.sleep(espera)
+                    if intento == 4:
+                        raise
+
             if (dia + 1) % 10 == 0:
+                ultimo_dia[mid] = dia + 1
+                _guardar_checkpoint(list(completados), ultimo_dia)
                 print(
-                    f"    CBT {mid} ({carga.get('nombre', '')}): "
-                    f"{dia + 1}/60 días procesados..."
+                    f"    CBT {mid} ({nombre}): {dia + 1}/60 días procesados "
+                    f"({(dia + 1) * 288} muestras este medidor)…"
                 )
+
+        completados.add(mid)
+        ultimo_dia[mid] = 60
+        _guardar_checkpoint(list(completados), ultimo_dia)
+        print(f"    CBT {mid} ({nombre}): ✓ completado (17,280 muestras).")
+
+    # Limpiar checkpoint
+    try:
+        os.remove(_CHECKPOINT_FILE)
+    except FileNotFoundError:
+        pass
 
     return total
 
