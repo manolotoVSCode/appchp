@@ -4,11 +4,13 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 
-from supabase import create_client, Client
+import httpx
+from supabase import create_client, Client, ClientOptions
 
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice, GasConcepto
@@ -23,7 +25,34 @@ logger = logging.getLogger(__name__)
 _supabase: Client = create_client(
     os.environ["SUPABASE_URL"],
     os.environ["SUPABASE_KEY"],
+    options=ClientOptions(postgrest_client_timeout=30),
 )
+
+# ── Retry ante saturación de conexiones HTTP/2 a Supabase ────────────────────
+
+_RETRIES = 3
+_BACKOFF_S = (2, 4, 8)  # segundos entre reintentos
+
+
+def _ejecutar_con_reintentos(fn):
+    """Ejecuta fn() con hasta 3 reintentos ante errores de red a Supabase.
+
+    Backoff: 2s tras el intento 1, 4s tras el intento 2. Si el intento 3
+    falla, re-lanza la excepción original.
+    """
+    ultimo_error: Exception | None = None
+    for intento in range(_RETRIES):
+        try:
+            return fn()
+        except (httpx.RemoteProtocolError, httpx.ReadTimeout, httpx.ConnectError) as e:
+            ultimo_error = e
+            logger.warning(
+                "Supabase error de red (intento %d/%d): %s",
+                intento + 1, _RETRIES, e,
+            )
+            if intento < _RETRIES - 1:
+                time.sleep(_BACKOFF_S[intento])
+    raise ultimo_error
 
 
 # ── Clientes ──────────────────────────────────────────────────────────────────
@@ -1558,19 +1587,22 @@ def obtener_agregados_5min(
 ) -> list[dict]:
     """Buckets de 5 minutos en mediciones_agregadas_5min para un medidor en [desde, hasta].
 
-    Ordenados por bucket_5min ASC.
+    Ordenados por bucket_5min ASC. Reintenta hasta 3 veces ante errores de red.
     """
-    resp = (
-        _supabase.table("mediciones_agregadas_5min")
-        .select("*")
-        .eq("medidor_id", medidor_id)
-        .gte("bucket_5min", desde)
-        .lte("bucket_5min", hasta)
-        .order("bucket_5min", desc=False)
-        .limit(20000)
-        .execute()
-    )
-    return resp.data or []
+    def _query():
+        resp = (
+            _supabase.table("mediciones_agregadas_5min")
+            .select("*")
+            .eq("medidor_id", medidor_id)
+            .gte("bucket_5min", desde)
+            .lte("bucket_5min", hasta)
+            .order("bucket_5min", desc=False)
+            .limit(20000)
+            .execute()
+        )
+        return resp.data or []
+
+    return _ejecutar_con_reintentos(_query)
 
 
 def obtener_agregados_horarios(
@@ -1580,19 +1612,22 @@ def obtener_agregados_horarios(
 ) -> list[dict]:
     """Buckets horarios en mediciones_agregadas_horarias para un medidor en [desde, hasta].
 
-    Ordenados por bucket_hora ASC.
+    Ordenados por bucket_hora ASC. Reintenta hasta 3 veces ante errores de red.
     """
-    resp = (
-        _supabase.table("mediciones_agregadas_horarias")
-        .select("*")
-        .eq("medidor_id", medidor_id)
-        .gte("bucket_hora", desde)
-        .lte("bucket_hora", hasta)
-        .order("bucket_hora", desc=False)
-        .limit(20000)
-        .execute()
-    )
-    return resp.data or []
+    def _query():
+        resp = (
+            _supabase.table("mediciones_agregadas_horarias")
+            .select("*")
+            .eq("medidor_id", medidor_id)
+            .gte("bucket_hora", desde)
+            .lte("bucket_hora", hasta)
+            .order("bucket_hora", desc=False)
+            .limit(20000)
+            .execute()
+        )
+        return resp.data or []
+
+    return _ejecutar_con_reintentos(_query)
 
 
 def crear_medidor_jerarquico(

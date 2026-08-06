@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.82.1] — 2026-08-06
+
+### Corregido — Saturación de conexiones HTTP/2 a Supabase en endpoint de telemetría
+
+- `storage/repository.py` — añade `ClientOptions(postgrest_client_timeout=30)` al singleton `_supabase` (timeout explícito de 30 s en lugar del default 120 s). Añade `_ejecutar_con_reintentos(fn)`: wrapper con hasta 3 intentos y backoff exponencial (2 s / 4 s / 8 s) ante `httpx.RemoteProtocolError`, `httpx.ReadTimeout` y `httpx.ConnectError`. `obtener_agregados_5min` y `obtener_agregados_horarios` envuelven su `.execute()` con el wrapper.
+- `web/app.py` — restructura el `ThreadPoolExecutor` del endpoint `cliente_dashboard_telemetria_data`: de `max_workers=2` con dos tareas bulk (una por periodo) a `max_workers=4` con una tarea por medidor que serializa internamente el fetch actual y el fetch anterior, limitando las conexiones HTTP/2 concurrentes a 4.
+
 ## [2.82.0] — 2026-08-05
 
 ### Añadido — Fase 2 D7-B: frontend KPIs telemetría con tabs, tarjetas, gauge PF y formulario producción

@@ -2779,12 +2779,14 @@ def create_app() -> Flask:
         desde_ant_iso = desde_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
         hasta_ant_iso = hasta_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Fetch paralelo: periodo actual (todas las hojas) + anterior (hojas del nodo)
-        def _fetch_todas_hojas(hids, desde_s, hasta_s):
-            resultado = {}
-            for hid in hids:
-                rows = _omfr(hid, desde_s, hasta_s, rango)
-                resultado[hid] = [
+        # Fetch paralelo por medidor: actual + anterior en la misma tarea (max 4 conexiones)
+        todas_hojas_set = set(todas_hojas_ids)
+        hojas_nodo_set = set(hojas_ids_nodo)
+        all_medidores = list(todas_hojas_set | hojas_nodo_set)
+
+        def _fetch_medidor_ambos(hid):
+            def _fmt(rows):
+                return [
                     {
                         "ts": r["timestamp"],
                         "kw": float(r.get("potencia_activa_kw") or 0),
@@ -2792,13 +2794,20 @@ def create_app() -> Flask:
                     }
                     for r in rows
                 ]
-            return resultado
+            act = _fmt(_omfr(hid, desde_iso, hasta_iso, rango)) if hid in todas_hojas_set else []
+            ant = _fmt(_omfr(hid, desde_ant_iso, hasta_ant_iso, rango)) if hid in hojas_nodo_set else []
+            return hid, act, ant
 
-        with ThreadPoolExecutor(max_workers=2) as _ex:
-            _fut_act = _ex.submit(_fetch_todas_hojas, todas_hojas_ids, desde_iso, hasta_iso)
-            _fut_ant = _ex.submit(_fetch_todas_hojas, hojas_ids_nodo, desde_ant_iso, hasta_ant_iso)
-            mediciones_por_hoja = _fut_act.result()
-            mediciones_ant = _fut_ant.result()
+        mediciones_por_hoja = {}
+        mediciones_ant = {}
+        with ThreadPoolExecutor(max_workers=4) as _ex:
+            futs = [_ex.submit(_fetch_medidor_ambos, hid) for hid in all_medidores]
+            for fut in futs:
+                hid, act, ant = fut.result()
+                if hid in todas_hojas_set:
+                    mediciones_por_hoja[hid] = act
+                if hid in hojas_nodo_set:
+                    mediciones_ant[hid] = ant
 
         # Diagnóstico: contar filas por hoja para detectar ventanas vacías
         _n_filas_total = sum(len(v) for v in mediciones_por_hoja.values())
