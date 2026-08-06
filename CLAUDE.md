@@ -316,8 +316,13 @@ Permite retomar cualquier chat sin reconstruir contexto.
 para 7d/30d; seed 207,360 muestras con checkpointing + retry; kpis_paneles 10 KPIs
 (4+3+3), fuente_precio en costo_unitario, solo_en_rango en produccion; POST endpoint
 para captura manual de m²/mes.
-Pendiente: ejecutar migration 202609_mediciones_5min_horarias.sql en Supabase,
-luego correr seed: python3 scripts/seed_iberica.py --forzar
+Pendiente: ejecutar en Supabase (si no están aplicadas aún):
+  - 202606_usuario_clientes.sql
+  - 202607_telemetria_jerarquia.sql
+  - 202608_produccion_diaria.sql
+  - 202609_mediciones_5min_horarias.sql
+  - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
+Luego correr: python3 scripts/seed_iberica.py --forzar
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout

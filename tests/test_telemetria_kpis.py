@@ -1,4 +1,9 @@
 """Tests para calc/telemetria_kpis.py (Task 1 — D7-A)."""
+import os
+os.environ.setdefault("SUPABASE_URL", "https://fake.supabase.co")
+os.environ.setdefault("SUPABASE_KEY", "fake_key")
+os.environ.setdefault("SECRET_KEY", "test-secret-key")
+
 from datetime import datetime, timedelta, timezone
 
 import pytest
