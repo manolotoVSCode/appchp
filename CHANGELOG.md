@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.80.0] — 2026-08-05
+
+### Añadido — Fase 2 D7-A v2: histórico 60 días, selección de fuente por rango, sparkline dinámico
+
+- `calc/telemetria_kpis.py` — nueva función `determinar_periodo_anterior(rango, ahora)`: calcula (desde_ant, hasta_ant, etiqueta) desplazando 30 días atrás con la misma anchura del rango. Función `generar_sparkline` extendida con param `tipo='energia'|'potencia'|'factor_potencia'` (retrocompatible). `calcular_kpis_produccion` ahora calcula `pct_costo_especifico = (costo_esp / costo_total) × 100` en lugar de retornar None.
+- `storage/repository.py` — nueva función `obtener_mediciones_para_rango(medidor_id, desde, hasta, rango)`: enruta a `mediciones_tiempo_real` para rango='24h' y a `mediciones_agregadas_15min` para '7d'/'30d', devuelve dicts homogeneizados con campo `timestamp` normalizado.
+- `scripts/seed_iberica.py` — `_sembrar_historico_mes_anterior` (1 día) reemplazada por `_sembrar_historico_60_dias` (60 días × 96 muestras = 5,760 por CBT; idempotente: salta si >5,000 muestras; --forzar borra el rango completo). `_sembrar_produccion_diaria` ahora cubre 60 días.
+- `web/app.py` — endpoint `cliente_dashboard_telemetria_data`: fetch paralelo con `ThreadPoolExecutor(max_workers=2)` (periodo actual + anterior simultáneos); usa `determinar_periodo_anterior` para calcular ventana anterior; sparkline dinámico (24h→24 pts, 7d→7 pts, 30d→30 pts); `n_puntos_sparkline` añadido a `kpis_paneles.meta`; `periodo_anterior_etiqueta` usa la etiqueta calculada según el rango.
+- `tests/test_telemetria_kpis.py` — 2 nuevos tests: `test_g_determinar_periodo_anterior` (verifica las tres variantes de rango), `test_h_obtener_mediciones_para_rango_elige_tabla` (verifica routing a tabla correcta y normalización de campos).
+
 ## [2.79.0] — 2026-08-05
 
 ### Añadido — Fase 2 D7-A: backend de KPIs de paneles de telemetría
