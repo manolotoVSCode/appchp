@@ -145,7 +145,7 @@ def test_telemetria_data_json_claves_esperadas(client, app):
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
          patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_descendientes_ids", return_value=DESC_IDS_MOCK), \
-         patch("storage.repository.obtener_mediciones_recientes", return_value=MEDICIONES_MOCK), \
+         patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
          patches[0], patches[1], patches[2], patches[3], patches[4]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
     assert resp.status_code == 200
@@ -163,7 +163,7 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
          patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_descendientes_ids", return_value=DESC_IDS_MOCK), \
-         patch("storage.repository.obtener_mediciones_recientes", return_value=MEDICIONES_MOCK), \
+         patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
          patches[0], patches[1], patches[2], patches[3], patches[4]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
     data = resp.get_json()
@@ -194,7 +194,7 @@ def test_telemetria_data_nodo_carga_final_sin_agregacion(client, app):
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
          patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_descendientes_ids", return_value=[]), \
-         patch("storage.repository.obtener_mediciones_recientes", return_value=carga_mock) as mock_omr, \
+         patch("storage.repository.obtener_mediciones_para_rango", return_value=carga_mock) as mock_omr, \
          patches[0], patches[1], patches[2], patches[3], patches[4]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h&nodo_id=3")
     assert resp.status_code == 200
