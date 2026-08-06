@@ -311,11 +311,12 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.79.0 — D7-A backend KPIs telemetría: módulo
-calc/telemetria_kpis.py (6 funciones puras), tabla produccion_diaria,
-seed extendido con producción diaria + histórico mes anterior, endpoint
-extendido con bloque kpis_paneles (5+4+4 KPIs + sparklines + deltas).
-18/18 tests pasan.
+Último tema resuelto: v2.80.0 — D7-A v2: histórico 60 días por CBT,
+determinar_periodo_anterior, obtener_mediciones_para_rango (enruta por
+rango a mediciones_tiempo_real o mediciones_agregadas_15min), fetch
+paralelo en endpoint (ThreadPoolExecutor), sparkline dinámico 24/7/30 pts,
+pct_costo_especifico con fórmula (pendiente validación usuario). 20/20 tests.
+Pendiente del usuario: validar si fórmula pct_costo_especifico=100/m² es intencional.
 Pendiente: ejecutar migrations en Supabase:
   - 202606_usuario_clientes.sql
   - 202607_telemetria_jerarquia.sql
@@ -338,7 +339,7 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.79.0 — D7-A backend KPIs completo: produccion_diaria,
-kpis_paneles en endpoint (energéticos, económicos, producción + sparklines
-24 puntos + deltas vs mes anterior). Pendiente: frontend que consuma
-kpis_paneles; integración MQTT/pipeline real.
+Último tema resuelto: v2.80.0 — D7-A v2 completo: fetch paralelo,
+sparkline dinámico por rango, seed 60d (69,120 muestras/planta),
+determinar_periodo_anterior, obtener_mediciones_para_rango.
+Pendiente: ejecutar seed con --forzar en Supabase; frontend D7-B.
