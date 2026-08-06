@@ -34,6 +34,31 @@
   let _chartSerie = null;
   let _abort      = null;
 
+  // ── Metadata de KPIs para labels, unidades y decimales ─────────────────
+  const _KPI_META = {
+    energia_kwh:               { label: "Energía en el periodo",  unit: "kWh",     dec: 1 },
+    demanda_pico_kw:           { label: "Demanda pico",           unit: "kW",      dec: 1 },
+    demanda_promedio_kw:       { label: "Demanda promedio",       unit: "kW",      dec: 1 },
+    factor_potencia:           { label: "Factor de potencia",     unit: "",        dec: 3 },
+    costo_total_mxn:           { label: "Costo total est.",       unit: "MXN",     dec: 0 },
+    costo_unitario_mxn_kwh:    { label: "Costo unitario",         unit: "MXN/kWh", dec: 4 },
+    pct_sobre_factura:         { label: "% sobre factura",        unit: "%",       dec: 1 },
+    consumo_especifico_kwh_m2: { label: "Consumo específico",     unit: "kWh/m²",  dec: 2 },
+    costo_especifico_mxn_m2:   { label: "Costo específico",       unit: "MXN/m²",  dec: 2 },
+    produccion_m2:             { label: "Producción mensual",     unit: "m²",      dec: 0 },
+  };
+
+  // Registro de instancias Chart.js para sparklines y gauge (destruir antes de re-render)
+  const _sparkInstances = new Map();
+
+  function _destroySparklines() {
+    _sparkInstances.forEach((chart) => { try { chart.destroy(); } catch (_) {} });
+    _sparkInstances.clear();
+  }
+
+  // Estado de pestaña activa (persiste entre re-renders)
+  let _tabActivo = "energeticos";
+
   // ── Helpers DOM ────────────────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
   const fmt = (n, dec = 2) =>
@@ -51,6 +76,136 @@
   function _mostrarLoading(visible) {
     const badge = $("header-loading-badge");
     if (badge) badge.style.display = visible ? "inline" : "none";
+  }
+
+  // ── Sparkline: line chart minimalista 32px de altura ────────────────────
+  function _crearSparkline(canvas, data, color) {
+    return new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: data.map((_, i) => i),
+        datasets: [{
+          data,
+          borderColor: color,
+          borderWidth: 1.2,
+          pointRadius: 0,
+          tension: 0.3,
+          fill: false,
+        }],
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false } },
+      },
+    });
+  }
+
+  // ── Tarjeta KPI estándar ─────────────────────────────────────────────────
+  function _renderKpiCard(key, kpi, nodoTipo) {
+    // Respetar flags de visibilidad
+    if (kpi.oculto_en_nodo && nodoTipo && kpi.oculto_en_nodo.includes(nodoTipo)) return null;
+    if (kpi.aplica_a_nodo  && nodoTipo && !kpi.aplica_a_nodo.includes(nodoTipo)) return null;
+
+    const m   = _KPI_META[key] || { label: key, unit: "", dec: 2 };
+    const act = kpi.actual;
+    const dPct = kpi.delta_pct;
+
+    let deltaHtml = "";
+    if (dPct !== null && dPct !== undefined) {
+      const esFavorable = kpi.es_favorable_menor ? dPct < 0 : dPct > 0;
+      const cls  = esFavorable ? "favorable" : (dPct === 0 ? "neutro" : "desfavorable");
+      const sign = dPct >= 0 ? "+" : "";
+      const pctStr = Number(dPct).toLocaleString("es-MX",
+        { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+      deltaHtml = `<span class="kpi-delta-badge ${cls}">${sign}${pctStr}%</span>`;
+    }
+
+    let hintHtml = "";
+    if (key === "costo_unitario_mxn_kwh" && kpi.fuente_precio) {
+      const hints = {
+        factura_mes_exacto:   "Precio de factura del mes",
+        factura_mes_anterior: "Precio est. último mes disponible",
+        promedio_12m:         "Precio promedio 12 meses",
+        sin_datos:            "Sin facturas registradas",
+      };
+      hintHtml = `<div class="kpi-hint">${hints[kpi.fuente_precio] || kpi.fuente_precio}</div>`;
+    }
+
+    const valStr = act != null
+      ? Number(act).toLocaleString("es-MX",
+          { maximumFractionDigits: m.dec, minimumFractionDigits: m.dec })
+      : "—";
+    const unitHtml = m.unit ? `<span class="kpi-unit-v2">${m.unit}</span>` : "";
+
+    const hasSpark = kpi.sparkline_actual && kpi.sparkline_actual.length > 0;
+    const sparkHtml = hasSpark
+      ? `<div class="kpi-sparkline-wrap">
+           <canvas id="sp-${key}-act" height="32"></canvas>
+           ${kpi.sparkline_anterior ? `<canvas id="sp-${key}-ant" height="32"></canvas>` : ""}
+         </div>`
+      : "";
+
+    const div = document.createElement("div");
+    div.className = "kpi-card-v2";
+    div.innerHTML = `
+      <div class="kpi-label-v2">${m.label}</div>
+      <div class="d-flex align-items-baseline flex-wrap">
+        <span class="kpi-value-v2">${valStr}</span>
+        ${unitHtml}
+        ${deltaHtml}
+      </div>
+      ${hintHtml}
+      ${sparkHtml}
+    `;
+    return div;
+  }
+
+  // ── Gauge FP: doughnut semicírculo Chart.js ──────────────────────────────
+  function _renderKpiGauge(canvasId, kpi) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const val    = kpi.actual != null ? parseFloat(kpi.actual) : 0;
+    const maxVal = kpi.rango_max || 1.0;
+    const filled = Math.min(Math.max(val, 0), maxVal);
+    const color  = val >= 0.90 ? "#198754"
+                 : val >= 0.80 ? "#ffc107"
+                 : "#dc3545";
+    const chart = new Chart(canvas, {
+      type: "doughnut",
+      data: {
+        datasets: [{
+          data: [filled, maxVal - filled],
+          backgroundColor: [color, "#e5e7eb"],
+          borderWidth: 0,
+        }],
+      },
+      options: {
+        circumference: 180,
+        rotation: -90,
+        responsive: true,
+        maintainAspectRatio: true,
+        animation: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        cutout: "68%",
+      },
+    });
+    _sparkInstances.set(canvasId, chart);
+  }
+
+  // ── Gestión de pestaña activa ────────────────────────────────────────────
+  function _activarTab(nombre) {
+    ["energeticos", "economicos", "produccion"].forEach((g) => {
+      const btn  = $(`tab-${g}`);
+      const pane = $(`pane-${g}`);
+      if (!btn || !pane) return;
+      const activo = g === nombre;
+      btn.classList.toggle("active", activo);
+      btn.setAttribute("aria-selected", String(activo));
+      pane.classList.toggle("show",   activo);
+      pane.classList.toggle("active", activo);
+    });
   }
 
   // ── Fetch central ──────────────────────────────────────────────────────────
@@ -539,6 +694,13 @@
   });
   const btnReintentar = $("btn-reintentar");
   if (btnReintentar) btnReintentar.addEventListener("click", fetchDatos);
+
+  document.querySelectorAll("#kpi-tabs button[data-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      _tabActivo = btn.dataset.tab;
+      _activarTab(_tabActivo);
+    });
+  });
 
   // ── Init ───────────────────────────────────────────────────────────────────
   fetchDatos();
