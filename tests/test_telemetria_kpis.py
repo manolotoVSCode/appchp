@@ -228,7 +228,7 @@ def test_i_anterior_null_sin_datos_historicos(_client_fase2):
     assert kpi["delta_pct"] is None
 
 
-def test_g_determinar_periodo_anterior():
+def test_j_determinar_periodo_anterior():
     """Para cada rango, la ventana anterior termina 30 días antes de ahora
     y tiene la misma anchura que el rango."""
     from datetime import datetime, timezone, timedelta
@@ -255,7 +255,7 @@ def test_g_determinar_periodo_anterior():
     assert abs((d30 - (esperado_hasta - timedelta(days=30))).total_seconds()) < 1
 
 
-def test_h_obtener_mediciones_para_rango_elige_tabla():
+def test_k_obtener_mediciones_para_rango_elige_tabla():
     """rango='24h' llama a obtener_mediciones_recientes; '7d' llama a obtener_agregados_15min."""
     from unittest.mock import patch, MagicMock
     from storage.repository import obtener_mediciones_para_rango
