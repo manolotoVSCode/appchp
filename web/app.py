@@ -2706,9 +2706,10 @@ def create_app() -> Flask:
         from storage.repository import (
             obtener_arbol_medidores as _oam,
             obtener_descendientes_ids as _odi,
-            obtener_mediciones_recientes as _omr,
-            obtener_agregados_15min as _oa15,
+            obtener_mediciones_para_rango as _omfr,
         )
+        from calc.telemetria_kpis import determinar_periodo_anterior as _dpa
+        from concurrent.futures import ThreadPoolExecutor
         from datetime import datetime, timedelta, timezone
 
         nodo_id = request.args.get("nodo_id", type=int)
@@ -2773,23 +2774,31 @@ def create_app() -> Flask:
         desde_iso = desde.strftime("%Y-%m-%dT%H:%M:%SZ")
         hasta_iso = ahora.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Fetch mediciones para TODAS las hojas del árbol (sunburst correcto en cualquier vista)
-        mediciones_por_hoja = {}
-        for hid in todas_hojas_ids:
-            if rango == "24h":
-                rows = _omr(hid, desde_iso, hasta_iso)
-                mediciones_por_hoja[hid] = [
-                    {"ts": r["timestamp"], "kw": float(r.get("potencia_activa_kw") or 0),
-                     "fp": float(r.get("factor_potencia") or 0)}
+        # Calcular periodo anterior antes del fetch paralelo
+        desde_ant, hasta_ant, etiqueta_ant = _dpa(rango, ahora)
+        desde_ant_iso = desde_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
+        hasta_ant_iso = hasta_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Fetch paralelo: periodo actual (todas las hojas) + anterior (hojas del nodo)
+        def _fetch_todas_hojas(hids, desde_s, hasta_s):
+            resultado = {}
+            for hid in hids:
+                rows = _omfr(hid, desde_s, hasta_s, rango)
+                resultado[hid] = [
+                    {
+                        "ts": r["timestamp"],
+                        "kw": float(r.get("potencia_activa_kw") or 0),
+                        "fp": float(r.get("factor_potencia") or 0),
+                    }
                     for r in rows
                 ]
-            else:
-                rows = _oa15(hid, desde_iso, hasta_iso)
-                mediciones_por_hoja[hid] = [
-                    {"ts": r["bucket_15min"], "kw": float(r.get("potencia_activa_kw") or 0),
-                     "fp": float(r.get("factor_potencia") or 0)}
-                    for r in rows
-                ]
+            return resultado
+
+        with ThreadPoolExecutor(max_workers=2) as _ex:
+            _fut_act = _ex.submit(_fetch_todas_hojas, todas_hojas_ids, desde_iso, hasta_iso)
+            _fut_ant = _ex.submit(_fetch_todas_hojas, hojas_ids_nodo, desde_ant_iso, hasta_ant_iso)
+            mediciones_por_hoja = _fut_act.result()
+            mediciones_ant = _fut_ant.result()
 
         # Diagnóstico: contar filas por hoja para detectar ventanas vacías
         _n_filas_total = sum(len(v) for v in mediciones_por_hoja.values())
@@ -2801,20 +2810,15 @@ def create_app() -> Flask:
         # que no es carga_final y por tanto no está en todas_hojas_ids)
         ids_sin_datos = [hid for hid in hojas_ids_nodo if hid not in mediciones_por_hoja]
         for hid in ids_sin_datos:
-            if rango == "24h":
-                rows = _omr(hid, desde_iso, hasta_iso)
-                mediciones_por_hoja[hid] = [
-                    {"ts": r["timestamp"], "kw": float(r.get("potencia_activa_kw") or 0),
-                     "fp": float(r.get("factor_potencia") or 0)}
-                    for r in rows
-                ]
-            else:
-                rows = _oa15(hid, desde_iso, hasta_iso)
-                mediciones_por_hoja[hid] = [
-                    {"ts": r["bucket_15min"], "kw": float(r.get("potencia_activa_kw") or 0),
-                     "fp": float(r.get("factor_potencia") or 0)}
-                    for r in rows
-                ]
+            rows = _omfr(hid, desde_iso, hasta_iso, rango)
+            mediciones_por_hoja[hid] = [
+                {
+                    "ts": r["timestamp"],
+                    "kw": float(r.get("potencia_activa_kw") or 0),
+                    "fp": float(r.get("factor_potencia") or 0),
+                }
+                for r in rows
+            ]
 
         # Agregar serie temporal: sumar kW solo de las hojas del nodo seleccionado
         from collections import defaultdict
@@ -2887,27 +2891,7 @@ def create_app() -> Flask:
         from calc.telemetria_costos import calcular_costo_periodo as _ccp
         costo_info = _ccp(cliente_id, energia_kwh, desde, ahora)
 
-        # ── Comparativa mes anterior ───────────────────────────────────────
-        desde_ant = desde - timedelta(days=30)
-        hasta_ant = ahora - timedelta(days=30)
-        desde_ant_iso = desde_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
-        hasta_ant_iso = hasta_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-        mediciones_ant = {}
-        for hid in hojas_ids_nodo:
-            if rango == "24h":
-                rows_ant = _omr(hid, desde_ant_iso, hasta_ant_iso)
-                mediciones_ant[hid] = [
-                    {"ts": r["timestamp"], "kw": float(r.get("potencia_activa_kw") or 0)}
-                    for r in rows_ant
-                ]
-            else:
-                rows_ant = _oa15(hid, desde_ant_iso, hasta_ant_iso)
-                mediciones_ant[hid] = [
-                    {"ts": r["bucket_15min"], "kw": float(r.get("potencia_activa_kw") or 0)}
-                    for r in rows_ant
-                ]
-
+        # ── Comparativa periodo anterior ───────────────────────────────────
         # Agregar serie anterior y calcular energía
         bucket_ant = defaultdict(float)
         for hid, rows in mediciones_ant.items():
@@ -2968,7 +2952,7 @@ def create_app() -> Flask:
         arbol_sunburst = _arbol_sunburst_con_costo(acometida["id"])
 
         # ── KPIs de paneles ────────────────────────────────────────────────
-        _N_SPARK = 24
+        _N_SPARK = {"24h": 24, "7d": 7, "30d": 30}.get(rango, 24)
 
         # Serie agregada actual (ya disponible como bucket_kw + bucket_fp_peso)
         meds_actuales = [
@@ -3135,7 +3119,8 @@ def create_app() -> Flask:
                 "periodo_actual_hasta": hasta_iso,
                 "periodo_anterior_desde": desde_ant_iso,
                 "periodo_anterior_hasta": hasta_ant_iso,
-                "periodo_anterior_etiqueta": "mismo día del mes anterior",
+                "periodo_anterior_etiqueta": etiqueta_ant,
+                "n_puntos_sparkline": _N_SPARK,
             },
         }
 
