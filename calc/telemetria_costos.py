@@ -143,3 +143,27 @@ def _mes_principal(desde: datetime, hasta: datetime) -> tuple[int, int]:
     if not conteo:
         return hasta.year, hasta.month
     return max(conteo, key=lambda k: (conteo[k], k[0], k[1]))
+
+
+def obtener_precio_unitario(
+    cliente_id: int,
+    anio: int,
+    mes: int,
+    historico_completo: dict | None = None,
+) -> dict:
+    """Retorna {precio_mxn_kwh, fuente, mes_referencia} para (cliente, año, mes).
+
+    Si historico_completo es un dict con clave (anio, mes), retorna desde el
+    cache sin consultar la BD (útil para evitar N+1 queries en series de meses).
+    Si no, delega a obtener_precio_unitario_mxn_kwh().
+
+    Retorna:
+        {
+          "precio_mxn_kwh": float | None,
+          "fuente": str,
+          "mes_referencia": str | None,
+        }
+    """
+    if historico_completo is not None and (anio, mes) in historico_completo:
+        return historico_completo[(anio, mes)]
+    return obtener_precio_unitario_mxn_kwh(cliente_id, anio, mes)

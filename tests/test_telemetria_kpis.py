@@ -132,6 +132,7 @@ def _app_fase2(monkeypatch):
     from web.app import create_app
     app = create_app()
     app.config["TESTING"] = True
+    app.config["WTF_CSRF_ENABLED"] = False
     return app
 
 
@@ -218,7 +219,7 @@ def test_g_endpoint_devuelve_kpis_paneles(_client_fase2):
 
 
 def test_h_kpis_flags_aplica_y_oculto(_client_fase2):
-    """indice_utilizacion_pct tiene aplica_a_nodo; pct_sobre_factura tiene oculto_en_nodo."""
+    """pct_sobre_factura tiene oculto_en_nodo; costo_unitario_mxn_kwh tiene fuente_precio."""
     _inyectar_sesion(_client_fase2)
     patches = _mock_repo(_ARBOL, _MEDS, _MEDS, [])
     with patch.multiple("storage.repository", **{
@@ -227,10 +228,13 @@ def test_h_kpis_flags_aplica_y_oculto(_client_fase2):
                patches["calc.telemetria_costos.calcular_costo_periodo"]):
         resp = _client_fase2.get("/clientes/44/dashboard/telemetria/data?rango=24h")
     data = json.loads(resp.data)
-    idx = data["kpis_paneles"]["energeticos"]["indice_utilizacion_pct"]
-    assert idx["aplica_a_nodo"] == ["carga_final"]
+    energeticos = data["kpis_paneles"]["energeticos"]
+    # indice_utilizacion_pct ya NO existe en la nueva estructura
+    assert "indice_utilizacion_pct" not in energeticos
     pct = data["kpis_paneles"]["economicos"]["pct_sobre_factura"]
     assert pct["oculto_en_nodo"] == ["acometida_cfe"]
+    costo_u = data["kpis_paneles"]["economicos"]["costo_unitario_mxn_kwh"]
+    assert "fuente_precio" in costo_u
 
 
 def test_i_anterior_null_sin_datos_historicos(_client_fase2):
@@ -313,3 +317,89 @@ def test_k_obtener_mediciones_para_rango_elige_tabla():
         obtener_mediciones_para_rango(1, "2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z", "30d")
         mock_ho.assert_called_once()
         mock_5m.assert_not_called()
+
+
+# ── Tests e, l-o (nuevos) ─────────────────────────────────────────────────────
+
+
+def test_e_precio_unitario_usa_historico_completo():
+    """Si historico_completo tiene (anio, mes), retorna desde cache sin llamar a la BD."""
+    from unittest.mock import patch
+    from calc.telemetria_costos import obtener_precio_unitario
+
+    historico = {
+        (2024, 1): {
+            "precio_mxn_kwh": 3.5,
+            "fuente": "cache_test",
+            "mes_referencia": "2024-01",
+        }
+    }
+
+    with patch(
+        "calc.telemetria_costos.obtener_precio_unitario_mxn_kwh"
+    ) as mock_db:
+        result = obtener_precio_unitario(44, 2024, 1, historico_completo=historico)
+        mock_db.assert_not_called()
+
+    assert result["precio_mxn_kwh"] == 3.5
+    assert result["fuente"] == "cache_test"
+
+
+def test_l_produccion_solo_en_rango(_client_fase2):
+    """kpis_paneles.produccion incluye solo_en_rango: ['30d']."""
+    _inyectar_sesion(_client_fase2)
+    patches = _mock_repo(_ARBOL, _MEDS, _MEDS, [{"fecha": "2024-01-01", "m2_producidos": 100.0}])
+    with patch.multiple("storage.repository", **{
+        k.split(".")[-1]: v for k, v in patches.items() if k.startswith("storage.repository")
+    }), patch("calc.telemetria_costos.calcular_costo_periodo",
+               patches["calc.telemetria_costos.calcular_costo_periodo"]):
+        resp = _client_fase2.get("/clientes/44/dashboard/telemetria/data?rango=24h")
+    data = json.loads(resp.data)
+    produccion = data["kpis_paneles"]["produccion"]
+    assert produccion.get("solo_en_rango") == ["30d"]
+
+
+def test_m_post_telemetria_produccion_distribuye(_client_fase2):
+    """POST /telemetria/produccion llama a upsert_produccion_mes y retorna ok."""
+    _inyectar_sesion(_client_fase2)
+    with patch("storage.repository.upsert_produccion_mes", return_value=31) as mock_up, \
+         patch("storage.repository.get_cliente_con_conteos",
+               side_effect=_mock_get_cliente):
+        resp = _client_fase2.post(
+            "/clientes/44/telemetria/produccion",
+            json={"anio": 2024, "mes": 1, "m2_mes": 120000.0},
+        )
+    assert resp.status_code == 200
+    body = json.loads(resp.data)
+    assert body["ok"] is True
+    assert body["registros"] == 31
+    mock_up.assert_called_once_with(44, 2024, 1, 120000.0)
+
+
+def test_n_post_telemetria_produccion_valida_input(_client_fase2):
+    """POST con valores inválidos retorna 400."""
+    _inyectar_sesion(_client_fase2)
+    with patch("storage.repository.get_cliente_con_conteos",
+               side_effect=_mock_get_cliente):
+        # mes fuera de rango
+        r1 = _client_fase2.post(
+            "/clientes/44/telemetria/produccion",
+            json={"anio": 2024, "mes": 13, "m2_mes": 1000.0},
+        )
+        assert r1.status_code == 400
+
+        # m2_mes negativo
+        r2 = _client_fase2.post(
+            "/clientes/44/telemetria/produccion",
+            json={"anio": 2024, "mes": 1, "m2_mes": -1.0},
+        )
+        assert r2.status_code == 400
+
+
+def test_o_post_telemetria_produccion_requiere_auth(_client_fase2):
+    """POST sin sesión retorna 401 o redirige a login."""
+    resp = _client_fase2.post(
+        "/clientes/44/telemetria/produccion",
+        json={"anio": 2024, "mes": 1, "m2_mes": 1000.0},
+    )
+    assert resp.status_code in (401, 302)

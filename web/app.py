@@ -3057,13 +3057,6 @@ def create_app() -> Flask:
                     rango_min=0.0,
                     rango_max=1.0,
                 ),
-                "indice_utilizacion_pct": _kpi_bloque(
-                    ken_act.get("indice_utilizacion_pct"),
-                    ken_ant.get("indice_utilizacion_pct"),
-                    None, None,
-                    es_favorable_menor=True,
-                    aplica_a_nodo=["carga_final"],
-                ),
             },
             "economicos": {
                 "costo_total_mxn": _kpi_bloque(
@@ -3072,9 +3065,11 @@ def create_app() -> Flask:
                     es_favorable_menor=True,
                 ),
                 "costo_unitario_mxn_kwh": _kpi_bloque(
-                    kec_act.get("costo_unitario_mxn_kwh"), kec_ant.get("costo_unitario_mxn_kwh"),
+                    kec_act.get("costo_unitario_mxn_kwh"),
+                    kec_ant.get("costo_unitario_mxn_kwh"),
                     None, None,
                     es_favorable_menor=True,
+                    fuente_precio=costo_info.get("fuente"),
                 ),
                 "pct_sobre_factura": _kpi_bloque(
                     kec_act.get("pct_sobre_factura"), kec_ant.get("pct_sobre_factura"),
@@ -3082,14 +3077,9 @@ def create_app() -> Flask:
                     es_favorable_menor=True,
                     oculto_en_nodo=["acometida_cfe"],
                 ),
-                "ahorro_potencial_mxn": _kpi_bloque(
-                    kec_act.get("ahorro_potencial_mxn"), kec_ant.get("ahorro_potencial_mxn"),
-                    None, None,
-                    es_favorable_menor=False,
-                    baseline_nota="baseline provisional, criterio final por definir",
-                ),
             },
             "produccion": {
+                "solo_en_rango": ["30d"],
                 "consumo_especifico_kwh_m2": _kpi_bloque(
                     kp_act.get("consumo_especifico_kwh_m2"),
                     kp_ant.get("consumo_especifico_kwh_m2"),
@@ -3099,12 +3089,6 @@ def create_app() -> Flask:
                 "costo_especifico_mxn_m2": _kpi_bloque(
                     kp_act.get("costo_especifico_mxn_m2"),
                     kp_ant.get("costo_especifico_mxn_m2"),
-                    None, None,
-                    es_favorable_menor=True,
-                ),
-                "pct_costo_especifico": _kpi_bloque(
-                    kp_act.get("pct_costo_especifico"),
-                    kp_ant.get("pct_costo_especifico"),
                     None, None,
                     es_favorable_menor=True,
                 ),
@@ -3154,5 +3138,36 @@ def create_app() -> Flask:
             "arbol_sunburst": arbol_sunburst,
             "kpis_paneles": kpis_paneles,
         })
+
+    @app.route("/clientes/<int:cliente_id>/telemetria/produccion", methods=["POST"])
+    def telemetria_produccion_post(cliente_id: int):
+        """Captura manual de producción mensual: distribuye m² entre días del mes.
+
+        Body JSON requerido: {"anio": int, "mes": int, "m2_mes": float}
+        Ponderación: L-V = 1.0, Sáb = 0.6, Dom = 0.0.
+        Retorna: {"ok": True, "registros": N}
+        """
+        from flask import jsonify, request
+        if not app.config.get("FASE2_HABILITADA", False):
+            abort(404)
+        from web.auth import is_authenticated
+        if not is_authenticated():
+            return jsonify({"error": "No autenticado"}), 401
+
+        payload = request.get_json(silent=True) or {}
+        anio = payload.get("anio")
+        mes = payload.get("mes")
+        m2_mes = payload.get("m2_mes")
+
+        if not isinstance(anio, int) or anio < 2000 or anio > 2100:
+            return jsonify({"error": "anio inválido"}), 400
+        if not isinstance(mes, int) or mes < 1 or mes > 12:
+            return jsonify({"error": "mes inválido (1-12)"}), 400
+        if not isinstance(m2_mes, (int, float)) or m2_mes < 0:
+            return jsonify({"error": "m2_mes debe ser >= 0"}), 400
+
+        from storage.repository import upsert_produccion_mes
+        n = upsert_produccion_mes(cliente_id, anio, mes, float(m2_mes))
+        return jsonify({"ok": True, "registros": n})
 
     return app
