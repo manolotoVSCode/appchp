@@ -219,3 +219,82 @@ def test_telemetria_sin_medidores_estado_vacio_200(client, app):
         resp = client.get("/clientes/44/dashboard/telemetria")
     assert resp.status_code == 200
     assert "aún no tiene medidores" in resp.get_data(as_text=True)
+
+
+# ── Test i ─────────────────────────────────────────────────────────────────
+def test_post_produccion_ok(client, app):
+    """POST válido con m2_mes ≥ 0 → 200, ok=True, registros=N."""
+    app.config["FASE2_HABILITADA"] = True
+    _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+    with patch("storage.repository.get_cliente_con_conteos",
+               side_effect=_mock_get_cliente_con_conteos), \
+         patch("storage.repository.upsert_produccion_mes", return_value=20):
+        resp = client.post(
+            "/clientes/44/telemetria/produccion",
+            json={"anio": 2024, "mes": 6, "m2_mes": 12000.0},
+        )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["registros"] == 20
+
+
+# ── Test j ─────────────────────────────────────────────────────────────────
+def test_post_produccion_sin_m2_mes_400(client, app):
+    """POST sin campo m2_mes → 400."""
+    app.config["FASE2_HABILITADA"] = True
+    _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+    with patch("storage.repository.get_cliente_con_conteos",
+               side_effect=_mock_get_cliente_con_conteos):
+        resp = client.post(
+            "/clientes/44/telemetria/produccion",
+            json={"anio": 2024, "mes": 6},
+        )
+    assert resp.status_code == 400
+
+
+# ── Test k ─────────────────────────────────────────────────────────────────
+def test_post_produccion_m2_negativo_400(client, app):
+    """POST con m2_mes negativo → 400."""
+    app.config["FASE2_HABILITADA"] = True
+    _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+    with patch("storage.repository.get_cliente_con_conteos",
+               side_effect=_mock_get_cliente_con_conteos):
+        resp = client.post(
+            "/clientes/44/telemetria/produccion",
+            json={"anio": 2024, "mes": 6, "m2_mes": -100.0},
+        )
+    assert resp.status_code == 400
+
+
+# ── Test l ─────────────────────────────────────────────────────────────────
+def test_post_produccion_sin_autenticacion_redirige(client, app):
+    """POST sin sesión activa → before_request redirige a login (302).
+
+    El hook _require_login redirige antes de que el route pueda devolver 401.
+    """
+    app.config["FASE2_HABILITADA"] = True
+    # Sin _injectar_sesion: usuario no autenticado
+    resp = client.post(
+        "/clientes/44/telemetria/produccion",
+        json={"anio": 2024, "mes": 6, "m2_mes": 12000.0},
+    )
+    assert resp.status_code == 302
+
+
+# ── Test m ─────────────────────────────────────────────────────────────────
+def test_post_produccion_fase2_deshabilitada_404(client, app):
+    """POST con FASE2_HABILITADA=False → 404."""
+    app.config["FASE2_HABILITADA"] = False
+    _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+    # Parchea render_template para que devuelva solo HTML sin llamar a Supabase
+    def dummy_render(template, **context):
+        return "<html>Error 404</html>"
+
+    with patch("web.app.render_template", side_effect=dummy_render), \
+         patch("web.app.log_error"):
+        resp = client.post(
+            "/clientes/44/telemetria/produccion",
+            json={"anio": 2024, "mes": 6, "m2_mes": 12000.0},
+        )
+    assert resp.status_code == 404

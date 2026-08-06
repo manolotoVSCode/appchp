@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.82.0] — 2026-08-05
+
+### Añadido — Fase 2 D7-B: frontend KPIs telemetría con tabs, tarjetas, gauge PF y formulario producción
+
+- `web/templates/telemetria/dashboard.html` — reemplaza el panel de 6 tarjetas KPI horizontales por estructura de 3 pestañas Bootstrap (Energéticos / Económicos / Producción). Panes vacíos renderizados por JS; HTML sin lógica.
+- `web/static/css/telemetria.css` — añade `.kpi-grid`, `.kpi-card-v2`, `.kpi-delta-badge` (favorable/desfavorable/neutro), `.kpi-hint`, `.kpi-sparkline-wrap`, `.kpi-gauge-wrap`, `.kpi-gauge-label`.
+- `web/static/js/dashboard-telemetria.js` — nuevas funciones: `_crearSparkline`, `_renderKpiCard` (tarjeta con badge delta y sparklines duales), `_renderKpiGauge` (doughnut semicírculo Chart.js para Factor de Potencia; verde ≥ 0.90, amarillo ≥ 0.80, rojo < 0.80), `_renderFormularioProduccion` (POST asíncrono con feedback inline), `_renderKpisPaneles` (respeta `oculto_en_nodo`, `aplica_a_nodo`, `solo_en_rango`; pestaña Producción oculta en rangos 24h y 7d; estado `_tabActivo` persiste entre re-fetches). Eliminadas `_renderKPIs` y `_renderComparativa` (código muerto tras eliminación de sus elementos DOM).
+- `web/app.py` — añade `punto_medicion` al dict `nodo_seleccionado` en la respuesta JSON del endpoint `cliente_dashboard_telemetria_data`.
+- `tests/test_dashboard_telemetria.py` — 5 tests nuevos (i–m): POST producción 200 ok, 400 sin m2_mes, 400 m2_mes negativo, 302 sin auth (antes_request redirige), 404 FASE2 deshabilitada.
+
 ## [2.81.0] — 2026-08-05
 
 ### Añadido — Fase 2 D7-A v3: resolución 5-min, agregado horario, seed 207k muestras, endpoint POST producción

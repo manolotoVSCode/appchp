@@ -311,18 +311,17 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.81.0 — D7-A v3: backend KPIs telemetría con resolución
-5-min (mediciones_agregadas_5min) para 24h y horaria (mediciones_agregadas_horarias)
-para 7d/30d; seed 207,360 muestras con checkpointing + retry; kpis_paneles 10 KPIs
-(4+3+3), fuente_precio en costo_unitario, solo_en_rango en produccion; POST endpoint
-para captura manual de m²/mes.
-Pendiente: ejecutar en Supabase (si no están aplicadas aún):
+Último tema resuelto: v2.82.0 — D7-B: panel KPI tabs (Energéticos/Económicos/Producción),
+tarjetas v2 con badge delta, gauge FP (doughnut semicírculo), sparklines duales,
+formulario POST producción mensual. Pestaña Producción visible sólo en rango 30d.
+_tabActivo persiste entre re-fetches. punto_medicion añadido a nodo_seleccionado JSON.
+Pendiente del usuario: validar si fórmula pct_costo_especifico=100/m² es intencional.
+Pendiente: ejecutar migrations en Supabase:
   - 202606_usuario_clientes.sql
   - 202607_telemetria_jerarquia.sql
   - 202608_produccion_diaria.sql
   - 202609_mediciones_5min_horarias.sql
   - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
-Luego correr: python3 scripts/seed_iberica.py --forzar
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
@@ -340,6 +339,8 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.81.0 — D7-A v3 completo: vistas 5-min + horaria,
-seed 288 muestras/día, endpoint POST producción, kpis_paneles restructurado a 10 KPIs.
-Pendiente: integración MQTT/pipeline real.
+Último tema resuelto: v2.82.0 — D7-B completo: frontend KPIs tabs, gauge FP,
+sparklines, formulario producción manual. Backend: punto_medicion en nodo_seleccionado.
+Pendiente: ejecutar seed con --forzar en Supabase (si no se ejecutó); refrescar vistas
+materializadas (REFRESH MATERIALIZED VIEW CONCURRENTLY mediciones_agregadas_5min/horarias);
+frontend D7-C (si definido).
