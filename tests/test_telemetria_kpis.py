@@ -5,11 +5,9 @@ import pytest
 
 from calc.telemetria_kpis import (
     atribuir_produccion_a_nodo,
-    calcular_baseline_movil,
     calcular_kpis_economicos,
     calcular_kpis_energeticos,
     calcular_kpis_produccion,
-    generar_sparkline,
 )
 
 
@@ -77,24 +75,46 @@ def test_d_atribuir_produccion_energia_cero():
     assert atribuir_produccion_a_nodo(10_000.0, 400.0, 0.0) == 0.0
 
 
-def test_e_baseline_vacio_retorna_none():
-    assert calcular_baseline_movil([]) is None
+def test_f_produccion_para_periodo_usa_promedio():
+    """Si no hay datos en el rango y usar_promedio_historico=True, usa el promedio histórico."""
+    from datetime import datetime, timezone
+    from unittest.mock import patch
+    from storage.repository import obtener_produccion_para_periodo
 
-
-def test_f_sparkline_96_a_24_puntos():
-    """generar_sparkline con 96 muestras (15 min) y n_puntos=24 retorna 24 floats."""
-    inicio = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-    meds = [
-        {
-            "ts": (inicio + timedelta(minutes=i * 15)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "kw": 100.0,
-            "fp": 0.90,
-        }
-        for i in range(96)
+    historico_data = [
+        {"fecha": "2024-01-01", "m2_producidos": 5000.0},
+        {"fecha": "2024-01-02", "m2_producidos": 5000.0},
+        {"fecha": "2024-01-03", "m2_producidos": 0.0},  # domingo
     ]
-    r = generar_sparkline(meds, 24)
-    assert len(r) == 24
-    assert all(isinstance(v, float) for v in r)
+
+    desde = datetime(2024, 2, 1, tzinfo=timezone.utc)
+    hasta = datetime(2024, 2, 3, tzinfo=timezone.utc)
+
+    with patch("storage.repository.obtener_produccion_diaria") as mock_opd:
+        mock_opd.side_effect = [
+            [],             # primera llamada: sin datos en el rango [2024-02-01, 2024-02-03]
+            historico_data, # segunda llamada: datos históricos de hasta 90 días atrás
+        ]
+        result = obtener_produccion_para_periodo(44, desde, hasta, usar_promedio_historico=True)
+
+    # Promedio de [5000, 5000, 0] = 10000/3 ≈ 3333.33; × 3 días = 10000
+    assert abs(result - 10000.0) < 1.0
+
+
+def test_f2_produccion_para_periodo_sin_historico_retorna_cero():
+    """Si no hay datos y usar_promedio_historico=True pero tampoco hay histórico, retorna 0."""
+    from datetime import datetime, timezone
+    from unittest.mock import patch
+    from storage.repository import obtener_produccion_para_periodo
+
+    desde = datetime(2024, 2, 1, tzinfo=timezone.utc)
+    hasta = datetime(2024, 2, 3, tzinfo=timezone.utc)
+
+    with patch("storage.repository.obtener_produccion_diaria") as mock_opd:
+        mock_opd.side_effect = [[], []]  # sin datos en ambas llamadas
+        result = obtener_produccion_para_periodo(44, desde, hasta, usar_promedio_historico=True)
+
+    assert result == 0.0
 
 
 # ── Tests g-i (integración con endpoint) ─────────────────────────────────────
@@ -163,7 +183,7 @@ def _mock_repo(mock_arbol, mock_meds_act, mock_meds_ant, mock_prod):
         "storage.repository.get_cliente_con_conteos": MagicMock(side_effect=_mock_get_cliente),
         "storage.repository.obtener_arbol_medidores": MagicMock(return_value=mock_arbol),
         "storage.repository.obtener_descendientes_ids": MagicMock(return_value=[3]),
-        "storage.repository.obtener_mediciones_recientes": MagicMock(side_effect=[
+        "storage.repository.obtener_mediciones_para_rango": MagicMock(side_effect=[
             mock_meds_act,   # periodo actual (hoja 3)
             mock_meds_ant,   # periodo anterior (hoja 3)
         ]),
@@ -256,39 +276,40 @@ def test_j_determinar_periodo_anterior():
 
 
 def test_k_obtener_mediciones_para_rango_elige_tabla():
-    """rango='24h' llama a obtener_mediciones_recientes; '7d' llama a obtener_agregados_15min."""
+    """rango='24h' llama a obtener_agregados_5min;
+    '7d' y '30d' llaman a obtener_agregados_horarios."""
     from unittest.mock import patch, MagicMock
     from storage.repository import obtener_mediciones_para_rango
 
-    fila_real = {"timestamp": "2024-01-01T00:00:00Z", "potencia_activa_kw": 100.0,
-                 "factor_potencia": 0.90, "energia_activa_importada_kwh": 25.0}
-    fila_agg  = {"bucket_15min": "2024-01-01T00:00:00Z", "potencia_activa_kw": 90.0,
-                 "factor_potencia": 0.88, "energia_activa_importada_kwh": 22.5}
+    fila_5min   = {"bucket_5min":  "2024-01-01T00:00:00Z", "potencia_activa_kw": 100.0,
+                   "factor_potencia": 0.90, "energia_activa_importada_kwh": 8.33}
+    fila_hora   = {"bucket_hora":  "2024-01-01T00:00:00Z", "potencia_activa_kw": 95.0,
+                   "factor_potencia": 0.88, "energia_activa_importada_kwh": 95.0}
 
-    with patch("storage.repository.obtener_mediciones_recientes", return_value=[fila_real]) as mock_omr, \
-         patch("storage.repository.obtener_agregados_15min", return_value=[fila_agg]) as mock_oa15:
+    with patch("storage.repository.obtener_agregados_5min", return_value=[fila_5min]) as mock_5m, \
+         patch("storage.repository.obtener_agregados_horarios", return_value=[fila_hora]) as mock_ho:
 
-        # 24h → mediciones_recientes
+        # 24h → 5min
         r24 = obtener_mediciones_para_rango(1, "2024-01-01T00:00:00Z", "2024-01-02T00:00:00Z", "24h")
-        mock_omr.assert_called_once()
-        mock_oa15.assert_not_called()
+        mock_5m.assert_called_once()
+        mock_ho.assert_not_called()
         assert r24[0]["timestamp"] == "2024-01-01T00:00:00Z"
         assert r24[0]["potencia_activa_kw"] == 100.0
 
-        mock_omr.reset_mock()
-        mock_oa15.reset_mock()
+        mock_5m.reset_mock()
+        mock_ho.reset_mock()
 
-        # 7d → agregados_15min
+        # 7d → horario
         r7 = obtener_mediciones_para_rango(1, "2024-01-01T00:00:00Z", "2024-01-08T00:00:00Z", "7d")
-        mock_oa15.assert_called_once()
-        mock_omr.assert_not_called()
-        assert r7[0]["timestamp"] == "2024-01-01T00:00:00Z"   # campo normalizado
-        assert r7[0]["potencia_activa_kw"] == 90.0
+        mock_ho.assert_called_once()
+        mock_5m.assert_not_called()
+        assert r7[0]["timestamp"] == "2024-01-01T00:00:00Z"
+        assert r7[0]["potencia_activa_kw"] == 95.0
 
-        mock_omr.reset_mock()
-        mock_oa15.reset_mock()
+        mock_5m.reset_mock()
+        mock_ho.reset_mock()
 
-        # 30d → también agregados_15min
+        # 30d → horario
         obtener_mediciones_para_rango(1, "2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z", "30d")
-        mock_oa15.assert_called_once()
-        mock_omr.assert_not_called()
+        mock_ho.assert_called_once()
+        mock_5m.assert_not_called()

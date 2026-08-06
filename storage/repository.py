@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from supabase import create_client, Client
@@ -1551,6 +1551,50 @@ def obtener_agregados_15min(
     return resp.data or []
 
 
+def obtener_agregados_5min(
+    medidor_id: int,
+    desde: str,
+    hasta: str,
+) -> list[dict]:
+    """Buckets de 5 minutos en mediciones_agregadas_5min para un medidor en [desde, hasta].
+
+    Ordenados por bucket_5min ASC.
+    """
+    resp = (
+        _supabase.table("mediciones_agregadas_5min")
+        .select("*")
+        .eq("medidor_id", medidor_id)
+        .gte("bucket_5min", desde)
+        .lte("bucket_5min", hasta)
+        .order("bucket_5min", desc=False)
+        .limit(20000)
+        .execute()
+    )
+    return resp.data or []
+
+
+def obtener_agregados_horarios(
+    medidor_id: int,
+    desde: str,
+    hasta: str,
+) -> list[dict]:
+    """Buckets horarios en mediciones_agregadas_horarias para un medidor en [desde, hasta].
+
+    Ordenados por bucket_hora ASC.
+    """
+    resp = (
+        _supabase.table("mediciones_agregadas_horarias")
+        .select("*")
+        .eq("medidor_id", medidor_id)
+        .gte("bucket_hora", desde)
+        .lte("bucket_hora", hasta)
+        .order("bucket_hora", desc=False)
+        .limit(20000)
+        .execute()
+    )
+    return resp.data or []
+
+
 def crear_medidor_jerarquico(
     cliente_id: int,
     nombre: str,
@@ -1981,25 +2025,106 @@ def obtener_produccion_diaria(
     return resp.data or []
 
 
+def upsert_produccion_mes(
+    cliente_id: int,
+    anio: int,
+    mes: int,
+    m2_mes: float,
+) -> int:
+    """Distribuye m2_mes entre los días del mes ponderando por tipo de día.
+
+    Ponderación: L-V = 1.0, Sáb = 0.6, Dom = 0.0.
+    Días con peso 0 (domingo) reciben m2 = 0.
+    Retorna número de registros upserted.
+    """
+    import calendar
+    from datetime import date
+
+    n_dias = calendar.monthrange(anio, mes)[1]
+    dias = [date(anio, mes, d) for d in range(1, n_dias + 1)]
+
+    PESOS = {0: 1.0, 1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 0.6, 6: 0.0}
+    pesos = [PESOS[d.weekday()] for d in dias]
+    total_peso = sum(pesos)
+
+    if total_peso == 0:
+        return 0
+
+    registros = [
+        {
+            "cliente_id": cliente_id,
+            "fecha": dia.isoformat(),
+            "m2_producidos": round(m2_mes * peso / total_peso, 2),
+        }
+        for dia, peso in zip(dias, pesos)
+    ]
+
+    n = 0
+    for inicio in range(0, len(registros), 100):
+        lote = registros[inicio : inicio + 100]
+        _supabase.table("produccion_diaria").upsert(
+            lote, on_conflict="cliente_id,fecha"
+        ).execute()
+        n += len(lote)
+    return n
+
+
+def obtener_produccion_para_periodo(
+    cliente_id: int,
+    desde: datetime,
+    hasta: datetime,
+    usar_promedio_historico: bool = False,
+) -> float:
+    """Retorna m² producidos atribuibles al periodo [desde, hasta].
+
+    Si usar_promedio_historico=True y no hay datos en el rango,
+    calcula el promedio diario histórico (90 días previos) × días del rango.
+    """
+    from datetime import timedelta
+
+    desde_str = desde.strftime("%Y-%m-%d")
+    hasta_str = hasta.strftime("%Y-%m-%d")
+
+    registros = obtener_produccion_diaria(cliente_id, desde_str, hasta_str)
+    total = sum(float(r.get("m2_producidos") or 0) for r in registros)
+
+    if total > 0 or not usar_promedio_historico:
+        return total
+
+    dias_rango = max(1, (hasta.date() - desde.date()).days + 1)
+    limite_historico = (desde - timedelta(days=90)).strftime("%Y-%m-%d")
+    historico = obtener_produccion_diaria(
+        cliente_id,
+        limite_historico,
+        (desde - timedelta(days=1)).strftime("%Y-%m-%d"),
+    )
+    if not historico:
+        return 0.0
+
+    m2_dias = [float(r.get("m2_producidos") or 0) for r in historico]
+    promedio_diario = sum(m2_dias) / len(m2_dias)
+    return round(promedio_diario * dias_rango, 2)
+
+
 def obtener_mediciones_para_rango(
     medidor_id: int,
     desde: str,
     hasta: str,
     rango: str,
 ) -> list[dict]:
-    """Selecciona la tabla correcta según el rango y devuelve dicts homogeneizados.
+    """Selecciona la fuente correcta según el rango y devuelve dicts homogeneizados.
 
-    rango='24h': mediciones_tiempo_real (resolución real, campo 'timestamp').
-    rango='7d' o '30d': mediciones_agregadas_15min (campo 'bucket_15min').
+    rango='24h': mediciones_agregadas_5min (bucket_5min → timestamp).
+    rango='7d' o '30d': mediciones_agregadas_horarias (bucket_hora → timestamp).
 
     Campos del dict retornado:
       timestamp, potencia_activa_kw, factor_potencia, energia_activa_importada_kwh.
     """
     if rango == "24h":
-        rows = obtener_mediciones_recientes(medidor_id, desde, hasta)
+        rows = obtener_agregados_5min(medidor_id, desde, hasta)
         return [
             {
-                "timestamp": r["timestamp"],
+                "timestamp": r["bucket_5min"],
                 "potencia_activa_kw": float(r.get("potencia_activa_kw") or 0),
                 "factor_potencia": float(r.get("factor_potencia") or 0),
                 "energia_activa_importada_kwh": float(
@@ -2009,10 +2134,10 @@ def obtener_mediciones_para_rango(
             for r in rows
         ]
     else:  # 7d, 30d
-        rows = obtener_agregados_15min(medidor_id, desde, hasta)
+        rows = obtener_agregados_horarios(medidor_id, desde, hasta)
         return [
             {
-                "timestamp": r["bucket_15min"],
+                "timestamp": r["bucket_hora"],
                 "potencia_activa_kw": float(r.get("potencia_activa_kw") or 0),
                 "factor_potencia": float(r.get("factor_potencia") or 0),
                 "energia_activa_importada_kwh": float(
