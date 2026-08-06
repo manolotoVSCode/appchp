@@ -311,17 +311,13 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.80.0 — D7-A v2: histórico 60 días por CBT,
-determinar_periodo_anterior, obtener_mediciones_para_rango (enruta por
-rango a mediciones_tiempo_real o mediciones_agregadas_15min), fetch
-paralelo en endpoint (ThreadPoolExecutor), sparkline dinámico 24/7/30 pts,
-pct_costo_especifico con fórmula (pendiente validación usuario). 20/20 tests.
-Pendiente del usuario: validar si fórmula pct_costo_especifico=100/m² es intencional.
-Pendiente: ejecutar migrations en Supabase:
-  - 202606_usuario_clientes.sql
-  - 202607_telemetria_jerarquia.sql
-  - 202608_produccion_diaria.sql (nueva)
-  - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
+Último tema resuelto: v2.81.0 — D7-A v3: backend KPIs telemetría con resolución
+5-min (mediciones_agregadas_5min) para 24h y horaria (mediciones_agregadas_horarias)
+para 7d/30d; seed 207,360 muestras con checkpointing + retry; kpis_paneles 10 KPIs
+(4+3+3), fuente_precio en costo_unitario, solo_en_rango en produccion; POST endpoint
+para captura manual de m²/mes.
+Pendiente: ejecutar migration 202609_mediciones_5min_horarias.sql en Supabase,
+luego correr seed: python3 scripts/seed_iberica.py --forzar
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
@@ -339,7 +335,6 @@ Pendiente: ninguno conocido.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
-Último tema resuelto: v2.80.0 — D7-A v2 completo: fetch paralelo,
-sparkline dinámico por rango, seed 60d (69,120 muestras/planta),
-determinar_periodo_anterior, obtener_mediciones_para_rango.
-Pendiente: ejecutar seed con --forzar en Supabase; frontend D7-B.
+Último tema resuelto: v2.81.0 — D7-A v3 completo: vistas 5-min + horaria,
+seed 288 muestras/día, endpoint POST producción, kpis_paneles restructurado a 10 KPIs.
+Pendiente: integración MQTT/pipeline real.

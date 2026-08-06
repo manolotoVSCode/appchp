@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.81.0] — 2026-08-05
+
+### Añadido — Fase 2 D7-A v3: resolución 5-min, agregado horario, seed 207k muestras, endpoint POST producción
+
+- `storage/migrations/202609_mediciones_5min_horarias.sql` — nuevas vistas materializadas `mediciones_agregadas_5min` (bucket de 5 min) y `mediciones_agregadas_horarias` (bucket horario), con índices únicos por (medidor_id, bucket) y jobs pg_cron de refresco (cada 5 min / cada hora).
+- `storage/repository.py` — nuevas funciones `obtener_agregados_5min` y `obtener_agregados_horarios` que leen las nuevas vistas. `obtener_mediciones_para_rango` actualizado: rango='24h' → vista 5-min; rango='7d'/'30d' → vista horaria (antes usaba mediciones_tiempo_real y mediciones_agregadas_15min). Nuevas funciones `upsert_produccion_mes(cliente_id, anio, mes, m2_mes)` (distribuye m² por día con ponderación L-V:1.0/Sáb:0.6/Dom:0.0) y `obtener_produccion_para_periodo(cliente_id, desde, hasta, usar_promedio_historico)`.
+- `scripts/seed_iberica.py` — `_sembrar_historico_60_dias` reescrita a resolución 5-min (288 muestras/día × 60 días × 12 CBTs = 207,360 total). Añadido checkpointing en `/tmp/seed_iberica_progress.json` con retry exponencial (hasta 5 intentos, backoff 2^n segundos). Verificación de migraciones antes de sembrar. `_sembrar_mediciones` base actualizada a 5-min (intervalo=5, n=2016).
+- `calc/telemetria_costos.py` — nueva función `obtener_precio_unitario(cliente_id, anio, mes, historico_completo)` con soporte de cache pre-cargado para evitar N+1 queries.
+- `web/app.py` — `kpis_paneles` restructurado a 10 KPIs: energeticos×4 (sin indice_utilizacion_pct), economicos×3 (sin ahorro_potencial_mxn; fuente_precio añadido a costo_unitario_mxn_kwh), produccion×3 (sin pct_costo_especifico; solo_en_rango: ["30d"] en el bloque). Nuevo endpoint `POST /clientes/<id>/telemetria/produccion` con validación de input y distribución por día.
+- `tests/test_telemetria_kpis.py` — tests a-o: reemplazados test_e (→ precio_unitario con cache) y test_f (→ produccion_para_periodo con promedio histórico); actualizados test_g/h/k; añadidos test_l (solo_en_rango), test_m (POST distribución), test_n (POST validación), test_o (POST auth).
+
 ## [2.80.0] — 2026-08-05
 
 ### Añadido — Fase 2 D7-A v2: histórico 60 días, selección de fuente por rango, sparkline dinámico
