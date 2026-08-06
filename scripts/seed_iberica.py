@@ -2,8 +2,9 @@
 """Seed masivo de telemetría jerárquica — Ibérica Tiles Planta 1 (c44) y Planta 2 (c45).
 
 Uso:
-    python scripts/seed_iberica.py
-    python scripts/seed_iberica.py --forzar
+    python scripts/seed_iberica.py              # seed completo (si no existe)
+    python scripts/seed_iberica.py --forzar     # borrar y resembrar desde cero
+    python scripts/seed_iberica.py --gap        # rellenar gap temporal sin borrar nada
 """
 from __future__ import annotations
 
@@ -466,6 +467,94 @@ def _sembrar_historico_60_dias(planta: dict, forzar: bool) -> int:
     return total
 
 
+def _rellenar_gap(planta: dict) -> list[dict]:
+    """Rellena el gap temporal desde max(timestamp)+5min hasta ahora para cada CBT.
+
+    Retorna lista de dicts por CBT: {nombre, medidor_id, desde, hasta, insertadas}.
+    No borra datos existentes. Idempotente: arranca desde max(timestamp) actual.
+    """
+    from storage.repository import _supabase
+
+    cid = planta["cliente_id"]
+    ahora = datetime.now(timezone.utc).replace(microsecond=0)
+
+    resp = (
+        _supabase.table("medidores")
+        .select("*")
+        .eq("cliente_id", cid)
+        .eq("punto_medicion", "carga_final")
+        .limit(20000)
+        .execute()
+    )
+    cargas = resp.data or []
+
+    resultados = []
+    for carga in cargas:
+        mid = carga["id"]
+        nombre = carga.get("nombre", str(mid))
+
+        # Timestamp máximo existente para este medidor
+        resp_max = (
+            _supabase.table("mediciones_tiempo_real")
+            .select("timestamp")
+            .eq("medidor_id", mid)
+            .order("timestamp", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not resp_max.data:
+            resultados.append({"nombre": nombre, "medidor_id": mid,
+                                "desde": None, "hasta": None, "insertadas": 0,
+                                "nota": "sin datos previos"})
+            continue
+
+        ts_max_str = resp_max.data[0]["timestamp"]
+        # Normalizar: quitar Z o +00:00, añadir tzinfo
+        ts_max_str_clean = ts_max_str.replace("Z", "+00:00")
+        ts_max = datetime.fromisoformat(ts_max_str_clean)
+        if ts_max.tzinfo is None:
+            ts_max = ts_max.replace(tzinfo=timezone.utc)
+
+        # Primer punto del gap = max + 5 min
+        gap_desde = ts_max + timedelta(minutes=5)
+
+        if gap_desde >= ahora:
+            resultados.append({"nombre": nombre, "medidor_id": mid,
+                                "desde": gap_desde.isoformat(),
+                                "hasta": ahora.isoformat(), "insertadas": 0,
+                                "nota": "sin gap"})
+            continue
+
+        # Calcular n a intervalos de 5 minutos
+        diff_min = int((ahora - gap_desde).total_seconds() / 60)
+        n = diff_min // 5
+        if n <= 0:
+            resultados.append({"nombre": nombre, "medidor_id": mid,
+                                "desde": gap_desde.isoformat(),
+                                "hasta": ahora.isoformat(), "insertadas": 0,
+                                "nota": "gap < 5min"})
+            continue
+
+        meds = generar_mediciones_por_carga(carga, gap_desde, n=n, intervalo=5)
+
+        # Insertar en chunks de 1000
+        total_ins = 0
+        for i in range(0, len(meds), 1000):
+            total_ins += insertar_mediciones_batch(meds[i:i + 1000])
+
+        resultados.append({
+            "nombre": nombre,
+            "medidor_id": mid,
+            "desde": gap_desde.isoformat(),
+            "hasta": ahora.isoformat(),
+            "insertadas": total_ins,
+        })
+        print(f"    CBT {mid} ({nombre}): {total_ins} muestras "
+              f"[{gap_desde.strftime('%H:%M')} → {ahora.strftime('%H:%M')} UTC]")
+
+    return resultados
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Seed masivo de telemetría jerárquica Ibérica Tiles."
@@ -475,9 +564,52 @@ def main() -> None:
         action="store_true",
         help="Borrar datos existentes y resembrar desde cero.",
     )
+    parser.add_argument(
+        "--gap",
+        action="store_true",
+        help="Rellenar el gap temporal desde max(timestamp)+5min hasta ahora. "
+             "No borra datos existentes.",
+    )
     args = parser.parse_args()
 
     t0 = time.time()
+
+    # ── Modo --gap ────────────────────────────────────────────────────────────
+    if args.gap:
+        print("=== Seed Ibérica Tiles — Rellenar gap temporal ===")
+        if not _verificar_existencia():
+            print("⛔  Árbol no sembrado. Ejecutar seed completo primero.")
+            sys.exit(1)
+
+        total_gap = 0
+        for planta in PLANTAS:
+            cid = planta["cliente_id"]
+            print(f"\n→ Planta cliente_id={cid}…")
+            filas = _rellenar_gap(planta)
+            total_gap += sum(r["insertadas"] for r in filas)
+
+        # Refrescar vistas materializadas
+        from storage.repository import _supabase
+        print("\n→ Refrescando vistas materializadas…")
+        try:
+            _supabase.rpc("refresh_mediciones_5min", {}).execute()
+            print("    mediciones_agregadas_5min: OK")
+        except Exception:
+            pass
+        try:
+            _supabase.rpc("refresh_mediciones_horarias", {}).execute()
+            print("    mediciones_agregadas_horarias: OK")
+        except Exception:
+            pass
+        print("    (Si las RPCs no existen, ejecutar manualmente:")
+        print("     REFRESH MATERIALIZED VIEW CONCURRENTLY mediciones_agregadas_5min;")
+        print("     REFRESH MATERIALIZED VIEW CONCURRENTLY mediciones_agregadas_horarias;)")
+
+        elapsed = time.time() - t0
+        print(f"\n=== Gap rellenado en {elapsed:.1f}s — {total_gap} muestras totales ===")
+        sys.exit(0)
+
+    # ── Modo normal / --forzar ────────────────────────────────────────────────
     print("=== Seed Ibérica Tiles — Telemetría jerárquica ===")
 
     if _verificar_existencia():
