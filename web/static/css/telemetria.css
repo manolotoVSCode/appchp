@@ -52,3 +52,95 @@
 .unifilar-se-agrupacion > .unifilar-fondo {
   stroke-dasharray: 4 3;
 }
+
+/* ── D7-B: KPI paneles con tabs ──────────────────────────────────────────── */
+
+#kpi-tabs .nav-link {
+  font-size: .76rem;
+  padding: .28rem .55rem;
+}
+
+/* Grid de una columna para las tarjetas */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .45rem;
+  padding: .2rem 0;
+}
+
+/* Tarjeta KPI v2 */
+.kpi-card-v2 {
+  border-left: 3px solid #2E5C8A;
+  padding: .3rem .55rem;
+  background: #f8fafc;
+  border-radius: 0 4px 4px 0;
+}
+.kpi-card-v2 .kpi-label-v2 {
+  font-size: .68rem;
+  color: #6b7280;
+  margin-bottom: .08rem;
+  line-height: 1.2;
+}
+.kpi-card-v2 .kpi-value-v2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1F3A5F;
+  line-height: 1.2;
+}
+.kpi-card-v2 .kpi-unit-v2 {
+  font-size: .68rem;
+  color: #6b7280;
+  margin-left: .2rem;
+}
+
+/* Badge de variación vs periodo anterior */
+.kpi-delta-badge {
+  font-size: .65rem;
+  padding: .08rem .28rem;
+  border-radius: 3px;
+  margin-left: .3rem;
+  vertical-align: middle;
+}
+.kpi-delta-badge.favorable    { background: #d1fae5; color: #065f46; }
+.kpi-delta-badge.desfavorable { background: #fee2e2; color: #991b1b; }
+.kpi-delta-badge.neutro       { background: #f3f4f6; color: #374151; }
+
+/* Hint de fuente de precio */
+.kpi-hint {
+  font-size: .62rem;
+  color: #9ca3af;
+  margin-top: .1rem;
+  line-height: 1.2;
+}
+
+/* Sparklines duales: actual (azul) + anterior (gris) */
+.kpi-sparkline-wrap {
+  display: flex;
+  gap: 2px;
+  margin-top: .2rem;
+  height: 32px;
+  align-items: flex-end;
+}
+.kpi-sparkline-wrap canvas {
+  flex: 1;
+  height: 32px !important;
+  max-height: 32px;
+}
+
+/* Gauge de Factor de Potencia (doughnut semicírculo) */
+.kpi-gauge-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 110px;
+  margin: .15rem auto 0;
+}
+.kpi-gauge-label {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  text-align: center;
+  font-size: .78rem;
+  font-weight: 700;
+  color: #1F3A5F;
+  pointer-events: none;
+}

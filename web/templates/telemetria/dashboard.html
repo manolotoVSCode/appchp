@@ -75,50 +75,31 @@
     </div>
     <div class="col-lg-4 mb-3">
       <div class="card border-0 shadow-sm h-100">
-        <div class="card-body">
-          <h6 class="text-muted mb-3">KPIs del periodo</h6>
-          <div class="kpi-panel d-flex flex-column gap-3">
-            <div class="kpi-card border-start border-primary border-3 ps-3">
-              <div class="kpi-label text-muted small">Energía en el periodo</div>
-              <div class="d-flex align-items-end gap-1">
-                <span class="kpi-value fs-4 fw-bold" id="kpi-energia">—</span>
-                <span class="kpi-unit text-muted small mb-1">kWh</span>
-              </div>
-            </div>
-            <div class="kpi-card border-start border-success border-3 ps-3">
-              <div class="kpi-label text-muted small">Demanda pico (15 min)</div>
-              <div class="d-flex align-items-end gap-1">
-                <span class="kpi-value fs-4 fw-bold" id="kpi-demanda">—</span>
-                <span class="kpi-unit text-muted small mb-1">kW</span>
-              </div>
-            </div>
-            <div class="kpi-card border-start border-warning border-3 ps-3">
-              <div class="kpi-label text-muted small">Factor de potencia promedio</div>
-              <div class="d-flex align-items-end gap-1">
-                <span class="kpi-value fs-4 fw-bold" id="kpi-fp">—</span>
-              </div>
-            </div>
-            <div class="kpi-card border-start border-secondary border-3 ps-3">
-              <div class="kpi-label text-muted small">Muestras registradas</div>
-              <div class="d-flex align-items-end gap-1">
-                <span class="kpi-value fs-4 fw-bold" id="kpi-muestras">—</span>
-              </div>
-            </div>
-            <div class="kpi-card border-start border-danger border-3 ps-3">
-              <div class="kpi-label text-muted small">Costo en el periodo</div>
-              <div class="d-flex align-items-end gap-1">
-                <span class="kpi-value fs-4 fw-bold" id="kpi-costo">—</span>
-                <span class="kpi-unit text-muted small mb-1">MXN</span>
-              </div>
-              <div id="kpi-costo-hint" style="font-size:.7rem;color:#6c757d;margin-top:.25rem"></div>
-            </div>
-            <div class="kpi-card border-start border-info border-3 ps-3">
-              <div class="kpi-label text-muted small">vs. mes anterior</div>
-              <div class="d-flex align-items-end gap-1">
-                <span class="kpi-value fs-4 fw-bold" id="kpi-delta">—</span>
-              </div>
-              <div id="kpi-delta-hint" style="font-size:.7rem;color:#6c757d;margin-top:.25rem"></div>
-            </div>
+        <div class="card-body p-2">
+          <ul class="nav nav-tabs nav-tabs-sm mb-2" id="kpi-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="tab-energeticos"
+                      type="button" role="tab"
+                      data-tab="energeticos">Energéticos</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-economicos"
+                      type="button" role="tab"
+                      data-tab="economicos">Económicos</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-produccion"
+                      type="button" role="tab"
+                      data-tab="produccion">Producción</button>
+            </li>
+          </ul>
+          <div class="tab-content" id="kpi-tab-content">
+            <div class="tab-pane show active" id="pane-energeticos" role="tabpanel"
+                 aria-labelledby="tab-energeticos"></div>
+            <div class="tab-pane" id="pane-economicos" role="tabpanel"
+                 aria-labelledby="tab-economicos"></div>
+            <div class="tab-pane" id="pane-produccion" role="tabpanel"
+                 aria-labelledby="tab-produccion"></div>
           </div>
         </div>
       </div>
