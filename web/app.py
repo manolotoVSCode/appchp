@@ -3112,6 +3112,7 @@ def create_app() -> Flask:
             "nodo_seleccionado": {
                 "id": nodo["id"],
                 "nombre": nodo["nombre"],
+                "punto_medicion": nodo.get("punto_medicion"),
                 "ruta_breadcrumbs": _breadcrumbs(nodo),
             },
             "serie_temporal": {

@@ -208,6 +208,167 @@
     });
   }
 
+  // ── Formulario de captura de producción mensual ──────────────────────────
+  function _renderFormularioProduccion(anio, mes) {
+    const wrap = document.createElement("div");
+    wrap.className = "mt-3 pt-2 border-top";
+    wrap.innerHTML = `
+      <p class="small text-muted mb-1" style="font-size:.7rem">
+        Captura producción del mes ${mes}/${anio} (m²):
+      </p>
+      <div class="d-flex gap-2 align-items-center">
+        <input type="number" id="prod-m2-input" class="form-control form-control-sm"
+               placeholder="m²" min="0" step="0.01" style="max-width:88px">
+        <button type="button" id="btn-guardar-prod" class="btn btn-sm btn-primary">
+          Guardar
+        </button>
+      </div>
+      <div id="prod-feedback" class="mt-1" style="min-height:1.1em;font-size:.68rem"></div>
+    `;
+
+    // El listener se registra en el próximo tick para que el elemento esté en el DOM
+    requestAnimationFrame(() => {
+      const btn   = document.getElementById("btn-guardar-prod");
+      const input = document.getElementById("prod-m2-input");
+      const fb    = document.getElementById("prod-feedback");
+      if (!btn || !input) return;
+
+      btn.addEventListener("click", async () => {
+        const m2 = parseFloat(input.value);
+        if (isNaN(m2) || m2 < 0) {
+          if (fb) { fb.textContent = "Ingresa un valor válido ≥ 0."; fb.style.color = "#dc3545"; }
+          return;
+        }
+        btn.disabled = true;
+        if (fb) { fb.textContent = "Guardando…"; fb.style.color = "#6b7280"; }
+        try {
+          const resp = await fetch(
+            `/clientes/${CLIENTE_ID}/telemetria/produccion`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ anio, mes, m2_mes: m2 }),
+            }
+          );
+          const json = await resp.json().catch(() => ({}));
+          if (!resp.ok) {
+            if (fb) { fb.textContent = json.error || `Error ${resp.status}`; fb.style.color = "#dc3545"; }
+          } else {
+            if (fb) { fb.textContent = `Guardado: ${json.registros} registros.`; fb.style.color = "#198754"; }
+            input.value = "";
+          }
+        } catch (e) {
+          if (fb) { fb.textContent = "Error de red."; fb.style.color = "#dc3545"; }
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+    return wrap;
+  }
+
+  // ── Panel principal de KPIs con tabs ─────────────────────────────────────
+  function _renderKpisPaneles(kpisPaneles, nodoTipo, rango) {
+    if (!kpisPaneles) return;
+    _destroySparklines();
+
+    const panes = {
+      energeticos: $("pane-energeticos"),
+      economicos:  $("pane-economicos"),
+      produccion:  $("pane-produccion"),
+    };
+    const tabBtns = {
+      energeticos: $("tab-energeticos"),
+      economicos:  $("tab-economicos"),
+      produccion:  $("tab-produccion"),
+    };
+
+    // Limpiar panes
+    Object.values(panes).forEach((p) => { if (p) p.innerHTML = ""; });
+
+    // Pestaña Producción: visible sólo cuando rango está en solo_en_rango
+    const soloEnRango = kpisPaneles.produccion && kpisPaneles.produccion.solo_en_rango;
+    const produccionVisible = !soloEnRango || soloEnRango.includes(rango);
+    if (tabBtns.produccion) tabBtns.produccion.style.display = produccionVisible ? "" : "none";
+    // Si la tab activa era producción y ahora no es visible, redirigir a energéticos
+    if (!produccionVisible && _tabActivo === "produccion") _tabActivo = "energeticos";
+
+    // Render de cada grupo de KPIs
+    const grupos = ["energeticos", "economicos"];
+    if (produccionVisible) grupos.push("produccion");
+
+    grupos.forEach((grupo) => {
+      const kpis = kpisPaneles[grupo];
+      if (!kpis || !panes[grupo]) return;
+
+      const grid = document.createElement("div");
+      grid.className = "kpi-grid";
+
+      Object.entries(kpis).forEach(([key, kpi]) => {
+        // Saltar claves meta del grupo (e.g. solo_en_rango)
+        if (key === "solo_en_rango") return;
+        if (!kpi || typeof kpi !== "object" || !("actual" in kpi)) return;
+
+        if (kpi.es_gauge) {
+          // Gauge: tarjeta con canvas semicírculo
+          const gaugeId = `gauge-${key}`;
+          const m = _KPI_META[key] || { label: key };
+          const wrap = document.createElement("div");
+          wrap.className = "kpi-card-v2";
+          const valStr = kpi.actual != null
+            ? Number(kpi.actual).toLocaleString("es-MX",
+                { maximumFractionDigits: 3, minimumFractionDigits: 3 })
+            : "—";
+          wrap.innerHTML = `
+            <div class="kpi-label-v2">${m.label}</div>
+            <div class="kpi-gauge-wrap">
+              <canvas id="${gaugeId}"></canvas>
+              <div class="kpi-gauge-label">${valStr}</div>
+            </div>
+          `;
+          grid.appendChild(wrap);
+          requestAnimationFrame(() => _renderKpiGauge(gaugeId, kpi));
+        } else {
+          const card = _renderKpiCard(key, kpi, nodoTipo);
+          if (card) grid.appendChild(card);
+        }
+      });
+
+      panes[grupo].appendChild(grid);
+
+      // Sparklines: registrar tras inserción en DOM
+      requestAnimationFrame(() => {
+        Object.entries(kpis).forEach(([key, kpi]) => {
+          if (!kpi || typeof kpi !== "object" || kpi.es_gauge) return;
+          if (kpi.sparkline_actual && kpi.sparkline_actual.length > 0) {
+            const cAct = document.getElementById(`sp-${key}-act`);
+            if (cAct) _sparkInstances.set(`sp-${key}-act`,
+              _crearSparkline(cAct, kpi.sparkline_actual, C_PRIMARIO_L));
+          }
+          if (kpi.sparkline_anterior && kpi.sparkline_anterior.length > 0) {
+            const cAnt = document.getElementById(`sp-${key}-ant`);
+            if (cAnt) _sparkInstances.set(`sp-${key}-ant`,
+              _crearSparkline(cAnt, kpi.sparkline_anterior, "#9ca3af"));
+          }
+        });
+      });
+    });
+
+    // Formulario de producción en la pestaña Producción (rango 30d)
+    if (produccionVisible && panes.produccion) {
+      const meta  = kpisPaneles.meta || {};
+      const hasta = meta.periodo_actual_hasta
+        ? new Date(meta.periodo_actual_hasta)
+        : new Date();
+      const anio = hasta.getFullYear();
+      const mes  = hasta.getMonth() + 1;
+      panes.produccion.appendChild(_renderFormularioProduccion(anio, mes));
+    }
+
+    // Restaurar pestaña activa (persiste entre re-fetches)
+    _activarTab(_tabActivo);
+  }
+
   // ── Fetch central ──────────────────────────────────────────────────────────
   async function fetchDatos() {
     if (_abort) _abort.abort();
@@ -243,11 +404,14 @@
   // ── Render completo ────────────────────────────────────────────────────────
   function _renderTodo(data) {
     _renderBreadcrumbs(data.nodo_seleccionado);
-    _renderKPIs(data.kpis);
+    _renderKpisPaneles(
+      data.kpis_paneles,
+      data.nodo_seleccionado.punto_medicion,
+      _rango,
+    );
     _renderUnifilar(data.arbol_sunburst);
     _renderSerie(data.serie_temporal, data.nodo_seleccionado.nombre);
     $("titulo-nodo").textContent = data.nodo_seleccionado.nombre;
-    _renderComparativa(data.comparativa_mes_anterior);
   }
 
   // ── Breadcrumbs ────────────────────────────────────────────────────────────
@@ -275,53 +439,6 @@
       }
       ol.appendChild(li);
     });
-  }
-
-  // ── KPIs ───────────────────────────────────────────────────────────────────
-  function _renderKPIs(kpis) {
-    $("kpi-energia").textContent  = fmt(kpis.energia_total_kwh);
-    $("kpi-demanda").textContent  = fmt(kpis.demanda_pico_kw);
-    $("kpi-fp").textContent       = fmt(kpis.factor_potencia_promedio, 3);
-    $("kpi-muestras").textContent = kpis.num_muestras != null
-      ? kpis.num_muestras.toLocaleString("es-MX") : "—";
-
-    const costEl = $("kpi-costo");
-    const hintEl = $("kpi-costo-hint");
-    if (costEl) costEl.textContent = kpis.costo_mxn != null ? fmt(kpis.costo_mxn) : "N/D";
-    if (hintEl) {
-      const ref = kpis.precio_mes_referencia;
-      const hints = {
-        "factura_mes_exacto":   `Precio de ${ref || ""}`,
-        "factura_mes_anterior": `Precio est. último mes disponible (${ref || ""})`,
-        "promedio_12m":         "Precio promedio de los últimos 12 meses",
-        "sin_datos":            "Sin facturas registradas para este cliente",
-      };
-      hintEl.textContent = hints[kpis.precio_fuente] || "";
-    }
-  }
-
-  // ── Comparativa ────────────────────────────────────────────────────────────
-  function _renderComparativa(comp) {
-    const deltaEl = $("kpi-delta");
-    const hintEl  = $("kpi-delta-hint");
-    if (!deltaEl) return;
-    if (!comp || !comp.disponible) {
-      deltaEl.textContent = "N/D"; deltaEl.style.color = "";
-      if (hintEl) hintEl.textContent = "Sin datos del mes anterior";
-      return;
-    }
-    const pct = comp.energia_delta_pct;
-    if (pct == null) { deltaEl.textContent = "N/D"; deltaEl.style.color = ""; }
-    else {
-      deltaEl.textContent = `${pct >= 0 ? "+" : ""}${pct.toLocaleString("es-MX", { maximumFractionDigits: 1 })}%`;
-      deltaEl.style.color = pct > 0 ? "#dc3545" : "#198754";
-    }
-    if (hintEl) {
-      const eStr = pct != null ? `Energía: ${pct >= 0 ? "+" : ""}${pct}%` : "";
-      const cStr = comp.costo_delta_pct != null
-        ? ` | Costo: ${comp.costo_delta_pct >= 0 ? "+" : ""}${comp.costo_delta_pct}%` : "";
-      hintEl.textContent = eStr + cStr;
-    }
   }
 
   // ── Serie temporal ─────────────────────────────────────────────────────────
