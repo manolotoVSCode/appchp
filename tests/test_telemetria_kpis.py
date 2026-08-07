@@ -290,10 +290,11 @@ def test_k_obtener_mediciones_para_rango_elige_tabla():
     from unittest.mock import patch, MagicMock
     from storage.repository import obtener_mediciones_para_rango
 
-    fila_5min   = {"bucket_5min":  "2024-01-01T00:00:00Z", "potencia_activa_kw": 100.0,
-                   "factor_potencia": 0.90, "energia_activa_importada_kwh": 8.33}
-    fila_hora   = {"bucket_hora":  "2024-01-01T00:00:00Z", "potencia_activa_kw": 95.0,
-                   "factor_potencia": 0.88, "energia_activa_importada_kwh": 95.0}
+    # Mocks con los nombres reales de las vistas materializadas
+    fila_5min   = {"bucket_5min":  "2024-01-01T00:00:00Z", "potencia_activa_promedio_kw": 100.0,
+                   "factor_potencia_promedio": 0.90, "energia_importada_periodo_kwh": 8.33}
+    fila_hora   = {"bucket_hora":  "2024-01-01T00:00:00Z", "potencia_activa_promedio_kw": 95.0,
+                   "factor_potencia_promedio": 0.88, "energia_importada_periodo_kwh": 95.0}
 
     with patch("storage.repository.obtener_agregados_5min", return_value=[fila_5min]) as mock_5m, \
          patch("storage.repository.obtener_agregados_horarios", return_value=[fila_hora]) as mock_ho:

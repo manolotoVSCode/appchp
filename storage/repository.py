@@ -2160,10 +2160,13 @@ def obtener_mediciones_para_rango(
         return [
             {
                 "timestamp": r["bucket_5min"],
-                "potencia_activa_kw": float(r.get("potencia_activa_kw") or 0),
-                "factor_potencia": float(r.get("factor_potencia") or 0),
+                # Vista usa potencia_activa_promedio_kw (no potencia_activa_kw)
+                "potencia_activa_kw": float(r.get("potencia_activa_promedio_kw") or 0),
+                # Vista usa factor_potencia_promedio (no factor_potencia)
+                "factor_potencia": float(r.get("factor_potencia_promedio") or 0),
+                # Vista usa energia_importada_periodo_kwh (no energia_activa_importada_kwh)
                 "energia_activa_importada_kwh": float(
-                    r.get("energia_activa_importada_kwh") or 0
+                    r.get("energia_importada_periodo_kwh") or 0
                 ),
             }
             for r in rows
@@ -2173,10 +2176,10 @@ def obtener_mediciones_para_rango(
         return [
             {
                 "timestamp": r["bucket_hora"],
-                "potencia_activa_kw": float(r.get("potencia_activa_kw") or 0),
-                "factor_potencia": float(r.get("factor_potencia") or 0),
+                "potencia_activa_kw": float(r.get("potencia_activa_promedio_kw") or 0),
+                "factor_potencia": float(r.get("factor_potencia_promedio") or 0),
                 "energia_activa_importada_kwh": float(
-                    r.get("energia_activa_importada_kwh") or 0
+                    r.get("energia_importada_periodo_kwh") or 0
                 ),
             }
             for r in rows

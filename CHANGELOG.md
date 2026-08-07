@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.82.2] — 2026-08-07
+
+### Corregido — Homogeneización de nombres de columnas entre vistas agregadas y tabla raw
+
+- `storage/repository.py` — `obtener_mediciones_para_rango`: las vistas materializadas
+  `mediciones_agregadas_5min` y `mediciones_agregadas_horarias` exponen
+  `potencia_activa_promedio_kw`, `factor_potencia_promedio` y
+  `energia_importada_periodo_kwh`, distintos a los de `mediciones_tiempo_real`.
+  El código leía los nombres de la tabla raw, obtenía `None` y caía al default 0.
+  Corregido: los tres campos se leen con los nombres reales de las vistas y se
+  renombran a los canónicos (`potencia_activa_kw`, `factor_potencia`,
+  `energia_activa_importada_kwh`) que consume el resto de la aplicación.
+  Aplica a ambas ramas (24h → 5min; 7d/30d → horaria).
+
 ## [2.82.1] — 2026-08-06
 
 ### Corregido — Saturación de conexiones HTTP/2 a Supabase en endpoint de telemetría
