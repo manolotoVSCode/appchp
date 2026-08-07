@@ -509,11 +509,10 @@ def _rellenar_gap(planta: dict) -> list[dict]:
             continue
 
         ts_max_str = resp_max.data[0]["timestamp"]
-        # Normalizar: quitar Z o +00:00, añadir tzinfo
-        ts_max_str_clean = ts_max_str.replace("Z", "+00:00")
-        ts_max = datetime.fromisoformat(ts_max_str_clean)
-        if ts_max.tzinfo is None:
-            ts_max = ts_max.replace(tzinfo=timezone.utc)
+        # Supabase devuelve UTC con variantes "+00", "+00:00" o "Z".
+        # Stripeamos cualquier offset y forzamos UTC para compatibilidad Python 3.9+.
+        ts_naive_str = ts_max_str.replace("Z", "").split("+")[0].strip()
+        ts_max = datetime.fromisoformat(ts_naive_str).replace(tzinfo=timezone.utc)
 
         # Primer punto del gap = max + 5 min
         gap_desde = ts_max + timedelta(minutes=5)
