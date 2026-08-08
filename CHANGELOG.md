@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.83.1] — 2026-08-08
+
+### Fix — Elimina POST automático en pestaña Producción (bucle infinito)
+
+- `web/static/js/dashboard-telemetria.js`: eliminado el auto-submit al
+  cargar la pestaña Producción. El input se pre-rellena con 1,200,000 (o
+  el valor existente) pero no envía nada hasta que el usuario hace click
+  en Guardar. Se añade texto de ayuda: "Ingresa m² totales del mes y haz
+  click en Guardar para calcular los KPIs de producción."
+- El flujo manual (Guardar → POST → fetchDatos una sola vez) se preserva.
+- No hay lógica de auto-seed en fetchDatos; el bucle queda eliminado.
+
+---
+
 ## [2.83.0] — 2026-08-08
 
 ### Fix integral — Producción mensual: fórmula de distribución, NUMERIC(12,2), default dinámico 1.2M

@@ -243,6 +243,9 @@
           Guardar
         </button>
       </div>
+      <p class="text-muted mb-0 mt-1" style="font-size:.65rem">
+        Ingresa m² totales del mes y haz click en Guardar para calcular los KPIs de producción.
+      </p>
       <div id="prod-feedback" class="mt-1" style="min-height:1.1em;font-size:.68rem"></div>
     `;
 
@@ -252,7 +255,7 @@
       const fb    = document.getElementById("prod-feedback");
       if (!btn || !input) return;
 
-      const _guardar = async () => {
+      btn.addEventListener("click", async () => {
         const m2 = parseFloat(input.value);
         if (isNaN(m2) || m2 <= 0) {
           if (fb) { fb.textContent = "Ingresa un valor válido > 0."; fb.style.color = "#dc3545"; }
@@ -274,14 +277,7 @@
         } finally {
           btn.disabled = false;
         }
-      };
-
-      btn.addEventListener("click", _guardar);
-
-      // Auto-submit solo si no había datos previos (m2Existente == null)
-      if (m2Existente == null) {
-        _guardar();
-      }
+      });
     });
     return wrap;
   }
