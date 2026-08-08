@@ -1,5 +1,52 @@
 # Changelog
 
+## [2.84.0] — 2026-08-08
+
+### Feat — Migración estructural a jerarquía cliente → planta → recursos
+
+Introduce la entidad `plantas` como nivel intermedio entre `clientes` y
+todos los recursos operativos. Infraestructura DDL + scripts de migración y
+verificación de datos. El backend continúa operando por `cliente_id`; la
+integración de `planta_id` en queries, sidebar y dashboards es la Entrega 2.
+
+**`storage/migrations/202610_plantas.sql`** — DDL (ejecutar en Supabase SQL Editor)
+- Crea tabla `plantas(id, cliente_id, nombre, activo, created_at, updated_at,
+  direccion_planta, notas)` con UNIQUE(cliente_id, nombre) e índice en cliente_id.
+- Añade columna `activo BOOLEAN DEFAULT true` a `clientes`.
+- Añade columna `planta_id BIGINT REFERENCES plantas(id) ON DELETE SET NULL`
+  (nullable) e índice asociado a: `contratos`, `cfe_facturas`, `gas_facturas`,
+  `facturas_electricidad_calificado`, `ppa_bloques_mensuales`, `medidores`,
+  `produccion_diaria`. Las tablas con relación transitiva (cfe_periodos,
+  gas_conceptos, contrato_meses_seleccionados, etc.) no reciben planta_id.
+
+**`storage/migrations/202610_plantas_rollback.sql`** — DDL de reversión
+- Elimina planta_id de todas las tablas operativas y hace DROP TABLE plantas CASCADE.
+- Elimina columna activo de clientes.
+
+**`scripts/migrar_a_plantas.py`** — Migración de datos (DML)
+- Caso especial IBÉRICA TILES: renombra cliente 45 a "IBÉRICA TILES", crea
+  "Planta 1" y "Planta 2" en cliente 45, migra todos los recursos del cliente
+  44 → cliente 45 con planta_id=Planta 1, asigna planta_id=Planta 2 a recursos
+  originales del 45, marca cliente 44 como inactivo, elimina entrada de
+  usuario_clientes para cliente 44.
+- Caso general: crea "Planta Principal" por cada cliente activo (excluido
+  Ibérica) y asigna planta_id en todas las tablas operativas.
+- Idempotente: detecta plantas existentes antes de crear. Flag `--forzar`
+  limpia y rehace desde cero.
+- Verificación rápida post-migración: reporta NULLs en planta_id por tabla.
+
+**`scripts/verificar_migracion_plantas.py`** — Auditoría post-migración
+- Reporte de 5 secciones: clientes activos/inactivos, plantas por cliente,
+  planta_id NULL por tabla operativa (esperado 0), consistencia
+  cliente_id ↔ plantas.cliente_id, usuarios en user_profiles y usuario_clientes.
+
+**Instrucciones de despliegue:**
+1. Ejecutar `storage/migrations/202610_plantas.sql` en Supabase SQL Editor.
+2. Ejecutar `python3 scripts/migrar_a_plantas.py` contra Supabase.
+3. Ejecutar `python3 scripts/verificar_migracion_plantas.py` para confirmar 0 NULLs.
+
+---
+
 ## [2.83.1] — 2026-08-08
 
 ### Fix — Elimina POST automático en pestaña Producción (bucle infinito)
