@@ -2761,8 +2761,14 @@ def create_app() -> Flask:
         if not todas_hojas_ids:
             todas_hojas_ids = hojas_ids_nodo
 
-        # Calcular ventana temporal
-        ahora = datetime.now(timezone.utc)
+        # Calcular ventana temporal.
+        # DEUDA TÉCNICA: usa max(timestamp) como ancla para que la demo con datos
+        # sintéticos siempre muestre información sin re-seeds periódicos.
+        # Revertir a datetime.now(timezone.utc) cuando entren medidores físicos con MQTT.
+        from storage.repository import obtener_ultimo_timestamp_cliente as _outc
+        _ts_max = _outc(cliente_id)
+        ahora = _ts_max if _ts_max is not None else datetime.now(timezone.utc)
+        modo_temporal = "sintetico" if _ts_max is not None else "tiempo_real"
         if rango == "7d":
             desde = ahora - timedelta(days=7)
         elif rango == "30d":
@@ -3108,6 +3114,7 @@ def create_app() -> Flask:
                 "periodo_anterior_hasta": hasta_ant_iso,
                 "periodo_anterior_etiqueta": etiqueta_ant,
                 "n_puntos_sparkline": _N_SPARK,
+                "modo_temporal": modo_temporal,
             },
         }
 

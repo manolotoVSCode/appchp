@@ -185,6 +185,8 @@ _MEDS = [
 
 def _mock_repo(mock_arbol, mock_meds_act, mock_meds_ant, mock_prod):
     """Retorna dict de patches para el endpoint de telemetría."""
+    from datetime import datetime, timezone
+    _ts_fijo = datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
     return {
         "storage.repository.get_cliente_con_conteos": MagicMock(side_effect=_mock_get_cliente),
         "storage.repository.obtener_arbol_medidores": MagicMock(return_value=mock_arbol),
@@ -194,6 +196,8 @@ def _mock_repo(mock_arbol, mock_meds_act, mock_meds_ant, mock_prod):
             mock_meds_ant,   # periodo anterior (hoja 3)
         ]),
         "storage.repository.obtener_produccion_diaria": MagicMock(return_value=mock_prod),
+        # Ancla temporal sintética: devuelve timestamp fijo para no depender de now()
+        "storage.repository.obtener_ultimo_timestamp_cliente": MagicMock(return_value=_ts_fijo),
         "calc.telemetria_costos.calcular_costo_periodo": MagicMock(return_value={
             "costo_mxn": 5000.0, "precio_mxn_kwh": 2.5,
             "fuente": "factura_mes_exacto", "mes_referencia": "2024-01",

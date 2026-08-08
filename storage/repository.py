@@ -1630,6 +1630,41 @@ def obtener_agregados_horarios(
     return _ejecutar_con_reintentos(_query)
 
 
+def obtener_ultimo_timestamp_cliente(cliente_id: int) -> "datetime | None":
+    """Timestamp máximo en mediciones_tiempo_real para todos los medidores del cliente.
+
+    Retorna None si el cliente no tiene mediciones.
+    Usado como ancla temporal en modo demo (datos sintéticos sin re-seed continuo).
+    DEUDA TÉCNICA: revertir a datetime.now() cuando entren medidores físicos con MQTT.
+    """
+    from datetime import timezone as _tz
+    resp = (
+        _supabase.table("medidores")
+        .select("id")
+        .eq("cliente_id", cliente_id)
+        .limit(20000)
+        .execute()
+    )
+    ids = [r["id"] for r in (resp.data or [])]
+    if not ids:
+        return None
+
+    resp2 = (
+        _supabase.table("mediciones_tiempo_real")
+        .select("timestamp")
+        .in_("medidor_id", ids)
+        .order("timestamp", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not resp2.data:
+        return None
+
+    ts_str = resp2.data[0]["timestamp"]
+    ts_naive = ts_str.replace("Z", "").split("+")[0].strip()
+    return datetime.fromisoformat(ts_naive).replace(tzinfo=_tz.utc)
+
+
 def crear_medidor_jerarquico(
     cliente_id: int,
     nombre: str,

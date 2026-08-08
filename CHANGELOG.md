@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.82.5] — 2026-08-08
+
+### Corregido — Ancla temporal del dashboard de telemetría desacoplada del reloj real
+
+- `storage/repository.py` — nueva función `obtener_ultimo_timestamp_cliente(cliente_id)`:
+  retorna `max(timestamp)` de `mediciones_tiempo_real` para todos los medidores del cliente.
+  Usado como "ahora" en la ventana temporal del endpoint en modo demo.
+- `web/app.py` — `cliente_dashboard_telemetria_data`: sustituye `datetime.now()` por
+  `obtener_ultimo_timestamp_cliente()` con fallback a `now()`. Añade `modo_temporal`
+  (`"sintetico"` | `"tiempo_real"`) en `kpis_paneles.meta`. Elimina el desfase entre datos
+  sintéticos del seed y el reloj real, que causaba ceros cuando pasaban >24h sin re-seed.
+  **DEUDA TÉCNICA REVERSIBLE:** revertir a `datetime.now()` cuando entren medidores físicos
+  con MQTT continuo. Ver `CLAUDE.md` sección "Deuda técnica temporal".
+- `CLAUDE.md` — documenta la deuda técnica con instrucción de reversión.
+- Tests: `_mock_repo` y `_patch_costo` añaden mock de `obtener_ultimo_timestamp_cliente`
+  con timestamp fijo para aislar los tests de llamadas reales a Supabase.
+
 ## [2.82.4] — 2026-08-08
 
 ### Corregido — Saturación de sockets Supabase (Errno 11 EAGAIN) y regresión pestaña Producción

@@ -123,6 +123,14 @@ Archivos clave:
 
 Tests: sesión se inyecta directamente con `client.session_transaction()` (no llamar a Supabase). Ver `tests/test_auth.py`.
 
+## Deuda técnica temporal — Ancla temporal del dashboard de telemetría (D7-B)
+
+El endpoint `/telemetria/data` usa `max(timestamp)` de `mediciones_tiempo_real` como "ahora" en lugar de `datetime.now()`. Esto permite que la demo con datos sintéticos siempre muestre información sin depender de re-seeds periódicos.
+
+Cuando entren medidores físicos con envío continuo de mediciones vía MQTT (entrega D7-C/IoT pendiente), revertir a `datetime.now(timezone.utc)` ya que la diferencia entre `max(timestamp)` y `now()` será de segundos, no días.
+
+Cambio a revertir: `web/app.py`, función `cliente_dashboard_telemetria_data`, línea `ahora = _ts_max if _ts_max is not None else datetime.now(timezone.utc)`. El campo `meta.modo_temporal` del JSON indicará `"sintetico"` mientras aplique esta deuda, `"tiempo_real"` cuando se revierta.
+
 ## Seguridad y deuda técnica reconocida
 
 La aplicación usa la clave service_role de Supabase, que bypasea Row Level Security. Esto es deuda técnica explícita y aceptada para fase 1. La clave service_role debe vivir exclusivamente en variables de entorno del servidor backend.
