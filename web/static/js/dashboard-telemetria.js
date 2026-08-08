@@ -141,10 +141,13 @@
     const unitHtml = m.unit ? `<span class="kpi-unit-v2">${m.unit}</span>` : "";
 
     const hasSpark = kpi.sparkline_actual && kpi.sparkline_actual.length > 0;
+    // energia_kwh muestra solo el periodo actual; quitar sparkline_anterior evita
+    // confusión con una segunda línea de referencia/facturación.
+    const mostrarAnt = kpi.sparkline_anterior && key !== "energia_kwh";
     const sparkHtml = hasSpark
       ? `<div class="kpi-sparkline-wrap">
            <canvas id="sp-${key}-act" height="32"></canvas>
-           ${kpi.sparkline_anterior ? `<canvas id="sp-${key}-ant" height="32"></canvas>` : ""}
+           ${mostrarAnt ? `<canvas id="sp-${key}-ant" height="32"></canvas>` : ""}
          </div>`
       : "";
 
@@ -542,7 +545,7 @@
       class: "unifilar-fondo",
     });
     g.appendChild(rect);
-    const kwh = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
+    const kwh = nodo.energia_kwh != null ? fmt(nodo.energia_kwh, 0) + " kWh" : "";
     g.appendChild(_multilineText(
       [nodo.nombre, kwh], cx, cy - 10, 16, "unifilar-label"
     ));
@@ -574,7 +577,7 @@
         x: cx, y: cy + 9,
         class: "unifilar-label-small", "text-anchor": "middle", "font-size": "10",
       });
-      t2.textContent = fmt(nodo.energia_kwh) + " kWh";
+      t2.textContent = fmt(nodo.energia_kwh, 0) + " kWh";
       g.appendChild(t2);
     }
     return { x: cx, y: cy + H_SE / 2 };
@@ -597,7 +600,7 @@
     const kvaMatch    = nodo.nombre.match(/(\d+\s*kVA)/);
     const nombreCorto = nombreMatch ? nombreMatch[1] : nodo.nombre.substring(0, 12);
     const kvaCorto    = kvaMatch ? kvaMatch[1] : "";
-    const kwh         = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
+    const kwh         = nodo.energia_kwh != null ? fmt(nodo.energia_kwh, 0) + " kWh" : "";
     const lx = cx + R_TX + 44;
     [
       [nombreCorto, "12", "bold"],
@@ -631,7 +634,7 @@
     const nom = nodo.potencia_nominal_kw != null
       ? fmt(nodo.potencia_nominal_kw, 0) + " kW nom."
       : "";
-    const kwh = nodo.energia_kwh != null ? fmt(nodo.energia_kwh) + " kWh" : "";
+    const kwh = nodo.energia_kwh != null ? fmt(nodo.energia_kwh, 0) + " kWh" : "";
     g.appendChild(_multilineText(
       [nodo.nombre, nom, kwh], cx, cy - 12, 16, "unifilar-label-small"
     ));
@@ -716,6 +719,15 @@
     const { x: aOutX, y: aOutY } =
       _dibujarAcometida(gA, raiz, aX, yAcom, _nodoId === raiz.id);
     svg.appendChild(gA);
+
+    // Sticky: mantener la raíz visible al hacer scroll vertical
+    const stickyEl = $("unifilar-acometida-sticky");
+    if (stickyEl) {
+      const kwhStr = raiz.energia_kwh != null
+        ? ` · ${fmt(raiz.energia_kwh, 0)} kWh` : "";
+      stickyEl.textContent = `${raiz.nombre}${kwhStr}`;
+      stickyEl.style.display = "";
+    }
 
     // Niveles 1-3: SE → Tx → CBT
     gruposSE.forEach((se) => {

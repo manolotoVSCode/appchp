@@ -1,5 +1,47 @@
 # Changelog
 
+## [2.82.8] — 2026-08-08
+
+### Mejorado — Seis cambios visuales (dashboard telemetría, unifilar, sidebar usuario_normal)
+
+**Cambio 1 — Sparkline doble en KPI "Energía en el periodo"**
+- `web/static/js/dashboard-telemetria.js` — la tarjeta `energia_kwh` mostraba dos sparklines
+  (periodo actual + periodo anterior). Se suprime el segundo (`sparkline_anterior`) para
+  `energia_kwh` únicamente; el resto de KPIs conserva ambos cuando los hay.
+  *(No se encontró un dataset con label literal "Telemetría" en el código; el sparkline
+  anterior era el equivalente funcional de la segunda línea descrita.)*
+
+**Cambio 2 — Overflow de valores largos en KPI cards**
+- `web/static/css/telemetria.css` — `.kpi-value-v2` añade `min-width:0;overflow-wrap:anywhere`
+  para que valores de 30d (más dígitos) no se salgan del contenedor flex ni solapen
+  el borde izquierdo de la tarjeta.
+- `web/templates/telemetria/dashboard.html` — SVG del unifilar recibe `overflow:visible`
+  para que etiquetas largas de transformadores no sean recortadas por el viewBox.
+
+**Cambio 3 — Raíz del unifilar visible al hacer scroll**
+- `web/templates/telemetria/dashboard.html` — div `#unifilar-acometida-sticky` con
+  `position:sticky;top:0;z-index:10` insertado antes del SVG. Se actualiza dinámicamente.
+- `web/static/js/dashboard-telemetria.js` — `_renderUnifilar` rellena el sticky con
+  nombre y kWh de la acometida raíz tras cada render.
+
+**Cambio 4 — Valores sin decimales en el unifilar**
+- `web/static/js/dashboard-telemetria.js` — todos los `fmt(nodo.energia_kwh)` en
+  `_dibujarAcometida`, `_dibujarSE`, `_dibujarTransformador` y `_dibujarCBT` cambian
+  a `fmt(nodo.energia_kwh, 0)`. Lectura rápida sin decimales en el diagrama.
+
+**Cambio 5 — Sidebar usuario_normal**
+- `web/app.py` — nuevo filtro Jinja2 `abreviar_con_cliente(contrato_nombre, cliente_nombre)`:
+  sustituye el prefijo del nombre del cliente por sus iniciales
+  ("IBÉRICA TILES Planta 1" → "IT Planta 1"). Ignora artículos (de, del, la, los…).
+- `web/templates/clientes/_base.html`:
+  - (5.1) Encabezado "Clientes" reemplazado por logo (si `logo_url`) + nombre de la empresa
+    activa para `usuario_normal`. Logo con `max-height:28px;object-fit:contain` y alt.
+  - (5.2) Nombre de contratos en sidebar aplicado con filtro `abreviar_con_cliente`.
+  - (5.3) Botón "Detalles" ahora visible para todos los roles; eliminado el enlace
+    `bi-info-circle` del bloque `usuario_normal` (era redundante). Añadido `aria-label`.
+  - (5.4) Sección MEDICIONES (HTML + script de selección de radio) eliminada del sidebar;
+    el acceso a mediciones sigue disponible desde la ficha del cliente.
+
 ## [2.82.7] — 2026-08-08
 
 ### Corregido — Click en SE no incluía nodo_id en la URL del fetch

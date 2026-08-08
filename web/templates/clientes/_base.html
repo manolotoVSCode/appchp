@@ -55,23 +55,21 @@
   <div id="sidebar-content">
 
   {% if current_user_data and current_user_data.rol == 'usuario_normal' %}
-  <div class="sidebar-section">Clientes</div>
+  {% set _empresa = clientes_usuario[0] if clientes_usuario else None %}
+  <div class="sidebar-section d-flex align-items-center gap-2" style="overflow:hidden">
+    {% if _empresa and _empresa.logo_url %}
+    <img src="{{ _empresa.logo_url }}" alt="Logo {{ _empresa.nombre }}"
+         style="max-height:28px;max-width:80px;object-fit:contain;flex-shrink:0">
+    {% endif %}
+    <span class="text-truncate">{{ _empresa.nombre if _empresa else 'Mi empresa' }}</span>
+  </div>
   {% if clientes_usuario %}
     {% for c in clientes_usuario %}
-    <div class="d-flex align-items-center">
-      <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=c.id) }}"
-         onclick="activarCliente({{ c.id }}, this); return false;"
-         class="sidebar-link flex-grow-1{% if cliente_activo and cliente_activo.id == c.id %} active{% endif %}">
-        <i class="bi bi-building"></i>{{ c.nombre }}
-      </a>
-      <a href="{{ url_for('clientes.ficha', cliente_id=c.id) }}"
-         title="Ver ficha"
-         class="ms-1 text-muted"
-         style="font-size:.75rem;padding:2px 4px;line-height:1;flex-shrink:0"
-         onclick="activarCliente({{ c.id }}, null); return true;">
-        <i class="bi bi-info-circle"></i>
-      </a>
-    </div>
+    <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=c.id) }}"
+       onclick="activarCliente({{ c.id }}, this); return false;"
+       class="sidebar-link{% if cliente_activo and cliente_activo.id == c.id %} active{% endif %}">
+      <i class="bi bi-building"></i>{{ c.nombre }}
+    </a>
     {% endfor %}
   {% else %}
   <span class="sidebar-link" style="color:#8A9BB0;cursor:default">
@@ -88,13 +86,13 @@
 
   {% if cliente_activo %}
   <hr class="sidebar-divider mx-3">
-  {% if current_user_data.rol != 'usuario_normal' %}
   <div class="sidebar-section d-flex align-items-center justify-content-between pe-2">
     <span class="text-truncate me-2">{{ cliente_activo.nombre }}</span>
     <a href="{{ url_for('clientes.ficha', cliente_id=cliente_activo.id) }}"
-       class="btn btn-sm btn-outline-secondary flex-shrink-0" style="font-size:.65rem;padding:.15rem .45rem;line-height:1.4">Detalles</a>
+       class="btn btn-sm btn-outline-secondary flex-shrink-0"
+       aria-label="Ver detalles de {{ cliente_activo.nombre }}"
+       style="font-size:.65rem;padding:.15rem .45rem;line-height:1.4">Detalles</a>
   </div>
-  {% endif %}
   <div class="sidebar-sub-header">Dashboard</div>
   <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id) }}"
      class="sidebar-link-contrato{% if nav_active == 'contabilidad' %} active{% endif %}">
@@ -126,7 +124,7 @@
            title="{{ contrato.nombre }}"
            onclick="toggleContrato(this)">
         <i class="bi bi-file-earmark-text" style="font-size:.8rem;flex-shrink:0"></i>
-        <span class="contrato-nombre" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ contrato.nombre }}</span>
+        <span class="contrato-nombre" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ contrato.nombre | abreviar_con_cliente(cliente_activo.nombre) }}</span>
         <span class="chev">&#9658;</span>
       </div>
       <div class="sidebar-contrato-body">
@@ -144,43 +142,6 @@
   {% endif %}
   {% endif %}
 
-  {% if cliente_activo and current_user_data %}
-  <hr class="sidebar-divider mx-3">
-  <div class="sidebar-section">Mediciones</div>
-
-  <div style="padding:.3rem 1.25rem .1rem 1.5rem; font-size:.72rem; font-weight:600; color:var(--color-text-sidebar-muted); text-transform:uppercase; letter-spacing:.05em;">
-    Electricidad
-  </div>
-
-  <div style="padding:.2rem 1.25rem .1rem 2rem; font-size:.72rem; color:var(--color-text-sidebar-muted); font-weight:600; text-transform:uppercase; letter-spacing:.05em;">
-    Cincominutal
-  </div>
-
-  <div id="sidebar-mediciones-list">
-    {% if mediciones_sidebar %}
-      {% for m in mediciones_sidebar %}
-      <div class="d-flex align-items-center"
-           style="padding:.3rem 1.25rem .3rem 2.5rem; font-size:.78rem;">
-        <input type="radio" name="medicion_activa" value="{{ m.id }}"
-               id="med-{{ m.id }}"
-               class="me-2 sidebar-medicion-radio"
-               {% if session.get('medicion_activa_id') == m.id
-                  or (loop.first and not session.get('medicion_activa_id'))
-               %}checked{% endif %}
-               style="accent-color:var(--color-primary); cursor:pointer;">
-        <label for="med-{{ m.id }}" style="cursor:pointer; color:#5A5A5A; flex:1;">
-          {{ ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][m.mes-1] }} {{ m.anio }}
-        </label>
-      </div>
-      {% endfor %}
-    {% else %}
-      <div style="padding:.3rem 1.25rem .3rem 2.5rem; font-size:.75rem; color:var(--color-text-sidebar-muted); font-style:italic;">
-        Sin mediciones cargadas
-      </div>
-    {% endif %}
-  </div>
-
-  {% endif %}
 
   {% if not current_user_data or current_user_data.rol != 'usuario_normal' %}
   <hr class="sidebar-divider mx-3">
@@ -644,29 +605,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     aplicarEstado(!document.body.classList.contains("sidebar-desktop-collapsed"));
   });
 })();
-</script>
-<script>
-// ── Sidebar: selección de medición activa ─────────────────────────────────────
-document.querySelectorAll('.sidebar-medicion-radio').forEach(function(radio) {
-  radio.addEventListener('change', function() {
-    var clienteId = {{ cliente_activo.id if cliente_activo else 'null' }};
-    if (!clienteId) return;
-    fetch('/clientes/' + clienteId + '/mediciones/seleccionar', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''
-      },
-      body: JSON.stringify({medicion_id: parseInt(this.value)})
-    }).then(function(r) { return r.json(); }).then(function(d) {
-      if (d.ok) {
-        document.dispatchEvent(new CustomEvent('medicionActivaChanged', {
-          detail: {medicion_id: parseInt(radio.value)}
-        }));
-      }
-    });
-  });
-});
 </script>
 <script>
 // ── Indicador de scroll en sidebar ───────────────────────────────────────────

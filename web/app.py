@@ -478,6 +478,32 @@ def create_app() -> Flask:
     def _label_rol(rol: str) -> str:
         return {"master_admin": "Super Admin", "admin": "Administrador", "usuario_normal": "Cliente"}.get(rol, rol)
 
+    @app.template_filter("abreviar_con_cliente")
+    def _abreviar_con_cliente(contrato_nombre: str, cliente_nombre: str) -> str:
+        """Reemplaza el prefijo del nombre del cliente por sus iniciales.
+
+        'IBÉRICA TILES Planta 1', 'IBÉRICA TILES' → 'IT Planta 1'
+        Artículos ignorados: de, del, la, las, los, el, y, e.
+        """
+        import unicodedata
+
+        ARTICULOS = {"de", "del", "la", "las", "los", "el", "y", "e"}
+        iniciales = "".join(
+            p[0].upper() for p in cliente_nombre.split()
+            if p.lower() not in ARTICULOS and p
+        )
+
+        def _sin_acentos(s: str) -> str:
+            return "".join(
+                c for c in unicodedata.normalize("NFD", s.lower())
+                if unicodedata.category(c) != "Mn"
+            )
+
+        if _sin_acentos(contrato_nombre).startswith(_sin_acentos(cliente_nombre)):
+            resto = contrato_nombre[len(cliente_nombre):].lstrip()
+            return f"{iniciales} {resto}".strip() if resto else iniciales
+        return contrato_nombre
+
     # Rutas exentas de autenticación
     _PUBLIC_PREFIXES = ("/auth/", "/static")
     _PUBLIC_EXACT = {"/healthz", "/health", "/privacidad"}

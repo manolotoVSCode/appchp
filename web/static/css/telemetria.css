@@ -86,6 +86,8 @@
   font-weight: 700;
   color: #1F3A5F;
   line-height: 1.2;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .kpi-card-v2 .kpi-unit-v2 {
   font-size: .68rem;
