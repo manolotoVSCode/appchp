@@ -389,8 +389,7 @@
     _ocultarError();
 
     const params = new URLSearchParams({ rango: _rango });
-    if (_nodoId !== null && _nodoId !== undefined &&
-        !String(_nodoId).startsWith("grupo:")) {
+    if (_nodoId !== null && _nodoId !== undefined) {
       params.set("nodo_id", String(_nodoId));
     }
 

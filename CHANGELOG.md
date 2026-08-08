@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.82.7] — 2026-08-08
+
+### Corregido — Click en SE no incluía nodo_id en la URL del fetch
+
+- `web/static/js/dashboard-telemetria.js` — `fetchDatos`: la condición
+  `!String(_nodoId).startsWith("grupo:")` bloqueaba la inclusión del ID virtual
+  en `URLSearchParams`, causando que el endpoint recibiera la petición sin `nodo_id`
+  y retornara datos de la acometida por defecto. Eliminada la guardia: todos los IDs
+  (numéricos y `grupo:SE-N`) se incluyen ahora en el parámetro `nodo_id` del fetch.
+
 ## [2.82.6] — 2026-08-06
 
 ### Corregido — Backend interpreta nodo_id virtual `grupo:SE-N` para agregación por subestación
