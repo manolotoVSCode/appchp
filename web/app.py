@@ -2711,7 +2711,7 @@ def create_app() -> Flask:
         from calc.telemetria_kpis import determinar_periodo_anterior as _dpa
         from datetime import datetime, timedelta, timezone
 
-        nodo_id = request.args.get("nodo_id", type=int)
+        nodo_id_raw = request.args.get("nodo_id")
         rango = request.args.get("rango", "24h")
 
         # Cargar árbol completo
@@ -2727,10 +2727,6 @@ def create_app() -> Flask:
             (m for m in todos if m.get("punto_medicion") == "acometida_cfe"),
             todos[0]
         )
-        if nodo_id is None:
-            nodo_id = acometida["id"]
-
-        nodo = por_id.get(nodo_id, acometida)
 
         # Calcular ruta de breadcrumbs (hacia arriba)
         def _breadcrumbs(nodo_dict):
@@ -2742,17 +2738,53 @@ def create_app() -> Flask:
                 cur = por_id.get(padre_id) if padre_id else None
             return list(reversed(ruta))
 
-        # Hojas del nodo seleccionado: determinan KPIs, serie y comparativa
-        if nodo.get("punto_medicion") == "carga_final":
-            hojas_ids_nodo = [nodo_id]
+        # --- Nodo virtual de subestación ---
+        # El frontend envía "grupo:SE-N" para subestaciones que no existen como medidor.
+        # Se agrega sobre sus transformadores hijo (T-N.*) y las cargas_final de estos.
+        _nodo_virtual = None  # dict con id, nombre, punto_medicion, ruta_breadcrumbs si es virtual
+
+        if nodo_id_raw and nodo_id_raw.startswith("grupo:"):
+            codigo_se = nodo_id_raw[len("grupo:"):]  # ej. "SE-4"
+            # Número de SE: "SE-4" → "4"
+            se_num = codigo_se.split("-")[-1] if "-" in codigo_se else codigo_se
+            prefijo_tx = f"T-{se_num}."
+            # Transformadores de esta SE
+            txs = [m for m in todos if (m.get("nombre") or "").startswith(prefijo_tx)]
+            hojas_ids_nodo = []
+            for tx in txs:
+                desc_ids = _odi(tx["id"])
+                hojas_ids_nodo += [
+                    mid for mid in desc_ids
+                    if por_id.get(mid, {}).get("punto_medicion") == "carga_final"
+                ]
+            if not hojas_ids_nodo and txs:
+                hojas_ids_nodo = [txs[0]["id"]]
+            elif not hojas_ids_nodo:
+                hojas_ids_nodo = [acometida["id"]]
+            _nodo_virtual = {
+                "id": nodo_id_raw,
+                "nombre": codigo_se,
+                "punto_medicion": "subestacion_virtual",
+                "ruta_breadcrumbs": [{"id": nodo_id_raw, "nombre": codigo_se}],
+            }
+            nodo = acometida  # referencia interna no usada en JSON cuando hay _nodo_virtual
         else:
-            desc_ids = _odi(nodo_id)
-            hojas_ids_nodo = [
-                mid for mid in desc_ids
-                if por_id.get(mid, {}).get("punto_medicion") == "carga_final"
-            ]
-            if not hojas_ids_nodo:
+            nodo_id = int(nodo_id_raw) if nodo_id_raw else None
+            if nodo_id is None:
+                nodo_id = acometida["id"]
+            nodo = por_id.get(nodo_id, acometida)
+
+            # Hojas del nodo seleccionado: determinan KPIs, serie y comparativa
+            if nodo.get("punto_medicion") == "carga_final":
                 hojas_ids_nodo = [nodo_id]
+            else:
+                desc_ids = _odi(nodo_id)
+                hojas_ids_nodo = [
+                    mid for mid in desc_ids
+                    if por_id.get(mid, {}).get("punto_medicion") == "carga_final"
+                ]
+                if not hojas_ids_nodo:
+                    hojas_ids_nodo = [nodo_id]
 
         # Todas las hojas del árbol completo: necesarias para que el sunburst
         # muestre energía correcta en todos los nodos, independientemente del
@@ -3119,7 +3151,7 @@ def create_app() -> Flask:
         }
 
         return jsonify({
-            "nodo_seleccionado": {
+            "nodo_seleccionado": _nodo_virtual if _nodo_virtual else {
                 "id": nodo["id"],
                 "nombre": nodo["nombre"],
                 "punto_medicion": nodo.get("punto_medicion"),

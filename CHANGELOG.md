@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.82.6] — 2026-08-06
+
+### Corregido — Backend interpreta nodo_id virtual `grupo:SE-N` para agregación por subestación
+
+- `web/app.py` — `cliente_dashboard_telemetria_data`: `request.args.get("nodo_id", type=int)`
+  descartaba silenciosamente el formato `"grupo:SE-N"` enviado por el frontend al hacer clic
+  en un nodo de subestación virtual del árbol. El endpoint caía al nodo acometida y mostraba
+  datos de toda la planta en lugar de los de la SE seleccionada.
+- Solución: leer `nodo_id_raw` como string. Si empieza con `"grupo:"`, extraer el número de SE,
+  localizar los transformadores con prefijo `T-{num_se}.`, obtener sus descendientes
+  `carga_final` y construir un `_nodo_virtual` dict con `id`, `nombre`, `punto_medicion`
+  y `ruta_breadcrumbs`. La respuesta JSON usa `_nodo_virtual` cuando está disponible, o el
+  dict de nodo real en caso contrario.
+- Los KPIs, la serie temporal y la comparativa ya utilizan `hojas_ids_nodo`, que ahora
+  agrega correctamente solo las cargas de la SE seleccionada.
+
 ## [2.82.5] — 2026-08-08
 
 ### Corregido — Ancla temporal del dashboard de telemetría desacoplada del reloj real
