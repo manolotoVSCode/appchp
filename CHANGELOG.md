@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.82.11] — 2026-08-08
+
+### Corregido — Header sidebar muestra empresa, filtro abreviar correcto, breadcrumb completo
+
+**FIX 1 — Header sidebar: muestra nombre de empresa, no de planta activa**
+- `web/app.py` `_inject_globals`: computa `nombre_empresa_usuario` como prefijo
+  común (alineado por palabras) de los nombres de los clientes asignados a
+  `usuario_normal`. Para "IBÉRICA TILES Planta 1" + "IBÉRICA TILES Planta 2"
+  resulta "IBÉRICA TILES".
+- `web/templates/clientes/_base.html`: el header de sección usa
+  `{{ nombre_empresa_usuario }}` en lugar de `cliente_activo.nombre`.
+
+**FIX 2 — Filtro `abreviar_con_cliente` reescrito (NFKD, lógica exacta)**
+- `web/app.py`: normalización con NFKD, iniciales excluyen artículos
+  {de,del,la,los,las,y}, slice desde `len(nombre_cliente)` preservando el
+  espacio original. "IBÉRICA TILES Planta 1" + "IBÉRICA TILES" → "IT Planta 1".
+- Template: filtro recibe `nombre_empresa_usuario` (empresa) en lugar del
+  nombre del cliente activo (planta).
+- `tests/test_abreviar_con_cliente.py`: 5 tests parametrizados (todos pasan).
+
+**FIX 3 — Breadcrumb del unifilar: todos los niveles, incluye SE virtual**
+- `web/app.py` `_breadcrumbs`: inyecta nodo virtual `SE-N` entre el padre y
+  cualquier transformador `T-N.*` cuyo padre sea el nodo anterior en la ruta.
+  Ejemplo: Acometida → T-4.1 → CBT-MMC2 se convierte en
+  Acometida → SE-4 → T-4.1 → CBT-MMC2.
+- `web/app.py` virtual SE node: `ruta_breadcrumbs` ahora incluye la acometida
+  como primer elemento (antes solo tenía el propio nodo SE).
+
+---
+
 ## [2.82.10] — 2026-08-08
 
 ### Corregido — Sidebar usuario_normal rediseñado + breadcrumb telemetría sin duplicado

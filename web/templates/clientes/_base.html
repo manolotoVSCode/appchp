@@ -63,7 +63,7 @@
          style="max-height:24px;max-width:56px;object-fit:contain;flex-shrink:0">
     {% endif %}
     <span class="text-truncate flex-grow-1" style="font-size:.75rem">
-      {{ (cliente_activo.nombre if cliente_activo else clientes_usuario[0].nombre) }}
+      {{ nombre_empresa_usuario }}
     </span>
   </div>
     {% for c in clientes_usuario %}
@@ -72,7 +72,7 @@
       <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=c.id) }}"
          onclick="activarCliente({{ c.id }}, this); return false;"
          class="flex-grow-1 text-truncate" style="text-decoration:none;color:inherit;font-size:.8rem">
-        {{ c.nombre | abreviar_con_cliente(cliente_activo.nombre if cliente_activo else c.nombre) }}
+        {{ c.nombre | abreviar_con_cliente(nombre_empresa_usuario) }}
       </a>
       <a href="{{ url_for('clientes.ficha', cliente_id=c.id) }}"
          class="btn btn-sm btn-outline-secondary flex-shrink-0"

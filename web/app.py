@@ -479,30 +479,30 @@ def create_app() -> Flask:
         return {"master_admin": "Super Admin", "admin": "Administrador", "usuario_normal": "Cliente"}.get(rol, rol)
 
     @app.template_filter("abreviar_con_cliente")
-    def _abreviar_con_cliente(contrato_nombre: str, cliente_nombre: str) -> str:
+    def _abreviar_con_cliente(nombre_contrato: str, nombre_cliente: str) -> str:
         """Reemplaza el prefijo del nombre del cliente por sus iniciales.
 
         'IBÉRICA TILES Planta 1', 'IBÉRICA TILES' → 'IT Planta 1'
-        Artículos ignorados: de, del, la, las, los, el, y, e.
+        Artículos ignorados: de, del, la, los, las, y.
+        Comparación sin acentos ni distinción de mayúsculas (NFKD).
         """
         import unicodedata
 
-        ARTICULOS = {"de", "del", "la", "las", "los", "el", "y", "e"}
+        ARTICULOS = {"de", "del", "la", "los", "las", "y"}
         iniciales = "".join(
-            p[0].upper() for p in cliente_nombre.split()
+            p[0].upper() for p in nombre_cliente.split()
             if p.lower() not in ARTICULOS and p
         )
 
-        def _sin_acentos(s: str) -> str:
+        def _norm(s: str) -> str:
             return "".join(
-                c for c in unicodedata.normalize("NFD", s.lower())
+                c for c in unicodedata.normalize("NFKD", s.lower())
                 if unicodedata.category(c) != "Mn"
             )
 
-        if _sin_acentos(contrato_nombre).startswith(_sin_acentos(cliente_nombre)):
-            resto = contrato_nombre[len(cliente_nombre):].lstrip()
-            return f"{iniciales} {resto}".strip() if resto else iniciales
-        return contrato_nombre
+        if _norm(nombre_contrato).startswith(_norm(nombre_cliente)):
+            return iniciales + nombre_contrato[len(nombre_cliente):]
+        return nombre_contrato
 
     # Rutas exentas de autenticación
     _PUBLIC_PREFIXES = ("/auth/", "/static")
@@ -565,6 +565,23 @@ def create_app() -> Flask:
                 base["clientes_usuario"] = []
         else:
             base["clientes_usuario"] = []
+        # Nombre de empresa para usuario_normal: prefijo común de los clientes asignados
+        _clst = base["clientes_usuario"]
+        if len(_clst) > 1:
+            _nombres = [c["nombre"] for c in _clst]
+            _prefix = _nombres[0]
+            for _n in _nombres[1:]:
+                _i = 0
+                while _i < len(_prefix) and _i < len(_n) and _prefix[_i] == _n[_i]:
+                    _i += 1
+                _prefix = _prefix[:_i]
+            _prefix = _prefix.rstrip()
+            _sp = _prefix.rfind(" ")
+            base["nombre_empresa_usuario"] = _prefix[:_sp].strip() if _sp != -1 else _prefix
+        elif _clst:
+            base["nombre_empresa_usuario"] = _clst[0]["nombre"]
+        else:
+            base["nombre_empresa_usuario"] = ""
         if not id_:
             return {**base, "cliente_activo": None}
 
@@ -2754,7 +2771,7 @@ def create_app() -> Flask:
             todos[0]
         )
 
-        # Calcular ruta de breadcrumbs (hacia arriba)
+        # Calcular ruta de breadcrumbs (hacia arriba), inyectando subestaciones virtuales
         def _breadcrumbs(nodo_dict):
             ruta = []
             cur = nodo_dict
@@ -2762,7 +2779,20 @@ def create_app() -> Flask:
                 ruta.append({"id": cur["id"], "nombre": cur["nombre"]})
                 padre_id = cur.get("medidor_padre_id")
                 cur = por_id.get(padre_id) if padre_id else None
-            return list(reversed(ruta))
+            ruta = list(reversed(ruta))
+            # Inyectar nodo virtual SE-N entre el padre y cada transformador T-N.*
+            result = []
+            for idx, seg in enumerate(ruta):
+                result.append(seg)
+                if idx + 1 < len(ruta):
+                    nxt_id = ruta[idx + 1]["id"]
+                    nxt = por_id.get(nxt_id, {})
+                    nxt_nombre = nxt.get("nombre", "")
+                    if (nxt_nombre.startswith("T-") and "." in nxt_nombre
+                            and nxt.get("medidor_padre_id") == seg["id"]):
+                        se_num = nxt_nombre.split("-")[1].split(".")[0]
+                        result.append({"id": f"grupo:SE-{se_num}", "nombre": f"SE-{se_num}"})
+            return result
 
         # --- Nodo virtual de subestación ---
         # El frontend envía "grupo:SE-N" para subestaciones que no existen como medidor.
@@ -2791,7 +2821,10 @@ def create_app() -> Flask:
                 "id": nodo_id_raw,
                 "nombre": codigo_se,
                 "punto_medicion": "subestacion_virtual",
-                "ruta_breadcrumbs": [{"id": nodo_id_raw, "nombre": codigo_se}],
+                "ruta_breadcrumbs": [
+                    {"id": acometida["id"], "nombre": acometida["nombre"]},
+                    {"id": nodo_id_raw, "nombre": codigo_se},
+                ],
             }
             nodo = acometida  # referencia interna no usada en JSON cuando hay _nodo_virtual
         else:
