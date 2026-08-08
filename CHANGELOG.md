@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.82.3] — 2026-08-08
+
+### Corregido — Race condition al cambiar de rango temporal en dashboard de telemetría
+
+- `web/static/js/dashboard-telemetria.js`:
+  - Añade `_rangoEnCurso` (debounce): `setRango(r)` ignora el click si `r` ya está
+    en vuelo, evitando que un doble-click sobre el mismo rango desplace el fetch en curso.
+  - Añade guarda `if (controller.signal.aborted) return` tras `await resp.json()`:
+    previene render stale cuando el browser entrega el body de una respuesta ya abortada.
+  - Error HTTP (ej. 500): en lugar de `throw` que llega al catch, retorna directamente
+    tras `_mostrarError(...)`. El DOM previo queda intacto; solo el banner de error aparece.
+
 ## [2.82.2] — 2026-08-07
 
 ### Corregido — Homogeneización de nombres de columnas entre vistas agregadas y tabla raw

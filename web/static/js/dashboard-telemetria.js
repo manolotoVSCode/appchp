@@ -28,11 +28,12 @@
   const CLIENTE_ID = root.dataset.clienteId;
   const ENDPOINT   = root.dataset.endpoint;
 
-  let _rango      = "24h";
-  let _nodoId     = null;   // nodo cuyo time-series se muestra en la gráfica
-  let _arbolCache = null;   // último arbol_sunburst recibido del backend
-  let _chartSerie = null;
-  let _abort      = null;
+  let _rango        = "24h";
+  let _nodoId       = null;   // nodo cuyo time-series se muestra en la gráfica
+  let _arbolCache   = null;   // último arbol_sunburst recibido del backend
+  let _chartSerie   = null;
+  let _abort        = null;
+  let _rangoEnCurso = null;   // rango del fetch actualmente en vuelo (debounce)
 
   // ── Metadata de KPIs para labels, unidades y decimales ─────────────────
   const _KPI_META = {
@@ -374,6 +375,7 @@
     if (_abort) _abort.abort();
     const controller = new AbortController();
     _abort = controller;
+    _rangoEnCurso = _rango;
 
     _mostrarLoading(true);
     _ocultarError();
@@ -386,8 +388,11 @@
 
     try {
       const resp = await fetch(`${ENDPOINT}?${params}`, { signal: controller.signal });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      // Error HTTP: mostrar banner pero NO limpiar la vista previa
+      if (!resp.ok) { _mostrarError(`Error al cargar datos (HTTP ${resp.status})`); return; }
       const data = await resp.json();
+      // Guardia: si este fetch fue abortado mientras se leía el body, no renderizar
+      if (controller.signal.aborted) return;
       if (data.error) { _mostrarError(data.error); return; }
       _arbolCache = data.arbol_sunburst;
       _renderTodo(data);
@@ -397,6 +402,7 @@
       if (e.name === "AbortError") return;
       _mostrarError("Error al cargar datos de telemetría: " + e.message);
     } finally {
+      _rangoEnCurso = null;
       if (!controller.signal.aborted) _mostrarLoading(false);
     }
   }
@@ -798,6 +804,8 @@
   }
 
   function setRango(r) {
+    // Debounce: ignorar si este rango ya está en vuelo
+    if (r === _rangoEnCurso) return;
     _rango = r;
     document.querySelectorAll("#rango-selector button").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.rango === r);
