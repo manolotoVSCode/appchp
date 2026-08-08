@@ -140,10 +140,10 @@
       : "—";
     const unitHtml = m.unit ? `<span class="kpi-unit-v2">${m.unit}</span>` : "";
 
-    const hasSpark = kpi.sparkline_actual && kpi.sparkline_actual.length > 0;
-    // energia_kwh muestra solo el periodo actual; quitar sparkline_anterior evita
-    // confusión con una segunda línea de referencia/facturación.
-    const mostrarAnt = kpi.sparkline_anterior && key !== "energia_kwh";
+    // energia_kwh no muestra sparkline (evita confusión con segunda serie).
+    const hasSpark = key !== "energia_kwh"
+      && kpi.sparkline_actual && kpi.sparkline_actual.length > 0;
+    const mostrarAnt = hasSpark && kpi.sparkline_anterior;
     const sparkHtml = hasSpark
       ? `<div class="kpi-sparkline-wrap">
            <canvas id="sp-${key}-act" height="32"></canvas>
@@ -417,9 +417,40 @@
     }
   }
 
+  // ── Breadcrumb navegable sobre el unifilar ─────────────────────────────────
+  function _renderUnifilarBreadcrumb(nodo) {
+    const ol = $("unifilar-breadcrumb-ol");
+    if (!ol) return;
+    ol.innerHTML = "";
+    const ruta = (nodo.ruta_breadcrumbs || []);
+    ruta.forEach((seg, idx) => {
+      const li = document.createElement("li");
+      li.className = "breadcrumb-item";
+      if (idx === ruta.length - 1) {
+        // Nodo actual: texto plano
+        li.classList.add("active");
+        li.setAttribute("aria-current", "page");
+        li.textContent = seg.nombre;
+      } else {
+        // Ancestro: enlace clicable
+        const a = document.createElement("a");
+        a.href = "#";
+        a.textContent = seg.nombre;
+        a.dataset.nodoId = String(seg.id);
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          setNodo(seg.id);
+        });
+        li.appendChild(a);
+      }
+      ol.appendChild(li);
+    });
+  }
+
   // ── Render completo ────────────────────────────────────────────────────────
   function _renderTodo(data) {
     _renderBreadcrumbs(data.nodo_seleccionado);
+    _renderUnifilarBreadcrumb(data.nodo_seleccionado);
     _renderKpisPaneles(
       data.kpis_paneles,
       data.nodo_seleccionado.punto_medicion,
@@ -720,14 +751,6 @@
       _dibujarAcometida(gA, raiz, aX, yAcom, _nodoId === raiz.id);
     svg.appendChild(gA);
 
-    // Sticky: mantener la raíz visible al hacer scroll vertical
-    const stickyEl = $("unifilar-acometida-sticky");
-    if (stickyEl) {
-      const kwhStr = raiz.energia_kwh != null
-        ? ` · ${fmt(raiz.energia_kwh, 0)} kWh` : "";
-      stickyEl.textContent = `${raiz.nombre}${kwhStr}`;
-      stickyEl.style.display = "";
-    }
 
     // Niveles 1-3: SE → Tx → CBT
     gruposSE.forEach((se) => {

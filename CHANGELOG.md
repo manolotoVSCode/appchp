@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.82.9] — 2026-08-08
+
+### Corregido — Cuatro fixes visuales (sidebar, unifilar breadcrumb, sparkline energía)
+
+**Fix 1 — Header sidebar: logo + cliente activo sin duplicado**
+- `web/templates/clientes/_base.html` — el bloque superior de `usuario_normal` dejó de
+  mostrar `_empresa.nombre` con logo; solo se muestra si hay >1 empresa asignada (para
+  permitir cambio de empresa). El bloque contextual del cliente activo (`cliente_activo`)
+  ahora incluye el logo (`cliente_activo.logo_url`) y el nombre del cliente, sin duplicar
+  el header. El botón Detalles queda inline en la misma fila.
+
+**Fix 2 — Abreviatura de contratos aplicada también al atributo title**
+- `web/templates/clientes/_base.html` — el `title="{{ contrato.nombre }}"` del
+  `.sidebar-contrato-header` ahora también usa el filtro `abreviar_con_cliente`.
+  El filtro en `web/app.py` ya estaba registrado correctamente; se corrige la aplicación
+  incompleta en el template (faltaba el atributo title).
+
+**Fix 3 — Breadcrumb navegable sobre el unifilar (reemplaza sticky de texto)**
+- `web/templates/telemetria/dashboard.html` — elimina `#unifilar-acometida-sticky`
+  (texto "Acometida CFE-2 SE Sur · 4,842,314 kWh"). Añade `<nav id="unifilar-breadcrumb-nav">`
+  con `position:sticky;top:0;z-index:10;background:#fff;box-shadow`.
+- `web/static/js/dashboard-telemetria.js` — nueva función `_renderUnifilarBreadcrumb(nodo)`:
+  renderiza la ruta completa desde `nodo.ruta_breadcrumbs`, todos los ancestros son enlaces
+  clicables que invocan `setNodo(id)`, el nodo actual es texto plano. Se llama desde
+  `_renderTodo` en cada actualización de datos. Se elimina el código que actualizaba el
+  sticky de texto.
+
+**Fix 4 — Sparkline de "Energía en el periodo" eliminado completamente**
+- `web/static/js/dashboard-telemetria.js` — `hasSpark` es `false` cuando `key === "energia_kwh"`,
+  eliminando tanto el canvas `sp-energia_kwh-act` como `sp-energia_kwh-ant`. El label,
+  el valor numérico y el badge de variación se conservan intactos. Los sparklines del resto
+  de KPIs no se modifican.
+
 ## [2.82.8] — 2026-08-08
 
 ### Mejorado — Seis cambios visuales (dashboard telemetría, unifilar, sidebar usuario_normal)

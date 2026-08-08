@@ -48,17 +48,20 @@
     <button class="btn btn-sm btn-outline-danger ms-2" id="btn-reintentar">Reintentar</button>
   </div>
 
+  <!-- Breadcrumb de navegación del unifilar (sticky) -->
+  <nav id="unifilar-breadcrumb-nav" aria-label="Ruta del esquema unifilar"
+       style="position:sticky;top:0;z-index:10;background:#fff;
+              box-shadow:0 2px 4px rgba(0,0,0,.05);
+              padding:6px 12px;margin-bottom:.75rem;border-radius:6px">
+    <ol class="breadcrumb mb-0" style="font-size:.78rem" id="unifilar-breadcrumb-ol">
+      <li class="breadcrumb-item text-muted">Cargando…</li>
+    </ol>
+  </nav>
+
   <!-- Unifilar SVG -->
   <div id="unifilar-wrapper" style="position:relative;min-height:500px;
        overflow-x:auto;background:#f8fafc;border-radius:8px;padding:24px;
        margin-bottom:1rem">
-    <div id="unifilar-acometida-sticky"
-         style="display:none;position:sticky;top:0;z-index:10;
-                background:#f8fafc;border-radius:4px;
-                box-shadow:0 2px 4px rgba(0,0,0,.07);
-                padding:4px 10px;margin-bottom:8px;
-                font-size:.8rem;font-weight:600;color:#1F3A5F;
-                font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"></div>
     <svg id="unifilarSvg" xmlns="http://www.w3.org/2000/svg"
          style="min-height:268px;overflow:visible"></svg>
     <p class="unifilar-nota" style="text-align:center;font-size:.75rem;

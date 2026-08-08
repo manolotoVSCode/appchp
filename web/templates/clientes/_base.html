@@ -55,15 +55,8 @@
   <div id="sidebar-content">
 
   {% if current_user_data and current_user_data.rol == 'usuario_normal' %}
-  {% set _empresa = clientes_usuario[0] if clientes_usuario else None %}
-  <div class="sidebar-section d-flex align-items-center gap-2" style="overflow:hidden">
-    {% if _empresa and _empresa.logo_url %}
-    <img src="{{ _empresa.logo_url }}" alt="Logo {{ _empresa.nombre }}"
-         style="max-height:28px;max-width:80px;object-fit:contain;flex-shrink:0">
-    {% endif %}
-    <span class="text-truncate">{{ _empresa.nombre if _empresa else 'Mi empresa' }}</span>
-  </div>
-  {% if clientes_usuario %}
+  {% if clientes_usuario | length > 1 %}
+  <div class="sidebar-section">Clientes</div>
     {% for c in clientes_usuario %}
     <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=c.id) }}"
        onclick="activarCliente({{ c.id }}, this); return false;"
@@ -71,7 +64,7 @@
       <i class="bi bi-building"></i>{{ c.nombre }}
     </a>
     {% endfor %}
-  {% else %}
+  {% elif not clientes_usuario %}
   <span class="sidebar-link" style="color:#8A9BB0;cursor:default">
     <i class="bi bi-building"></i>Sin clientes asignados
   </span>
@@ -86,10 +79,14 @@
 
   {% if cliente_activo %}
   <hr class="sidebar-divider mx-3">
-  <div class="sidebar-section d-flex align-items-center justify-content-between pe-2">
-    <span class="text-truncate me-2">{{ cliente_activo.nombre }}</span>
+  <div class="sidebar-section d-flex align-items-center gap-2 pe-2" style="overflow:hidden">
+    {% if cliente_activo.logo_url %}
+    <img src="{{ cliente_activo.logo_url }}" alt="Logo {{ cliente_activo.nombre }}"
+         style="max-height:28px;max-width:64px;object-fit:contain;flex-shrink:0">
+    {% endif %}
+    <span class="text-truncate flex-grow-1">{{ cliente_activo.nombre }}</span>
     <a href="{{ url_for('clientes.ficha', cliente_id=cliente_activo.id) }}"
-       class="btn btn-sm btn-outline-secondary flex-shrink-0"
+       class="btn btn-sm btn-outline-secondary flex-shrink-0 ms-auto"
        aria-label="Ver detalles de {{ cliente_activo.nombre }}"
        style="font-size:.65rem;padding:.15rem .45rem;line-height:1.4">Detalles</a>
   </div>
@@ -121,7 +118,7 @@
     {% for contrato in cliente_activo.contratos %}
     <div class="sidebar-contrato-item" data-contrato-id="{{ contrato.id }}" data-cliente-id="{{ cliente_activo.id }}" data-tipo="{{ contrato.tipo }}">
       <div class="sidebar-contrato-header{% if nav_active == 'contrato' and contrato_activo_id == contrato.id %} active{% endif %}"
-           title="{{ contrato.nombre }}"
+           title="{{ contrato.nombre | abreviar_con_cliente(cliente_activo.nombre) }}"
            onclick="toggleContrato(this)">
         <i class="bi bi-file-earmark-text" style="font-size:.8rem;flex-shrink:0"></i>
         <span class="contrato-nombre" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ contrato.nombre | abreviar_con_cliente(cliente_activo.nombre) }}</span>
