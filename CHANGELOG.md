@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.82.10] — 2026-08-08
+
+### Corregido — Sidebar usuario_normal rediseñado + breadcrumb telemetría sin duplicado
+
+**Fix 1 — Sidebar usuario_normal: logo + nombre empresa + lista de plantas con Detalles**
+- `web/templates/clientes/_base.html` — se elimina la etiqueta "Clientes" y el
+  bloque condicional `length > 1`. Ahora siempre se muestra el logo + nombre del
+  cliente activo (o del primero en lista) como cabecera de sección. Cada planta
+  aparece con su nombre abreviado (filtro `abreviar_con_cliente`) + botón "Detalles"
+  inline hacia la ficha del cliente.
+
+**Fix 2 — Sidebar usuario_normal: eliminar bloque redundante logo+nombre+Detalles**
+- `web/templates/clientes/_base.html` — se elimina el bloque `sidebar-section`
+  con logo + `cliente_activo.nombre` + botón Detalles que duplicaba información
+  ya presente en la cabecera de sección superior.
+
+**Fix 3 — Dashboard telemetría: eliminar breadcrumb duplicado del unifilar**
+- `web/templates/telemetria/dashboard.html` — se elimina el segundo `<nav>` sticky
+  (`#unifilar-breadcrumb-nav`) que duplicaba la navegación del unifilar. El breadcrumb
+  principal (`#breadcrumbs-telemetria`) queda como única referencia de ruta.
+
+**Fix 4 — Breadcrumb telemetría: muestra ruta completa desde Acometida**
+- `web/static/js/dashboard-telemetria.js` — se elimina el truncado `ruta.slice(-2)`
+  en `_renderBreadcrumbs`. Ahora se muestran todos los segmentos de la ruta desde
+  la Acometida. Se elimina la llamada a `_renderUnifilarBreadcrumb` de `_renderTodo`
+  (la función de destino `#unifilar-breadcrumb-ol` ya no existe en el HTML).
+
+---
+
 ## [2.82.9] — 2026-08-08
 
 ### Corregido — Cuatro fixes visuales (sidebar, unifilar breadcrumb, sparkline energía)

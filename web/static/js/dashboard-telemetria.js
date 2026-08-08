@@ -450,7 +450,6 @@
   // ── Render completo ────────────────────────────────────────────────────────
   function _renderTodo(data) {
     _renderBreadcrumbs(data.nodo_seleccionado);
-    _renderUnifilarBreadcrumb(data.nodo_seleccionado);
     _renderKpisPaneles(
       data.kpis_paneles,
       data.nodo_seleccionado.punto_medicion,
@@ -467,13 +466,11 @@
     if (!nav) return;
     const ol = nav.querySelector("ol");
     ol.innerHTML = "";
-    // Mostrar solo los 2 últimos segmentos de la ruta
     const ruta = nodo.ruta_breadcrumbs || [];
-    const segmentos = ruta.length > 2 ? ruta.slice(-2) : ruta;
-    segmentos.forEach((seg, idx) => {
+    ruta.forEach((seg, idx) => {
       const li = document.createElement("li");
       li.className = "breadcrumb-item";
-      if (idx === segmentos.length - 1) {
+      if (idx === ruta.length - 1) {
         li.classList.add("active");
         li.setAttribute("aria-current", "page");
         li.textContent = seg.nombre;
