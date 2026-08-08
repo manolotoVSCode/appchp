@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.83.0] — 2026-08-08
+
+### Fix integral — Producción mensual: fórmula de distribución, NUMERIC(12,2), default dinámico 1.2M
+
+**Fix 1 — Fórmula de distribución de producción verificada**
+- `storage/repository.py` `upsert_produccion_mes`: fórmula `m2_mes * peso / total_peso`
+  ya era correcta. Confirmado: para 2M m² con 22L-V + 4Sat + 4Dom →
+  `total_peso=24.4` → 81,967 m²/día laborable. Sin cambio de código.
+
+**Fix 2 — Migración NUMERIC(12,2) para defensa en profundidad**
+- `storage/migrations/202608_produccion_diaria_numeric12.sql`: amplía
+  `m2_producidos` de NUMERIC(10,2) a NUMERIC(12,2).
+  **Ejecutar en Supabase SQL editor antes del deploy.**
+
+**Fix 3 — Validación explícita en backend**
+- `web/app.py` `telemetria_produccion_post`: valida `m2_mes > 0` y
+  `m2_mes <= 100_000_000`. Devuelve 400 con mensaje descriptivo si falla.
+
+**Fix 4 — JS: default 1,200,000, CSRF token, auto-submit, refresh tras guardar**
+- `web/static/js/dashboard-telemetria.js`:
+  - `_postProduccion` centraliza el fetch con `X-CSRFToken` en headers.
+  - `_renderFormularioProduccion(anio, mes, m2Existente)`: input pre-relleno
+    con `m2Existente` (si hay datos) o `1,200,000` (default).
+  - Auto-submit al cargar la pestaña solo si `m2Existente == null`
+    (sin datos previos).
+  - Tras guardar exitosamente, invoca `fetchDatos()` para refrescar KPIs.
+  - `max="100000000"` en el input para validación cliente.
+
+---
+
 ## [2.82.11] — 2026-08-08
 
 ### Corregido — Header sidebar muestra empresa, filtro abreviar correcto, breadcrumb completo

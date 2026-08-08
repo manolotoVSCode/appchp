@@ -3265,8 +3265,10 @@ def create_app() -> Flask:
             return jsonify({"error": "anio inválido"}), 400
         if not isinstance(mes, int) or mes < 1 or mes > 12:
             return jsonify({"error": "mes inválido (1-12)"}), 400
-        if not isinstance(m2_mes, (int, float)) or m2_mes < 0:
-            return jsonify({"error": "m2_mes debe ser >= 0"}), 400
+        if not isinstance(m2_mes, (int, float)) or m2_mes <= 0:
+            return jsonify({"error": "m2_mes debe ser > 0"}), 400
+        if m2_mes > 100_000_000:
+            return jsonify({"error": "m2_mes excede límite permitido (100 M m²)"}), 400
 
         from storage.repository import upsert_produccion_mes
         n = upsert_produccion_mes(cliente_id, anio, mes, float(m2_mes))

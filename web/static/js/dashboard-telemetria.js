@@ -213,16 +213,32 @@
   }
 
   // ── Formulario de captura de producción mensual ──────────────────────────
-  function _renderFormularioProduccion(anio, mes) {
+  const _PROD_DEFAULT = 1200000;
+
+  async function _postProduccion(anio, mes, m2) {
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    return fetch(
+      `/clientes/${CLIENTE_ID}/telemetria/produccion`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+        body: JSON.stringify({ anio, mes, m2_mes: m2 }),
+      }
+    );
+  }
+
+  function _renderFormularioProduccion(anio, mes, m2Existente) {
     const wrap = document.createElement("div");
     wrap.className = "mt-3 pt-2 border-top";
+    const valorInicial = m2Existente != null ? m2Existente : _PROD_DEFAULT;
     wrap.innerHTML = `
       <p class="small text-muted mb-1" style="font-size:.7rem">
-        Captura producción del mes ${mes}/${anio} (m²):
+        Producción del mes ${mes}/${anio} (m² totales):
       </p>
       <div class="d-flex gap-2 align-items-center">
         <input type="number" id="prod-m2-input" class="form-control form-control-sm"
-               placeholder="m²" min="0" step="0.01" style="max-width:88px">
+               value="${valorInicial}" min="1" max="100000000" step="1"
+               style="max-width:120px">
         <button type="button" id="btn-guardar-prod" class="btn btn-sm btn-primary">
           Guardar
         </button>
@@ -230,43 +246,42 @@
       <div id="prod-feedback" class="mt-1" style="min-height:1.1em;font-size:.68rem"></div>
     `;
 
-    // El listener se registra en el próximo tick para que el elemento esté en el DOM
     requestAnimationFrame(() => {
       const btn   = document.getElementById("btn-guardar-prod");
       const input = document.getElementById("prod-m2-input");
       const fb    = document.getElementById("prod-feedback");
       if (!btn || !input) return;
 
-      btn.addEventListener("click", async () => {
+      const _guardar = async () => {
         const m2 = parseFloat(input.value);
-        if (isNaN(m2) || m2 < 0) {
-          if (fb) { fb.textContent = "Ingresa un valor válido ≥ 0."; fb.style.color = "#dc3545"; }
+        if (isNaN(m2) || m2 <= 0) {
+          if (fb) { fb.textContent = "Ingresa un valor válido > 0."; fb.style.color = "#dc3545"; }
           return;
         }
         btn.disabled = true;
         if (fb) { fb.textContent = "Guardando…"; fb.style.color = "#6b7280"; }
         try {
-          const resp = await fetch(
-            `/clientes/${CLIENTE_ID}/telemetria/produccion`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ anio, mes, m2_mes: m2 }),
-            }
-          );
+          const resp = await _postProduccion(anio, mes, m2);
           const json = await resp.json().catch(() => ({}));
           if (!resp.ok) {
             if (fb) { fb.textContent = json.error || `Error ${resp.status}`; fb.style.color = "#dc3545"; }
           } else {
-            if (fb) { fb.textContent = `Guardado: ${json.registros} registros.`; fb.style.color = "#198754"; }
-            input.value = "";
+            if (fb) { fb.textContent = `Guardado: ${json.registros} días. Actualizando KPIs…`; fb.style.color = "#198754"; }
+            fetchDatos();
           }
         } catch (e) {
           if (fb) { fb.textContent = "Error de red."; fb.style.color = "#dc3545"; }
         } finally {
           btn.disabled = false;
         }
-      });
+      };
+
+      btn.addEventListener("click", _guardar);
+
+      // Auto-submit solo si no había datos previos (m2Existente == null)
+      if (m2Existente == null) {
+        _guardar();
+      }
     });
     return wrap;
   }
@@ -366,7 +381,11 @@
         : new Date();
       const anio = hasta.getFullYear();
       const mes  = hasta.getMonth() + 1;
-      panes.produccion.appendChild(_renderFormularioProduccion(anio, mes));
+      // Si ya hay producción registrada, pre-llenar con ese valor y NO auto-submit.
+      const m2Existente = (kpisPaneles.produccion?.produccion_m2?.valor > 0)
+        ? kpisPaneles.produccion.produccion_m2.valor
+        : null;
+      panes.produccion.appendChild(_renderFormularioProduccion(anio, mes, m2Existente));
     }
 
     // Restaurar pestaña activa (persiste entre re-fetches)
