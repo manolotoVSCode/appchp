@@ -2709,7 +2709,6 @@ def create_app() -> Flask:
             obtener_mediciones_para_rango as _omfr,
         )
         from calc.telemetria_kpis import determinar_periodo_anterior as _dpa
-        from concurrent.futures import ThreadPoolExecutor
         from datetime import datetime, timedelta, timezone
 
         nodo_id = request.args.get("nodo_id", type=int)
@@ -2779,35 +2778,30 @@ def create_app() -> Flask:
         desde_ant_iso = desde_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
         hasta_ant_iso = hasta_ant.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Fetch paralelo por medidor: actual + anterior en la misma tarea (max 4 conexiones)
+        # Fetch secuencial por medidor: actual + anterior en la misma iteración.
+        # Serializado deliberadamente para no saturar el pool de sockets de Supabase
+        # (Errno 11 EAGAIN bajo carga concurrente en Render free tier).
         todas_hojas_set = set(todas_hojas_ids)
         hojas_nodo_set = set(hojas_ids_nodo)
         all_medidores = list(todas_hojas_set | hojas_nodo_set)
 
-        def _fetch_medidor_ambos(hid):
-            def _fmt(rows):
-                return [
-                    {
-                        "ts": r["timestamp"],
-                        "kw": float(r.get("potencia_activa_kw") or 0),
-                        "fp": float(r.get("factor_potencia") or 0),
-                    }
-                    for r in rows
-                ]
-            act = _fmt(_omfr(hid, desde_iso, hasta_iso, rango)) if hid in todas_hojas_set else []
-            ant = _fmt(_omfr(hid, desde_ant_iso, hasta_ant_iso, rango)) if hid in hojas_nodo_set else []
-            return hid, act, ant
+        def _fmt_rows(rows):
+            return [
+                {
+                    "ts": r["timestamp"],
+                    "kw": float(r.get("potencia_activa_kw") or 0),
+                    "fp": float(r.get("factor_potencia") or 0),
+                }
+                for r in rows
+            ]
 
         mediciones_por_hoja = {}
         mediciones_ant = {}
-        with ThreadPoolExecutor(max_workers=4) as _ex:
-            futs = [_ex.submit(_fetch_medidor_ambos, hid) for hid in all_medidores]
-            for fut in futs:
-                hid, act, ant = fut.result()
-                if hid in todas_hojas_set:
-                    mediciones_por_hoja[hid] = act
-                if hid in hojas_nodo_set:
-                    mediciones_ant[hid] = ant
+        for hid in all_medidores:
+            if hid in todas_hojas_set:
+                mediciones_por_hoja[hid] = _fmt_rows(_omfr(hid, desde_iso, hasta_iso, rango))
+            if hid in hojas_nodo_set:
+                mediciones_ant[hid] = _fmt_rows(_omfr(hid, desde_ant_iso, hasta_ant_iso, rango))
 
         # Diagnóstico: contar filas por hoja para detectar ventanas vacías
         _n_filas_total = sum(len(v) for v in mediciones_por_hoja.values())

@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.82.4] — 2026-08-08
+
+### Corregido — Saturación de sockets Supabase (Errno 11 EAGAIN) y regresión pestaña Producción
+
+- `web/app.py` — `cliente_dashboard_telemetria_data`: elimina `ThreadPoolExecutor`; los
+  fetches por medidor pasan a ejecución secuencial. El tiempo de respuesta sube ~2–4s pero
+  elimina la saturación de file descriptors en Render free tier (Errno 11 bajo carga
+  concurrente). Se elimina el import de `concurrent.futures`.
+- `storage/repository.py` — `_ejecutar_con_reintentos`: añade `httpx.ReadError` al tuple
+  de excepciones reintentables (era la excepción exacta del traceback de producción; las
+  excepciones anteriores eran insuficientes para capturarla).
+- `web/static/js/dashboard-telemetria.js` — `fetchDatos`: oculta la pestaña Producción
+  **al inicio de cada fetch** (pesimista) cuando el rango no es `30d`, en lugar de esperar
+  la respuesta. Corrige la regresión donde la pestaña quedaba visible al cambiar de 30d a
+  24h/7d mientras el fetch estaba en vuelo.
+
 ## [2.82.3] — 2026-08-08
 
 ### Corregido — Race condition al cambiar de rango temporal en dashboard de telemetría

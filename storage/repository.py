@@ -44,7 +44,7 @@ def _ejecutar_con_reintentos(fn):
     for intento in range(_RETRIES):
         try:
             return fn()
-        except (httpx.RemoteProtocolError, httpx.ReadTimeout, httpx.ConnectError) as e:
+        except (httpx.RemoteProtocolError, httpx.ReadTimeout, httpx.ConnectError, httpx.ReadError) as e:
             ultimo_error = e
             logger.warning(
                 "Supabase error de red (intento %d/%d): %s",

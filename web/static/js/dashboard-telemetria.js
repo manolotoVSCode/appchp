@@ -377,6 +377,14 @@
     _abort = controller;
     _rangoEnCurso = _rango;
 
+    // Ocultar pestaña Producción optimistamente: solo debe verse en rango 30d.
+    // Se aplica antes de recibir respuesta para evitar flash si el rango cambia.
+    const tabProduccionBtn = $("tab-produccion");
+    if (tabProduccionBtn && _rango !== "30d") {
+      tabProduccionBtn.style.display = "none";
+      if (_tabActivo === "produccion") { _tabActivo = "energeticos"; _activarTab(_tabActivo); }
+    }
+
     _mostrarLoading(true);
     _ocultarError();
 
