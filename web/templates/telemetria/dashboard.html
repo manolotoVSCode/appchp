@@ -6,8 +6,18 @@
      data-cliente-id="{{ cliente.id }}"
      data-endpoint="{{ url_for('cliente_dashboard_telemetria_data', cliente_id=cliente.id) }}">
 
-  <div class="dashboard-header d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-    <h4 class="mb-0">Telemetría — {{ cliente.nombre }}</h4>
+  <div class="d-flex align-items-center mb-4 gap-3">
+    {% set _logo = obtener_logo_cliente(cliente) %}
+    {% if _logo %}
+    <img src="{{ _logo }}" alt="{{ cliente.nombre }}"
+         style="height:52px;max-width:160px;object-fit:contain;">
+    {% endif %}
+    <div class="flex-grow-1">
+      <div class="fw-bold fs-5" style="color:var(--color-primary-dark)">{{ cliente.nombre }}</div>
+      <div class="text-muted small">Telemetría
+        <span class="badge bg-warning text-dark ms-1" style="font-size:.55rem;vertical-align:middle">Beta</span>
+      </div>
+    </div>
     <div class="d-flex align-items-center gap-2">
       <div class="btn-group btn-group-sm" role="group" id="rango-selector">
         <button type="button" class="btn btn-outline-primary active" data-rango="24h">24h</button>

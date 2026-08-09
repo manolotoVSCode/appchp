@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.85.7] — 2026-08-08
+
+### Fix — Sidebar sin logo cliente + nombre legible; cabecera Telemetría uniforme
+
+**`web/templates/clientes/_base.html`:**
+- Eliminado `<img>` del logo del cliente en la fila del sidebar.
+- Nombre del cliente: `font-weight:700`, `color:var(--color-primary)` — contraste verde intenso sobre fondo oscuro, igual de legible que las cabeceras de los dashboards.
+
+**`web/templates/telemetria/dashboard.html`:**
+- Cabecera reemplazada con el mismo patrón que Modelado CHP / Contabilidad / Cogeneración: logo del cliente (vía `obtener_logo_cliente`), nombre en verde intenso negrita (`color:var(--color-primary-dark)`), subtítulo "Telemetría · Badge Beta", controles de rango a la derecha.
+
 ## [2.85.5] — 2026-08-08
 
 ### Fix — Sidebar: restaura header "CHP App / Análisis Energético" eliminado por error en 2.85.3
