@@ -31,6 +31,21 @@ body { background: var(--color-bg); margin: 0; }
   display: none;
 }
 
+/* Brand */
+.sidebar-brand {
+  padding: 1.1rem 1.25rem .9rem;
+  border-bottom: 1px solid var(--color-border-sidebar);
+  flex-shrink: 0;
+}
+.sidebar-brand-title {
+  font-weight: 700; font-size: .95rem;
+  color: var(--color-text-primary); line-height: 1.2; letter-spacing: .01em;
+}
+.sidebar-brand-sub {
+  font-size: .7rem; color: var(--color-text-sidebar-muted); margin-top: .15rem;
+  text-transform: uppercase; letter-spacing: .06em;
+}
+
 /* Section labels */
 .sidebar-section {
   padding: .75rem 1.25rem .25rem; font-size: .68rem; font-weight: 600;

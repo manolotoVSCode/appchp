@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.85.5] — 2026-08-08
+
+### Fix — Sidebar: restaura header "CHP App / Análisis Energético" eliminado por error en 2.85.3
+
+**`web/templates/clientes/_base.html`:**
+- Restaurado bloque `<div class="sidebar-brand">` con título "CHP App" y subtítulo "Análisis Energético" como primer elemento del sidebar, encima de la fila del cliente activo.
+
+**`web/static/css/sidebar.css`:**
+- Restauradas reglas `.sidebar-brand`, `.sidebar-brand-title`, `.sidebar-brand-sub` eliminadas por error en 2.85.3.
+
 ## [2.85.3] — 2026-08-08
 
 ### Fix — Sidebar: elimina header genérico y bloque duplicado del cliente activo
