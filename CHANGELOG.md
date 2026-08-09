@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.86.2] — 2026-08-09
+
+### Fix — UndefinedError f.anio / f.mes en template ficha.html
+
+**`web/templates/clientes/ficha.html`:**
+- Líneas 540, 574, 608: reemplazado `f.anio`/`f.mes` por `f.periodo_fin.year`/`f.periodo_fin.month` en las tablas de facturas CFE, gas y calificadas. `CFEInvoice` y `GasInvoice` no exponen `anio`/`mes`; `FacturaCalificado` los tiene como `int | None`. Los tres modelos exponen `periodo_fin: date` que es la fuente canónica.
+
+---
+
 ## [2.86.1] — 2026-08-08
 
 ### Fix — KeyError 'timestamp' en cliente_dashboard_telemetria_data
