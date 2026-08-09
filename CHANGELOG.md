@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.86.0] — 2026-08-08
+
+### Feat — Permisos completos de usuario_normal en ficha del cliente (consolidación tras rollback)
+
+**`web/clientes.py`:**
+- `ficha()`: usuario_normal con acceso a otro cliente es redirigido (nuevo guard `usuario_puede_ver_empresa`).
+- `ficha()`: `cre_params` (CNE/CELs) ahora se calcula para todos los usuarios autenticados, no solo admin.
+- `planta_desactivar()`: cambia `usuario_puede_borrar` por `usuario_puede_escribir_en_cliente` — usuario_normal puede desactivar plantas de su propio cliente.
+- Import: añadido `usuario_puede_ver_empresa` desde `web.auth_permissions`.
+
+**`web/templates/clientes/ficha.html`:**
+- Sección PPA (Suministro Calificado): eliminado wrapper `{% if rol != 'usuario_normal' %}` — visible y editable para todos.
+- Sección Gas (proyección): eliminado wrapper `{% if rol in ('admin', 'master_admin') %}` — visible y editable para todos.
+- Sección CNE/CELs: visible para usuario_normal vía `cre_params` ya calculado en backend.
+- "Borrar cliente" sigue restringido a admin/master_admin.
+
+**`tests/test_ficha_permisos.py`** (nuevo):
+- 7 tests de permisos: GET ficha propio cliente → 200; POST editar → 302; POST medicion_subir → no 403; POST contrato_nuevo → no 403; POST planta_nueva → no 403; POST borrar cliente → 302 sin borrar; GET ficha otro cliente → redirect.
+
 ## [2.85.6] — 2026-08-08
 
 ### Fix — Restaura ficha completa con contratos, facturas y mediciones; permisos de escritura a usuario_normal

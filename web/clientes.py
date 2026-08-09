@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from web.auth import get_current_user as _get_current_user
-from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario, usuario_puede_escribir_en_cliente
+from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario, usuario_puede_escribir_en_cliente, usuario_puede_ver_empresa
 from web.error_logger import log_error
 from calc.excepciones import PeriodoIncompletoError
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
@@ -514,9 +514,13 @@ def ficha(cliente_id: int):
     except Exception:
         pass
     user = _get_current_user()
-    # Parámetros CRE: solo para admin/master_admin
+    # usuario_normal solo puede ver su propio cliente
+    if user and user.get("rol") == "usuario_normal" and not usuario_puede_ver_empresa(cliente_id, user):
+        flash("No tienes acceso a este cliente.", "danger")
+        return redirect(url_for("clientes.listado"))
+    # Parámetros CRE: para todos los usuarios autenticados con acceso al cliente
     cre_params = None
-    if user and user.get("rol") in ("master_admin", "admin"):
+    if user:
         try:
             cre_params = _calcular_cre_params(cliente)
         except Exception:
@@ -3151,7 +3155,7 @@ def planta_editar(cliente_id: int, planta_id: int):
 @clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/desactivar", methods=["POST"])
 def planta_desactivar(cliente_id: int, planta_id: int):
     user = _get_current_user()
-    if not usuario_puede_borrar(user or {}):
+    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
         flash("No tienes permisos para desactivar plantas.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 

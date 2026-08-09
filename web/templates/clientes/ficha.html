@@ -260,7 +260,6 @@
 {% endif %}
 
 <!-- Suministro Calificado (PPA) — Accordion -->
-{% if current_user_data and current_user_data.rol != 'usuario_normal' %}
 <div class="mt-4">
   <div class="accordion" id="acordeonPPA">
     <div class="accordion-item shadow-sm">
@@ -386,10 +385,8 @@
     </div>
   </div>
 </div>
-{% endif %}{# fin bloque PPA usuario_normal #}
 
-{% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
-<!-- Configuración de gas (proyección) — solo admin/master_admin -->
+<!-- Configuración de gas (proyección) -->
 <div class="mt-4">
   <div class="card shadow-sm">
     <div class="card-header fw-semibold text-muted small py-2">Configuración de gas (proyección)</div>
@@ -417,7 +414,6 @@
     </div>
   </div>
 </div>
-{% endif %}
 
 <!-- Acciones cliente -->
 <div class="d-flex gap-2 mt-4">
