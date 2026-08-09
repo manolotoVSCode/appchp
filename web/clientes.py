@@ -505,7 +505,6 @@ def ficha(cliente_id: int):
     session["cliente_activo_nombre"] = cliente["nombre"]
     session["cliente_activo_logo_url"] = cliente.get("logo_url")
     session.pop("_cp_cache", None)
-    contratos = get_contratos_por_cliente(cliente_id)
     # PPA bloques para precarga: {anio: {mes: mwh_str}}
     ppa_bloques: dict[int, dict[int, str]] = {}
     try:
@@ -521,15 +520,12 @@ def ficha(cliente_id: int):
             cre_params = _calcular_cre_params(cliente)
         except Exception:
             pass
-    mediciones_ficha = get_mediciones_por_cliente(cliente_id)
     plantas = obtener_plantas_por_cliente(cliente_id, solo_activas=False)
     resp = make_response(render_template(
         "clientes/ficha.html",
         cliente=cliente,
-        contratos=contratos,
         ppa_bloques=ppa_bloques,
         cre_params=cre_params,
-        mediciones_ficha=mediciones_ficha,
         plantas=plantas,
     ))
     if user and user.get("rol") in ("master_admin", "admin"):

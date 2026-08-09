@@ -1360,17 +1360,19 @@ def set_configuracion(clave: str, valor: str) -> None:
 
 # ── Mediciones cincominutal ────────────────────────────────────────────────────
 
-def get_mediciones_por_cliente(cliente_id: int) -> list[dict]:
-    """Lista de mediciones cargadas para el cliente, ordenadas por anio DESC, mes DESC."""
-    resp = (
+def get_mediciones_por_cliente(cliente_id: int, planta_id: int | None = None) -> list[dict]:
+    """Lista de mediciones cargadas para el cliente, ordenadas por anio DESC, mes DESC.
+
+    Si planta_id se especifica, filtra a las mediciones de esa planta.
+    """
+    q = (
         _supabase.table("mediciones_cincominutal")
-        .select("id, cliente_id, anio, mes, nombre, uploaded_at, uploaded_by")
+        .select("id, cliente_id, planta_id, anio, mes, nombre, uploaded_at, uploaded_by")
         .eq("cliente_id", cliente_id)
-        .order("anio", desc=True)
-        .order("mes", desc=True)
-        .execute()
     )
-    return resp.data or []
+    if planta_id is not None:
+        q = q.eq("planta_id", planta_id)
+    return q.order("anio", desc=True).order("mes", desc=True).execute().data or []
 
 
 def get_medicion(medicion_id: int) -> dict | None:

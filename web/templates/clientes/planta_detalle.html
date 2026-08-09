@@ -1,0 +1,448 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "clientes" %}
+{% set cliente_id = cliente.id %}
+{% block title %}{{ planta.nombre }} — {{ cliente.nombre }}{% endblock %}
+
+{% block content %}
+<!-- Cabecera con breadcrumb -->
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+  <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}"
+     class="btn btn-sm btn-outline-secondary">← {{ cliente.nombre }}</a>
+  <span class="text-muted">/</span>
+  <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">
+    <i class="bi bi-building me-1"></i>{{ planta.nombre }}
+  </h4>
+  {% if planta.direccion_planta %}
+  <span class="text-muted small ms-1">— {{ planta.direccion_planta }}</span>
+  {% endif %}
+  {% if es_admin %}
+  <a href="{{ url_for('clientes.planta_editar', cliente_id=cliente.id, planta_id=planta.id) }}"
+     class="btn btn-sm btn-outline-primary ms-auto">Editar planta</a>
+  {% endif %}
+</div>
+
+<!-- Datos generales de la planta -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header fw-semibold small text-muted">Datos de la planta</div>
+  <div class="card-body">
+    <dl class="row mb-0 small">
+      <dt class="col-sm-3 text-muted">Nombre</dt>
+      <dd class="col-sm-9 fw-semibold mb-2">{{ planta.nombre }}</dd>
+
+      <dt class="col-sm-3 text-muted">Dirección</dt>
+      <dd class="col-sm-9 mb-2">{{ planta.direccion_planta or "—" }}</dd>
+
+      <dt class="col-sm-3 text-muted">Estado</dt>
+      <dd class="col-sm-9 mb-2">
+        {% if planta.activo %}
+        <span class="badge bg-success-subtle text-success border border-success-subtle">Activa</span>
+        {% else %}
+        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactiva</span>
+        {% endif %}
+      </dd>
+
+      {% if planta.notas %}
+      <dt class="col-sm-3 text-muted">Notas</dt>
+      <dd class="col-sm-9 mb-0">{{ planta.notas }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+</div>
+
+<!-- Sección contratos -->
+<div class="mt-4">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Contratos</h5>
+    {% if es_admin %}
+    <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}"
+       class="btn btn-sm btn-primary">+ Nuevo contrato</a>
+    {% endif %}
+  </div>
+
+  {% if contratos %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th>Identificador</th>
+          <th>Notas</th>
+          {% if es_admin %}<th class="text-end">Acciones</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in contratos %}
+        <tr>
+          <td class="fw-semibold">{{ c.nombre }}</td>
+          <td>
+            {% if c.tipo == "electrico_basico" %}
+              <span class="badge text-bg-primary">Eléctrico básico (CFE)</span>
+            {% elif c.tipo == "electrico_calificado" %}
+              <span class="badge text-bg-info text-dark">Eléctrico calificado (PPA)</span>
+            {% else %}
+              <span class="badge text-bg-warning text-dark">Gas</span>
+            {% endif %}
+          </td>
+          <td class="font-monospace">{{ c.identificador_real }}</td>
+          <td class="text-muted">{{ c.notas or "—" }}</td>
+          {% if es_admin %}
+          <td class="text-end">
+            <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=c.id) }}"
+               class="btn btn-outline-secondary btn-sm">Ver</a>
+            <button class="btn btn-outline-danger btn-sm ms-1"
+                    data-bs-toggle="modal" data-bs-target="#modalBorrarContrato"
+                    data-contrato-id="{{ c.id }}"
+                    data-contrato-nombre="{{ c.nombre }}">Borrar</button>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card shadow-sm">
+    <div class="card-body text-center text-muted py-4">
+      Sin contratos en esta planta.
+      {% if es_admin %}
+      <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}">Crear primer contrato</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Sección mediciones -->
+<div class="mt-5">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Mediciones</h5>
+    {% if es_admin %}
+    <a href="{{ url_for('clientes.medicion_subir', cliente_id=cliente.id) }}"
+       class="btn btn-sm btn-primary">+ Subir medición</a>
+    {% endif %}
+  </div>
+
+  {% if es_admin %}
+  <div id="medicion-bulk-bar" class="d-none alert alert-secondary d-flex align-items-center gap-3 py-2 px-3 mb-2" role="status">
+    <span id="medicion-bulk-count" class="fw-semibold small"></span>
+    <button id="medicion-bulk-delete-btn" type="button" class="btn btn-danger btn-sm">
+      Eliminar seleccionados
+    </button>
+  </div>
+  {% endif %}
+
+  {% if mediciones %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm" id="tabla-mediciones">
+      <thead class="table-light">
+        <tr>
+          {% if es_admin %}<th style="width:2rem"><input type="checkbox" id="medicion-select-all"></th>{% endif %}
+          <th>Mes / Año</th>
+          <th>Archivo</th>
+          <th>Fecha de subida</th>
+          {% if es_admin %}<th class="text-end" style="width:3rem">Acción</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% set _meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"] %}
+        {% for m in mediciones %}
+        <tr data-medicion-id="{{ m.id }}">
+          {% if es_admin %}
+          <td><input type="checkbox" class="medicion-row-chk" value="{{ m.id }}"></td>
+          {% endif %}
+          <td class="editable-cell" data-field="mes_anio" data-id="{{ m.id }}"
+              data-anio="{{ m.anio }}" data-mes="{{ m.mes }}" title="{% if es_admin %}Clic para editar{% endif %}">
+            <span class="cell-view">{{ _meses[m.mes - 1] }} {{ m.anio }}</span>
+          </td>
+          <td class="editable-cell" data-field="nombre" data-id="{{ m.id }}"
+              title="{% if es_admin %}Clic para editar{% endif %}">
+            <span class="cell-view">{{ m.nombre or "—" }}</span>
+          </td>
+          <td class="text-muted">{{ m.uploaded_at[:16].replace("T"," ") if m.uploaded_at else "—" }}</td>
+          {% if es_admin %}
+          <td class="text-end">
+            <button type="button" class="btn btn-outline-danger btn-sm medicion-delete-btn"
+                    data-id="{{ m.id }}"
+                    data-label="{{ _meses[m.mes - 1] }} {{ m.anio }}">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card shadow-sm">
+    <div class="card-body text-center text-muted py-4">
+      Sin mediciones en esta planta.
+      {% if es_admin %}
+      <a href="{{ url_for('clientes.medicion_subir', cliente_id=cliente.id) }}">Subir primera medición</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% if es_admin %}
+<!-- Modal borrar medición individual -->
+<div class="modal fade" id="modalBorrarMedicion" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger">Borrar medición</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        ¿Borrar la medición de <strong id="modal-medicion-label"></strong>?
+        <strong>Esta acción no se puede deshacer.</strong>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" id="modal-medicion-confirmar" class="btn btn-danger">Borrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal borrar mediciones en lote -->
+<div class="modal fade" id="modalBorrarMedicionLote" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger">Borrar mediciones</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        ¿Borrar <strong id="modal-lote-count"></strong> medición(es) seleccionada(s)?
+        <strong>Esta acción no se puede deshacer.</strong>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" id="modal-lote-confirmar" class="btn btn-danger">Borrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal borrar contrato -->
+<div class="modal fade" id="modalBorrarContrato" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger">Borrar contrato</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Esta acción borrará permanentemente el contrato
+          <strong id="nombreContratoModal"></strong>.
+          Las facturas vinculadas quedarán sin contrato asignado.
+          <strong>No se puede deshacer.</strong>
+        </p>
+        <label class="form-label fw-semibold">Para confirmar, escriba el nombre exacto del contrato:</label>
+        <input type="text" id="inputConfirmacionContrato" class="form-control" placeholder="">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="POST" id="formBorrarContrato" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="confirmacion" id="hiddenConfirmacionContrato">
+          <button type="submit" id="btnBorrarContrato" class="btn btn-danger" disabled>Borrar permanentemente</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if es_admin %}
+<script>
+(function () {
+  const CLIENTE_ID = {{ cliente.id }};
+  const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
+  const MESES_ABREV = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  // ── Edición inline ───────────────────────────────────────────────────────────
+  document.querySelectorAll(".editable-cell").forEach(function (cell) {
+    cell.style.cursor = "pointer";
+    cell.addEventListener("mouseenter", () => cell.style.backgroundColor = "rgba(0,0,0,.03)");
+    cell.addEventListener("mouseleave", () => { if (!cell.querySelector("input,select")) cell.style.backgroundColor = ""; });
+    cell.addEventListener("click", function () {
+      if (cell.querySelector("input,select")) return;
+      if (cell.dataset.field === "nombre") _activarNombre(cell);
+      else if (cell.dataset.field === "mes_anio") _activarMesAnio(cell);
+    });
+  });
+
+  async function _patch(id, campos) {
+    try {
+      const r = await fetch(`/clientes/${CLIENTE_ID}/mediciones/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+        body: JSON.stringify(campos),
+      });
+      return r.ok;
+    } catch (_) { return false; }
+  }
+
+  function _flashGuardado(cell) {
+    cell.style.backgroundColor = "rgba(25,135,84,.12)";
+    setTimeout(() => { cell.style.backgroundColor = ""; }, 800);
+  }
+
+  function _activarNombre(cell) {
+    const span = cell.querySelector(".cell-view");
+    const valorActual = span.textContent.trim() === "—" ? "" : span.textContent.trim();
+    span.style.display = "none";
+    const inp = document.createElement("input");
+    inp.type = "text"; inp.className = "form-control form-control-sm";
+    inp.value = valorActual; inp.style.minWidth = "140px";
+    cell.appendChild(inp); inp.focus(); inp.select();
+    let _saving = false;
+    const guardar = async () => {
+      if (_saving) return; _saving = true;
+      const nuevo = inp.value.trim();
+      const ok = await _patch(cell.dataset.id, { nombre: nuevo || null });
+      inp.remove(); span.style.display = "";
+      if (ok) { span.textContent = nuevo || "—"; _flashGuardado(cell); }
+    };
+    const cancelar = () => { _saving = true; inp.remove(); span.style.display = ""; };
+    inp.addEventListener("blur", guardar);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } if (e.key === "Escape") cancelar(); });
+  }
+
+  function _activarMesAnio(cell) {
+    const span = cell.querySelector(".cell-view");
+    span.style.display = "none";
+    const anioActual = parseInt(cell.dataset.anio, 10);
+    const mesActual  = parseInt(cell.dataset.mes, 10);
+    const wrap = document.createElement("div");
+    wrap.className = "d-flex gap-1 align-items-center";
+    const selMes = document.createElement("select");
+    selMes.className = "form-select form-select-sm"; selMes.style.width = "80px";
+    MESES_ABREV.forEach((m, i) => {
+      const opt = document.createElement("option");
+      opt.value = i + 1; opt.textContent = m;
+      if (i + 1 === mesActual) opt.selected = true;
+      selMes.appendChild(opt);
+    });
+    const inpAnio = document.createElement("input");
+    inpAnio.type = "number"; inpAnio.min = 2000; inpAnio.max = 2100;
+    inpAnio.className = "form-control form-control-sm"; inpAnio.style.width = "74px";
+    inpAnio.value = anioActual;
+    wrap.appendChild(selMes); wrap.appendChild(inpAnio);
+    cell.appendChild(wrap); selMes.focus();
+    let _saving = false;
+    const guardar = async (e) => {
+      if (cell.contains(e.relatedTarget)) return;
+      if (_saving) return; _saving = true;
+      const nuevoMes = parseInt(selMes.value, 10);
+      const nuevoAnio = parseInt(inpAnio.value, 10);
+      if (nuevoAnio < 2000 || nuevoAnio > 2100) { wrap.remove(); span.style.display = ""; return; }
+      const ok = await _patch(cell.dataset.id, { mes: nuevoMes, anio: nuevoAnio });
+      wrap.remove(); span.style.display = "";
+      if (ok) { cell.dataset.mes = nuevoMes; cell.dataset.anio = nuevoAnio; span.textContent = `${MESES_ABREV[nuevoMes - 1]} ${nuevoAnio}`; _flashGuardado(cell); }
+    };
+    const cancelar = () => { _saving = true; wrap.remove(); span.style.display = ""; };
+    selMes.addEventListener("blur", guardar);
+    inpAnio.addEventListener("blur", guardar);
+    inpAnio.addEventListener("keydown", e => { if (e.key === "Enter") inpAnio.blur(); if (e.key === "Escape") cancelar(); });
+    selMes.addEventListener("keydown", e => { if (e.key === "Escape") cancelar(); });
+  }
+
+  // ── Borrado individual ───────────────────────────────────────────────────────
+  const modalDelEl = document.getElementById("modalBorrarMedicion");
+  const btnConfDel = document.getElementById("modal-medicion-confirmar");
+  let _pendingId = null;
+
+  document.querySelectorAll(".medicion-delete-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      _pendingId = btn.dataset.id;
+      document.getElementById("modal-medicion-label").textContent = btn.dataset.label;
+      bootstrap.Modal.getOrCreateInstance(modalDelEl).show();
+    });
+  });
+
+  if (btnConfDel) {
+    btnConfDel.addEventListener("click", async function () {
+      if (!_pendingId) return;
+      btnConfDel.disabled = true;
+      try {
+        const r = await fetch(`/clientes/${CLIENTE_ID}/mediciones/${_pendingId}`, {
+          method: "DELETE", headers: { "X-CSRFToken": CSRF },
+        });
+        if (r.ok) { document.querySelector(`tr[data-medicion-id="${_pendingId}"]`)?.remove(); _actualizarBulkBar(); }
+      } finally {
+        btnConfDel.disabled = false;
+        bootstrap.Modal.getOrCreateInstance(modalDelEl).hide();
+        _pendingId = null;
+      }
+    });
+  }
+
+  // ── Borrado en bloque ────────────────────────────────────────────────────────
+  const selAll = document.getElementById("medicion-select-all");
+  const bulkBar = document.getElementById("medicion-bulk-bar");
+  const bulkCount = document.getElementById("medicion-bulk-count");
+  const bulkDelBtn = document.getElementById("medicion-bulk-delete-btn");
+  const modalLoteEl = document.getElementById("modalBorrarMedicionLote");
+  const btnLoteConf = document.getElementById("modal-lote-confirmar");
+
+  function _getSeleccionados() {
+    return Array.from(document.querySelectorAll(".medicion-row-chk:checked")).map(c => c.value);
+  }
+  function _actualizarBulkBar() {
+    const ids = _getSeleccionados();
+    if (bulkBar) bulkBar.classList.toggle("d-none", ids.length === 0);
+    if (bulkCount) bulkCount.textContent = `${ids.length} seleccionada(s)`;
+    const todos = document.querySelectorAll(".medicion-row-chk");
+    if (selAll) { selAll.checked = todos.length > 0 && ids.length === todos.length; selAll.indeterminate = ids.length > 0 && ids.length < todos.length; }
+  }
+  document.querySelectorAll(".medicion-row-chk").forEach(c => c.addEventListener("change", _actualizarBulkBar));
+  if (selAll) { selAll.addEventListener("change", function () { document.querySelectorAll(".medicion-row-chk").forEach(c => c.checked = selAll.checked); _actualizarBulkBar(); }); }
+  if (bulkDelBtn) { bulkDelBtn.addEventListener("click", function () { const ids = _getSeleccionados(); if (!ids.length) return; document.getElementById("modal-lote-count").textContent = ids.length; bootstrap.Modal.getOrCreateInstance(modalLoteEl).show(); }); }
+  if (btnLoteConf) {
+    btnLoteConf.addEventListener("click", async function () {
+      const ids = _getSeleccionados(); if (!ids.length) return;
+      btnLoteConf.disabled = true;
+      try {
+        const r = await fetch(`/clientes/${CLIENTE_ID}/mediciones/borrar-lote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+          body: JSON.stringify({ ids }),
+        });
+        if (r.ok) { ids.forEach(id => document.querySelector(`tr[data-medicion-id="${id}"]`)?.remove()); _actualizarBulkBar(); }
+      } finally { btnLoteConf.disabled = false; bootstrap.Modal.getOrCreateInstance(modalLoteEl).hide(); }
+    });
+  }
+
+  // ── Modal borrar contrato ────────────────────────────────────────────────────
+  const modalBorrarContrato = document.getElementById("modalBorrarContrato");
+  if (modalBorrarContrato) {
+    let esperadoContrato = "";
+    modalBorrarContrato.addEventListener("show.bs.modal", function (event) {
+      const btn = event.relatedTarget;
+      const contratoId = btn.getAttribute("data-contrato-id");
+      esperadoContrato = btn.getAttribute("data-contrato-nombre");
+      document.getElementById("nombreContratoModal").textContent = esperadoContrato;
+      document.getElementById("inputConfirmacionContrato").value = "";
+      document.getElementById("inputConfirmacionContrato").placeholder = esperadoContrato;
+      document.getElementById("hiddenConfirmacionContrato").value = "";
+      document.getElementById("btnBorrarContrato").disabled = true;
+      document.getElementById("formBorrarContrato").action =
+        `/clientes/{{ cliente.id }}/contratos/${contratoId}/borrar`;
+    });
+    document.getElementById("inputConfirmacionContrato").addEventListener("input", function () {
+      const coincide = this.value === esperadoContrato;
+      document.getElementById("hiddenConfirmacionContrato").value = this.value;
+      document.getElementById("btnBorrarContrato").disabled = !coincide;
+    });
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

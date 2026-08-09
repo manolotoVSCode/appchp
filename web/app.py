@@ -705,6 +705,48 @@ def create_app() -> Flask:
         """Redirige al listado de clientes."""
         return redirect(url_for("clientes.listado"))
 
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>")
+    def vista_planta(cliente_id: int, planta_id: int):
+        """Vista dedicada de una planta: datos generales, contratos y mediciones filtrados."""
+        user = get_current_user()
+        if not user:
+            return redirect(url_for("auth.login"))
+
+        # usuario_normal solo puede ver su propia empresa
+        if user.get("rol") == "usuario_normal":
+            empresa_id = user.get("empresa_id")
+            if empresa_id != cliente_id:
+                flash("No tienes acceso a este cliente.", "danger")
+                return redirect(url_for("clientes.listado"))
+
+        planta = obtener_planta(planta_id)
+        if planta is None or planta.get("cliente_id") != cliente_id:
+            flash("Planta no encontrada.", "warning")
+            return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+        from storage.repository import get_cliente_con_conteos as _gcc
+        cliente = _gcc(cliente_id)
+        if cliente is None:
+            flash("Cliente no encontrado.", "warning")
+            return redirect(url_for("clientes.listado"))
+
+        # Sincronizar planta activa en sesión para que sidebar quede alineado
+        session["planta_activa_id"] = planta_id
+        session.pop("_plantas_cache", None)
+
+        contratos = get_contratos_por_cliente(cliente_id, planta_id=planta_id)
+        mediciones = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
+        es_admin = user.get("rol") in ("admin", "master_admin")
+
+        return render_template(
+            "clientes/planta_detalle.html",
+            cliente=cliente,
+            planta=planta,
+            contratos=contratos,
+            mediciones=mediciones,
+            es_admin=es_admin,
+        )
+
     @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/seleccionar", methods=["POST"])
     def seleccionar_planta(cliente_id: int, planta_id: int):
         """Cambia la planta activa para el cliente en la sesión actual."""

@@ -27,7 +27,11 @@ Separación de recursos entre Planta 1 y Planta 2 de IBERICA:
   Facturas (cfe, gas, calificado, ppa_bloques): heredan planta_id del
   contrato al que pertenecen (via JOIN contrato_id → contratos.planta_id).
 
-  mediciones_cincominutal: no tiene columna planta_id; se omite.
+  mediciones_cincominutal: clasificación por nombre de medición.
+    - Nombre contiene 'Planta 1' → Planta 1.
+    - Nombre contiene 'Planta 2' → Planta 2.
+    - Sin match y cliente con una sola planta → esa planta.
+    - Sin match y múltiples plantas → primera planta por nombre (warning).
   produccion_diaria: no distinguible — se asigna todo a Planta 2.
 
 Comportamiento:
@@ -36,6 +40,7 @@ Comportamiento:
     2. Asignar medidores por patrón de nombre (padres primero, luego hijos).
     3. Asignar contratos por patrón de nombre.
     4. Asignar facturas heredando planta_id del contrato.
+    4b. Asignar mediciones_cincominutal por patrón del nombre.
     5. Asignar produccion_diaria → Planta 2.
     6. Renombrar cliente 45 → "IBÉRICA TILES".
     7. Marcar cliente 44 como inactivo (si existe).
@@ -78,7 +83,7 @@ CLIENTE_44 = 44  # IBÉRICA TILES Planta 1 → inactivar
 CLIENTE_45 = 45  # IBÉRICA TILES Planta 2 → renombrar a "IBÉRICA TILES"
 NOMBRE_CLIENTE_45_NUEVO = "IBÉRICA TILES"
 
-# Tablas que reciben planta_id (DDL 202610_plantas.sql)
+# Tablas que reciben planta_id (DDL 202610_plantas.sql + ALTER TABLE mediciones_cincominutal)
 TABLAS_PLANTA_ID = [
     "contratos",
     "cfe_facturas",
@@ -87,13 +92,11 @@ TABLAS_PLANTA_ID = [
     "ppa_bloques_mensuales",
     "medidores",
     "produccion_diaria",
-]
-
-# Tablas adicionales que necesitan migración de cliente_id 44→45 pero pueden no
-# tener columna planta_id todavía (el error se captura y se reporta sin abortar).
-TABLAS_SOLO_CLIENTE_ID = [
     "mediciones_cincominutal",
 ]
+
+# Tablas sin columna planta_id (ya ninguna en schema actual)
+TABLAS_SOLO_CLIENTE_ID: list[str] = []
 
 # Tablas de facturas que heredan planta_id del contrato
 TABLAS_FACTURAS = [
@@ -474,6 +477,47 @@ def _asignar_facturas_por_contrato(sb, contrato_planta: dict[int, int]) -> None:
               (f" [{fw} warnings]" if fw else ""))
 
 
+def _asignar_mediciones_iberica(sb, id_planta1: int, id_planta2: int) -> None:
+    """Asigna planta_id a mediciones_cincominutal de cliente 45 por nombre de medición."""
+    print(f"\n  [2d] Asignando mediciones_cincominutal por nombre:")
+
+    try:
+        r = (sb.table("mediciones_cincominutal")
+             .select("id,nombre,planta_id")
+             .eq("cliente_id", CLIENTE_45)
+             .execute())
+        mediciones = r.data or []
+    except Exception as e:
+        print(f"    ERROR leyendo mediciones_cincominutal: {e}")
+        return
+
+    if not mediciones:
+        print("    Sin mediciones en cliente 45.")
+        return
+
+    m1 = m2 = mw = 0
+    for m in mediciones:
+        mid = m["id"]
+        nombre = m.get("nombre") or ""
+        if "Planta 1" in nombre:
+            planta = id_planta1
+            m1 += 1
+        elif "Planta 2" in nombre:
+            planta = id_planta2
+            m2 += 1
+        else:
+            planta = id_planta2
+            mw += 1
+            print(f"    WARNING: medición id={mid} nombre='{nombre}' sin match → Planta 2 (default)")
+        try:
+            sb.table("mediciones_cincominutal").update({"planta_id": planta}).eq("id", mid).execute()
+        except Exception as e:
+            print(f"    ERROR actualizando medición {mid}: {e}")
+
+    print(f"    Mediciones: {m1} → Planta 1, {m2} → Planta 2"
+          + (f" ({mw} defaults)" if mw else ""))
+
+
 def _migrar_iberica(sb, clientes: dict) -> None:
     """Migra cliente 45 al modelo planta usando clasificación por nombre."""
     sep = "─" * 60
@@ -498,6 +542,9 @@ def _migrar_iberica(sb, clientes: dict) -> None:
 
     # [2c] Asignar facturas heredando del contrato ────────────────────────────
     _asignar_facturas_por_contrato(sb, contrato_planta)
+
+    # [2d] Asignar mediciones_cincominutal por nombre ──────────────────────────
+    _asignar_mediciones_iberica(sb, id_planta1, id_planta2)
 
     # [3] produccion_diaria → Planta 2 (no distinguible entre plantas) ────────
     print(f"\n  [3] produccion_diaria → Planta 2 (no distinguible entre plantas):")

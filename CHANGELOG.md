@@ -1,5 +1,57 @@
 # Changelog
 
+## [2.85.1] — 2026-08-08
+
+### Feat — Reestructura ficha cliente y agrega vista dedicada de planta con contratos y mediciones filtrados
+
+**Schema (ejecutar manualmente en Supabase SQL Editor antes de `--forzar`):**
+```sql
+ALTER TABLE mediciones_cincominutal
+    ADD COLUMN IF NOT EXISTS planta_id INTEGER REFERENCES plantas(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_mediciones_cincominutal_planta
+    ON mediciones_cincominutal(planta_id);
+```
+
+**`scripts/migrar_a_plantas.py`:**
+- `mediciones_cincominutal` pasa de `TABLAS_SOLO_CLIENTE_ID` a `TABLAS_PLANTA_ID`.
+- Nueva función `_asignar_mediciones_iberica(sb, id_planta1, id_planta2)`: asigna por patrón del nombre ("Planta 1" / "Planta 2"); sin match → Planta 2 con warning.
+- `--forzar` ya incluye mediciones en el reset de `planta_id`.
+
+**`storage/repository.py`:**
+- `get_mediciones_por_cliente(cliente_id, planta_id=None)`: nuevo parámetro opcional; filtra por `planta_id` cuando se provee. Añade `planta_id` al SELECT.
+
+**`web/clientes.py` — `ficha()`:**
+- Eliminadas queries de `contratos` y `mediciones_ficha`; el template ya no las necesita.
+
+**`web/app.py`:**
+- Nueva ruta `GET /clientes/<cliente_id>/planta/<planta_id>` → `vista_planta`:
+  - Verifica acceso (`usuario_normal` solo puede ver su propia empresa).
+  - Valida que `planta_id` pertenece a `cliente_id`.
+  - Sincroniza `session['planta_activa_id']` al visitar la planta.
+  - Carga contratos y mediciones filtrados por `planta_id`.
+  - Pasa `es_admin` al template para condicionar botones de escritura.
+
+**`web/templates/clientes/ficha.html` (simplificada):**
+- Eliminadas: sección Contratos, sección Mediciones, modales de medición y contrato, JS asociado.
+- Conservados: datos generales, PPA accordion, gas proyección, acciones cliente, sección Plantas.
+- Planta: nombre clickable con enlace a `vista_planta`. La sección es visible para todos los roles; botones Editar/Desactivar solo para admin/master_admin.
+
+**`web/templates/clientes/planta_detalle.html` (nuevo):**
+- Breadcrumb Cliente → Planta.
+- Sección datos generales de la planta (solo lectura).
+- Sección Contratos filtrados por planta: tabla completa para admin, solo lectura para `usuario_normal`.
+- Sección Mediciones filtradas por planta: edición inline + borrado individual/lote solo para admin.
+- Modales de borrado (contrato, medición, lote) solo renderizados con `{% if es_admin %}`.
+
+**Tests (`tests/test_vista_planta.py`):** 7 nuevos tests cubriendo:
+- 200 para master_admin, admin y usuario_normal con acceso.
+- Redirect para usuario_normal de otro cliente.
+- Redirect para planta inexistente.
+- Sincronización de `session['planta_activa_id']`.
+- Contratos filtrados por `planta_id=9`, no por otra planta.
+
+---
+
 ## [2.85.0] — 2026-08-08
 
 ### Feat — Refactor completo a jerarquía cliente > planta con sidebar, ficha y contratos filtrados por planta_activa_id
