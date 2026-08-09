@@ -1,15 +1,26 @@
 # Changelog
 
+## [2.84.1] — 2026-08-08
+
+### Fix — Reescritura del script de migración de plantas: UPDATE en lugar de copy-delete
+
+- `scripts/migrar_a_plantas.py`: enfoque anterior rompía 12 cadenas de FK al
+  eliminar filas padre; el nuevo hace UPDATE en su lugar (los `id` primarios
+  se conservan, las FKs hija siguen intactas).
+- `--forzar` ahora resetea `planta_id = NULL` acotado por `cliente_id IN (...)`
+  en lugar de global (`neq id 0`), previniendo colaterales en clientes no
+  involucrados. La carga de clientes se adelanta antes del bloque de limpieza.
+- Añade `mediciones_cincominutal` (migración de `cliente_id` 44→45, sin
+  `planta_id` en DDL actual).
+- Maneja `user_profiles.empresa_id` (iberica) además de `usuario_clientes`.
+- Verificación final con conteos de NULLs y filas restantes en cliente 44,
+  más queries SQL listos para ejecutar en Supabase SQL Editor.
+
+---
+
 ## [2.84.0] — 2026-08-08
 
 ### Feat — Migración estructural a jerarquía cliente → planta → recursos
-
-**Corrección (fix post-commit):** `scripts/migrar_a_plantas.py` reescrito para
-usar UPDATE en su lugar en vez de copy-delete. El enfoque original rompía 12
-cadenas de FK al cambiar IDs; el nuevo enfoque actualiza `cliente_id` y
-`planta_id` en las filas existentes sin tocar sus `id` primarios. Se añade
-`mediciones_cincominutal` a la lista de tablas migradas, manejo explícito de
-`user_profiles.empresa_id` (iberica), y verificación con conteos por tabla.
 
 Introduce la entidad `plantas` como nivel intermedio entre `clientes` y
 todos los recursos operativos. Infraestructura DDL + scripts de migración y

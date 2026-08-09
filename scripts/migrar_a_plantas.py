@@ -93,28 +93,36 @@ def main():
         print("       Ejecuta primero 202610_plantas.sql en el SQL Editor de Supabase.")
         sys.exit(1)
 
-    # ── --forzar: limpiar planta_id y eliminar plantas ────────────────────────
-    if args.forzar:
-        print("─" * 60)
-        print("--forzar: reseteando planta_id y eliminando plantas…")
-        for tabla in TABLAS_PLANTA_ID:
-            try:
-                sb.table(tabla).update({"planta_id": None}).neq("id", 0).execute()
-                print(f"  {tabla}: planta_id = NULL")
-            except Exception as e:
-                print(f"  {tabla}: {e} (omitida)")
-        try:
-            r = sb.table("plantas").delete().neq("id", 0).execute()
-            n = len(r.data) if r.data else "?"
-            print(f"  plantas: {n} filas eliminadas")
-        except Exception as e:
-            print(f"  plantas: {e}")
-        print("  Limpieza completada.\n")
-
-    # ── Cargar clientes ───────────────────────────────────────────────────────
+    # ── Cargar clientes (se necesita antes de --forzar para acotar por cliente_id) ──
     clientes_r = sb.table("clientes").select("id,nombre,activo").execute()
     clientes = {c["id"]: c for c in clientes_r.data}
     print(f"Clientes encontrados: {len(clientes)}")
+
+    # ── --forzar: limpiar planta_id acotado por cliente y eliminar plantas ────
+    if args.forzar:
+        ids_a_limpiar = list(clientes.keys())
+        print("─" * 60)
+        print(f"--forzar: reseteando planta_id para {len(ids_a_limpiar)} clientes…")
+        for tabla in TABLAS_PLANTA_ID:
+            try:
+                r = (sb.table(tabla)
+                     .update({"planta_id": None})
+                     .in_("cliente_id", ids_a_limpiar)
+                     .execute())
+                n = len(r.data) if r.data else 0
+                print(f"  {tabla}: {n} filas → planta_id = NULL")
+            except Exception as e:
+                print(f"  {tabla}: {e} (omitida)")
+        try:
+            r = (sb.table("plantas")
+                 .delete()
+                 .in_("cliente_id", ids_a_limpiar)
+                 .execute())
+            n = len(r.data) if r.data else "?"
+            print(f"  plantas: {n} eliminadas")
+        except Exception as e:
+            print(f"  plantas: {e}")
+        print("  Limpieza completada.\n")
 
     # ── CASO ESPECIAL: IBERICA ────────────────────────────────────────────────
     _migrar_iberica(sb, clientes)
