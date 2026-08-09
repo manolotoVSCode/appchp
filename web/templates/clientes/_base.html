@@ -65,24 +65,14 @@
   {% endif %}
 
   {% if current_user_data and current_user_data.rol == 'usuario_normal' %}
+  {% if not cliente_activo %}
   {% if clientes_usuario %}
-  <div class="sidebar-section d-flex align-items-center gap-2 pe-2" style="overflow:hidden">
-    {% set _logo = cliente_activo.logo_url if cliente_activo and cliente_activo.logo_url else (clientes_usuario[0].logo_url if clientes_usuario[0].logo_url else None) %}
-    {% if _logo %}
-    <img src="{{ _logo }}" alt="Logo"
-         style="max-height:24px;max-width:56px;object-fit:contain;flex-shrink:0">
-    {% endif %}
-    <span class="text-truncate flex-grow-1" style="font-size:.75rem">
-      {{ nombre_empresa_usuario }}
-    </span>
-  </div>
     {% for c in clientes_usuario %}
-    <div class="d-flex align-items-center sidebar-link{% if cliente_activo and cliente_activo.id == c.id %} active{% endif %} pe-2"
-         style="gap:.4rem">
+    <div class="d-flex align-items-center sidebar-link pe-2" style="gap:.4rem">
       <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=c.id) }}"
          onclick="activarCliente({{ c.id }}, this); return false;"
          class="flex-grow-1 text-truncate" style="text-decoration:none;color:inherit;font-size:.8rem">
-        {{ c.nombre | abreviar_con_cliente(nombre_empresa_usuario) }}
+        {{ c.nombre }}
       </a>
       <a href="{{ url_for('clientes.ficha', cliente_id=c.id) }}"
          class="btn btn-sm btn-outline-secondary flex-shrink-0"
@@ -93,6 +83,7 @@
   <span class="sidebar-link" style="color:#8A9BB0;cursor:default">
     <i class="bi bi-building"></i>Sin clientes asignados
   </span>
+  {% endif %}
   {% endif %}
   {% else %}
   <div class="sidebar-section">Clientes</div>

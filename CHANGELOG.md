@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.85.3] — 2026-08-08
+
+### Fix — Sidebar: elimina header genérico y bloque duplicado del cliente activo
+
+**`web/templates/clientes/_base.html`:**
+- Eliminado bloque `sidebar-brand` ("CHP App / Análisis Energético") — ya no existe elemento DOM; reglas CSS huérfanas también eliminadas.
+- Bloque `usuario_normal` refactorizado: cuando `cliente_activo` está presente, el bloque antiguo (logo + nombre abreviado "IT" + botón Detalles duplicado) se oculta. Solo se muestra cuando no hay cliente activo, permitiendo seleccionar empresa.
+- Cuando no hay cliente activo, el nombre del cliente en el listado se muestra completo (sin filtro `abreviar_con_cliente`).
+
+**`web/static/css/sidebar.css`:**
+- Eliminadas reglas huérfanas `.sidebar-brand`, `.sidebar-brand-title`, `.sidebar-brand-sub`.
+
+## [2.85.2] — 2026-08-08
+
+### Feat — Sidebar muestra logo y nombre real del cliente activo
+
+**`web/templates/clientes/_base.html`:**
+- Eliminado bloque `<div class="sidebar-brand">` con texto estático "CHP App / Análisis Energético".
+- Añadido bloque dinámico al inicio de `#sidebar-content`: cuando `cliente_activo` está definido, muestra logo real (`cliente_activo.logo_url`, altura 32px) si existe, nombre completo con `text-truncate`, y botón "Detalles" enlazado a la ficha del cliente.
+
 ## [2.85.1] — 2026-08-08
 
 ### Feat — Reestructura ficha cliente y agrega vista dedicada de planta con contratos y mediciones filtrados
