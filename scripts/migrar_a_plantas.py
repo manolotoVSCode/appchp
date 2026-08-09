@@ -42,6 +42,7 @@ Uso:
   python3 scripts/migrar_a_plantas.py
   python3 scripts/migrar_a_plantas.py --forzar   # rehace desde cero
 """
+from __future__ import annotations
 
 import os
 import sys
