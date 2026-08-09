@@ -47,12 +47,22 @@
 
 <!-- Sidebar -->
 <nav id="sidebar">
-  <div class="sidebar-brand">
-    <div class="sidebar-brand-title">CHP App</div>
-    <div class="sidebar-brand-sub">Análisis Energético</div>
-  </div>
-
   <div id="sidebar-content">
+
+  {% if cliente_activo %}
+  <div class="d-flex align-items-center gap-2 px-3 py-2" style="border-bottom:1px solid rgba(255,255,255,.08);min-height:48px">
+    {% if cliente_activo.logo_url %}
+    <img src="{{ cliente_activo.logo_url }}" alt="Logo"
+         style="height:32px;max-width:56px;object-fit:contain;flex-shrink:0;border-radius:4px">
+    {% endif %}
+    <span class="flex-grow-1 text-truncate" style="font-size:.8rem;font-weight:600;color:#e8edf2">
+      {{ cliente_activo.nombre }}
+    </span>
+    <a href="{{ url_for('clientes.ficha', cliente_id=cliente_activo.id) }}"
+       class="btn btn-sm btn-outline-secondary flex-shrink-0"
+       style="font-size:.6rem;padding:.1rem .35rem;line-height:1.4">Detalles</a>
+  </div>
+  {% endif %}
 
   {% if current_user_data and current_user_data.rol == 'usuario_normal' %}
   {% if clientes_usuario %}
