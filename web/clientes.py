@@ -35,6 +35,11 @@ from storage.repository import (
     update_contrato,
     delete_contrato,
     ContratoIdentificadorDuplicado,
+    obtener_plantas_por_cliente,
+    obtener_planta,
+    crear_planta,
+    actualizar_planta,
+    planta_tiene_recursos,
     save_cfe_invoice,
     save_gas_invoice,
     get_cfe_facturas_por_contrato,
@@ -517,6 +522,7 @@ def ficha(cliente_id: int):
         except Exception:
             pass
     mediciones_ficha = get_mediciones_por_cliente(cliente_id)
+    plantas = obtener_plantas_por_cliente(cliente_id, solo_activas=False)
     resp = make_response(render_template(
         "clientes/ficha.html",
         cliente=cliente,
@@ -524,6 +530,7 @@ def ficha(cliente_id: int):
         ppa_bloques=ppa_bloques,
         cre_params=cre_params,
         mediciones_ficha=mediciones_ficha,
+        plantas=plantas,
     ))
     if user and user.get("rol") in ("master_admin", "admin"):
         resp.set_cookie("last_cliente_id", str(cliente_id),
@@ -762,11 +769,15 @@ def contrato_nuevo(cliente_id: int):
         flash("El cliente solicitado no existe.", "warning")
         return redirect(url_for("clientes.listado"))
 
+    plantas = obtener_plantas_por_cliente(cliente_id)
+
     if request.method == "POST":
         nombre = request.form.get("nombre", "").strip()
         tipo = request.form.get("tipo", "").strip()
         identificador_real = _sanitizar(request.form.get("identificador_real", ""))
         notas = request.form.get("notas", "").strip() or None
+        planta_id_str = request.form.get("planta_id", "").strip()
+        planta_id = int(planta_id_str) if planta_id_str.isdigit() else None
 
         error = None
         if not nombre:
@@ -775,13 +786,15 @@ def contrato_nuevo(cliente_id: int):
             error = "Tipo inválido. Debe ser eléctrico básico (CFE), eléctrico calificado (PPA) o gas."
         elif not identificador_real:
             error = "El identificador real es obligatorio."
+        elif plantas and planta_id is None:
+            error = "Debes seleccionar una planta para el contrato."
 
         if error is None:
             try:
-                contrato_id = create_contrato(cliente_id, nombre, tipo, identificador_real, notas)
+                contrato_id = create_contrato(cliente_id, nombre, tipo, identificador_real, notas, planta_id=planta_id)
                 logger.info(
-                    "Contrato creado: id=%d, cliente_id=%d, nombre='%s'",
-                    contrato_id, cliente_id, nombre,
+                    "Contrato creado: id=%d, cliente_id=%d, nombre='%s', planta_id=%s",
+                    contrato_id, cliente_id, nombre, planta_id,
                 )
                 flash(f"Contrato '{nombre}' creado correctamente.", "success")
                 return redirect(url_for(
@@ -796,21 +809,28 @@ def contrato_nuevo(cliente_id: int):
         return render_template(
             "clientes/contratos/nuevo.html",
             cliente=cliente,
+            plantas=plantas,
             error=error,
             nombre=nombre,
             tipo=tipo,
             identificador_real=identificador_real,
             notas=notas or "",
+            planta_id_sel=planta_id,
         )
 
+    # GET — preseleccionar la planta activa de la sesión si existe
+    from flask import session as _sess
+    planta_id_default = _sess.get("planta_activa_id")
     return render_template(
         "clientes/contratos/nuevo.html",
         cliente=cliente,
+        plantas=plantas,
         error=None,
         nombre="",
         tipo="electrico_basico",
         identificador_real="",
         notas="",
+        planta_id_sel=planta_id_default,
     )
 
 
@@ -863,11 +883,15 @@ def contrato_editar(cliente_id: int, contrato_id: int):
         return resultado
     contrato = resultado
 
+    plantas = obtener_plantas_por_cliente(cliente_id)
+
     if request.method == "POST":
         nombre = request.form.get("nombre", "").strip()
         tipo = request.form.get("tipo", "").strip()
         identificador_real = _sanitizar(request.form.get("identificador_real", ""))
         notas = request.form.get("notas", "").strip() or None
+        planta_id_str = request.form.get("planta_id", "").strip()
+        planta_id = int(planta_id_str) if planta_id_str.isdigit() else None
 
         error = None
         if not nombre:
@@ -876,10 +900,12 @@ def contrato_editar(cliente_id: int, contrato_id: int):
             error = "Tipo inválido. Debe ser eléctrico básico (CFE), eléctrico calificado (PPA) o gas."
         elif not identificador_real:
             error = "El identificador real es obligatorio."
+        elif plantas and planta_id is None:
+            error = "Debes seleccionar una planta para el contrato."
 
         if error is None:
             try:
-                update_contrato(contrato_id, nombre, tipo, identificador_real, notas)
+                update_contrato(contrato_id, nombre, tipo, identificador_real, notas, planta_id=planta_id)
                 logger.info("Contrato actualizado: id=%d, nombre='%s'", contrato_id, nombre)
                 flash("Contrato actualizado correctamente.", "success")
                 return redirect(url_for(
@@ -895,6 +921,8 @@ def contrato_editar(cliente_id: int, contrato_id: int):
             "clientes/contratos/editar.html",
             cliente=cliente,
             contrato=contrato,
+            plantas=plantas,
+            planta_id_sel=planta_id,
             error=error,
             nombre=nombre,
             tipo=tipo,
@@ -906,6 +934,8 @@ def contrato_editar(cliente_id: int, contrato_id: int):
         "clientes/contratos/editar.html",
         cliente=cliente,
         contrato=contrato,
+        plantas=plantas,
+        planta_id_sel=contrato.planta_id,
         error=None,
         nombre=contrato.nombre,
         tipo=contrato.tipo,
@@ -2992,3 +3022,142 @@ def activar_cliente(cliente_id: int):
     session["cliente_activo_id"] = cliente_id
     session["_empresa_id"] = cliente_id
     return jsonify({"ok": True})
+
+
+# ── Gestión de plantas ────────────────────────────────────────────────────────
+
+@clientes_bp.route("/<int:cliente_id>/planta/nueva", methods=["GET", "POST"])
+def planta_nueva(cliente_id: int):
+    user = _get_current_user()
+    if not usuario_puede_crear(user or {}):
+        flash("No tienes permisos para crear plantas.", "danger")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    if request.method == "POST":
+        nombre = request.form.get("nombre", "").strip()
+        direccion_planta = request.form.get("direccion_planta", "").strip() or None
+        notas = request.form.get("notas", "").strip() or None
+        if not nombre:
+            return render_template(
+                "clientes/planta/nueva.html",
+                cliente=cliente,
+                error="El nombre de la planta es obligatorio.",
+                nombre="",
+                direccion_planta=direccion_planta or "",
+                notas=notas or "",
+            )
+        try:
+            crear_planta(cliente_id, nombre, direccion_planta=direccion_planta, notas=notas)
+            session.pop("_plantas_cache", None)
+            flash(f"Planta '{nombre}' creada correctamente.", "success")
+        except Exception as exc:
+            logger.error("Error creando planta cliente_id=%d: %s", cliente_id, exc)
+            return render_template(
+                "clientes/planta/nueva.html",
+                cliente=cliente,
+                error=f"Error al crear la planta: {exc}",
+                nombre=nombre,
+                direccion_planta=direccion_planta or "",
+                notas=notas or "",
+            )
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    return render_template(
+        "clientes/planta/nueva.html",
+        cliente=cliente,
+        error=None,
+        nombre="",
+        direccion_planta="",
+        notas="",
+    )
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/editar", methods=["GET", "POST"])
+def planta_editar(cliente_id: int, planta_id: int):
+    user = _get_current_user()
+    if not usuario_puede_crear(user or {}):
+        flash("No tienes permisos para editar plantas.", "danger")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    planta = obtener_planta(planta_id)
+    if planta is None or planta.get("cliente_id") != cliente_id:
+        flash("La planta solicitada no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    if request.method == "POST":
+        nombre = request.form.get("nombre", "").strip()
+        direccion_planta = request.form.get("direccion_planta", "").strip() or None
+        notas = request.form.get("notas", "").strip() or None
+
+        if not nombre:
+            return render_template(
+                "clientes/planta/editar.html",
+                cliente=cliente,
+                planta=planta,
+                error="El nombre de la planta es obligatorio.",
+                nombre="",
+                direccion_planta=direccion_planta or "",
+                notas=notas or "",
+            )
+        try:
+            actualizar_planta(planta_id, nombre=nombre, direccion_planta=direccion_planta, notas=notas)
+            session.pop("_plantas_cache", None)
+            flash("Planta actualizada correctamente.", "success")
+        except Exception as exc:
+            logger.error("Error actualizando planta id=%d: %s", planta_id, exc)
+            return render_template(
+                "clientes/planta/editar.html",
+                cliente=cliente,
+                planta=planta,
+                error=f"Error al guardar: {exc}",
+                nombre=nombre,
+                direccion_planta=direccion_planta or "",
+                notas=notas or "",
+            )
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    return render_template(
+        "clientes/planta/editar.html",
+        cliente=cliente,
+        planta=planta,
+        error=None,
+        nombre=planta.get("nombre", ""),
+        direccion_planta=planta.get("direccion_planta") or "",
+        notas=planta.get("notas") or "",
+    )
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/desactivar", methods=["POST"])
+def planta_desactivar(cliente_id: int, planta_id: int):
+    user = _get_current_user()
+    if not usuario_puede_borrar(user or {}):
+        flash("No tienes permisos para desactivar plantas.", "danger")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    planta = obtener_planta(planta_id)
+    if planta is None or planta.get("cliente_id") != cliente_id:
+        flash("La planta solicitada no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+    try:
+        actualizar_planta(planta_id, activo=False)
+        session.pop("_plantas_cache", None)
+        # Si era la planta activa, limpiar sesión
+        if session.get("planta_activa_id") == planta_id:
+            session.pop("planta_activa_id", None)
+        flash(f"Planta '{planta.get('nombre')}' desactivada.", "success")
+    except Exception as exc:
+        logger.error("Error desactivando planta id=%d: %s", planta_id, exc)
+        flash(f"Error al desactivar: {exc}", "danger")
+
+    return redirect(url_for("clientes.ficha", cliente_id=cliente_id))

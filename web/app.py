@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from time import time
 
-from flask import Flask, abort, flash, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, session, url_for
 from flask_wtf.csrf import CSRFProtect
 
 from storage.repository import (
@@ -26,6 +26,8 @@ from storage.repository import (
     set_configuracion,
     get_mediciones_por_cliente,
     get_cliente_chp_params,
+    obtener_plantas_por_cliente,
+    obtener_planta,
 )
 from models.contrato import TIPO_ELECTRICO_CALIFICADO
 from web.error_logger import log_error
@@ -190,13 +192,28 @@ def _calcular_periodo_label(cfe_invoices, gas_invoices, ppa_invoices=None) -> st
     return "Múltiples años"
 
 
-def _cargar_facturas_seleccionadas(cliente_id: int):
+def _pid_de_g() -> int | None:
+    """Lee g.planta_activa_id con seguridad (retorna None fuera de contexto de request o en tests)."""
+    try:
+        return getattr(g, "planta_activa_id", None)
+    except RuntimeError:
+        return None
+
+
+def _tipo_suministro(cliente_id: int) -> str | None:
+    """Wrapper de get_tipo_suministro_electrico_seleccionado que auto-inyecta planta_activa_id."""
+    return get_tipo_suministro_electrico_seleccionado(cliente_id, planta_id=_pid_de_g())
+
+
+def _cargar_facturas_seleccionadas(cliente_id: int, planta_id: int | None = None):
     """Carga facturas CFE y gas seleccionadas del cliente y las formatea para templates.
 
     Retorna (cfe_invoices, gas_invoices, facturas_cfe, facturas_gas).
-    Usa get_facturas_para_dashboard para compartir la query de meses seleccionados (4 queries en total).
+    Si planta_id no se provee, lo lee de g.planta_activa_id (before_request).
     """
-    cfe_invoices, gas_invoices = get_facturas_para_dashboard(cliente_id)
+    if planta_id is None:
+        planta_id = _pid_de_g()
+    cfe_invoices, gas_invoices = get_facturas_para_dashboard(cliente_id, planta_id=planta_id)
 
     facturas_cfe = [
         {
@@ -225,9 +242,13 @@ def _cargar_facturas_seleccionadas(cliente_id: int):
     return cfe_invoices, gas_invoices, facturas_cfe, facturas_gas
 
 
-def _cargar_facturas_ppa(cliente_id: int):
-    """Carga facturas PPA y gas seleccionadas. Retorna (ppa_invoices, gas_invoices, facturas_ppa, facturas_gas)."""
-    ppa_invoices, gas_invoices = get_facturas_ppa_y_gas_para_dashboard(cliente_id)
+def _cargar_facturas_ppa(cliente_id: int, planta_id: int | None = None):
+    """Carga facturas PPA y gas seleccionadas. Retorna (ppa_invoices, gas_invoices, facturas_ppa, facturas_gas).
+    Si planta_id no se provee, lo lee de g.planta_activa_id (before_request).
+    """
+    if planta_id is None:
+        planta_id = _pid_de_g()
+    ppa_invoices, gas_invoices = get_facturas_ppa_y_gas_para_dashboard(cliente_id, planta_id=planta_id)
 
     facturas_ppa = [
         {
@@ -541,6 +562,53 @@ def create_app() -> Flask:
                     flash("No tienes acceso a ese cliente.", "danger")
                     return redirect(url_for("clientes.listado"))
 
+    @app.before_request
+    def _resolver_planta_activa():
+        """Resuelve planta_activa_id para rutas de cliente y lo almacena en g.
+
+        Si no hay planta en sesión (o pertenece a otro cliente), asigna la
+        primera planta del cliente activo. No realiza query BD si la sesión
+        ya contiene un valor válido y consistente con el cliente actual.
+        """
+        import re as _re2
+        path = request.path
+        m = _re2.match(r"^/clientes/(\d+)", path)
+        if not m:
+            g.planta_activa_id = None
+            g.planta_activa = None
+            g.plantas_cliente = []
+            return
+        cliente_id = int(m.group(1))
+        # Cache de plantas en sesión (TTL 120s)
+        _pc = session.get("_plantas_cache")
+        if (
+            _pc
+            and _pc.get("cliente_id") == cliente_id
+            and time() - _pc.get("ts", 0) < 120
+        ):
+            plantas = _pc["plantas"]
+        else:
+            try:
+                plantas = obtener_plantas_por_cliente(cliente_id)
+            except Exception:
+                plantas = []
+            session["_plantas_cache"] = {"cliente_id": cliente_id, "ts": time(), "plantas": plantas}
+
+        g.plantas_cliente = plantas
+        if not plantas:
+            g.planta_activa_id = None
+            g.planta_activa = None
+            return
+
+        ids_de_este_cliente = {p["id"] for p in plantas}
+        planta_activa_id = session.get("planta_activa_id")
+        if not planta_activa_id or planta_activa_id not in ids_de_este_cliente:
+            planta_activa_id = plantas[0]["id"]
+            session["planta_activa_id"] = planta_activa_id
+
+        g.planta_activa_id = planta_activa_id
+        g.planta_activa = next((p for p in plantas if p["id"] == planta_activa_id), plantas[0])
+
     @app.context_processor
     def _inject_globals():
         from storage.repository import get_cliente_con_conteos as _get_cliente
@@ -599,14 +667,20 @@ def create_app() -> Flask:
             session.pop("cliente_activo_logo_url", None)
             session.pop("_cp_cache", None)
             return {**base, "cliente_activo": None}
-        contratos = [asdict(c) for c in get_contratos_por_cliente(id_)]
+        # Filtrar contratos por planta activa (g.planta_activa_id disponible tras before_request)
+        planta_id_cp = getattr(g, "planta_activa_id", None)
+        contratos = [asdict(c) for c in get_contratos_por_cliente(id_, planta_id=planta_id_cp)]
         data = {
             "id": id_,
             "nombre": cliente["nombre"],
             "contratos": contratos,
             "logo_url": cliente.get("logo_url"),
         }
-        session["_cp_cache"] = {"id": id_, "ts": time(), "data": data}
+        # No cachear en sesión cuando filtramos por planta (el cache no incluye planta_id)
+        if planta_id_cp is None:
+            session["_cp_cache"] = {"id": id_, "ts": time(), "data": data}
+        else:
+            session.pop("_cp_cache", None)
         return {**base, "cliente_activo": data}
 
     @app.context_processor
@@ -617,10 +691,31 @@ def create_app() -> Flask:
     def inject_fase2_flag():
         return {"fase2_habilitada": app.config["FASE2_HABILITADA"]}
 
+    @app.context_processor
+    def _inject_planta_context():
+        """Inyecta planta_activa_id, planta_activa y plantas_cliente en todos los templates."""
+        return {
+            "planta_activa_id": getattr(g, "planta_activa_id", None),
+            "planta_activa": getattr(g, "planta_activa", None),
+            "plantas_cliente": getattr(g, "plantas_cliente", []),
+        }
+
     @app.route("/")
     def dashboard():
         """Redirige al listado de clientes."""
         return redirect(url_for("clientes.listado"))
+
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/seleccionar", methods=["POST"])
+    def seleccionar_planta(cliente_id: int, planta_id: int):
+        """Cambia la planta activa para el cliente en la sesión actual."""
+        planta = obtener_planta(planta_id)
+        if planta is None or planta.get("cliente_id") != cliente_id:
+            flash("Planta no válida para este cliente.", "danger")
+            return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
+        session["planta_activa_id"] = planta_id
+        session.pop("_plantas_cache", None)  # forzar recarga
+        referer = request.referrer
+        return redirect(referer or url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
 
     @app.route("/clientes/<int:cliente_id>/dashboard")
     def cliente_dashboard(cliente_id: int):
@@ -634,7 +729,7 @@ def create_app() -> Flask:
         if err:
             return err
 
-        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id)
 
         try:
             if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
@@ -731,7 +826,7 @@ def create_app() -> Flask:
         if err:
             return err
 
-        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id)
 
         try:
             from decimal import Decimal as _D
@@ -935,7 +1030,7 @@ def create_app() -> Flask:
         if cliente is None:
             return jsonify({"error": "no_encontrado"}), 404
 
-        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id)
 
         try:
             if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
@@ -1034,7 +1129,7 @@ def create_app() -> Flask:
         if err:
             return err
 
-        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id)
         if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
             return jsonify({"error": "No aplica a PPA"}), 400
 
@@ -1124,7 +1219,7 @@ def create_app() -> Flask:
         if cliente is None:
             return jsonify({"error": "no_encontrado"}), 404
 
-        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id)
 
         try:
             _cfg = {row["clave"]: row["valor"] for row in list_configuracion()}
@@ -1428,7 +1523,7 @@ def create_app() -> Flask:
         if err:
             return err
 
-        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id)
 
         try:
             if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
@@ -1677,7 +1772,7 @@ def create_app() -> Flask:
             eficiencia_caldera=_qparam("eficiencia_caldera", 0.85, 0.50, 0.99),
         )
 
-        tipo_suministro = get_tipo_suministro_electrico_seleccionado(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id)
 
         try:
             _cfg = {row["clave"]: row["valor"] for row in list_configuracion()}

@@ -428,6 +428,83 @@
 </div>
 {% endif %}
 
+<!-- Sección plantas -->
+{% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
+<div class="mt-5">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Plantas</h5>
+    <a href="{{ url_for('clientes.planta_nueva', cliente_id=cliente.id) }}"
+       class="btn btn-sm btn-primary">+ Nueva planta</a>
+  </div>
+  {% if plantas %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr>
+          <th>Nombre</th>
+          <th>Dirección</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for planta in plantas %}
+        <tr>
+          <td class="fw-semibold">{{ planta.nombre }}</td>
+          <td>{{ planta.direccion_planta or '—' }}</td>
+          <td>
+            {% if planta.activo %}
+            <span class="badge bg-success-subtle text-success border border-success-subtle">Activa</span>
+            {% else %}
+            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactiva</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              <a href="{{ url_for('clientes.planta_editar', cliente_id=cliente.id, planta_id=planta.id) }}"
+                 class="btn btn-xs btn-outline-secondary">Editar</a>
+              {% if planta.activo %}
+              <button class="btn btn-xs btn-outline-warning"
+                      onclick="confirmarDesactivarPlanta({{ planta.id }}, '{{ planta.nombre | e }}')">
+                Desactivar
+              </button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted small">Sin plantas registradas.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Modal desactivar planta -->
+<div class="modal fade" id="modalDesactivarPlanta" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-warning">Desactivar planta</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small mb-0">¿Desactivar la planta <strong id="nombrePlantaDesactivar"></strong>?
+          Los recursos asociados se conservan; la planta dejará de aparecer en el selector.</p>
+      </div>
+      <div class="modal-footer">
+        <form id="formDesactivarPlanta" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-warning">Desactivar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Sección contratos -->
 <div class="mt-5">
   <div class="d-flex align-items-center justify-content-between mb-2">
@@ -687,6 +764,15 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// ── Plantas: desactivar ────────────────────────────────────────────────────────
+function confirmarDesactivarPlanta(plantaId, nombrePlanta) {
+  document.getElementById("nombrePlantaDesactivar").textContent = nombrePlanta;
+  document.getElementById("formDesactivarPlanta").action =
+    "/clientes/{{ cliente.id }}/planta/" + plantaId + "/desactivar";
+  new bootstrap.Modal(document.getElementById("modalDesactivarPlanta")).show();
+}
+</script>
 <script>
 // ── Mediciones: edición inline y borrado ──────────────────────────────────────
 (function () {

@@ -20,3 +20,4 @@ class Contrato:
     identificador_real: str
     notas: str | None
     created_at: str | None
+    planta_id: int | None = None

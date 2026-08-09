@@ -667,6 +667,7 @@ def _row_to_contrato(row: dict) -> Contrato:
         identificador_real=row["identificador_real"],
         notas=row.get("notas"),
         created_at=row.get("created_at"),
+        planta_id=row.get("planta_id"),
     )
 
 
@@ -697,12 +698,12 @@ def get_contrato_con_conteos(contrato_id: int) -> dict | None:
     }
 
 
-def get_contratos_por_cliente(cliente_id: int) -> list[Contrato]:
-    """Devuelve todos los contratos del cliente, ordenados por nombre."""
-    result = _supabase.table("contratos").select("*").eq(
-        "cliente_id", cliente_id
-    ).order("nombre").execute()
-    return [_row_to_contrato(r) for r in result.data]
+def get_contratos_por_cliente(cliente_id: int, planta_id: int | None = None) -> list[Contrato]:
+    """Devuelve contratos del cliente. Si planta_id se provee, filtra a esa planta."""
+    q = _supabase.table("contratos").select("*").eq("cliente_id", cliente_id)
+    if planta_id is not None:
+        q = q.eq("planta_id", planta_id)
+    return [_row_to_contrato(r) for r in q.order("nombre").execute().data]
 
 
 def get_contrato(contrato_id: int) -> Contrato | None:
@@ -719,17 +720,21 @@ def create_contrato(
     tipo: str,
     identificador_real: str,
     notas: str | None,
+    planta_id: int | None = None,
 ) -> int:
     """Crea un contrato. Devuelve el id asignado.
     Lanza ContratoIdentificadorDuplicado si (cliente_id, identificador_real) ya existe."""
+    payload: dict = {
+        "cliente_id": cliente_id,
+        "nombre": nombre,
+        "tipo": tipo,
+        "identificador_real": identificador_real,
+        "notas": notas if notas else None,
+    }
+    if planta_id is not None:
+        payload["planta_id"] = planta_id
     try:
-        result = _supabase.table("contratos").insert({
-            "cliente_id": cliente_id,
-            "nombre": nombre,
-            "tipo": tipo,
-            "identificador_real": identificador_real,
-            "notas": notas if notas else None,
-        }).execute()
+        result = _supabase.table("contratos").insert(payload).execute()
     except Exception as exc:
         msg = str(exc).lower()
         if "unique" in msg or "duplicate" in msg or "contratos_cliente_id_identificador_real" in msg:
@@ -744,16 +749,20 @@ def update_contrato(
     tipo: str,
     identificador_real: str,
     notas: str | None,
+    planta_id: int | None = None,
 ) -> None:
     """Actualiza los campos del contrato.
     Lanza ContratoIdentificadorDuplicado si el nuevo identificador_real ya existe para el cliente."""
+    payload: dict = {
+        "nombre": nombre,
+        "tipo": tipo,
+        "identificador_real": identificador_real,
+        "notas": notas if notas else None,
+    }
+    if planta_id is not None:
+        payload["planta_id"] = planta_id
     try:
-        _supabase.table("contratos").update({
-            "nombre": nombre,
-            "tipo": tipo,
-            "identificador_real": identificador_real,
-            "notas": notas if notas else None,
-        }).eq("id", contrato_id).execute()
+        _supabase.table("contratos").update(payload).eq("id", contrato_id).execute()
     except Exception as exc:
         msg = str(exc).lower()
         if "unique" in msg or "duplicate" in msg or "contratos_cliente_id_identificador_real" in msg:
@@ -874,24 +883,22 @@ def delete_meses_seleccionados_anio(contrato_id: int, anio: int) -> None:
     ).eq("anio", anio).execute()
 
 
-def get_tipos_electricos_con_meses_seleccionados(cliente_id: int) -> list[str]:
+def get_tipos_electricos_con_meses_seleccionados(cliente_id: int, planta_id: int | None = None) -> list[str]:
     """
     Devuelve lista de tipos de contrato eléctrico que tienen al menos un mes
-    seleccionado para el cliente dado.
-
-    Posibles valores de retorno: [], ['electrico_basico'], ['electrico_calificado'],
-    ['electrico_basico', 'electrico_calificado']
+    seleccionado para el cliente dado. Si planta_id se provee, limita a esa planta.
     """
     from models.contrato import TIPOS_ELECTRICOS
 
-    # Query contratos del cliente que son eléctricos
-    contratos = _supabase.table("contratos").select("id, tipo").eq("cliente_id", cliente_id).in_("tipo", list(TIPOS_ELECTRICOS)).execute()
+    q = _supabase.table("contratos").select("id, tipo").eq("cliente_id", cliente_id).in_("tipo", list(TIPOS_ELECTRICOS))
+    if planta_id is not None:
+        q = q.eq("planta_id", planta_id)
+    contratos = q.execute()
 
     tipos_con_meses = set()
     for contrato in contratos.data:
         contrato_id = contrato["id"]
         tipo = contrato["tipo"]
-        # Check if this contrato has any selected months
         result = _supabase.table("contrato_meses_seleccionados").select("contrato_id").eq("contrato_id", contrato_id).limit(1).execute()
         if result.data:
             tipos_con_meses.add(tipo)
@@ -899,7 +906,7 @@ def get_tipos_electricos_con_meses_seleccionados(cliente_id: int) -> list[str]:
     return sorted(tipos_con_meses)
 
 
-def get_tipo_suministro_electrico_seleccionado(cliente_id: int) -> str | None:
+def get_tipo_suministro_electrico_seleccionado(cliente_id: int, planta_id: int | None = None) -> str | None:
     """
     Detecta el tipo de suministro eléctrico de los meses seleccionados del cliente.
 
@@ -911,7 +918,7 @@ def get_tipo_suministro_electrico_seleccionado(cliente_id: int) -> str | None:
     Nota: el bloqueo de mezcla (Task 22) garantiza que nunca coexistan basico y calificado.
     Si por algún bug existieran ambos, retorna el primero encontrado.
     """
-    tipos = get_tipos_electricos_con_meses_seleccionados(cliente_id)
+    tipos = get_tipos_electricos_con_meses_seleccionados(cliente_id, planta_id=planta_id)
     if not tipos:
         return None
     return tipos[0]  # bloqueo de mezcla garantiza máximo uno; si hay dos, tomar el primero
@@ -1037,14 +1044,19 @@ def get_sidebar_data_cliente(cliente_id: int) -> dict[int, list[dict]]:
     return resultado
 
 
-def get_facturas_para_dashboard(cliente_id: int) -> tuple[list[CFEInvoice], list[GasInvoice]]:
-    """Carga facturas CFE y gas seleccionadas en 4 queries fijas, compartiendo la consulta de
-    meses seleccionados. Evita las 2 queries duplicadas que ocurrían al llamar a
-    get_cfe_invoices_for_dashboard y get_gas_invoices_for_dashboard por separado.
+def get_facturas_para_dashboard(cliente_id: int, planta_id: int | None = None) -> tuple[list[CFEInvoice], list[GasInvoice]]:
+    """Carga facturas CFE y gas seleccionadas. Si planta_id se provee, solo considera
+    contratos de esa planta, filtrando los meses seleccionados de otras plantas.
     """
     seleccionados = get_meses_seleccionados_por_cliente(cliente_id)
     if not seleccionados:
         return [], []
+    if planta_id is not None:
+        r = _supabase.table("contratos").select("id").eq("planta_id", planta_id).execute()
+        ids_planta = {row["id"] for row in r.data}
+        seleccionados = {(c, a, m) for c, a, m in seleccionados if c in ids_planta}
+        if not seleccionados:
+            return [], []
     contrato_ids = list({c for c, _, _ in seleccionados})
 
     cfe_result = _supabase.table("cfe_facturas").select(
@@ -1237,11 +1249,18 @@ def get_facturas_para_dashboard_calificado(
 
 def get_facturas_ppa_y_gas_para_dashboard(
     cliente_id: int,
+    planta_id: int | None = None,
 ) -> tuple[list[FacturaCalificado], list[GasInvoice]]:
-    """Carga facturas PPA y gas seleccionadas en 3 queries, para clientes con suministro calificado."""
+    """Carga facturas PPA y gas seleccionadas. Si planta_id se provee, filtra a esa planta."""
     seleccionados = get_meses_seleccionados_por_cliente(cliente_id)
     if not seleccionados:
         return [], []
+    if planta_id is not None:
+        r = _supabase.table("contratos").select("id").eq("planta_id", planta_id).execute()
+        ids_planta = {row["id"] for row in r.data}
+        seleccionados = {(c, a, m) for c, a, m in seleccionados if c in ids_planta}
+        if not seleccionados:
+            return [], []
     contrato_ids = list({c for c, _, _ in seleccionados})
 
     ppa_result = _supabase.table("facturas_electricidad_calificado").select("*").eq(
@@ -2219,3 +2238,77 @@ def obtener_mediciones_para_rango(
             }
             for r in rows
         ]
+
+
+# ── Plantas ────────────────────────────────────────────────────────────────────
+
+def obtener_plantas_por_cliente(cliente_id: int, solo_activas: bool = True) -> list[dict]:
+    """Devuelve plantas del cliente ordenadas por nombre.
+    Por defecto solo activas; con solo_activas=False devuelve todas.
+    """
+    q = _supabase.table("plantas").select("*").eq("cliente_id", cliente_id)
+    if solo_activas:
+        q = q.eq("activo", True)
+    return q.order("nombre").execute().data or []
+
+
+def obtener_planta(planta_id: int) -> dict | None:
+    """Devuelve una planta por id, o None si no existe."""
+    r = _supabase.table("plantas").select("*").eq("id", planta_id).execute()
+    return r.data[0] if r.data else None
+
+
+def crear_planta(
+    cliente_id: int,
+    nombre: str,
+    *,
+    direccion_planta: str | None = None,
+    notas: str | None = None,
+) -> dict:
+    """Inserta una planta y retorna el registro creado."""
+    payload = {"cliente_id": cliente_id, "nombre": nombre}
+    if direccion_planta:
+        payload["direccion_planta"] = direccion_planta
+    if notas:
+        payload["notas"] = notas
+    r = _supabase.table("plantas").insert(payload).execute()
+    return r.data[0]
+
+
+def actualizar_planta(planta_id: int, **campos) -> dict:
+    """Actualiza campos permitidos de la planta y retorna el registro actualizado."""
+    _CAMPOS_PERMITIDOS = {"nombre", "direccion_planta", "notas", "activo"}
+    payload = {k: v for k, v in campos.items() if k in _CAMPOS_PERMITIDOS}
+    if not payload:
+        raise ValueError("Sin campos válidos para actualizar.")
+    r = _supabase.table("plantas").update(payload).eq("id", planta_id).execute()
+    return r.data[0]
+
+
+def planta_tiene_recursos(planta_id: int) -> dict:
+    """Verifica si la planta tiene recursos vinculados.
+
+    Retorna dict vacío si no hay recursos, o dict con conteos por categoría:
+    {"contratos": N, "medidores": N, "facturas_cfe": N, "facturas_gas": N}
+    """
+    conteos: dict[str, int] = {}
+    for tabla, label in [
+        ("contratos", "contratos"),
+        ("medidores", "medidores"),
+        ("cfe_facturas", "facturas_cfe"),
+        ("gas_facturas", "facturas_gas"),
+    ]:
+        try:
+            r = _supabase.table(tabla).select("id", count="exact").eq("planta_id", planta_id).execute()
+            n = r.count or 0
+            if n:
+                conteos[label] = n
+        except Exception:
+            pass
+    return conteos
+
+
+def get_contratos_por_planta(planta_id: int) -> list[Contrato]:
+    """Devuelve contratos de una planta específica, ordenados por nombre."""
+    r = _supabase.table("contratos").select("*").eq("planta_id", planta_id).order("nombre").execute()
+    return [_row_to_contrato(row) for row in r.data]

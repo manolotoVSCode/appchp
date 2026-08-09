@@ -280,6 +280,7 @@ def test_borrar_confirmacion_correcta(auth_client, monkeypatch):
 def test_contrato_nuevo_get(auth_client, monkeypatch):
     """GET /clientes/1/contratos/nuevo → 200 con formulario."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("web.clientes.obtener_plantas_por_cliente", lambda *a, **kw: [])
     resp = auth_client.get("/clientes/1/contratos/nuevo")
     assert resp.status_code == 200
     assert b"Nuevo contrato" in resp.data
@@ -288,6 +289,7 @@ def test_contrato_nuevo_get(auth_client, monkeypatch):
 def test_contrato_nuevo_exitoso(auth_client, monkeypatch):
     """POST /clientes/1/contratos/nuevo válido → redirige a ficha del contrato."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("web.clientes.obtener_plantas_por_cliente", lambda *a, **kw: [])
     monkeypatch.setattr("web.clientes.create_contrato", lambda *a, **kw: 10)
     resp = auth_client.post("/clientes/1/contratos/nuevo", data={
         "nombre": "CFE Planta 1",
@@ -302,6 +304,7 @@ def test_contrato_nuevo_exitoso(auth_client, monkeypatch):
 def test_contrato_nuevo_campos_vacios(auth_client, monkeypatch):
     """POST /clientes/1/contratos/nuevo sin nombre → 200 con error."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("web.clientes.obtener_plantas_por_cliente", lambda *a, **kw: [])
     resp = auth_client.post("/clientes/1/contratos/nuevo", data={
         "nombre": "",
         "tipo": "electrico_basico",
@@ -316,6 +319,7 @@ def test_contrato_nuevo_identificador_duplicado(auth_client, monkeypatch):
     """POST /clientes/1/contratos/nuevo con identificador duplicado → 200 con error."""
     from storage.repository import ContratoIdentificadorDuplicado
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
+    monkeypatch.setattr("web.clientes.obtener_plantas_por_cliente", lambda *a, **kw: [])
     monkeypatch.setattr(
         "web.clientes.create_contrato",
         lambda *a, **kw: (_ for _ in ()).throw(ContratoIdentificadorDuplicado("812990300016")),
@@ -383,6 +387,7 @@ def test_contrato_editar_get(auth_client, monkeypatch):
     """GET /clientes/1/contratos/10/editar → 200 con formulario pre-rellenado."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_BASE)
+    monkeypatch.setattr("web.clientes.obtener_plantas_por_cliente", lambda *a, **kw: [])
     resp = auth_client.get("/clientes/1/contratos/10/editar")
     assert resp.status_code == 200
     assert b"CFE Planta 1" in resp.data
@@ -393,6 +398,7 @@ def test_contrato_editar_post_exitoso(auth_client, monkeypatch):
     """POST /clientes/1/contratos/10/editar válido → redirige a ficha del contrato."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("web.clientes.get_contrato", lambda id: _CONTRATO_BASE)
+    monkeypatch.setattr("web.clientes.obtener_plantas_por_cliente", lambda *a, **kw: [])
     monkeypatch.setattr("web.clientes.update_contrato", lambda *a, **kw: None)
     resp = auth_client.post("/clientes/1/contratos/10/editar", data={
         "nombre": "CFE Planta 1 Actualizado",

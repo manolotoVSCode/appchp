@@ -25,6 +25,18 @@
                value="{{ nombre }}" required>
       </div>
 
+      {% if plantas %}
+      <div class="mb-3">
+        <label for="planta_id" class="form-label fw-semibold">Planta <span class="text-danger">*</span></label>
+        <select class="form-select" id="planta_id" name="planta_id" required>
+          <option value="">— Seleccionar planta —</option>
+          {% for p in plantas %}
+          <option value="{{ p.id }}" {% if p.id == planta_id_sel %}selected{% endif %}>{{ p.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
       <div class="mb-3">
         <label for="tipo" class="form-label fw-semibold">Tipo <span class="text-danger">*</span></label>
         <select class="form-select" id="tipo" name="tipo" required>

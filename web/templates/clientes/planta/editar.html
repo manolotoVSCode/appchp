@@ -1,0 +1,44 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "clientes" %}
+{% block title %}Editar planta — {{ planta.nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}" class="btn btn-sm btn-outline-secondary">← Volver</a>
+  <h4 class="fw-bold mb-0" style="color:var(--color-primary-dark)">Editar planta — {{ planta.nombre }}</h4>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="card shadow-sm" style="max-width:540px">
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="mb-3">
+        <label for="nombre" class="form-label fw-semibold">Nombre de la planta <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="nombre" name="nombre"
+               value="{{ nombre }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label for="direccion_planta" class="form-label fw-semibold">Dirección (opcional)</label>
+        <input type="text" class="form-control" id="direccion_planta" name="direccion_planta"
+               value="{{ direccion_planta }}">
+      </div>
+
+      <div class="mb-4">
+        <label for="notas" class="form-label fw-semibold">Notas</label>
+        <textarea class="form-control" id="notas" name="notas" rows="2">{{ notas }}</textarea>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

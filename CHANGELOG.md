@@ -1,5 +1,43 @@
 # Changelog
 
+## [2.85.0] — 2026-08-08
+
+### Feat — Refactor completo a jerarquía cliente > planta con sidebar, ficha y contratos filtrados por planta_activa_id
+
+Introduce `planta_id` como clave operacional en toda la capa de datos, UI y dashboards.
+La planta activa se resuelve vía `session['planta_activa_id']` en un `before_request`,
+se expone a templates con un `context_processor`, y filtra contratos, facturas y
+selección de meses sin cambiar las URLs existentes.
+
+**Repository (`storage/repository.py`):**
+- `Contrato` dataclass: nuevo campo `planta_id: int | None = None` (default para compatibilidad).
+- `get_contratos_por_cliente`: parámetro opcional `planta_id` que añade filtro `.eq`.
+- `create_contrato` / `update_contrato`: aceptan `planta_id` y lo incluyen en el payload.
+- `get_facturas_para_dashboard` / `get_facturas_ppa_y_gas_para_dashboard` / `get_tipos_electricos_con_meses_seleccionados` / `get_tipo_suministro_electrico_seleccionado`: filtran por planta cuando se provee.
+- 6 funciones nuevas: `obtener_plantas_por_cliente`, `obtener_planta`, `crear_planta`, `actualizar_planta`, `planta_tiene_recursos`, `get_contratos_por_planta`.
+
+**Backend (`web/app.py`):**
+- `@before_request _resolver_planta_activa()`: resuelve `g.planta_activa_id` desde sesión para rutas `/clientes/<id>/...`, con caché TTL 120 s en sesión.
+- `@context_processor _inject_planta_context()`: inyecta `planta_activa_id`, `planta_activa`, `plantas_cliente` en todos los templates.
+- Helpers `_pid_de_g()` y `_tipo_suministro()`: auto-leen `g.planta_activa_id`.
+- Ruta `POST /clientes/<id>/planta/<pid>/seleccionar`: cambia planta activa en sesión.
+
+**Backend (`web/clientes.py`):**
+- `ficha()`: pasa lista de plantas al template.
+- `contrato_nuevo()` / `contrato_editar()`: leen `planta_id` del formulario, validan selección cuando existen plantas, pasan dropdown al template.
+- Rutas nuevas: `planta_nueva`, `planta_editar`, `planta_desactivar`.
+
+**Frontend:**
+- `_base.html`: selector visual de planta activa en sidebar (visible cuando ≥ 2 plantas).
+- `ficha.html`: sección "Plantas" con tabla (nombre, dirección, estado, acciones), modal de confirmación de desactivación.
+- `contratos/nuevo.html` / `contratos/editar.html`: dropdown de planta (visible cuando el cliente tiene plantas definidas).
+- `planta/nueva.html` / `planta/editar.html`: formularios CRUD de planta.
+
+**Tests:**
+- Mocks de `obtener_plantas_por_cliente` añadidos a 6 tests de contrato afectados.
+
+---
+
 ## [2.84.2] — 2026-08-08
 
 ### Fix — Script de migración separa recursos entre Planta 1 y Planta 2 por patrón del nombre
