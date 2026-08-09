@@ -532,12 +532,12 @@
   <div class="table-responsive">
     <table class="table table-hover align-middle small shadow-sm">
       <thead class="table-light">
-        <tr><th>Año/Mes</th><th>Planta</th><th>Total MXN</th><th>Acciones</th></tr>
+        <tr><th>Nombre</th><th>Planta</th><th>Total MXN</th><th>Acciones</th></tr>
       </thead>
       <tbody>
         {% for f in facturas_cfe %}
         <tr>
-          <td>{{ f.periodo_fin.year }}/{{ "%02d"|format(f.periodo_fin.month) }}</td>
+          <td class="small">{{ f.nombre_canonico or "—" }}</td>
           <td class="text-muted">{{ contrato_planta.get(f.contrato_id, '—') if f.contrato_id else '—' }}</td>
           <td>${{ "{:,.0f}".format(f.total_mxn|float) if f.total_mxn else '—' }}</td>
           <td>
@@ -566,12 +566,12 @@
   <div class="table-responsive">
     <table class="table table-hover align-middle small shadow-sm">
       <thead class="table-light">
-        <tr><th>Año/Mes</th><th>Planta</th><th>Total MXN</th><th>Acciones</th></tr>
+        <tr><th>Nombre</th><th>Planta</th><th>Total MXN</th><th>Acciones</th></tr>
       </thead>
       <tbody>
         {% for f in facturas_gas %}
         <tr>
-          <td>{{ f.periodo_fin.year }}/{{ "%02d"|format(f.periodo_fin.month) }}</td>
+          <td class="small">{{ f.nombre_canonico or "—" }}</td>
           <td class="text-muted">{{ contrato_planta.get(f.contrato_id, '—') if f.contrato_id else '—' }}</td>
           <td>${{ "{:,.0f}".format(f.total_mxn|float) if f.total_mxn else '—' }}</td>
           <td>
@@ -600,12 +600,12 @@
   <div class="table-responsive">
     <table class="table table-hover align-middle small shadow-sm">
       <thead class="table-light">
-        <tr><th>Año/Mes</th><th>Planta</th><th>Suministrador</th><th>Total MXN</th><th>Acciones</th></tr>
+        <tr><th>Nombre</th><th>Planta</th><th>Suministrador</th><th>Total MXN</th><th>Acciones</th></tr>
       </thead>
       <tbody>
         {% for f in facturas_calificado %}
         <tr>
-          <td>{{ f.periodo_fin.year }}/{{ "%02d"|format(f.periodo_fin.month) }}</td>
+          <td class="small">{{ f.nombre_canonico or "—" }}</td>
           <td class="text-muted">{{ contrato_planta.get(f.contrato_id, '—') if f.contrato_id else '—' }}</td>
           <td>{{ f.suministrador or '—' }}</td>
           <td>${{ "{:,.0f}".format(f.total_mxn|float) if f.total_mxn else '—' }}</td>

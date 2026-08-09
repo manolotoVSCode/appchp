@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.86.3] — 2026-08-09
+
+### Fix — Persiste hot-patches de producción: modelos CFE/Gas + template ficha
+
+**`models/cfe_invoice.py`:**
+- Añadidos 5 campos opcionales al dataclass `CFEInvoice`: `contrato_id`, `planta_id`, `anio`, `mes`, `nombre_canonico` (todos `None` por defecto).
+
+**`models/gas_invoice.py`:**
+- Ídem en `GasInvoice`.
+
+**`storage/repository.py`:**
+- `_row_to_cfe_invoice`: hidrata los 5 campos nuevos desde `row.get(...)`.
+- `_row_to_gas_invoice`: ídem.
+
+**`web/templates/clientes/ficha.html`:**
+- Tablas de facturas CFE, Gas y Calificadas: cabecera `Año/Mes` → `Nombre`; celda `periodo_fin.year/month` → `f.nombre_canonico or "—"`. El nombre canónico es más legible e identifica unívocamente cada factura.
+
+---
+
 ## [2.86.2] — 2026-08-09
 
 ### Fix — UndefinedError f.anio / f.mes en template ficha.html
