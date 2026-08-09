@@ -420,22 +420,20 @@
 {% endif %}
 
 <!-- Acciones cliente -->
-{% if current_user_data and current_user_data.rol != 'usuario_normal' %}
 <div class="d-flex gap-2 mt-4">
   <a href="{{ url_for('clientes.editar', cliente_id=cliente.id) }}" class="btn btn-outline-primary btn-sm">Editar ficha</a>
+  {% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
   <button class="btn btn-outline-danger btn-sm ms-auto"
           data-bs-toggle="modal" data-bs-target="#modalBorrarCliente">Borrar cliente</button>
+  {% endif %}
 </div>
-{% endif %}
 
 <!-- Sección plantas -->
 <div class="mt-5">
   <div class="d-flex align-items-center justify-content-between mb-2">
     <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Plantas</h5>
-    {% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
     <a href="{{ url_for('clientes.planta_nueva', cliente_id=cliente.id) }}"
        class="btn btn-sm btn-primary">+ Nueva planta</a>
-    {% endif %}
   </div>
   {% if plantas %}
   <div class="table-responsive">
@@ -445,9 +443,7 @@
           <th>Nombre</th>
           <th>Dirección</th>
           <th>Estado</th>
-          {% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
           <th>Acciones</th>
-          {% endif %}
         </tr>
       </thead>
       <tbody>
@@ -467,7 +463,6 @@
             <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactiva</span>
             {% endif %}
           </td>
-          {% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
           <td>
             <div class="d-flex gap-1">
               <a href="{{ url_for('clientes.planta_editar', cliente_id=cliente.id, planta_id=planta.id) }}"
@@ -480,7 +475,6 @@
               {% endif %}
             </div>
           </td>
-          {% endif %}
         </tr>
         {% endfor %}
       </tbody>
@@ -488,15 +482,195 @@
   </div>
   {% else %}
   <p class="text-muted small">Sin plantas registradas.
-    {% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
     <a href="{{ url_for('clientes.planta_nueva', cliente_id=cliente.id) }}">Crear primera planta</a>
-    {% endif %}
   </p>
   {% endif %}
 </div>
 
+<!-- ── Contratos ─────────────────────────────────────────────────────────── -->
+<div class="mt-5">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Contratos</h5>
+    <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}"
+       class="btn btn-sm btn-primary">+ Nuevo contrato</a>
+  </div>
+  {% if contratos %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr><th>Nombre</th><th>Tipo</th><th>Planta</th><th>Identificador</th><th>Acciones</th></tr>
+      </thead>
+      <tbody>
+        {% for c in contratos %}
+        <tr>
+          <td><a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=c.id) }}" class="text-decoration-none fw-semibold">{{ c.nombre }}</a></td>
+          <td>
+            {% if c.tipo == 'electrico_basico' %}<span class="badge bg-primary-subtle text-primary border border-primary-subtle">CFE</span>
+            {% elif c.tipo == 'electrico_calificado' %}<span class="badge bg-info-subtle text-info border border-info-subtle">PPA</span>
+            {% else %}<span class="badge bg-warning-subtle text-warning border border-warning-subtle">Gas</span>{% endif %}
+          </td>
+          <td class="text-muted">{{ contrato_planta.get(c.id, '—') }}</td>
+          <td class="font-monospace small">{{ c.identificador_real or '—' }}</td>
+          <td>
+            <div class="d-flex gap-1">
+              <a href="{{ url_for('clientes.contrato_editar', cliente_id=cliente.id, contrato_id=c.id) }}"
+                 class="btn btn-xs btn-outline-secondary">Editar</a>
+              <button class="btn btn-xs btn-outline-danger"
+                      onclick="confirmarBorrarContrato({{ c.id }}, '{{ c.nombre | e }}')">Borrar</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted small">Sin contratos. <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}">Crear primer contrato</a></p>
+  {% endif %}
+</div>
+
+<!-- ── Facturas CFE ──────────────────────────────────────────────────────── -->
+{% if facturas_cfe %}
+<div class="mt-4">
+  <h6 class="fw-semibold text-muted mb-2">Facturas Electricidad (CFE / GDMTH)</h6>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr><th>Año/Mes</th><th>Planta</th><th>Total MXN</th><th>Acciones</th></tr>
+      </thead>
+      <tbody>
+        {% for f in facturas_cfe %}
+        <tr>
+          <td>{{ f.anio }}/{{ "%02d"|format(f.mes) }}</td>
+          <td class="text-muted">{{ contrato_planta.get(f.contrato_id, '—') if f.contrato_id else '—' }}</td>
+          <td>${{ "{:,.0f}".format(f.total_mxn|float) if f.total_mxn else '—' }}</td>
+          <td>
+            {% if f.contrato_id %}
+            <form method="POST"
+                  action="{{ url_for('clientes.contrato_factura_borrar', cliente_id=cliente.id, contrato_id=f.contrato_id, factura_id=f.id) }}"
+                  style="display:inline" onsubmit="return confirm('¿Borrar esta factura CFE?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="tipo" value="cfe">
+              <button type="submit" class="btn btn-xs btn-outline-danger">Borrar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Facturas Gas ──────────────────────────────────────────────────────── -->
+{% if facturas_gas %}
+<div class="mt-4">
+  <h6 class="fw-semibold text-muted mb-2">Facturas Gas Natural</h6>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr><th>Año/Mes</th><th>Planta</th><th>Total MXN</th><th>Acciones</th></tr>
+      </thead>
+      <tbody>
+        {% for f in facturas_gas %}
+        <tr>
+          <td>{{ f.anio }}/{{ "%02d"|format(f.mes) }}</td>
+          <td class="text-muted">{{ contrato_planta.get(f.contrato_id, '—') if f.contrato_id else '—' }}</td>
+          <td>${{ "{:,.0f}".format(f.total_mxn|float) if f.total_mxn else '—' }}</td>
+          <td>
+            {% if f.contrato_id %}
+            <form method="POST"
+                  action="{{ url_for('clientes.contrato_factura_borrar', cliente_id=cliente.id, contrato_id=f.contrato_id, factura_id=f.id) }}"
+                  style="display:inline" onsubmit="return confirm('¿Borrar esta factura de gas?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="tipo" value="gas">
+              <button type="submit" class="btn btn-xs btn-outline-danger">Borrar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Facturas Calificadas (PPA) ────────────────────────────────────────── -->
+{% if facturas_calificado %}
+<div class="mt-4">
+  <h6 class="fw-semibold text-muted mb-2">Facturas Electricidad Calificada (PPA)</h6>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr><th>Año/Mes</th><th>Planta</th><th>Suministrador</th><th>Total MXN</th><th>Acciones</th></tr>
+      </thead>
+      <tbody>
+        {% for f in facturas_calificado %}
+        <tr>
+          <td>{{ f.anio }}/{{ "%02d"|format(f.mes) }}</td>
+          <td class="text-muted">{{ contrato_planta.get(f.contrato_id, '—') if f.contrato_id else '—' }}</td>
+          <td>{{ f.suministrador or '—' }}</td>
+          <td>${{ "{:,.0f}".format(f.total_mxn|float) if f.total_mxn else '—' }}</td>
+          <td>
+            {% if f.contrato_id %}
+            <form method="POST"
+                  action="{{ url_for('clientes.factura_calificado_borrar', cliente_id=cliente.id, contrato_id=f.contrato_id, factura_id=f.id) }}"
+                  style="display:inline" onsubmit="return confirm('¿Borrar esta factura PPA?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-xs btn-outline-danger">Borrar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Mediciones Cincominutales ──────────────────────────────────────────── -->
+<div class="mt-5">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Mediciones Cincominutales</h5>
+    <a href="{{ url_for('clientes.medicion_subir', cliente_id=cliente.id) }}"
+       class="btn btn-sm btn-primary">+ Subir medición</a>
+  </div>
+  {% if mediciones %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr><th>Nombre</th><th>Año</th><th>Mes</th><th>Planta</th><th>Subida</th><th>Acciones</th></tr>
+      </thead>
+      <tbody>
+        {% for m in mediciones %}
+        <tr>
+          <td>{{ m.nombre or '—' }}</td>
+          <td>{{ m.anio }}</td>
+          <td>{{ m.mes }}</td>
+          <td class="text-muted">{{ planta_nombre.get(m.planta_id, '—') if m.planta_id else '—' }}</td>
+          <td class="text-muted small">{{ m.uploaded_at[:10] if m.uploaded_at else '—' }}</td>
+          <td>
+            <form method="POST"
+                  action="{{ url_for('clientes.medicion_borrar', cliente_id=cliente.id, medicion_id=m.id) }}"
+                  style="display:inline" onsubmit="return confirm('¿Borrar esta medición?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-xs btn-outline-danger">Borrar</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted small">Sin mediciones cargadas.</p>
+  {% endif %}
+</div>
+
 <!-- Modal desactivar planta -->
-{% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
 <div class="modal fade" id="modalDesactivarPlanta" tabindex="-1">
   <div class="modal-dialog modal-sm">
     <div class="modal-content">
@@ -518,10 +692,32 @@
     </div>
   </div>
 </div>
-{% endif %}
+
+<!-- Modal borrar contrato -->
+<div class="modal fade" id="modalBorrarContrato" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger">Borrar contrato</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small mb-0">¿Borrar el contrato <strong id="nombreContratoBorrar"></strong>?
+          Se eliminarán todas sus facturas y selecciones asociadas. Esta acción no se puede deshacer.</p>
+      </div>
+      <div class="modal-footer">
+        <form id="formBorrarContrato" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-danger">Borrar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Modal borrar cliente -->
-{% if current_user_data and current_user_data.rol != 'usuario_normal' %}
+{% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
 <div class="modal fade" id="modalBorrarCliente" tabindex="-1" aria-labelledby="modalBorrarClienteTitulo" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -555,7 +751,6 @@
 {% endblock %}
 
 {% block scripts %}
-{% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
 <script>
 function confirmarDesactivarPlanta(plantaId, nombrePlanta) {
   document.getElementById("nombrePlantaDesactivar").textContent = nombrePlanta;
@@ -563,9 +758,14 @@ function confirmarDesactivarPlanta(plantaId, nombrePlanta) {
     "/clientes/{{ cliente.id }}/planta/" + plantaId + "/desactivar";
   new bootstrap.Modal(document.getElementById("modalDesactivarPlanta")).show();
 }
+function confirmarBorrarContrato(contratoId, nombreContrato) {
+  document.getElementById("nombreContratoBorrar").textContent = nombreContrato;
+  document.getElementById("formBorrarContrato").action =
+    "/clientes/{{ cliente.id }}/contratos/" + contratoId + "/borrar";
+  new bootstrap.Modal(document.getElementById("modalBorrarContrato")).show();
+}
 </script>
-{% endif %}
-{% if current_user_data and current_user_data.rol != 'usuario_normal' %}
+{% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
 <script>
 (function () {
   const esperadoCliente = {{ cliente.nombre | tojson }};
@@ -576,6 +776,7 @@ function confirmarDesactivarPlanta(plantaId, nombrePlanta) {
   });
 })();
 </script>
+{% endif %}
 <script>
 (function () {
   const _csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
@@ -652,5 +853,4 @@ function confirmarDesactivarPlanta(plantaId, nombrePlanta) {
   ppaAjax("formPPABloques", "msgPPABloques", actualizarBloqueEnMemoria);
 })();
 </script>
-{% endif %}
 {% endblock %}

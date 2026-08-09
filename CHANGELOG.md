@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.85.6] — 2026-08-08
+
+### Fix — Restaura ficha completa con contratos, facturas y mediciones; permisos de escritura a usuario_normal
+
+**`web/auth_permissions.py`:**
+- Nueva función `usuario_puede_escribir_en_cliente(user, cliente_id)`: devuelve `True` para admin/master_admin siempre; para usuario_normal si tiene acceso al cliente vía `usuario_puede_ver_empresa`. Centraliza la lógica de escritura que antes estaba dispersa.
+
+**`web/clientes.py`:**
+- `ficha()` ahora carga y pasa al template: `plantas` (todas, incluyendo inactivas), `contratos`, `mediciones`, `facturas_cfe` (últimas 50), `facturas_gas` (últimas 50), `facturas_calificado`. Dicts auxiliares `planta_nombre` y `contrato_planta` para columna Planta en tablas.
+- 9 rutas de escritura migradas a `usuario_puede_escribir_en_cliente`: `contrato_borrar`, `contrato_factura_borrar`, `factura_calificado_borrar`, `medicion_subir`, `medicion_borrar`, `medicion_api`, `medicion_borrar_lote`, `cliente_gas_manual_actualizar`, `planta_nueva`, `planta_editar`.
+
+**`web/templates/clientes/ficha.html`:**
+- Sección "Acciones cliente": botón "Editar ficha" visible a todos los roles; "Borrar cliente" solo a admin/master_admin.
+- Sección "Plantas": todos los botones (Nueva planta, Editar, Desactivar) visibles sin filtro de rol.
+- Nueva sección "Contratos": tabla con columnas Planta, Tipo, Nombre, Identificador, acciones Editar y Borrar. Modal `modalBorrarContrato` integrado.
+- Nueva sección "Facturas Electricidad (CFE)": tabla con Planta, Periodo, Contrato, Total, acción Borrar.
+- Nueva sección "Facturas Gas": tabla con Planta, Periodo, Contrato, Total, acción Borrar.
+- Nueva sección "Facturas Electricidad Calificada (PPA)": tabla con Planta, Periodo, Contrato, Total, acción Borrar.
+- Nueva sección "Mediciones Cincominutales": tabla con Planta, Archivo, Fecha subida, acción Borrar.
+- `{% block scripts %}`: `confirmarDesactivarPlanta` y `confirmarBorrarContrato` disponibles para todos los roles (eliminado wrapper admin-only). Script PPA bloques/datos sin restricción de rol. Script borrar cliente mantiene condición `admin/master_admin`.
+
+**`tests/test_clientes.py`:**
+- Helper `_patch_ficha()` centraliza los 10 monkeypatches necesarios para GET ficha (incluyendo nuevas funciones `obtener_plantas_por_cliente`, `get_mediciones_por_cliente`, `get_ultimas_cfe_invoices`, `get_ultimas_gas_invoices`, `get_facturas_calificado_por_cliente`).
+- Añadido `num_electricidad` a `_CLIENTE_BASE` (usado por `list.html`).
+- Añadido mock `update_cliente_chp_params` a tests de editar.
+- Lambdas de `get_contratos_por_cliente` y `web.app.get_contratos_por_cliente` actualizadas a `*a, **kw` para compatibilidad con el context processor.
+
 ## [2.85.7] — 2026-08-08
 
 ### Fix — Sidebar sin logo cliente + nombre legible; cabecera Telemetría uniforme

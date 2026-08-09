@@ -13,6 +13,7 @@ _CLIENTE_BASE = {
     "notas": "Cliente industrial",
     "created_at": "2024-01-15T10:00:00+00:00",
     "num_cfe": 12,
+    "num_electricidad": 12,
     "num_gas": 12,
     "logo_url": None,
     "sector_industrial": None,
@@ -176,13 +177,24 @@ def test_nuevo_cliente_exitoso(auth_client, monkeypatch):
 
 # ── Ficha de cliente ──────────────────────────────────────────────────────────
 
+def _patch_ficha(monkeypatch, cliente=None):
+    """Aplica todos los monkeypatches necesarios para GET /clientes/<id>."""
+    c = cliente or _CLIENTE_BASE
+    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: c)
+    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: c)
+    monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda *a, **kw: [])
+    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda *a, **kw: [])
+    monkeypatch.setattr("storage.repository.get_ppa_bloques_mensuales", lambda id: [])
+    monkeypatch.setattr("web.clientes.obtener_plantas_por_cliente", lambda *a, **kw: [])
+    monkeypatch.setattr("web.clientes.get_mediciones_por_cliente", lambda id: [])
+    monkeypatch.setattr("web.clientes.get_ultimas_cfe_invoices", lambda id, n=50: [])
+    monkeypatch.setattr("web.clientes.get_ultimas_gas_invoices", lambda id, n=50: [])
+    monkeypatch.setattr("web.clientes.get_facturas_calificado_por_cliente", lambda id: [])
+
+
 def test_ficha_cliente_existente(auth_client, monkeypatch):
     """GET /clientes/1 → 200 con datos del cliente."""
-    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
-    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
-    monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
-    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [])
-    monkeypatch.setattr("storage.repository.get_ppa_bloques_mensuales", lambda id: [])
+    _patch_ficha(monkeypatch)
     resp = auth_client.get("/clientes/1")
     assert resp.status_code == 200
     assert b"IBERICA TILES" in resp.data
@@ -191,12 +203,7 @@ def test_ficha_cliente_existente(auth_client, monkeypatch):
 
 def test_ficha_cliente_rfc_nulo_muestra_guion(auth_client, monkeypatch):
     """GET /clientes/1 con RFC=None → ficha muestra '—' en lugar de 'None'."""
-    cliente_sin_rfc = {**_CLIENTE_BASE, "rfc": None}
-    monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: cliente_sin_rfc)
-    monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: cliente_sin_rfc)
-    monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
-    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [])
-    monkeypatch.setattr("storage.repository.get_ppa_bloques_mensuales", lambda id: [])
+    _patch_ficha(monkeypatch, cliente={**_CLIENTE_BASE, "rfc": None})
     resp = auth_client.get("/clientes/1")
     assert resp.status_code == 200
     assert b"None" not in resp.data
@@ -227,6 +234,7 @@ def test_editar_post_exitoso(auth_client, monkeypatch):
     """POST /clientes/1/editar válido → redirige a ficha."""
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("web.clientes.update_cliente", lambda *a, **kw: None)
+    monkeypatch.setattr("web.clientes.update_cliente_chp_params", lambda *a, **kw: None)
     resp = auth_client.post("/clientes/1/editar", data={
         "nombre": "IBERICA TILES SA", "rfc": "ITI930101AAA", "notas": "actualizado",
     }, follow_redirects=False)
@@ -241,6 +249,7 @@ def test_editar_post_rfc_vacio(auth_client, monkeypatch):
     def _update(cliente_id, **kwargs):
         llamadas.append(kwargs)
     monkeypatch.setattr("web.clientes.update_cliente", _update)
+    monkeypatch.setattr("web.clientes.update_cliente_chp_params", lambda *a, **kw: None)
     resp = auth_client.post("/clientes/1/editar", data={
         "nombre": "IBERICA TILES", "rfc": "", "notas": "",
     }, follow_redirects=False)
@@ -661,9 +670,14 @@ def test_ficha_get_activa_cliente_en_sesion(app, monkeypatch):
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
     monkeypatch.setattr("web.clientes.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
-    monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda id: [])
-    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [])
+    monkeypatch.setattr("web.clientes.get_contratos_por_cliente", lambda *a, **kw: [])
+    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda *a, **kw: [])
     monkeypatch.setattr("storage.repository.get_ppa_bloques_mensuales", lambda id: [])
+    monkeypatch.setattr("web.clientes.obtener_plantas_por_cliente", lambda *a, **kw: [])
+    monkeypatch.setattr("web.clientes.get_mediciones_por_cliente", lambda id: [])
+    monkeypatch.setattr("web.clientes.get_ultimas_cfe_invoices", lambda id, n=50: [])
+    monkeypatch.setattr("web.clientes.get_ultimas_gas_invoices", lambda id, n=50: [])
+    monkeypatch.setattr("web.clientes.get_facturas_calificado_por_cliente", lambda id: [])
     c = app.test_client()
     with c.session_transaction() as sess:
         sess["_user_id"] = "test-user-uuid"
@@ -700,7 +714,7 @@ def test_sidebar_con_cliente_activo_muestra_estructura(app, monkeypatch):
     """Con cliente activo en sesión, el sidebar muestra nombre, sub-headers Dashboard y Contratos."""
     monkeypatch.setattr("web.clientes.get_all_clientes_con_conteos", lambda: [_CLIENTE_BASE])
     monkeypatch.setattr("storage.repository.get_cliente_con_conteos", lambda id: _CLIENTE_BASE)
-    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda id: [_CONTRATO_BASE])
+    monkeypatch.setattr("web.app.get_contratos_por_cliente", lambda *a, **kw: [_CONTRATO_BASE])
     c = app.test_client()
     with c.session_transaction() as sess:
         sess["_user_id"] = "test-user-uuid"

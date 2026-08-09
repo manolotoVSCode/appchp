@@ -86,6 +86,15 @@ def usuario_puede_ver_empresa(empresa_id: int, user: dict) -> bool:
     return user.get("empresa_id") == empresa_id
 
 
+def usuario_puede_escribir_en_cliente(user: dict, cliente_id: int) -> bool:
+    """admin/master_admin: sí. usuario_normal: solo si tiene acceso al cliente."""
+    if user.get("rol") in (ROL_MASTER_ADMIN, ROL_ADMIN):
+        return True
+    if user.get("rol") == ROL_USUARIO_NORMAL:
+        return usuario_puede_ver_empresa(cliente_id, user)
+    return False
+
+
 def filtrar_empresas_para_usuario(clientes: list[dict], user: dict) -> list[dict]:
     """
     Filtra la lista de clientes según el rol del usuario.
