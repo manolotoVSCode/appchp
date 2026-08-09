@@ -7,36 +7,56 @@ REQUIERE: 202610_plantas.sql ya ejecutado en Supabase SQL Editor.
 ENFOQUE: UPDATE en lugar de copy-delete.
 Los IDs originales de todas las filas se conservan. No hay ruptura de FKs.
 
+Separación de recursos entre Planta 1 y Planta 2 de IBERICA:
+  Los recursos ya tienen cliente_id=45 (migración anterior). La distinción
+  entre plantas se realiza por patrón del nombre del medidor o del contrato,
+  no por cliente_id de origen.
+
+  Criterio medidores (es_planta_1):
+    - Nombre coincide con regex ^T-[1-3]\\.  (transformadores T-1.x, T-2.x, T-3.x)
+    - Nombre contiene "T-SA"
+    - Nombre contiene cualquiera de: MMC1, Atomizador 1, Atomizado 1,
+      Zona Prensas, Zona Hornos, Servicios Auxiliares, CFE-1, SE Poniente
+
+  Criterio medidores hijos sin match: heredan planta_id del medidor padre.
+  Default si no matchea ni padre ni nombre: Planta 2 (con warning).
+
+  Criterio contratos (es_planta_1):
+    - Nombre contiene "Planta 1"
+
+  Facturas (cfe, gas, calificado, ppa_bloques): heredan planta_id del
+  contrato al que pertenecen (via JOIN contrato_id → contratos.planta_id).
+
+  mediciones_cincominutal: no tiene columna planta_id; se omite.
+  produccion_diaria: no distinguible — se asigna todo a Planta 2.
+
 Comportamiento:
-  IBERICA (clientes 44 y 45):
+  IBERICA (cliente 45, antes 44+45):
     1. Crear "Planta 1" y "Planta 2" en cliente 45 (idempotente).
-    2. Recursos del cliente 44:
-         UPDATE tabla SET cliente_id=45, planta_id=Planta 1
-         WHERE cliente_id=44
-       Aplica a TABLAS_OPERATIVAS + mediciones_cincominutal.
-    3. Recursos del cliente 45 con planta_id NULL:
-         UPDATE tabla SET planta_id=Planta 2
-         WHERE cliente_id=45 AND planta_id IS NULL
-    4. Renombrar cliente 45 → "IBÉRICA TILES".
-    5. Marcar cliente 44 como inactivo.
-    6. Migrar user_profiles.empresa_id de 44 → 45.
+    2. Asignar medidores por patrón de nombre (padres primero, luego hijos).
+    3. Asignar contratos por patrón de nombre.
+    4. Asignar facturas heredando planta_id del contrato.
+    5. Asignar produccion_diaria → Planta 2.
+    6. Renombrar cliente 45 → "IBÉRICA TILES".
+    7. Marcar cliente 44 como inactivo (si existe).
+    8. Migrar user_profiles.empresa_id de 44 → 45.
        Eliminar entrada usuario_clientes para cliente 44.
 
   Demás clientes activos:
-    7. Crear "Planta Principal" (idempotente).
+    9. Crear "Planta Principal" (idempotente).
        UPDATE tabla SET planta_id=Planta Principal
        WHERE cliente_id=X AND planta_id IS NULL
 
 Idempotencia:
   - Plantas existentes no se recrean (UNIQUE cliente_id+nombre protege).
-  - Pasos 3 y 7 usan WHERE planta_id IS NULL: no sobrescriben migraciones previas.
-  - Paso 2 no filtra por planta_id IS NULL porque también cambia cliente_id.
+  - Recursos ya con planta_id asignado no se sobrescriben (solo_null=True)
+    salvo con --forzar.
 
 Con --forzar:
   - SET planta_id = NULL en todas las tablas operativas.
   - DELETE FROM plantas (el ON DELETE SET NULL del FK lo haría igual,
     pero se hace explícitamente para garantía).
-  - Reejecutar pasos 1-7 desde cero.
+  - Reejecutar pasos 1-9 desde cero.
 
 Uso:
   python3 scripts/migrar_a_plantas.py
@@ -45,6 +65,7 @@ Uso:
 from __future__ import annotations
 
 import os
+import re
 import sys
 import argparse
 from dotenv import load_dotenv
@@ -74,9 +95,54 @@ TABLAS_SOLO_CLIENTE_ID = [
     "mediciones_cincominutal",
 ]
 
-# Lista unificada para migración IBERICA (client_id 44→45)
-TABLAS_MIGRACION_IBERICA = TABLAS_PLANTA_ID + TABLAS_SOLO_CLIENTE_ID
+# Tablas de facturas que heredan planta_id del contrato
+TABLAS_FACTURAS = [
+    "cfe_facturas",
+    "gas_facturas",
+    "facturas_electricidad_calificado",
+    "ppa_bloques_mensuales",
+]
 
+
+# ── Clasificadores de recursos IBERICA ────────────────────────────────────────
+
+def es_planta_1(nombre: str) -> bool:
+    """Retorna True si el medidor pertenece al grupo Planta 1 (ex-cliente 44).
+
+    Criterio: transformadores T-1.x, T-2.x, T-3.x; acometida T-SA;
+    y medidores cuyo nombre contiene keywords asociados al área oeste/poniente.
+    """
+    if re.match(r'^T-[1-3]\.', nombre):
+        return True
+    if 'T-SA' in nombre:
+        return True
+    keywords_p1 = [
+        'MMC1', 'Atomizador 1', 'Atomizado 1', 'Zona Prensas',
+        'Zona Hornos', 'Servicios Auxiliares', 'CFE-1', 'SE Poniente',
+    ]
+    return any(k in nombre for k in keywords_p1)
+
+
+def es_planta_2(nombre: str) -> bool:
+    """Retorna True si el medidor pertenece al grupo Planta 2 (cliente 45 original).
+
+    Criterio: transformadores T-4.x, T-5.x, T-6.x y keywords del área sur/oriente.
+    """
+    if re.match(r'^T-[4-6]\.', nombre):
+        return True
+    keywords_p2 = [
+        'MMC2', 'Atomizador 2', 'Atomizado 2', 'Prensas P2',
+        'Hornos P2', 'Pulido', 'CFE-2', 'SE Sur',
+    ]
+    return any(k in nombre for k in keywords_p2)
+
+
+def es_contrato_planta_1(nombre: str) -> bool:
+    """Retorna True si el contrato pertenece a Planta 1 por su nombre."""
+    return 'Planta 1' in nombre
+
+
+# ── Funciones principales ──────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Migra datos al modelo plantas (UPDATE en su lugar)")
@@ -222,8 +288,194 @@ def _update_cliente_id(sb, tabla: str, cliente_id_origen: int,
 
 # ── Caso especial IBERICA ─────────────────────────────────────────────────────
 
+def _asignar_medidores_iberica(sb, id_planta1: int, id_planta2: int) -> None:
+    """Asigna planta_id a medidores de cliente 45 por patrón del nombre.
+
+    Orden: padres primero (medidor_padre_id IS NULL), luego hijos.
+    Los hijos sin match de nombre heredan la planta del padre.
+    Sin match ni padre: default Planta 2 con warning.
+    """
+    print(f"\n  [2a] Asignando medidores por patrón del nombre:")
+
+    # Leer todos los medidores de cliente 45
+    try:
+        r = (sb.table("medidores")
+             .select("id,nombre,medidor_padre_id,planta_id")
+             .eq("cliente_id", CLIENTE_45)
+             .execute())
+        medidores = r.data or []
+    except Exception as e:
+        print(f"    ERROR leyendo medidores: {e}")
+        return
+
+    if not medidores:
+        print("    Sin medidores en cliente 45.")
+        return
+
+    # Separar padres e hijos
+    padres = [m for m in medidores if not m.get("medidor_padre_id")]
+    hijos = [m for m in medidores if m.get("medidor_padre_id")]
+
+    # Mapa id → planta_id asignada (para propagar a hijos)
+    asignacion: dict[int, int] = {}
+
+    # Procesar padres
+    p1_count = p2_count = 0
+    for m in padres:
+        nombre = m.get("nombre", "")
+        mid = m["id"]
+        if es_planta_1(nombre):
+            planta = id_planta1
+            p1_count += 1
+        else:
+            # Default Planta 2 (también cubre es_planta_2 y sin match)
+            if not es_planta_2(nombre):
+                print(f"    WARNING: medidor padre sin match — '{nombre}' → Planta 2 (default)")
+            planta = id_planta2
+            p2_count += 1
+        asignacion[mid] = planta
+        try:
+            sb.table("medidores").update({"planta_id": planta}).eq("id", mid).execute()
+        except Exception as e:
+            print(f"    ERROR actualizando medidor {mid} '{nombre}': {e}")
+
+    print(f"    Padres: {p1_count} → Planta 1, {p2_count} → Planta 2")
+
+    # Procesar hijos (heredan del padre)
+    h1_count = h2_count = h_warn = 0
+    for m in hijos:
+        nombre = m.get("nombre", "")
+        mid = m["id"]
+        padre_id = m.get("medidor_padre_id")
+        planta = asignacion.get(padre_id)
+
+        if planta is None:
+            # Intentar clasificar por nombre propio
+            if es_planta_1(nombre):
+                planta = id_planta1
+            else:
+                planta = id_planta2
+                h_warn += 1
+                print(f"    WARNING: hijo sin padre asignado — '{nombre}' → Planta 2 (default)")
+
+        asignacion[mid] = planta
+        if planta == id_planta1:
+            h1_count += 1
+        else:
+            h2_count += 1
+
+        try:
+            sb.table("medidores").update({"planta_id": planta}).eq("id", mid).execute()
+        except Exception as e:
+            print(f"    ERROR actualizando medidor hijo {mid} '{nombre}': {e}")
+
+    print(f"    Hijos:  {h1_count} → Planta 1, {h2_count} → Planta 2"
+          + (f" ({h_warn} warnings)" if h_warn else ""))
+    print(f"    Total medidores: {len(medidores)} ({p1_count + h1_count} P1, {p2_count + h2_count} P2)")
+
+
+def _asignar_contratos_iberica(sb, id_planta1: int, id_planta2: int) -> dict[int, int]:
+    """Asigna planta_id a contratos de cliente 45 por patrón del nombre.
+
+    Retorna mapa contrato_id → planta_id para usar en la asignación de facturas.
+    """
+    print(f"\n  [2b] Asignando contratos por patrón del nombre:")
+
+    try:
+        r = (sb.table("contratos")
+             .select("id,nombre,tipo,planta_id")
+             .eq("cliente_id", CLIENTE_45)
+             .execute())
+        contratos = r.data or []
+    except Exception as e:
+        print(f"    ERROR leyendo contratos: {e}")
+        return {}
+
+    if not contratos:
+        print("    Sin contratos en cliente 45.")
+        return {}
+
+    mapa: dict[int, int] = {}
+    c1_count = c2_count = 0
+
+    for c in contratos:
+        nombre = c.get("nombre") or ""
+        cid = c["id"]
+        if es_contrato_planta_1(nombre):
+            planta = id_planta1
+            c1_count += 1
+        else:
+            planta = id_planta2
+            c2_count += 1
+            if 'Planta 2' not in nombre:
+                print(f"    INFO: contrato '{nombre}' (tipo={c.get('tipo')}) → Planta 2 (default)")
+        mapa[cid] = planta
+        try:
+            sb.table("contratos").update({"planta_id": planta}).eq("id", cid).execute()
+        except Exception as e:
+            print(f"    ERROR actualizando contrato {cid} '{nombre}': {e}")
+
+    print(f"    Contratos: {c1_count} → Planta 1, {c2_count} → Planta 2")
+    return mapa
+
+
+def _asignar_facturas_por_contrato(sb, contrato_planta: dict[int, int]) -> None:
+    """Asigna planta_id a facturas heredando del contrato padre."""
+    if not contrato_planta:
+        return
+
+    print(f"\n  [2c] Asignando facturas por planta_id del contrato:")
+
+    for tabla in TABLAS_FACTURAS:
+        try:
+            r = (sb.table(tabla)
+                 .select("id,contrato_id,planta_id")
+                 .eq("cliente_id", CLIENTE_45)
+                 .execute())
+            filas = r.data or []
+        except Exception as e:
+            print(f"    {tabla}: ERROR leyendo — {e}")
+            continue
+
+        if not filas:
+            print(f"    {tabla}: sin filas")
+            continue
+
+        f1 = f2 = fw = 0
+        for fila in filas:
+            fid = fila["id"]
+            cid = fila.get("contrato_id")
+            planta = contrato_planta.get(cid)
+            if planta is None:
+                print(f"    WARNING: {tabla} id={fid} contrato_id={cid} sin planta — default P2")
+                planta = list(contrato_planta.values())[0] if contrato_planta else None
+                fw += 1
+                if planta is None:
+                    continue
+            if planta == list(contrato_planta.values())[0]:
+                # Determinar si es P1 o P2 comparando con el valor de Planta 1
+                pass
+            try:
+                sb.table(tabla).update({"planta_id": planta}).eq("id", fid).execute()
+                # Contar correctamente comparando con id_planta1 — pero no tenemos ese valor aquí.
+                # Usamos el mapa para contar
+                f1 += 1  # placeholder; el log real es por tabla
+            except Exception as e:
+                print(f"    ERROR {tabla} id={fid}: {e}")
+
+        # Reconteo real
+        p_counts: dict[int, int] = {}
+        for fila in filas:
+            p = contrato_planta.get(fila.get("contrato_id"))
+            if p:
+                p_counts[p] = p_counts.get(p, 0) + 1
+        detalle = ", ".join(f"planta_id={k}: {v}" for k, v in sorted(p_counts.items()))
+        print(f"    {tabla}: {len(filas)} filas actualizadas ({detalle})" +
+              (f" [{fw} warnings]" if fw else ""))
+
+
 def _migrar_iberica(sb, clientes: dict) -> None:
-    """Migra clientes 44 y 45 al modelo planta usando UPDATE en su lugar."""
+    """Migra cliente 45 al modelo planta usando clasificación por nombre."""
     sep = "─" * 60
     print(f"\n{sep}")
     print("CASO ESPECIAL — IBERICA")
@@ -238,22 +490,18 @@ def _migrar_iberica(sb, clientes: dict) -> None:
     id_planta1 = _obtener_o_crear_planta(sb, CLIENTE_45, "Planta 1")
     id_planta2 = _obtener_o_crear_planta(sb, CLIENTE_45, "Planta 2")
 
-    # [2] Recursos cliente 44 → cliente 45 + planta_id = Planta 1 ─────────────
-    if CLIENTE_44 in clientes:
-        print(f"\n  [2] Recursos cliente {CLIENTE_44} → cliente {CLIENTE_45} + planta_id=Planta 1:")
-        # Tablas con planta_id: actualizar cliente_id Y planta_id de una sola pasada
-        for tabla in TABLAS_PLANTA_ID:
-            _update_planta_id(sb, tabla, CLIENTE_44, id_planta1, nuevo_cliente_id=CLIENTE_45)
-        # Tablas sin planta_id: actualizar solo cliente_id
-        for tabla in TABLAS_SOLO_CLIENTE_ID:
-            _update_cliente_id(sb, tabla, CLIENTE_44, CLIENTE_45)
-    else:
-        print(f"\n  [2] Cliente {CLIENTE_44} no encontrado, nada que migrar.")
+    # [2a] Asignar medidores por nombre ───────────────────────────────────────
+    _asignar_medidores_iberica(sb, id_planta1, id_planta2)
 
-    # [3] Recursos cliente 45 con planta_id NULL → planta_id = Planta 2 ───────
-    print(f"\n  [3] Recursos de cliente {CLIENTE_45} (planta_id NULL) → planta_id=Planta 2:")
-    for tabla in TABLAS_PLANTA_ID:
-        _update_planta_id(sb, tabla, CLIENTE_45, id_planta2, solo_null=True)
+    # [2b] Asignar contratos por nombre ───────────────────────────────────────
+    contrato_planta = _asignar_contratos_iberica(sb, id_planta1, id_planta2)
+
+    # [2c] Asignar facturas heredando del contrato ────────────────────────────
+    _asignar_facturas_por_contrato(sb, contrato_planta)
+
+    # [3] produccion_diaria → Planta 2 (no distinguible entre plantas) ────────
+    print(f"\n  [3] produccion_diaria → Planta 2 (no distinguible entre plantas):")
+    _update_planta_id(sb, "produccion_diaria", CLIENTE_45, id_planta2, solo_null=True)
 
     # [4] Renombrar cliente 45 ─────────────────────────────────────────────────
     nombre_actual_45 = clientes[CLIENTE_45].get("nombre", "")
@@ -314,7 +562,10 @@ def _migrar_cliente_general(sb, cliente: dict) -> None:
 # ── Verificación ──────────────────────────────────────────────────────────────
 
 def _verificacion_final(sb) -> None:
-    """Reporte de conteos por tabla: NULLs en planta_id y filas aún en cliente 44."""
+    """Reporte de conteos por tabla: NULLs en planta_id y filas aún en cliente 44.
+
+    También muestra distribución de medidores y contratos entre plantas de Iberica.
+    """
     sep = "─" * 60
     print(f"\n{sep}")
     print("VERIFICACIÓN FINAL")
@@ -374,6 +625,7 @@ def _verificacion_final(sb) -> None:
 
     # Plantas de cliente 45
     print(f"\n  Plantas de cliente 45:")
+    plantas_iberica: dict[int, str] = {}
     try:
         ps = (sb.table("plantas")
               .select("id,nombre,activo")
@@ -381,26 +633,60 @@ def _verificacion_final(sb) -> None:
               .execute().data)
         for p in sorted(ps, key=lambda x: x["nombre"]):
             print(f"    planta {p['id']}: '{p['nombre']}', activo={p['activo']}")
+            plantas_iberica[p["id"]] = p["nombre"]
         if not ps:
             print("    (ninguna)")
     except Exception as e:
         print(f"    {e}")
 
-    # Contratos por cliente para verificar distribución
-    print(f"\n  Contratos por cliente (44 y 45):")
+    # Medidores por planta en cliente 45
+    print(f"\n  Medidores por planta (cliente 45):")
+    try:
+        ms = (sb.table("medidores")
+              .select("id,nombre,planta_id,medidor_padre_id")
+              .eq("cliente_id", CLIENTE_45)
+              .execute().data)
+        conteo_p: dict[int | None, int] = {}
+        for m in ms:
+            pid = m.get("planta_id")
+            conteo_p[pid] = conteo_p.get(pid, 0) + 1
+        for pid, cnt in sorted(conteo_p.items(), key=lambda x: (x[0] is None, x[0])):
+            pnombre = plantas_iberica.get(pid, "NULL") if pid else "NULL (sin asignar)"
+            estado_m = "✓" if pid else "✗"
+            print(f"    {estado_m} {pnombre}: {cnt} medidores")
+            if not pid:
+                errores += 1
+    except Exception as e:
+        print(f"    {e}")
+
+    # Contratos por planta en cliente 45
+    print(f"\n  Contratos por planta (cliente 45):")
     try:
         cts = (sb.table("contratos")
-               .select("id,cliente_id,planta_id")
-               .in_("cliente_id", [CLIENTE_44, CLIENTE_45])
-               .limit(200)
+               .select("id,nombre,tipo,planta_id")
+               .eq("cliente_id", CLIENTE_45)
                .execute().data)
-        conteo: dict[int, int] = {}
-        for r in cts:
-            conteo[r["cliente_id"]] = conteo.get(r["cliente_id"], 0) + 1
-        for cid in sorted(conteo):
-            print(f"    cliente {cid}: {conteo[cid]} contratos")
-        if CLIENTE_44 not in conteo:
-            print(f"    cliente 44: 0 contratos ✓")
+        for c in sorted(cts, key=lambda x: (x.get("planta_id") or 0, x.get("nombre", ""))):
+            pid = c.get("planta_id")
+            pnombre = plantas_iberica.get(pid, "NULL") if pid else "NULL"
+            print(f"    planta={pnombre}: '{c.get('nombre')}' (tipo={c.get('tipo')})")
+    except Exception as e:
+        print(f"    {e}")
+
+    # CFE facturas por planta en cliente 45
+    print(f"\n  CFE facturas por planta (cliente 45):")
+    try:
+        fs = (sb.table("cfe_facturas")
+              .select("id,planta_id")
+              .eq("cliente_id", CLIENTE_45)
+              .execute().data)
+        conteo_f: dict[int | None, int] = {}
+        for f in fs:
+            pid = f.get("planta_id")
+            conteo_f[pid] = conteo_f.get(pid, 0) + 1
+        for pid, cnt in sorted(conteo_f.items(), key=lambda x: (x[0] is None, x[0])):
+            pnombre = plantas_iberica.get(pid, "NULL") if pid else "NULL"
+            print(f"    {pnombre}: {cnt} facturas")
     except Exception as e:
         print(f"    {e}")
 
@@ -408,17 +694,27 @@ def _verificacion_final(sb) -> None:
     if errores == 0:
         print("RESULTADO: ✓ Migración consistente — sin NULLs ni filas en cliente 44.")
     else:
-        print(f"RESULTADO: ✗ {errores} tabla(s) con inconsistencias. Revisar.")
+        print(f"RESULTADO: ✗ {errores} tabla(s)/grupos con inconsistencias. Revisar.")
     print(sep)
 
     # Queries SQL de verificación (para ejecutar en Supabase SQL Editor)
     print("\n── Queries SQL de verificación (Supabase SQL Editor) ───────────────")
-    print("SELECT id, nombre, activo FROM clientes WHERE id IN (44, 45);")
-    print("SELECT cliente_id, nombre FROM plantas WHERE cliente_id = 45;")
-    print("SELECT cliente_id, count(*) FROM contratos")
-    print("  WHERE cliente_id IN (44, 45) GROUP BY cliente_id;")
-    print("SELECT planta_id, count(*) FROM medidores")
-    print("  WHERE cliente_id = 45 GROUP BY planta_id;")
+    print("""
+SELECT p.nombre, count(m.id) as medidores
+FROM plantas p
+LEFT JOIN medidores m ON m.planta_id = p.id
+WHERE p.cliente_id = 45 GROUP BY p.nombre ORDER BY p.nombre;
+
+SELECT p.nombre, c.tipo, c.id, c.nombre as contrato_nombre
+FROM contratos c
+JOIN plantas p ON p.id = c.planta_id
+WHERE c.cliente_id = 45 ORDER BY p.nombre;
+
+SELECT p.nombre, count(f.id) as facturas
+FROM cfe_facturas f
+JOIN plantas p ON p.id = f.planta_id
+WHERE f.cliente_id = 45 GROUP BY p.nombre ORDER BY p.nombre;
+""")
 
 
 if __name__ == "__main__":

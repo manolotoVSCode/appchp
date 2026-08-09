@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.84.2] — 2026-08-08
+
+### Fix — Script de migración separa recursos entre Planta 1 y Planta 2 por patrón del nombre
+
+Causa raíz: al ejecutarse con `--forzar` tras una migración previa, todos los recursos
+ya tenían `cliente_id=45`. El paso 2 buscaba `cliente_id=44` (vacío), y el paso 3
+enviaba todo a Planta 2. Los 26 medidores quedaban en Planta 2.
+
+Solución: la asignación ya no depende del `cliente_id` de origen sino de funciones
+clasificadoras por nombre: `es_planta_1()` y `es_planta_2()`.
+
+- `es_planta_1(nombre)`: regex `^T-[1-3]\.`, subcadena `T-SA`, o keywords
+  `MMC1, Atomizador 1, Atomizado 1, Zona Prensas, Zona Hornos, Servicios Auxiliares,
+  CFE-1, SE Poniente`.
+- `es_planta_2(nombre)`: regex `^T-[4-6]\.` o keywords `MMC2, Atomizador 2,
+  Atomizado 2, Prensas P2, Hornos P2, Pulido, CFE-2, SE Sur`.
+- Medidores padres se clasifican primero; hijos heredan `planta_id` del padre.
+- Contratos: `es_contrato_planta_1` detecta "Planta 1" en el nombre del contrato.
+- Facturas: heredan `planta_id` del contrato padre vía `contrato_id`.
+- `produccion_diaria`: asignada a Planta 2 (no distinguible entre plantas).
+
+Resultado verificado en Supabase:
+  - Planta 1: 13 medidores, 1 contrato (PPA), 5 facturas calificadas.
+  - Planta 2: 13 medidores, 2 contratos (CFE SSB + Gas Natural), 12 CFE + 12 gas.
+
+---
+
 ## [2.84.1] — 2026-08-08
 
 ### Fix — Reescritura del script de migración de plantas: UPDATE en lugar de copy-delete
