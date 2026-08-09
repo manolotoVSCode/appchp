@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.86.1] — 2026-08-08
+
+### Fix — KeyError 'timestamp' en cliente_dashboard_telemetria_data
+
+**`web/app.py`:**
+- Loop `ids_sin_datos` en `cliente_dashboard_telemetria_data`: reemplazado dict-literal manual `r["timestamp"]` por `_fmt_rows(_omfr(...))` — idéntico al patrón ya usado en el loop principal. `_omfr` homogeniza `bucket_5min`/`bucket_hora` a `"timestamp"` internamente; acceder directamente al campo crudo causaba `KeyError` en producción.
+
+---
+
 ## [2.86.0] — 2026-08-08
 
 ### Feat — Permisos completos de usuario_normal en ficha del cliente (consolidación tras rollback)

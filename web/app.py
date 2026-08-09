@@ -3047,15 +3047,7 @@ def create_app() -> Flask:
         # que no es carga_final y por tanto no está en todas_hojas_ids)
         ids_sin_datos = [hid for hid in hojas_ids_nodo if hid not in mediciones_por_hoja]
         for hid in ids_sin_datos:
-            rows = _omfr(hid, desde_iso, hasta_iso, rango)
-            mediciones_por_hoja[hid] = [
-                {
-                    "ts": r["timestamp"],
-                    "kw": float(r.get("potencia_activa_kw") or 0),
-                    "fp": float(r.get("factor_potencia") or 0),
-                }
-                for r in rows
-            ]
+            mediciones_por_hoja[hid] = _fmt_rows(_omfr(hid, desde_iso, hasta_iso, rango))
 
         # Agregar serie temporal: sumar kW solo de las hojas del nodo seleccionado
         from collections import defaultdict
