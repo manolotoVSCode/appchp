@@ -4,6 +4,13 @@
 
 ### Feat — Migración estructural a jerarquía cliente → planta → recursos
 
+**Corrección (fix post-commit):** `scripts/migrar_a_plantas.py` reescrito para
+usar UPDATE en su lugar en vez de copy-delete. El enfoque original rompía 12
+cadenas de FK al cambiar IDs; el nuevo enfoque actualiza `cliente_id` y
+`planta_id` en las filas existentes sin tocar sus `id` primarios. Se añade
+`mediciones_cincominutal` a la lista de tablas migradas, manejo explícito de
+`user_profiles.empresa_id` (iberica), y verificación con conteos por tabla.
+
 Introduce la entidad `plantas` como nivel intermedio entre `clientes` y
 todos los recursos operativos. Infraestructura DDL + scripts de migración y
 verificación de datos. El backend continúa operando por `cliente_id`; la
