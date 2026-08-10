@@ -113,22 +113,22 @@
   {% endif %}
   <hr class="sidebar-divider mx-3">
   <div class="sidebar-sub-header">Dashboard</div>
-  <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id, planta_id=planta_activa_id) if planta_activa_id else url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id) }}"
+  <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id, planta_id=planta_activa_id) }}"
      class="sidebar-link-contrato{% if nav_active == 'contabilidad' %} active{% endif %}">
     <i class="bi bi-bar-chart-line"></i>Contabilidad Energética
   </a>
-  <a href="{{ url_for('cliente_dashboard_cogeneracion', cliente_id=cliente_activo.id, planta_id=planta_activa_id) if planta_activa_id else url_for('cliente_dashboard_cogeneracion', cliente_id=cliente_activo.id) }}"
+  <a href="{{ url_for('cliente_dashboard_cogeneracion', cliente_id=cliente_activo.id, planta_id=planta_activa_id) }}"
      class="sidebar-link-contrato{% if nav_active == 'cogeneracion' %} active{% endif %}">
     <i class="bi bi-bar-chart-line"></i>Proyecto Cogeneración
   </a>
   {% if mediciones_sidebar %}
-  <a href="{{ url_for('cliente_dashboard_modelado_chp', cliente_id=cliente_activo.id, planta_id=planta_activa_id) if planta_activa_id else url_for('cliente_dashboard_modelado_chp', cliente_id=cliente_activo.id) }}"
+  <a href="{{ url_for('cliente_dashboard_modelado_chp', cliente_id=cliente_activo.id, planta_id=planta_activa_id) }}"
      class="sidebar-link-contrato{% if nav_active == 'modelado_chp' %} active{% endif %}">
     <i class="bi bi-cpu"></i>Modelado CHP
   </a>
   {% endif %}
   {% if fase2_habilitada %}
-  <a href="{{ url_for('cliente_dashboard_telemetria', cliente_id=cliente_activo.id, planta_id=planta_activa_id) if planta_activa_id else url_for('cliente_dashboard_telemetria', cliente_id=cliente_activo.id) }}"
+  <a href="{{ url_for('cliente_dashboard_telemetria', cliente_id=cliente_activo.id, planta_id=planta_activa_id) }}"
      class="sidebar-link-contrato{% if nav_active == 'telemetria_cliente' %} active{% endif %}">
     <i class="bi bi-activity"></i>Telemetría
     <span class="badge bg-warning text-dark ms-1" style="font-size:.55rem;padding:.15rem .3rem;vertical-align:middle;">Beta</span>

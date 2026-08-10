@@ -200,17 +200,6 @@ def _pid_de_g() -> int | None:
         return None
 
 
-def _verificar_planta_de_cliente(planta_id: int, cliente_id: int) -> dict:
-    """Verifica que planta_id pertenece a cliente_id.
-
-    Retorna el dict de la planta si es válida. Hace abort(404) si no existe
-    o si pertenece a otro cliente. Usado por rutas con planta_id en la URL.
-    """
-    planta = obtener_planta(planta_id)
-    if planta is None or planta.get("cliente_id") != cliente_id:
-        abort(404)
-    return planta
-
 
 def _tipo_suministro(cliente_id: int) -> str | None:
     """Wrapper de get_tipo_suministro_electrico_seleccionado que auto-inyecta planta_activa_id."""
@@ -580,11 +569,12 @@ def create_app() -> Flask:
 
     @app.before_request
     def _resolver_planta_activa():
-        """Resuelve planta_activa_id para rutas de cliente y lo almacena en g.
+        """Resuelve planta_activa_id para rutas de cliente a partir de la URL.
 
-        Si no hay planta en sesión (o pertenece a otro cliente), asigna la
-        primera planta del cliente activo. No realiza query BD si la sesión
-        ya contiene un valor válido y consistente con el cliente actual.
+        La planta activa se extrae del segmento /planta/<planta_id>/ del path
+        cuando está presente. Nunca lee ni escribe session["planta_activa_id"];
+        la sesión se usa solo para cachear la lista de plantas (rendimiento).
+        Cuando la URL no contiene /planta/<id>/, g.planta_activa_id queda None.
         """
         import re as _re2
         path = request.path
@@ -595,7 +585,7 @@ def create_app() -> Flask:
             g.plantas_cliente = []
             return
         cliente_id = int(m.group(1))
-        # Cache de plantas en sesión (TTL 120s)
+        # Cache de plantas en sesión — solo rendimiento, no ámbito (TTL 120s)
         _pc = session.get("_plantas_cache")
         if (
             _pc
@@ -616,14 +606,16 @@ def create_app() -> Flask:
             g.planta_activa = None
             return
 
-        ids_de_este_cliente = {p["id"] for p in plantas}
-        planta_activa_id = session.get("planta_activa_id")
-        if not planta_activa_id or planta_activa_id not in ids_de_este_cliente:
-            planta_activa_id = plantas[0]["id"]
-            session["planta_activa_id"] = planta_activa_id
-
-        g.planta_activa_id = planta_activa_id
-        g.planta_activa = next((p for p in plantas if p["id"] == planta_activa_id), plantas[0])
+        # Extraer planta_id del path cuando está presente
+        m_planta = _re2.search(r"/planta/(\d+)(?:/|$)", path)
+        if m_planta:
+            planta_id_url = int(m_planta.group(1))
+            planta = next((p for p in plantas if p["id"] == planta_id_url), None)
+            g.planta_activa_id = planta_id_url if planta else None
+            g.planta_activa = planta
+        else:
+            g.planta_activa_id = None
+            g.planta_activa = None
 
     @app.context_processor
     def _inject_globals():
@@ -745,10 +737,6 @@ def create_app() -> Flask:
             flash("Cliente no encontrado.", "warning")
             return redirect(url_for("clientes.listado"))
 
-        # Sincronizar planta activa en sesión para que sidebar quede alineado
-        session["planta_activa_id"] = planta_id
-        session.pop("_plantas_cache", None)
-
         contratos = get_contratos_por_cliente(cliente_id, planta_id=planta_id)
         mediciones = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
         es_admin = user.get("rol") in ("admin", "master_admin")
@@ -762,18 +750,6 @@ def create_app() -> Flask:
             es_admin=es_admin,
         )
 
-    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/seleccionar", methods=["POST"])
-    def seleccionar_planta(cliente_id: int, planta_id: int):
-        """Cambia la planta activa para el cliente en la sesión actual."""
-        planta = obtener_planta(planta_id)
-        if planta is None or planta.get("cliente_id") != cliente_id:
-            flash("Planta no válida para este cliente.", "danger")
-            return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
-        session["planta_activa_id"] = planta_id
-        session.pop("_plantas_cache", None)  # forzar recarga
-        referer = request.referrer
-        return redirect(referer or url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
-
     @app.route("/clientes/<int:cliente_id>/dashboard")
     def cliente_dashboard(cliente_id: int):
         """Redirige a Contabilidad Energética (primera vista del análisis del cliente)."""
@@ -783,14 +759,16 @@ def create_app() -> Flask:
     @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/contabilidad")
     def cliente_dashboard_contabilidad(cliente_id: int, planta_id: int | None = None):
         """Vista de Contabilidad Energética: histórico eléctrico del cliente."""
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                abort(404)
+            return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            abort(404)
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -886,14 +864,16 @@ def create_app() -> Flask:
     @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/cogeneracion")
     def cliente_dashboard_cogeneracion(cliente_id: int, planta_id: int | None = None):
         """Vista de Proyecto Cogeneración: análisis de oportunidad de cogeneración."""
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                abort(404)
+            return redirect(url_for("cliente_dashboard_cogeneracion", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            abort(404)
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -1099,11 +1079,13 @@ def create_app() -> Flask:
         cliente = _gcc(cliente_id)
         if cliente is None:
             return jsonify({"error": "no_encontrado"}), 404
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                return jsonify({"error": "no_encontrado"}), 404
+            return redirect(url_for("cliente_dashboard_contabilidad_data", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            return jsonify({"error": "no_encontrado"}), 404
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -1201,14 +1183,16 @@ def create_app() -> Flask:
         """
         from flask import jsonify
         from decimal import Decimal
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                abort(404)
+            return redirect(url_for("cliente_dashboard_contabilidad_desglose", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            abort(404)
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
 
         tipo_suministro = _tipo_suministro(cliente_id)
         if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
@@ -1300,11 +1284,13 @@ def create_app() -> Flask:
         cliente = _gcc(cliente_id)
         if cliente is None:
             return jsonify({"error": "no_encontrado"}), 404
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                return jsonify({"error": "no_encontrado"}), 404
+            return redirect(url_for("cliente_dashboard_cogeneracion_data", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            return jsonify({"error": "no_encontrado"}), 404
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -1610,11 +1596,13 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                abort(404)
+            return redirect(url_for("cliente_dashboard_contabilidad_export", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            abort(404)
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -1850,11 +1838,13 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                abort(404)
+            return redirect(url_for("cliente_dashboard_cogeneracion_export", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            abort(404)
 
         # Leer parámetros de slider desde query string
         def _qparam(name, default, lo=0.01, hi=1.0):
@@ -2061,11 +2051,13 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                abort(404)
+            return redirect(url_for("cliente_grafica_excel", cliente_id=cliente_id, grafica_id=grafica_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            abort(404)
 
         _GRAFICAS = {
             "ahorro_neto_mensual":    "Cogeneración — Detalle Mensual",
@@ -2886,11 +2878,13 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                abort(404)
+            return redirect(url_for("cliente_dashboard_modelado_chp", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            abort(404)
 
         mediciones = get_mediciones_por_cliente(cliente_id, planta_id=_pid_de_g())
         if not mediciones:
@@ -2932,11 +2926,13 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                abort(404)
+            return redirect(url_for("cliente_dashboard_telemetria", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            abort(404)
 
         from storage.repository import obtener_arbol_medidores as _oam
         arbol_medidores = _oam(cliente_id, planta_id=_pid_de_g())
@@ -2958,11 +2954,13 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return jsonify({"error": "acceso denegado"}), 403
-        if planta_id is not None:
-            _verificar_planta_de_cliente(planta_id, cliente_id)
-            g.planta_activa_id = planta_id
-            session["planta_activa_id"] = planta_id
-            session.pop("_plantas_cache", None)
+        if planta_id is None:
+            _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
+            if not _pg:
+                return jsonify({"error": "no_encontrado"}), 404
+            return redirect(url_for("cliente_dashboard_telemetria_data", cliente_id=cliente_id, planta_id=_pg[0]["id"]), 302)
+        if _pid_de_g() != planta_id:
+            return jsonify({"error": "no_encontrado"}), 404
 
         from storage.repository import (
             obtener_arbol_medidores as _oam,

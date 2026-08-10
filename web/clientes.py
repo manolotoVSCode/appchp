@@ -3180,9 +3180,6 @@ def planta_desactivar(cliente_id: int, planta_id: int):
     try:
         actualizar_planta(planta_id, activo=False)
         session.pop("_plantas_cache", None)
-        # Si era la planta activa, limpiar sesión
-        if session.get("planta_activa_id") == planta_id:
-            session.pop("planta_activa_id", None)
         flash(f"Planta '{planta.get('nombre')}' desactivada.", "success")
     except Exception as exc:
         logger.error("Error desactivando planta id=%d: %s", planta_id, exc)
