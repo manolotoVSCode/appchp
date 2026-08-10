@@ -428,6 +428,49 @@
 </div>
 {% endif %}
 
+<!-- Sección contratos -->
+<div class="mt-5">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Contratos</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th>Identificador</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if contratos %}
+        {% for contrato in contratos %}
+        <tr>
+          <td class="fw-semibold">{{ contrato.nombre }}</td>
+          <td>
+            {% if contrato.tipo == 'electrico_basico' %}Eléctrico (CFE)
+            {% elif contrato.tipo == 'electrico_calificado' %}Eléctrico (PPA)
+            {% elif contrato.tipo == 'gas' %}Gas
+            {% else %}{{ contrato.tipo }}{% endif %}
+          </td>
+          <td class="font-monospace">{{ contrato.identificador_real or '—' }}</td>
+          <td>
+            <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+               class="btn btn-xs btn-outline-secondary">Ver contrato</a>
+          </td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-muted">Sin contratos registrados.</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <!-- Sección plantas -->
 <div class="mt-5">
   <div class="d-flex align-items-center justify-content-between mb-2">
