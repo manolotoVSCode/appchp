@@ -544,6 +544,11 @@ def ficha(cliente_id: int):
 @clientes_bp.route("/<int:cliente_id>/activar", methods=["POST"])
 def cliente_activar(cliente_id: int):
     from flask import jsonify, make_response
+    user = _get_current_user()
+    if not user:
+        return jsonify({"error": "No autenticado"}), 401
+    if not usuario_puede_ver_empresa(cliente_id, user):
+        return jsonify({"error": "No autorizado"}), 403
     cliente = get_cliente_con_conteos(cliente_id)
     if cliente is None:
         return jsonify({"error": "Cliente no encontrado"}), 404
@@ -552,8 +557,7 @@ def cliente_activar(cliente_id: int):
     session["cliente_activo_logo_url"] = cliente.get("logo_url")
     session.pop("_cp_cache", None)
     resp = make_response(jsonify({"ok": True}))
-    user = _get_current_user()
-    if user and user.get("rol") in ("master_admin", "admin"):
+    if user.get("rol") in ("master_admin", "admin"):
         resp.set_cookie(
             "last_cliente_id", str(cliente_id),
             max_age=30 * 24 * 3600, samesite="Lax",
@@ -741,6 +745,22 @@ def cliente_logo_eliminar(cliente_id: int):
 
 
 # ── Contratos ─────────────────────────────────────────────────────────────────
+
+def _verificar_acceso_modelado(modelado_id: int, cliente_id: int):
+    """Carga el modelado y verifica que pertenezca al cliente dado.
+
+    Devuelve el dict del modelado si el acceso es válido.
+    Si no existe, devuelve None.
+    Si pertenece a otro cliente, devuelve una Response de error 404 JSON.
+    """
+    modelado = get_modelado_chp_by_id(modelado_id)
+    if modelado is None:
+        return None
+    if modelado.get("cliente_id") != cliente_id:
+        from flask import jsonify as _jsonify
+        return _jsonify({"error": "No encontrado"}), 404
+    return modelado
+
 
 def _verificar_acceso_contrato(contrato_id: int, cliente_id: int):
     """Carga el contrato y verifica que pertenezca al cliente dado.
@@ -2514,8 +2534,12 @@ def modelado_chp_curva(cliente_id: int, modelado_id: int):
         return jsonify({"error": "No autenticado"}), 401
 
     # Obtener motores_config del modelado para etiquetas y construcción de arrays por motor
-    modelado_hdr = get_modelado_chp_by_id(modelado_id)
-    motores_cfg  = (modelado_hdr.get("motores_config") or []) if modelado_hdr else []
+    modelado_hdr = _verificar_acceso_modelado(modelado_id, cliente_id)
+    if modelado_hdr is None:
+        return jsonify({"error": "No encontrado"}), 404
+    if isinstance(modelado_hdr, tuple):
+        return modelado_hdr  # Response de error 404 ya construida
+    motores_cfg  = modelado_hdr.get("motores_config") or []
 
     puntos = get_modelado_chp_curva(modelado_id)
 
