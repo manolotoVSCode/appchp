@@ -226,11 +226,6 @@ def _row_to_cfe_invoice(row: dict) -> CFEInvoice:
         total_mxn=Decimal(row["total_mxn"]),
         pdf_path=row["pdf_path"],
         advertencias=json.loads(row["advertencias"]) if row.get("advertencias") else [],
-        contrato_id=row.get("contrato_id"),
-        planta_id=row.get("planta_id"),
-        anio=row.get("anio"),
-        mes=row.get("mes"),
-        nombre_canonico=row.get("nombre_canonico"),
     )
 
 
@@ -353,11 +348,6 @@ def _row_to_gas_invoice(row: dict) -> GasInvoice:
         total_mxn=Decimal(row["total_mxn"]),
         pdf_path=row.get("pdf_path", ""),
         advertencias=json.loads(row["advertencias"]) if row.get("advertencias") else [],
-        contrato_id=row.get("contrato_id"),
-        planta_id=row.get("planta_id"),
-        anio=row.get("anio"),
-        mes=row.get("mes"),
-        nombre_canonico=row.get("nombre_canonico"),
     )
 
 

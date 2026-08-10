@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from web.auth import get_current_user as _get_current_user
-from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario, usuario_puede_escribir_en_cliente, usuario_puede_ver_empresa
+from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario
 from web.error_logger import log_error
 from calc.excepciones import PeriodoIncompletoError
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
@@ -55,7 +55,6 @@ from storage.repository import (
     upsert_meses_seleccionados_anio,
     delete_meses_seleccionados_anio,
     get_facturas_calificado_por_contrato,
-    get_facturas_calificado_por_cliente,
     create_factura_calificado,
     get_factura_calificado,
     update_factura_calificado,
@@ -382,12 +381,10 @@ def _validar_rfc_formato(rfc: str) -> str | None:
 @clientes_bp.route("/")
 def listado():
     user = _get_current_user()
-    if user and user.get("rol") in ("usuario_normal", "usuario_avanzado"):
+    if user and user.get("rol") == "usuario_normal":
         if user.get("empresa_id"):
             return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
         return render_template("error_sin_empresa.html"), 403
-    if user and user.get("rol") == "admin" and user.get("empresa_id"):
-        return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
     clientes = get_all_clientes_con_conteos()
     if user:
         clientes = filtrar_empresas_para_usuario(clientes, user)
@@ -516,41 +513,20 @@ def ficha(cliente_id: int):
     except Exception:
         pass
     user = _get_current_user()
-    # usuario_normal y usuario_avanzado solo pueden ver su propio cliente
-    if user and user.get("rol") in ("usuario_normal", "usuario_avanzado") and not usuario_puede_ver_empresa(cliente_id, user):
-        flash("No tienes acceso a este cliente.", "danger")
-        empresa_id_actor = user.get("empresa_id") if user is not None else None
-        if empresa_id_actor:
-            return redirect(url_for("clientes.ficha", cliente_id=empresa_id_actor))
-        return redirect(url_for("clientes.listado"))
-    # Parámetros CRE: para todos los usuarios autenticados con acceso al cliente
+    # Parámetros CRE: solo para admin/master_admin
     cre_params = None
-    if user:
+    if user and user.get("rol") in ("master_admin", "admin"):
         try:
             cre_params = _calcular_cre_params(cliente)
         except Exception:
             pass
     plantas = obtener_plantas_por_cliente(cliente_id, solo_activas=False)
-    contratos = get_contratos_por_cliente(cliente_id)
-    mediciones = get_mediciones_por_cliente(cliente_id)
-    facturas_cfe = get_ultimas_cfe_invoices(cliente_id, n=50)
-    facturas_gas = get_ultimas_gas_invoices(cliente_id, n=50)
-    facturas_calificado = get_facturas_calificado_por_cliente(cliente_id)
-    planta_nombre: dict[int, str] = {p["id"]: p["nombre"] for p in plantas}
-    contrato_planta: dict[int, str] = {c.id: planta_nombre.get(c.planta_id, "—") for c in contratos}
     resp = make_response(render_template(
         "clientes/ficha.html",
         cliente=cliente,
         ppa_bloques=ppa_bloques,
         cre_params=cre_params,
         plantas=plantas,
-        contratos=contratos,
-        mediciones=mediciones,
-        facturas_cfe=facturas_cfe,
-        facturas_gas=facturas_gas,
-        facturas_calificado=facturas_calificado,
-        planta_nombre=planta_nombre,
-        contrato_planta=contrato_planta,
     ))
     if user and user.get("rol") in ("master_admin", "admin"):
         resp.set_cookie("last_cliente_id", str(cliente_id),
@@ -967,7 +943,7 @@ def contrato_editar(cliente_id: int, contrato_id: int):
 @clientes_bp.route("/<int:cliente_id>/contratos/<int:contrato_id>/borrar", methods=["POST"])
 def contrato_borrar(cliente_id: int, contrato_id: int):
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not usuario_puede_borrar(user or {}):
         log_error("negocio", "No tienes permisos para borrar contratos.")
         flash("No tienes permisos para borrar contratos.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
@@ -1350,7 +1326,7 @@ def contrato_factura_borrar(cliente_id: int, contrato_id: int, factura_id: int):
     from flask import Response, jsonify
 
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not usuario_puede_borrar(user or {}):
         log_error("negocio", "No tienes permisos para borrar facturas.")
         flash("No tienes permisos para borrar facturas.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
@@ -1804,7 +1780,7 @@ def factura_calificado_borrar(cliente_id: int, contrato_id: int, factura_id: int
     from flask import Response
 
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not usuario_puede_borrar(user or {}):
         log_error("negocio", "No tienes permisos para borrar facturas.")
         flash("No tienes permisos para borrar facturas.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
@@ -2058,7 +2034,7 @@ def cliente_gas_manual_actualizar(cliente_id: int):
     from decimal import Decimal, InvalidOperation
 
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not user or user.get("rol") not in ("master_admin", "admin"):
         log_error("negocio", "No tienes permiso para esta acción.")
         flash("No tienes permiso para esta acción.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
@@ -2099,7 +2075,7 @@ _MESES_NOMBRES = [
 def medicion_subir(cliente_id: int):
     from datetime import datetime as _dt
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not user or user.get("rol") not in ("master_admin", "admin"):
         flash("No tienes permiso para subir mediciones.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
@@ -2216,7 +2192,7 @@ def medicion_subir(cliente_id: int):
 @clientes_bp.route("/<int:cliente_id>/mediciones/<int:medicion_id>/borrar", methods=["POST"])
 def medicion_borrar(cliente_id: int, medicion_id: int):
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not user or user.get("rol") not in ("master_admin", "admin"):
         flash("No tienes permiso para borrar mediciones.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
@@ -2280,7 +2256,7 @@ def medicion_api(cliente_id: int, medicion_id: int):
     """PATCH: actualiza campos editables. DELETE: borra la medición. Devuelve JSON."""
     from flask import jsonify
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not user or user.get("rol") not in ("master_admin", "admin"):
         return jsonify({"error": "No autorizado"}), 403
 
     medicion = get_medicion(medicion_id)
@@ -2331,7 +2307,7 @@ def medicion_borrar_lote(cliente_id: int):
     """Borra varias mediciones por lista de ids. Devuelve JSON."""
     from flask import jsonify
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not user or user.get("rol") not in ("master_admin", "admin"):
         return jsonify({"error": "No autorizado"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -3049,7 +3025,7 @@ def activar_cliente(cliente_id: int):
 @clientes_bp.route("/<int:cliente_id>/planta/nueva", methods=["GET", "POST"])
 def planta_nueva(cliente_id: int):
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not usuario_puede_crear(user or {}):
         flash("No tienes permisos para crear plantas.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
@@ -3100,7 +3076,7 @@ def planta_nueva(cliente_id: int):
 @clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/editar", methods=["GET", "POST"])
 def planta_editar(cliente_id: int, planta_id: int):
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not usuario_puede_crear(user or {}):
         flash("No tienes permisos para editar plantas.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
@@ -3160,7 +3136,7 @@ def planta_editar(cliente_id: int, planta_id: int):
 @clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/desactivar", methods=["POST"])
 def planta_desactivar(cliente_id: int, planta_id: int):
     user = _get_current_user()
-    if not user or not usuario_puede_escribir_en_cliente(user, cliente_id):
+    if not usuario_puede_borrar(user or {}):
         flash("No tienes permisos para desactivar plantas.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 

@@ -332,10 +332,8 @@ Pendiente: ejecutar migrations en Supabase:
   - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
 
 ### Bugs App
-Último tema resuelto: v2.85.6 — Ficha cliente restaurada con contratos, facturas y
-mediciones; permisos de escritura extendidos a usuario_normal en rutas propias.
-Sidebar fixes v2.85.2/3/5/7: header CHP App, fila cliente sin logo, telemetría
-cabecera unificada.
+Último tema resuelto: tabla componentes cogeneración con table-layout
+fixed para Safari + colores donut resueltos desde CSS vars.
 Pendiente: ninguno conocido.
 
 ### Diseño Visual App

@@ -71,10 +71,3 @@ class CFEInvoice:
     # Trazabilidad
     pdf_path: str
     advertencias: list[str] = field(default_factory=list)
-
-    # Vínculos operativos (opcionales, hidratados desde BD)
-    contrato_id: int | None = None
-    planta_id: int | None = None
-    anio: int | None = None
-    mes: int | None = None
-    nombre_canonico: str | None = None

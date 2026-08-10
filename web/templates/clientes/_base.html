@@ -86,27 +86,12 @@
   </span>
   {% endif %}
   {% endif %}
-  {% elif current_user_data and current_user_data.rol == 'usuario_avanzado' %}
-  <div class="sidebar-section">Clientes</div>
-  {% if current_user_data.empresa_id %}
-  <a href="{{ url_for('clientes.ficha', cliente_id=current_user_data.empresa_id) }}"
-     class="sidebar-link{% if nav_active == 'ficha' %} active{% endif %}">
-    <i class="bi bi-building"></i>Mi Cliente
-  </a>
-  {% endif %}
   {% else %}
   <div class="sidebar-section">Clientes</div>
-  {% if current_user_data and (current_user_data.rol == 'master_admin' or (current_user_data.rol == 'admin' and not current_user_data.empresa_id)) %}
   <a href="{{ url_for('clientes.listado') }}"
      class="sidebar-link{% if nav_active == 'clientes' %} active{% endif %}">
     <i class="bi bi-people"></i>Listado clientes
   </a>
-  {% elif current_user_data and current_user_data.rol == 'admin' and current_user_data.empresa_id %}
-  <a href="{{ url_for('clientes.ficha', cliente_id=current_user_data.empresa_id) }}"
-     class="sidebar-link{% if nav_active == 'ficha' %} active{% endif %}">
-    <i class="bi bi-building"></i>Mi Cliente
-  </a>
-  {% endif %}
   {% endif %}
 
   {% if cliente_activo %}
@@ -234,8 +219,6 @@
           <span style="color:#F48FB1">{{ current_user_data.rol|label_rol }}</span>
         {% elif current_user_data.rol == 'admin' %}
           <span style="color:#81D4FA">{{ current_user_data.rol|label_rol }}</span>
-        {% elif current_user_data.rol == 'usuario_avanzado' %}
-          <span style="color:#A5D6A7">{{ current_user_data.rol|label_rol }}</span>
         {% endif %}
       </div>
       {% endif %}
