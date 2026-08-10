@@ -60,11 +60,76 @@ Decorador `@require_master_admin_y_fase2` en `web/auth_permissions.py`. Si la fl
 
 El sidebar muestra el bloque "Telemetría (Beta)" solo cuando `fase2_habilitada` es `True` y el usuario es `master_admin`. Los enlaces concretos de la sección se añadirán en entregas posteriores de fase 2.
 
+## Modelo de plantas y ámbito de URL
+
+Un cliente puede tener una o más plantas industriales. Cada planta agrupa contratos, activos eléctricos y medidores que pertenecen a esa instalación física.
+
+Tabla `plantas`: id, cliente_id (FK clientes ON DELETE CASCADE), nombre, direccion_planta, notas, activo (BOOL), created_at.
+
+Todas las rutas de activos, contratos y telemetría con alcance de planta viajan con la forma `/clientes/<cliente_id>/planta/<planta_id>/...`. Esto hace el ámbito explícito en la URL y permite a Flask validar la combinación cliente/planta antes de ejecutar la lógica de negocio.
+
+Funciones de repositorio para plantas: `obtener_plantas_por_cliente(cliente_id, solo_activas=True)`, `obtener_planta(planta_id)`, `crear_planta(cliente_id, nombre, *, direccion_planta, notas)`, `actualizar_planta(planta_id, **campos)`, `planta_tiene_recursos(planta_id)`.
+
+## Modelo de activos eléctricos
+
+Tabla `activos_electricos`: id, cliente_id (FK clientes), planta_id (FK plantas), nombre, tipo, activo_padre_id (FK activos_electricos, autorreferencial), capacidad_kva, potencia_nominal_kw, tipo_carga, notas, activo (BOOL), created_at.
+
+La jerarquía tiene cinco tipos, en orden de precedencia topológica:
+
+- acometida: nodo raíz de la planta (sin padre). Punto de entrada de la red CFE o suministrador calificado.
+- subestacion: puede tener como padre una acometida u otra subestacion.
+- transformador: padre debe ser subestacion.
+- carga: equipo consumidor final (hornos, compresores, etc.). Padre debe ser transformador o subestacion.
+- generacion: activo generador (motor CHP, solar, etc.). Padre debe ser transformador o subestacion.
+
+El campo `activo_padre_id` es el estado materializado de la alimentación vigente. Se usa para renderizar el árbol en memoria sin consultas adicionales. Su valor verdadero temporal está en `activo_alimentacion_vigencia`; cualquier divergencia entre ambos es un error de consistencia detectable con `verificar_consistencia_alimentacion(cliente_id)`.
+
+Solo los activos de tipo `carga` y `generacion` pueden tener medidor físico asociado. Los activos de tipo `acometida`, `subestacion` y `transformador` se incluyen en el árbol sin energía propia medida.
+
+Las constantes de tipo válido para padre de cada tipo se declaran en `_PADRES_VALIDOS` en `web/clientes.py`.
+
+## Tablas de vigencia temporal
+
+`medidor_activo_vigencia`: activo_id (FK activos_electricos), medidor_id (FK medidores), vigente_desde (timestamptz), vigente_hasta (timestamptz|NULL), motivo. La fila con `vigente_hasta IS NULL` es la vigencia activa. Append-only: nunca se actualiza, solo se cierra (se escribe `vigente_hasta`) y se crea una nueva.
+
+`activo_alimentacion_vigencia`: activo_id (FK activos_electricos, SIN CASCADE), fuente_activo_id (FK activos_electricos|NULL), vigente_desde (timestamptz), vigente_hasta (timestamptz|NULL), motivo. Registra la topología de alimentación a lo largo del tiempo. La FK de `activo_id` no tiene ON DELETE CASCADE; al borrar un activo se debe eliminar primero su fila de vigencia (o la DELETE falla con FK violation). Al crear un activo con padre, se crea también su primera fila de vigencia en una operación atómica (patrón compensating transaction en `crear_activo_con_vigencia`).
+
+Las rutas que declaran un cambio de alimentación pasan siempre por `declarar_cambio_alimentacion(activo_id, fuente_activo_id, desde, motivo)`, que cierra la fila abierta y actualiza `activo_padre_id` en la misma secuencia. La edición directa de `activo_padre_id` vía endpoint de edición no está permitida (el campo se excluye del payload de `activo_editar`).
+
+## Módulo de telemetría (Fase 2)
+
+Las mediciones brutas llegan a `mediciones_tiempo_real`: medidor_id, timestamp (timestamptz), potencia_activa_kw, factor_potencia. Dos vistas materializadas agregan estos datos para queries eficientes:
+
+- `mediciones_agregadas_5min`: buckets de 5 minutos con columnas bucket_5min, medidor_id, kw_promedio, kw_max, fp_promedio, n_lecturas. Usada para rangos ≤ 7 días.
+- `mediciones_agregadas_horarias`: buckets de 1 hora con columnas bucket_hora, medidor_id, kw_promedio, kw_max, fp_promedio, n_lecturas. Usada para el rango 30d.
+
+La función `obtener_mediciones_para_rango(medidor_id, desde, hasta, rango)` en `storage/repository.py` selecciona automáticamente la vista correcta según el rango y devuelve dicts homogeneizados `{ts, kw, fp}`.
+
+La función `obtener_arbol_activos_telemetria(cliente_id, planta_id)` en `storage/repository.py` devuelve la lista plana de activos de la planta enriquecida con `medidor_id` vigente (NULL si el activo no tiene medidor activo) y `punto_medicion` (alias del tipo para el contrato JS del dashboard).
+
+## Convención TODAS_LAS_PLANTAS y ámbito ausente
+
+Las funciones de repositorio que aceptan un filtro de planta declaran el parámetro como `planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA`. Dos sentinelas definen los casos especiales:
+
+`TODAS_LAS_PLANTAS` (exportado públicamente): pasa como argumento cuando el llamante necesita agregar datos de todas las plantas del cliente deliberadamente. Es el único camino legítimo para agregar a nivel cliente.
+
+`_PLANTA_NO_ESPECIFICADA` (privado): valor por defecto cuando el llamante omite el parámetro. Provoca un `logger.warning("[SCOPE_MISSING] ...")` y devuelve datos sin filtrar. Esto es comportamiento seguro hacia atrás (no rompe código existente), pero deja huella en el log para detectar llamadas que deberían especificar ámbito.
+
+El código nuevo que invoca funciones de repositorio con ámbito de planta siempre debe pasar `planta_id` explícito o `TODAS_LAS_PLANTAS`. Nunca omitir el parámetro intencionalmente en código nuevo.
+
+## Patrón de validación de permiso y pertenencia en rutas de activos
+
+Todas las rutas bajo `/clientes/<cliente_id>/planta/<planta_id>/...` que operan sobre activos invocan `_verificar_planta_activos(cliente_id, planta_id)` al inicio. Esta función valida tres condiciones en secuencia: que el usuario tenga sesión activa, que pueda ver la empresa (`usuario_puede_ver_empresa`), y que la planta exista y pertenezca al cliente. Retorna `(user, planta)` en caso de éxito o `(None, error_tuple)` en caso de fallo. El helper `_err_activos(resultado)` materializa el error en una respuesta Flask (redirect al login, JSON 403 o JSON 404 según el caso).
+
+Antes de ejecutar lógica de negocio sobre un activo específico, las rutas también verifican que el activo pertenezca a la planta (`activo.get("planta_id") != planta_id` → 404). Esto garantiza que un ID de activo de otra planta no pueda ser operado desde la URL de una planta diferente.
+
 ## Schema de Supabase (tablas existentes)
 
 clientes: id, nombre, rfc (único), notas, created_at, sector_industrial, contacto_nombre, contacto_cargo, contacto_email, contacto_telefono, direccion, estado, codigo_postal, tarifa_cfe, capacidad_instalada_kw, demanda_contratada_kw, anio_inicio_operacion, regimen_operacion, consumo_anual_estimado_mwh, logo_url, medio_termico, medio_termico_vapor_pct (INTEGER 0-100), nivel_tension_kv, altitud_msnm, tipo_motor.
 
-contratos: id, cliente_id (FK clientes ON DELETE CASCADE), nombre, tipo ('electrico'|'gas'), identificador_real, notas, created_at.
+plantas: id, cliente_id (FK clientes ON DELETE CASCADE), nombre, direccion_planta, notas, activo (BOOL DEFAULT true), created_at.
+
+contratos: id, cliente_id (FK clientes ON DELETE CASCADE), planta_id (FK plantas ON DELETE SET NULL), nombre, tipo ('electrico_basico'|'electrico_calificado'|'gas'), identificador_real, notas, created_at.
 
 cfe_facturas: id, cliente_id (FK clientes ON DELETE CASCADE), contrato_id (FK contratos ON DELETE SET NULL), uuid_cfdi, folio, serie, fecha_emision, periodo_inicio, periodo_fin, fecha_limite_pago, numero_servicio, rmu, tarifa, numero_medidor, multiplicador, carga_conectada_kw, demanda_contratada_kw, kw_max, kvarh, factor_potencia_pct, cargo_fijo_mxn, energia_total_mxn, cargo_factor_potencia_mxn, subtotal_mxn, iva_mxn, facturacion_periodo_mxn, derecho_alumbrado_publico_mxn, credito_aplicado_mxn, total_mxn, pdf_path, advertencias (JSON array), nombre_canonico, anio, mes.
 
@@ -81,6 +146,24 @@ contrato_meses_seleccionados: PK(contrato_id, anio, mes). FK contrato_id → con
 configuracion: clave (PK), valor, descripcion, updated_at. Claves activas: tipo_cambio_mxn_usd, factor_emision_electricidad_kg_co2_kwh, factor_emision_gas_kg_co2_gj.
 
 user_profiles: id (UUID PK → auth.users), email (TEXT), rol (TEXT: master_admin|admin|usuario_normal), empresa_id (INT NULL → clientes), activo (BOOL), created_at.
+
+activos_electricos: id, cliente_id (FK clientes), planta_id (FK plantas), nombre, tipo ('acometida'|'subestacion'|'transformador'|'carga'|'generacion'), activo_padre_id (FK activos_electricos NULL), capacidad_kva, potencia_nominal_kw, tipo_carga, notas, activo (BOOL), created_at.
+
+medidores: id, cliente_id (FK clientes), planta_id (FK plantas), nombre, modelo, numero_serie, activo (BOOL), created_at.
+
+medidor_activo_vigencia: id, activo_id (FK activos_electricos ON DELETE CASCADE), medidor_id (FK medidores ON DELETE CASCADE), vigente_desde (timestamptz), vigente_hasta (timestamptz NULL), motivo.
+
+activo_alimentacion_vigencia: id, activo_id (FK activos_electricos — SIN CASCADE), fuente_activo_id (FK activos_electricos NULL), vigente_desde (timestamptz), vigente_hasta (timestamptz NULL), motivo.
+
+mediciones_tiempo_real: id, medidor_id (FK medidores), timestamp (timestamptz), potencia_activa_kw, factor_potencia.
+
+mediciones_agregadas_5min (vista materializada): bucket_5min (timestamptz), medidor_id, kw_promedio, kw_max, fp_promedio, n_lecturas.
+
+mediciones_agregadas_horarias (vista materializada): bucket_hora (timestamptz), medidor_id, kw_promedio, kw_max, fp_promedio, n_lecturas.
+
+facturas_electricidad_calificado: id, contrato_id, cliente_id, suministrador, rpu, serie_folio, periodo_inicio, periodo_fin, dias_facturados, anio, mes, nombre_canonico, consumo_kwh, precio_unitario_mxn_kwh, subtotal_mxn, iva_mxn, total_mxn, excedente_detectado, advertencias, pdf_url, parser_version, created_at.
+
+ppa_bloques_mensuales: contrato_id, anio, mes, bloque_mwh.
 
 ## Arquitectura de contratos y selección de meses
 
@@ -319,17 +402,23 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.82.0 — D7-B: panel KPI tabs (Energéticos/Económicos/Producción),
-tarjetas v2 con badge delta, gauge FP (doughnut semicírculo), sparklines duales,
-formulario POST producción mensual. Pestaña Producción visible sólo en rango 30d.
-_tabActivo persiste entre re-fetches. punto_medicion añadido a nodo_seleccionado JSON.
-Pendiente del usuario: validar si fórmula pct_costo_especifico=100/m² es intencional.
+Último tema resuelto: v2.82.0 — D7-B completo. Pendiente del usuario: validar si
+fórmula pct_costo_especifico=100/m² es intencional.
 Pendiente: ejecutar migrations en Supabase:
   - 202606_usuario_clientes.sql
   - 202607_telemetria_jerarquia.sql
   - 202608_produccion_diaria.sql
   - 202609_mediciones_5min_horarias.sql
   - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
+
+### Activos eléctricos
+Último tema resuelto: sistema de declaración de cambios de alimentación completo.
+activo_crear usa crear_activo_con_vigencia (compensating transaction). activo_editar
+ya no acepta activo_padre_id. activo_reasignar_padre delega en declarar_cambio_alimentacion.
+Eliminación permanente condicionada a: sin hijos, sin historial medidor, ≤1 fila vigencia.
+FK activo_alimentacion_vigencia.activo_id no tiene CASCADE (verificado con activo id=38).
+Pendiente: ejecutar UPDATE potencia_nominal_kw en Supabase para cargas del cliente 45
+  (IDs 5,7,9,11,13,15,17,19,21,23,25,27 — valores en la sesión anterior de telemetría).
 
 ### Bugs App
 Último tema resuelto: tabla componentes cogeneración con table-layout
@@ -343,12 +432,12 @@ sincronizados al mismo color del arco.
 Pendiente: ninguno conocido.
 
 ### Auditorías App
-Último tema resuelto: ninguno. Chat iniciado, modelo recomendado Opus 4.7.
+Último tema resuelto: ninguno.
 Pendiente: auditoría de fase 1 al cierre del alcance.
 
 ### Integración Telemática
 Último tema resuelto: v2.82.0 — D7-B completo: frontend KPIs tabs, gauge FP,
 sparklines, formulario producción manual. Backend: punto_medicion en nodo_seleccionado.
-Pendiente: ejecutar seed con --forzar en Supabase (si no se ejecutó); refrescar vistas
-materializadas (REFRESH MATERIALIZED VIEW CONCURRENTLY mediciones_agregadas_5min/horarias);
-frontend D7-C (si definido).
+Pendiente: refrescar vistas materializadas en Supabase:
+  REFRESH MATERIALIZED VIEW CONCURRENTLY mediciones_agregadas_5min;
+  REFRESH MATERIALIZED VIEW CONCURRENTLY mediciones_agregadas_horarias;
