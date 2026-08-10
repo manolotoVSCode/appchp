@@ -2361,7 +2361,8 @@ def medicion_borrar_lote(cliente_id: int):
 # ── Modelado CHP ─────────────────────────────────────────────────────────────
 
 @clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/data")
-def modelado_chp_data(cliente_id: int):
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/dashboard/modelado-chp/data")
+def modelado_chp_data(cliente_id: int, planta_id: int | None = None):
     """Calcula o sirve desde cache los KPIs del modelado CHP para una medición."""
     import math as _math
     from flask import jsonify
@@ -2525,7 +2526,8 @@ def modelado_chp_data(cliente_id: int):
 
 
 @clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/curva/<int:modelado_id>")
-def modelado_chp_curva(cliente_id: int, modelado_id: int):
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/dashboard/modelado-chp/curva/<int:modelado_id>")
+def modelado_chp_curva(cliente_id: int, modelado_id: int, planta_id: int | None = None):
     """Retorna la curva modelada (ts, demanda_kw, gen_neta_kw) de un modelado."""
     from flask import jsonify
 
@@ -2566,7 +2568,8 @@ def modelado_chp_curva(cliente_id: int, modelado_id: int):
 
 
 @clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/params", methods=["POST"])
-def modelado_chp_params(cliente_id: int):
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/dashboard/modelado-chp/params", methods=["POST"])
+def modelado_chp_params(cliente_id: int, planta_id: int | None = None):
     """Guarda los parámetros de cabecera de la sesión del Modelado CHP."""
     from flask import jsonify
 
@@ -2593,7 +2596,8 @@ def modelado_chp_params(cliente_id: int):
 
 
 @clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/cogen-data")
-def modelado_chp_cogen_data(cliente_id: int):
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/dashboard/modelado-chp/cogen-data")
+def modelado_chp_cogen_data(cliente_id: int, planta_id: int | None = None):
     """KPIs de cogeneración calculados desde un modelado CHP previo.
 
     Usa la cobertura derivada de la simulación CHP (kpis_modelado["cobertura_pct"])
@@ -2852,7 +2856,8 @@ def modelado_chp_cogen_data(cliente_id: int):
 
 
 @clientes_bp.route("/<int:cliente_id>/dashboard/modelado-chp/excel")
-def modelado_chp_excel(cliente_id: int):
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/dashboard/modelado-chp/excel")
+def modelado_chp_excel(cliente_id: int, planta_id: int | None = None):
     """Genera y descarga el Excel maestro con fórmulas nativas del Modelado CHP.
 
     Reutiliza exactamente la misma lógica de cálculo de /cogen-data.

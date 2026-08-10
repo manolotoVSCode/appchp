@@ -841,6 +841,7 @@ def create_app() -> Flask:
             "dashboard_contabilidad.html",
             aviso_datos=aviso_datos,
             cliente_id=cliente_id,
+            planta_id=planta_id,
             cliente_nombre=cliente["nombre"],
             logo_url=obtener_logo_cliente(cliente),
             facturas_cfe=facturas_cfe_tmpl,
@@ -1047,6 +1048,7 @@ def create_app() -> Flask:
             r=r,
             aviso_datos=aviso_datos,
             cliente_id=cliente_id,
+            planta_id=planta_id,
             cliente_nombre=cliente["nombre"],
             logo_url=obtener_logo_cliente(cliente),
             periodo_label=periodo_label,
@@ -2910,6 +2912,7 @@ def create_app() -> Flask:
         return render_template(
             "dashboard_modelado_chp.html",
             cliente_id=cliente_id,
+            planta_id=planta_id,
             cliente_nombre=cliente["nombre"],
             logo_url=obtener_logo_cliente(cliente),
             mediciones=mediciones,
@@ -2945,6 +2948,7 @@ def create_app() -> Flask:
         return render_template(
             "telemetria/dashboard.html",
             cliente=cliente,
+            planta_id=planta_id,
             arbol_medidores=arbol_medidores,
             nav_active="telemetria_cliente",
         )

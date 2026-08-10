@@ -30,7 +30,7 @@
 </div>
 
 {# Root del dashboard — data-cliente-id para que el JS sepa a qué endpoint llamar #}
-<div id="dashboard-contabilidad-root" data-cliente-id="{{ cliente_id }}"
+<div id="dashboard-contabilidad-root" data-cliente-id="{{ cliente_id }}" data-planta-id="{{ planta_id }}"
      data-medicion-activa-id="{{ session.get('medicion_activa_id', '') }}">
 
   {# Título #}
@@ -151,7 +151,7 @@
               <p class="text-muted small mt-1 mb-0">Barras agrupadas: kW por horario (eje izq.) · Línea: $/kWh total (eje der.)</p>
             </div>
             <span class="d-flex align-items-center gap-2 ms-3 mt-1">
-              <a href="/clientes/{{ cliente_id }}/grafica/demanda_por_horario/excel"
+              <a href="{{ url_for('cliente_grafica_excel', cliente_id=cliente_id, planta_id=planta_id, grafica_id='demanda_por_horario') }}"
                  class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
               <a href="#" class="link-datos" onclick="abrirPanel('panelConsumosDemandas'); return false;">Ver datos</a>
             </span>
@@ -168,7 +168,7 @@
               <p class="text-muted small mt-1 mb-0">Barras apiladas: kWh por horario (eje izq.) · Línea: $/kWh total (eje der.)</p>
             </div>
             <span class="d-flex align-items-center gap-2 ms-3 mt-1">
-              <a href="/clientes/{{ cliente_id }}/grafica/consumo_por_horario/excel"
+              <a href="{{ url_for('cliente_grafica_excel', cliente_id=cliente_id, planta_id=planta_id, grafica_id='consumo_por_horario') }}"
                  class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
               <a href="#" class="link-datos" onclick="abrirPanel('panelConsumosDemandas'); return false;">Ver datos</a>
             </span>
@@ -185,7 +185,7 @@
               <p class="text-muted small mt-1 mb-0">$/kWh — promedio ponderado sobre todo el periodo cargado</p>
             </div>
             <span class="d-flex align-items-center gap-2 ms-3 mt-1">
-              <a href="/clientes/{{ cliente_id }}/grafica/costo_unitario_promedio/excel"
+              <a href="{{ url_for('cliente_grafica_excel', cliente_id=cliente_id, planta_id=planta_id, grafica_id='costo_unitario_promedio') }}"
                  class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
               <a href="#" class="link-datos" onclick="abrirPanel('panelCostosDetallados'); return false;">Ver datos</a>
             </span>
@@ -203,7 +203,7 @@
               <p class="text-muted small mt-1 mb-0">Distribución del subtotal sin IVA: Energía, Demanda y Otros cargos</p>
             </div>
             <span class="d-flex align-items-center gap-2 ms-3 mt-1">
-              <a href="/clientes/{{ cliente_id }}/grafica/composicion_costo/excel"
+              <a href="{{ url_for('cliente_grafica_excel', cliente_id=cliente_id, planta_id=planta_id, grafica_id='composicion_costo') }}"
                  class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
               <a href="#" class="link-datos" onclick="abrirPanelIndicadores(); return false;">Ver datos</a>
             </span>
@@ -346,7 +346,7 @@
                 <p class="text-muted small mt-1 mb-0">Barras: GJ consumido (eje izq.) · Línea: $/GJ total (eje der.)</p>
               </div>
               <span class="d-flex align-items-center gap-2 ms-3 mt-1">
-                <a href="/clientes/{{ cliente_id }}/grafica/gas_consumo/excel"
+                <a href="{{ url_for('cliente_grafica_excel', cliente_id=cliente_id, planta_id=planta_id, grafica_id='gas_consumo') }}"
                    class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
                 <a href="#" class="link-datos" onclick="abrirPanel('panelGasHistorico'); return false;">Ver datos</a>
               </span>
@@ -363,7 +363,7 @@
                 <p class="text-muted small mt-1 mb-0">Barras apiladas: Molécula + Transporte (eje izq.) · Línea: $/GJ total (eje der.)</p>
               </div>
               <span class="d-flex align-items-center gap-2 ms-3 mt-1">
-                <a href="/clientes/{{ cliente_id }}/grafica/gas_costos/excel"
+                <a href="{{ url_for('cliente_grafica_excel', cliente_id=cliente_id, planta_id=planta_id, grafica_id='gas_costos') }}"
                    class="btn-excel" title="Descargar datos en Excel"><i class="bi bi-file-earmark-excel"></i></a>
                 <a href="#" class="link-datos" onclick="abrirPanel('panelGasHistorico'); return false;">Ver datos</a>
               </span>

@@ -13,7 +13,8 @@
   if (!root) return;
 
   const CLIENTE_ID = parseInt(root.dataset.clienteId, 10);
-  const DATA_URL   = `/clientes/${CLIENTE_ID}/dashboard/cogeneracion/data`;
+  const PLANTA_ID  = parseInt(root.dataset.plantaId, 10);
+  const DATA_URL   = `/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/dashboard/cogeneracion/data`;
 
   const spinner     = document.getElementById("dashboard-spinner");
   const errorBanner = document.getElementById("dashboard-error-banner");
@@ -1024,7 +1025,7 @@
     const re  = (document.getElementById("rendimiento-elec")?.value ?? 40) / 100;
     const rt  = (document.getElementById("rendimiento-term")?.value ?? 25) / 100;
     const ec  = (document.getElementById("caldera")?.value ?? 85) / 100;
-    window.location.href = `/clientes/${CLIENTE_ID}/dashboard/cogeneracion/export-datos` +
+    window.location.href = `/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/dashboard/cogeneracion/export-datos` +
       `?cobertura=${cob}&rend_elec=${re}&rend_term=${rt}&eficiencia_caldera=${ec}`;
   });
 

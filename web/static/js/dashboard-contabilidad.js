@@ -13,7 +13,8 @@
   if (!root) return;
 
   const CLIENTE_ID = parseInt(root.dataset.clienteId, 10);
-  const DATA_URL   = `/clientes/${CLIENTE_ID}/dashboard/contabilidad/data`;
+  const PLANTA_ID  = parseInt(root.dataset.plantaId, 10);
+  const DATA_URL   = `/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/dashboard/contabilidad/data`;
 
   // Helper: "YYYY-MM-DD" → "DD MMM YYYY" en español (meses en mayúsculas)
   function _fmtFechaEs(iso) {
@@ -897,9 +898,10 @@
     const tbody = document.getElementById("tbodyDetalleCostoTotal");
     if (tbody && tbody.children.length === 0) {
       const clienteId = document.getElementById("dashboard-contabilidad-root")?.dataset.clienteId;
-      if (!clienteId) return;
+      const plantaId  = document.getElementById("dashboard-contabilidad-root")?.dataset.plantaId;
+      if (!clienteId || !plantaId) return;
       try {
-        const resp = await fetch(`/clientes/${clienteId}/dashboard/contabilidad/desglose-costo-total`);
+        const resp = await fetch(`/clientes/${clienteId}/planta/${plantaId}/dashboard/contabilidad/desglose-costo-total`);
         if (!resp.ok) { console.error("desglose-costo-total:", resp.status); return; }
         const data = await resp.json();
         if (data.lineas) renderDetalleCostoTotal(data);
@@ -917,8 +919,9 @@
   document.getElementById("btn-descargar-datos")?.addEventListener("click", (e) => {
     e.preventDefault();
     const clienteId = document.getElementById("dashboard-contabilidad-root")?.dataset.clienteId;
-    if (clienteId) {
-      window.location.href = `/clientes/${clienteId}/dashboard/contabilidad/export-datos`;
+    const plantaId  = document.getElementById("dashboard-contabilidad-root")?.dataset.plantaId;
+    if (clienteId && plantaId) {
+      window.location.href = `/clientes/${clienteId}/planta/${plantaId}/dashboard/contabilidad/export-datos`;
     }
   });
 

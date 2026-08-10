@@ -15,6 +15,7 @@
   if (!root) return;
 
   const CLIENTE_ID  = parseInt(root.dataset.clienteId, 10);
+  const PLANTA_ID   = parseInt(root.dataset.plantaId, 10);
   let   MEDICION_ID = parseInt(root.dataset.medicionId, 10);
 
   let chpChart         = null;
@@ -239,7 +240,7 @@
 
     const timeoutId = setTimeout(() => _abortCtrl.abort(), 60_000);
 
-    fetch(`/clientes/${CLIENTE_ID}/dashboard/modelado-chp/data?${qs}`, { signal })
+    fetch(`/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/dashboard/modelado-chp/data?${qs}`, { signal })
       .then(r => {
         clearTimeout(timeoutId);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -293,7 +294,7 @@
 
   // ── fetchCurva ─────────────────────────────────────────────────────────────
   function fetchCurva(modeladoId) {
-    return fetch(`/clientes/${CLIENTE_ID}/dashboard/modelado-chp/curva/${modeladoId}`)
+    return fetch(`/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/dashboard/modelado-chp/curva/${modeladoId}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -685,7 +686,7 @@
 
     const qs = new URLSearchParams(qsObj);
 
-    return fetch(`/clientes/${CLIENTE_ID}/dashboard/modelado-chp/cogen-data?${qs}`)
+    return fetch(`/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/dashboard/modelado-chp/cogen-data?${qs}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -859,7 +860,7 @@
     const btn = document.getElementById("btn-excel-modelado");
     if (!btn) return;
     btn.href =
-      `/clientes/${CLIENTE_ID}/dashboard/modelado-chp/excel`
+      `/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/dashboard/modelado-chp/excel`
       + `?modelado_id=${modeladoId}`
       + `&rendimiento_termico=${p.rendimiento_termico}`
       + (p.precio_gas    ? `&precio_gas_gj=${p.precio_gas}`         : "")
@@ -873,7 +874,7 @@
     const p      = getParams();
     const cogenP = getCogenParams();
     const csrf   = document.querySelector('meta[name="csrf-token"]')?.content || "";
-    fetch(`/clientes/${CLIENTE_ID}/dashboard/modelado-chp/params`, {
+    fetch(`/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/dashboard/modelado-chp/params`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
       body: JSON.stringify({

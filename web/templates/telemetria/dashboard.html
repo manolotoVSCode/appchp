@@ -4,7 +4,8 @@
 {% block content %}
 <div id="dashboard-telemetria-root"
      data-cliente-id="{{ cliente.id }}"
-     data-endpoint="{{ url_for('cliente_dashboard_telemetria_data', cliente_id=cliente.id) }}">
+     data-planta-id="{{ planta_id }}"
+     data-endpoint="{{ url_for('cliente_dashboard_telemetria_data', cliente_id=cliente.id, planta_id=planta_id) }}">
 
   <div class="d-flex align-items-center mb-4 gap-3">
     {% set _logo = obtener_logo_cliente(cliente) %}
