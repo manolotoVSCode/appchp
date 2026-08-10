@@ -3068,3 +3068,199 @@ def resolver_intervalos_medidor(
             "motivo":          row.get("motivo"),
         })
     return result
+
+
+# ── Contratos por contrato_id ──────────────────────────────────────────────────
+
+def obtener_contrato(contrato_id: int) -> dict | None:
+    """Retorna el contrato por id, o None."""
+    resp = (
+        _supabase.table("contratos")
+        .select("*")
+        .eq("id", contrato_id)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+# ── Facturas por contrato ──────────────────────────────────────────────────────
+
+def obtener_factura_cfe_contrato_mes(contrato_id: int, anio: int, mes: int) -> dict | None:
+    """Factura CFE del contrato en (anio, mes) con cfe_periodos embebidos, o None."""
+    resp = (
+        _supabase.table("cfe_facturas")
+        .select("*, cfe_periodos(*)")
+        .eq("contrato_id", contrato_id)
+        .eq("anio", anio)
+        .eq("mes", mes)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def obtener_ultimas_facturas_cfe_contrato(contrato_id: int, n: int = 12) -> list[dict]:
+    """Últimas n facturas CFE del contrato con cfe_periodos, ordenadas DESC."""
+    resp = (
+        _supabase.table("cfe_facturas")
+        .select("*, cfe_periodos(*)")
+        .eq("contrato_id", contrato_id)
+        .order("anio", desc=True)
+        .order("mes", desc=True)
+        .limit(n)
+        .execute()
+    )
+    return resp.data or []
+
+
+def obtener_factura_ppa_contrato_mes(contrato_id: int, anio: int, mes: int) -> dict | None:
+    """Factura PPA del contrato en (anio, mes), o None."""
+    resp = (
+        _supabase.table("facturas_electricidad_calificado")
+        .select("*")
+        .eq("contrato_id", contrato_id)
+        .eq("anio", anio)
+        .eq("mes", mes)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def obtener_ultimas_facturas_ppa_contrato(contrato_id: int, n: int = 12) -> list[dict]:
+    """Últimas n facturas PPA del contrato, ordenadas DESC."""
+    resp = (
+        _supabase.table("facturas_electricidad_calificado")
+        .select("*")
+        .eq("contrato_id", contrato_id)
+        .order("anio", desc=True)
+        .order("mes", desc=True)
+        .limit(n)
+        .execute()
+    )
+    return resp.data or []
+
+
+# ── Vigencia de contrato en acometida ─────────────────────────────────────────
+
+def resolver_intervalos_contrato(
+    activo_id: int,
+    desde_iso: str,
+    hasta_iso: str,
+) -> list[dict]:
+    """Intervalos de contrato vigente para la acometida en [desde_iso, hasta_iso).
+
+    Replica exactamente la semántica de resolver_intervalos_medidor:
+    - Criterio de solape: vigente_desde < hasta_iso AND (vigente_hasta > desde_iso OR NULL)
+    - Recorte de extremos al rango solicitado
+    - vigente_hasta NULL sustituido por hasta_iso
+    - Orden ascendente por intervalo_desde
+
+    Retorna dicts con: contrato_id (int|None), intervalo_desde (str ISO), intervalo_hasta (str ISO), motivo (str|None).
+    """
+    resp = (
+        _supabase.table("acometida_contrato_vigencia")
+        .select("contrato_id, vigente_desde, vigente_hasta, motivo")
+        .eq("activo_id", activo_id)
+        .lt("vigente_desde", hasta_iso)
+        .or_(f"vigente_hasta.gt.{desde_iso},vigente_hasta.is.null")
+        .order("vigente_desde")
+        .execute()
+    )
+
+    result = []
+    for row in (resp.data or []):
+        iv_desde = max(row["vigente_desde"], desde_iso)
+        iv_hasta = min(row["vigente_hasta"], hasta_iso) if row["vigente_hasta"] else hasta_iso
+        result.append({
+            "contrato_id":     row["contrato_id"],
+            "intervalo_desde": iv_desde,
+            "intervalo_hasta": iv_hasta,
+            "motivo":          row.get("motivo"),
+        })
+    return result
+
+
+def declarar_contrato_acometida(
+    activo_id: int,
+    contrato_id: "int | None",
+    desde: "datetime",
+    motivo: "str | None",
+) -> dict:
+    """Declara el contrato eléctrico vigente para la acometida a partir de `desde`.
+
+    Operación compuesta (no transaccional):
+    1. Cierra la fila abierta poniendo vigente_hasta = desde.
+    2. Abre nueva fila con contrato_id y vigente_desde = desde.
+
+    Raises:
+        ValueError: si el activo no es de tipo 'acometida'.
+        ValueError: si existe fila abierta y desde <= vigente_desde de esa fila.
+    """
+    from datetime import timezone
+
+    # Validar tipo
+    activo = obtener_activo(activo_id)
+    if not activo:
+        raise ValueError(f"Activo {activo_id} no encontrado")
+    if activo.get("tipo") != "acometida":
+        raise ValueError(f"El activo {activo_id} no es de tipo acometida (tipo={activo.get('tipo')})")
+
+    # Normalizar a UTC
+    if desde.tzinfo is None:
+        desde = desde.replace(tzinfo=timezone.utc)
+    desde_utc = desde.astimezone(timezone.utc)
+    desde_iso = desde_utc.isoformat()
+
+    # 1. Localizar fila abierta
+    resp_open = (
+        _supabase.table("acometida_contrato_vigencia")
+        .select("id, vigente_desde")
+        .eq("activo_id", activo_id)
+        .is_("vigente_hasta", "null")
+        .limit(1)
+        .execute()
+    )
+    fila_abierta = resp_open.data[0] if resp_open.data else None
+
+    if fila_abierta:
+        from datetime import datetime as _dt
+        vd_raw = fila_abierta["vigente_desde"]
+        vd = _dt.fromisoformat(vd_raw) if ("+" in vd_raw or vd_raw.endswith("Z")) \
+            else _dt.fromisoformat(vd_raw).replace(tzinfo=timezone.utc)
+        if vd.tzinfo is None:
+            vd = vd.replace(tzinfo=timezone.utc)
+        if desde_utc <= vd:
+            raise ValueError(
+                f"La fecha de inicio ({desde_iso}) debe ser posterior al "
+                f"vigente_desde de la fila actual ({vd_raw})."
+            )
+        _supabase.table("acometida_contrato_vigencia").update(
+            {"vigente_hasta": desde_iso}
+        ).eq("id", fila_abierta["id"]).execute()
+
+    # 2. Abrir nueva fila
+    resp_new = _supabase.table("acometida_contrato_vigencia").insert({
+        "activo_id":    activo_id,
+        "contrato_id":  contrato_id,
+        "vigente_desde": desde_iso,
+        "vigente_hasta": None,
+        "motivo":       motivo or None,
+    }).execute()
+    return resp_new.data[0]
+
+
+def obtener_historial_contrato_acometida(activo_id: int) -> list[dict]:
+    """Historial de contratos de la acometida ordenado por vigente_desde DESC.
+
+    Cada fila incluye el campo 'contrato' con id/nombre/tipo del contrato.
+    """
+    resp = (
+        _supabase.table("acometida_contrato_vigencia")
+        .select("*, contrato:contrato_id(id, nombre, tipo)")
+        .eq("activo_id", activo_id)
+        .order("vigente_desde", desc=True)
+        .execute()
+    )
+    return resp.data or []

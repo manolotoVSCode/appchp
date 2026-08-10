@@ -116,19 +116,6 @@ def test_precio_ppa():
     assert result["precio_mxn_kwh"] == pytest.approx(2.5, rel=1e-3)
 
 
-# ── Test e ─────────────────────────────────────────────────────────────────
-def test_calcular_costo_periodo_basico():
-    """Con energia=1000 kWh y precio=2.50 MXN/kWh: costo=2500 MXN."""
-    from calc.telemetria_costos import calcular_costo_periodo
-    desde = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    hasta = datetime(2024, 1, 31, tzinfo=timezone.utc)
-    with patch("storage.repository.obtener_factura_cfe_cliente_mes", return_value=FAC_CFE_MOCK), \
-         patch("storage.repository.obtener_ultimas_facturas_cfe", return_value=[]):
-        result = calcular_costo_periodo(44, 1000.0, desde, hasta)
-    assert result["costo_mxn"] == pytest.approx(2500.0, rel=1e-3)
-    assert result["precio_mxn_kwh"] == pytest.approx(2.5, rel=1e-3)
-
-
 # ── Test f ─────────────────────────────────────────────────────────────────
 def test_endpoint_data_nuevas_claves(client, app):
     """El endpoint /data devuelve kpis.costo_mxn, kpis.precio_fuente, comparativa_mes_anterior.disponible."""
@@ -137,10 +124,12 @@ def test_endpoint_data_nuevas_claves(client, app):
     ARBOL_MOCK = [
         {"id": 1, "nombre": "Acometida CFE-1", "punto_medicion": "acometida_cfe",
          "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
-         "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None},
+         "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None,
+         "tipo": "acometida"},
         {"id": 2, "nombre": "Horno 1", "punto_medicion": "carga_final",
          "activo_padre_id": 1, "cliente_id": 44, "planta_id": 1,
-         "tipo_carga": "horno_tunel", "potencia_nominal_kw": 200.0, "medidor_id": 30},
+         "tipo_carga": "horno_tunel", "potencia_nominal_kw": 200.0, "medidor_id": 30,
+         "tipo": "carga"},
     ]
     MEDICIONES_MOCK = [
         {"timestamp": "2024-01-01T00:00:00Z", "potencia_activa_kw": 100.0, "factor_potencia": 0.90},
@@ -154,11 +143,15 @@ def test_endpoint_data_nuevas_claves(client, app):
                              "num_gas": 12, "num_electricidad": 12, "contratos": []}), \
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
-         patch("storage.repository.obtener_factura_cfe_cliente_mes", return_value=None), \
-         patch("storage.repository.obtener_ultimas_facturas_cfe", return_value=[]), \
-         patch("storage.repository.obtener_factura_ppa_cliente_mes", return_value=None), \
-         patch("storage.repository.obtener_ultimas_facturas_ppa", return_value=[]):
-        resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
+         patch("storage.repository.resolver_intervalos_medidor", return_value=[]), \
+         patch("storage.repository.resolver_intervalos_contrato", return_value=[]), \
+         patch("storage.repository.resolver_intervalos_fuente", return_value=[]), \
+         patch("storage.repository.obtener_ultimo_timestamp_cliente",
+               return_value=datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)), \
+         patch("web.app.obtener_plantas_por_cliente",
+               return_value=[{"id": 1, "nombre": "Planta 1", "activo": True}]), \
+         patch("storage.repository.obtener_produccion_diaria", return_value=[]):
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
 
     assert resp.status_code == 200
     data = resp.get_json()
@@ -168,12 +161,35 @@ def test_endpoint_data_nuevas_claves(client, app):
     assert "disponible" in data["comparativa_mes_anterior"]
 
 
+# ── Test h ─────────────────────────────────────────────────────────────────
+def test_precio_por_contrato_cfe_exacto():
+    """obtener_precio_unitario_por_contrato: factura CFE del contrato exacto."""
+    from calc.telemetria_costos import obtener_precio_unitario_por_contrato
+    with patch("storage.repository.obtener_factura_cfe_contrato_mes", return_value=FAC_CFE_MOCK), \
+         patch("storage.repository.obtener_ultimas_facturas_cfe_contrato", return_value=[]):
+        result = obtener_precio_unitario_por_contrato(5, 2024, 1)
+    assert result["fuente"] == "factura_mes_exacto"
+    assert result["precio_mxn_kwh"] == pytest.approx(2.5, rel=1e-3)
+    assert result["mes_referencia"] == "2024-01"
+
+
+def test_precio_por_contrato_sin_facturas():
+    """obtener_precio_unitario_por_contrato: sin facturas → sin_datos."""
+    from calc.telemetria_costos import obtener_precio_unitario_por_contrato
+    with patch("storage.repository.obtener_factura_cfe_contrato_mes", return_value=None), \
+         patch("storage.repository.obtener_ultimas_facturas_cfe_contrato", return_value=[]), \
+         patch("storage.repository.obtener_factura_ppa_contrato_mes", return_value=None), \
+         patch("storage.repository.obtener_ultimas_facturas_ppa_contrato", return_value=[]):
+        result = obtener_precio_unitario_por_contrato(5, 2024, 1)
+    assert result["fuente"] == "sin_datos"
+    assert result["precio_mxn_kwh"] is None
+
+
 # ── Test g ─────────────────────────────────────────────────────────────────
 def test_comparativa_energia_delta_pct():
     """energia_delta_pct se calcula correctamente con datos controlados."""
     # Si el periodo actual tiene 200 kWh y el anterior 160 kWh: delta = +25%
-    from calc.telemetria_costos import calcular_costo_periodo
-    # Usamos obtener_precio_unitario directamente para verificar la aritmética
+    # Usamos _precio_de_factura_cfe directamente para verificar la aritmética
     from calc.telemetria_costos import _precio_de_factura_cfe
     fac = {
         "subtotal_mxn": "10000.00",

@@ -284,6 +284,65 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
     </div>
     {% endif %}
 
+    {# Historial de contrato: solo para acometidas #}
+    {% if nodo.tipo == 'acometida' %}
+    {% set hist_contrato = hist_contrato_por_activo.get(nodo.id, []) %}
+    <div class="nodo-historial">
+      {% if hist_contrato | length > 0 %}
+      <button class="historial-toggle" onclick="toggleHistorial('hist-contrato-{{ nodo.id }}')">
+        <i class="bi bi-file-earmark-text me-1"></i>Contrato: {{ hist_contrato[0].contrato.nombre if hist_contrato[0].contrato else '—' }} — ver historial
+      </button>
+      <div id="hist-contrato-{{ nodo.id }}" style="display:none">
+        <table class="historial-tabla">
+          <thead><tr><th>Contrato</th><th>Desde</th><th>Hasta</th><th>Motivo</th></tr></thead>
+          <tbody>
+          {% for fila in hist_contrato %}
+          <tr{% if not fila.vigente_hasta %} class="vigente"{% endif %}>
+            <td>
+              {% if fila.contrato %}{{ fila.contrato.nombre }} <span class="text-muted">({{ fila.contrato.tipo }})</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ fila.vigente_desde[:10] if fila.vigente_desde else '—' }}</td>
+            <td>{{ fila.vigente_hasta[:10] if fila.vigente_hasta else '<em>vigente</em>' | safe }}</td>
+            <td>{{ fila.motivo or '' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      {% if es_admin and nodo.activo %}
+      <div class="mt-1">
+        <button class="historial-toggle" onclick="toggleHistorial('form-contrato-{{ nodo.id }}')">
+          <i class="bi bi-plus-circle me-1"></i>Asignar contrato
+        </button>
+        <div id="form-contrato-{{ nodo.id }}" style="display:none; margin-top:.4rem">
+          <div class="d-flex gap-1 align-items-end flex-wrap">
+            <div>
+              <label class="form-label form-label-sm mb-0">Contrato</label>
+              <select id="contrato-sel-{{ nodo.id }}" class="form-select form-select-sm" style="min-width:160px">
+                <option value="">— sin contrato —</option>
+                {% for c in contratos_electricos_planta %}
+                <option value="{{ c.id }}">{{ c.nombre }} ({{ c.tipo }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label form-label-sm mb-0">Desde</label>
+              <input type="datetime-local" id="contrato-desde-{{ nodo.id }}" class="form-control form-control-sm">
+            </div>
+            <div>
+              <label class="form-label form-label-sm mb-0">Motivo</label>
+              <input type="text" id="contrato-motivo-{{ nodo.id }}" class="form-control form-control-sm" placeholder="opcional">
+            </div>
+            <button class="btn btn-outline-primary btn-sm" onclick="asignarContratoAcometida({{ nodo.id }})">Guardar</button>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
     {# Hijos (recursivo) #}
     {% if nodo.hijos %}
     <ul>
@@ -757,6 +816,25 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
     post(`${baseUrl(id)}/desvincular-medidor`, {})
       .then(() => { mostrarToast("Medidor desvinculado"); setTimeout(() => location.reload(), 1200); })
       .catch(e => alert(`Error: ${e.message}`));
+  };
+
+  window.asignarContratoAcometida = async function (id) {
+    const contratoId = document.getElementById(`contrato-sel-${id}`).value || null;
+    const desdeVal   = document.getElementById(`contrato-desde-${id}`).value;
+    const motivo     = document.getElementById(`contrato-motivo-${id}`).value.trim() || null;
+    if (!desdeVal) { alert("La fecha de inicio es obligatoria."); return; }
+    const desde = new Date(desdeVal).toISOString();
+    try {
+      await post(`${baseUrl(id)}/contrato-acometida`, {
+        contrato_id: contratoId ? parseInt(contratoId) : null,
+        desde,
+        motivo,
+      });
+      mostrarToast("Contrato asignado");
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      alert(`Error: ${e.message}`);
+    }
   };
 
 })();

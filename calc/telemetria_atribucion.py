@@ -223,3 +223,214 @@ def agregar_por_camino(segmentos_energia: list[dict]) -> dict[int, float]:
         for nodo_id in seg.get("camino", []):
             acum[nodo_id] = acum.get(nodo_id, 0.0) + kwh
     return acum
+
+
+def subdividir_por_mes(segmentos: list[dict]) -> list[dict]:
+    """Parte cada segmento en las fronteras de mes en UTC.
+
+    Mantiene la invariante de conservación de energía: la energía del segmento
+    original se redistribuye proporcionalmente al tiempo de cada sub-segmento.
+    Los segmentos sin energía (energia_kwh=0 o ausente) se subdividen igualmente.
+
+    Retorna lista ordenada por 'desde'; el orden de segmentos del input se preserva.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    result = []
+    for seg in segmentos:
+        desde_n = seg["desde"]
+        hasta_n = seg["hasta"]
+        energia_kwh = seg.get("energia_kwh", 0.0)
+
+        # Calcular fronteras de mes dentro de (desde_n, hasta_n)
+        d0 = datetime.fromisoformat(desde_n.replace("Z", "+00:00"))
+        d1 = datetime.fromisoformat(hasta_n.replace("Z", "+00:00"))
+
+        # Construir lista de cortes: inicio del mes siguiente a d0, hasta < d1
+        fronteras: list[datetime] = []
+        # primer corte: primer día del mes siguiente a d0
+        if d0.month == 12:
+            prox = d0.replace(year=d0.year + 1, month=1, day=1,
+                              hour=0, minute=0, second=0, microsecond=0)
+        else:
+            prox = d0.replace(month=d0.month + 1, day=1,
+                              hour=0, minute=0, second=0, microsecond=0)
+        while prox < d1:
+            fronteras.append(prox)
+            if prox.month == 12:
+                prox = prox.replace(year=prox.year + 1, month=1, day=1)
+            else:
+                prox = prox.replace(month=prox.month + 1, day=1)
+
+        if not fronteras:
+            # El segmento cae íntegramente en un solo mes
+            result.append(seg)
+            continue
+
+        # Dividir en sub-segmentos y distribuir energía proporcional al tiempo
+        total_s = (d1 - d0).total_seconds()
+        puntos = [d0] + fronteras + [d1]
+
+        for i in range(len(puntos) - 1):
+            pa = puntos[i]
+            pb = puntos[i + 1]
+            frac = (pb - pa).total_seconds() / total_s if total_s > 0 else 0.0
+            sub_kwh = round(energia_kwh * frac, 6)
+            sub = {**seg,
+                   "desde": pa.astimezone(timezone.utc).isoformat(),
+                   "hasta": pb.astimezone(timezone.utc).isoformat(),
+                   "energia_kwh": sub_kwh}
+            result.append(sub)
+
+    return result
+
+
+def valorar_segmentos(
+    segmentos_energia: list[dict],
+    precios: dict,
+    contrato_intervals: dict,
+    tipos_por_nodo: "dict | None" = None,
+) -> list[dict]:
+    """Valora económicamente cada segmento según el contrato de su acometida.
+
+    Si un segmento abarca más de un intervalo de contrato en la acometida, se subdivide
+    proporcionalmente al tiempo en cada tramo de contrato; cada sub-segmento recibe su
+    propio contrato_id, precio y costo.
+
+    Args:
+        segmentos_energia: salida de integrar_por_segmentos (o subdividir_por_mes),
+            con claves: desde, hasta, camino (list[int]), energia_kwh, completo.
+        precios: dict indexado por (contrato_id, anio, mes) →
+            {"precio_mxn_kwh": float|None, "fuente": str, "mes_referencia": str|None}.
+            Precalculado por el llamante para evitar N+1.
+        contrato_intervals: dict {acometida_id: list[{contrato_id, intervalo_desde, intervalo_hasta}]}.
+            Resultado de resolver_intervalos_contrato por acometida, precalculado.
+        tipos_por_nodo: dict {nodo_id: tipo_str} para detectar nodos de tipo 'generacion'.
+            Si un nodo en el camino es 'generacion', el costo es None.
+
+    Retorna lista de segmentos con campos añadidos:
+        contrato_id (int|None), precio_mxn_kwh (float|None),
+        costo_mxn (float|None), fuente_precio (str|None).
+    Casos con costo_mxn=None (no se usa 0):
+        - camino vacío (sin acometida conocida)
+        - acometida sin contrato vigente en el intervalo
+        - contrato sin factura resoluble
+        - camino contiene nodo de tipo 'generacion'
+    """
+    from datetime import datetime, timezone
+
+    tipos_por_nodo = tipos_por_nodo or {}
+
+    result = []
+    for seg in segmentos_energia:
+        camino = seg.get("camino", [])
+        desde_n = seg["desde"]
+        hasta_n = seg["hasta"]
+
+        # Caso: camino vacío → sin atribución → sin costo
+        if not camino:
+            result.append({**seg, "contrato_id": None, "precio_mxn_kwh": None,
+                           "costo_mxn": None, "fuente_precio": "sin_vigencia"})
+            continue
+
+        # Caso: camino contiene nodo de tipo 'generacion' → costo por gas (futuro)
+        if tipos_por_nodo and any(tipos_por_nodo.get(n) == "generacion" for n in camino):
+            result.append({**seg, "contrato_id": None, "precio_mxn_kwh": None,
+                           "costo_mxn": None, "fuente_precio": "generacion"})
+            continue
+
+        # La acometida es el último elemento del camino
+        acometida_id = camino[-1]
+
+        # Todos los intervalos de contrato de la acometida que solapan con [desde_n, hasta_n)
+        intervals = contrato_intervals.get(acometida_id, [])
+        seg_desde_n = _norm(desde_n)
+        seg_hasta_n = _norm(hasta_n)
+        energia_kwh = seg.get("energia_kwh", 0.0)
+        total_s = _ts(hasta_n) - _ts(desde_n)
+
+        # Recopilar tramos solapantes: (iv_desde_norm, iv_hasta_norm, contrato_id)
+        tramos: list[tuple[str, str, int]] = []
+        for iv in intervals:
+            iv_desde_n = _norm(iv["intervalo_desde"])
+            iv_hasta_n = _norm(iv["intervalo_hasta"])
+            # Solapa si iv_desde < seg_hasta y iv_hasta > seg_desde
+            if iv_desde_n < seg_hasta_n and iv_hasta_n > seg_desde_n:
+                tramo_desde = max(iv_desde_n, seg_desde_n)
+                tramo_hasta = min(iv_hasta_n, seg_hasta_n)
+                tramos.append((tramo_desde, tramo_hasta, iv["contrato_id"]))
+
+        # Sin ningún intervalo de contrato solapante
+        if not tramos:
+            result.append({**seg, "contrato_id": None, "precio_mxn_kwh": None,
+                           "costo_mxn": None, "fuente_precio": "sin_contrato"})
+            continue
+
+        # Ordenar tramos por inicio (por si intervals no vienen ordenados)
+        tramos.sort(key=lambda t: t[0])
+
+        for tramo_desde, tramo_hasta, contrato_id in tramos:
+            # Fracción de energía proporcional al tiempo
+            if total_s > 0:
+                tramo_s = _ts(tramo_hasta) - _ts(tramo_desde)
+                frac = tramo_s / total_s
+            else:
+                frac = 1.0 / len(tramos)
+            sub_kwh = round(energia_kwh * frac, 6)
+
+            # Resolver mes del sub-tramo
+            dt0 = datetime.fromtimestamp(_ts(tramo_desde), tz=timezone.utc)
+            anio, mes = dt0.year, dt0.month
+
+            info = precios.get((contrato_id, anio, mes),
+                               {"precio_mxn_kwh": None, "fuente": "sin_datos", "mes_referencia": None})
+            precio = info["precio_mxn_kwh"]
+            costo = round(sub_kwh * precio, 2) if precio is not None else None
+
+            result.append({**seg,
+                           "desde":          tramo_desde,
+                           "hasta":          tramo_hasta,
+                           "energia_kwh":    sub_kwh,
+                           "contrato_id":    contrato_id,
+                           "precio_mxn_kwh": precio,
+                           "costo_mxn":      costo,
+                           "fuente_precio":  info["fuente"]})
+
+    return result
+
+
+def agregar_costo_por_camino(segmentos_valorados: list[dict]) -> "dict[int, dict]":
+    """Acumula costo_mxn y energía sin costo de cada segmento en todos los nodos del camino.
+
+    Retorna dict {nodo_id: {"costo_mxn": float|None, "energia_sin_costo_kwh": float}}.
+    - costo_mxn: None si TODOS los segmentos atribuidos al nodo tienen costo_mxn=None;
+      suma de costes parciales en otro caso.
+    - energia_sin_costo_kwh: suma de energia_kwh de segmentos con costo_mxn=None.
+
+    Los segmentos con camino vacío no aportan a ningún nodo.
+    """
+    acum_costo: "dict[int, float | None]" = {}
+    acum_sin_costo: dict[int, float] = {}
+    tiene_costo: dict[int, bool] = {}
+
+    for seg in segmentos_valorados:
+        camino = seg.get("camino", [])
+        kwh = seg.get("energia_kwh", 0.0)
+        costo = seg.get("costo_mxn")
+
+        for nodo_id in camino:
+            if costo is not None:
+                tiene_costo[nodo_id] = True
+                acum_costo[nodo_id] = round((acum_costo.get(nodo_id) or 0.0) + costo, 2)
+            else:
+                acum_sin_costo[nodo_id] = round(acum_sin_costo.get(nodo_id, 0.0) + kwh, 3)
+
+    # Unir nodos que aparecen en cualquier acumulador
+    todos_nodos = set(acum_costo) | set(acum_sin_costo) | set(tiene_costo)
+    return {
+        nid: {
+            "costo_mxn":           acum_costo.get(nid) if tiene_costo.get(nid) else None,
+            "energia_sin_costo_kwh": acum_sin_costo.get(nid, 0.0),
+        }
+        for nid in todos_nodos
+    }

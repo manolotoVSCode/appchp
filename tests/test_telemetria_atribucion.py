@@ -11,6 +11,8 @@ os.environ.setdefault("SUPABASE_URL", "https://fake.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "fake_key")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
+import pytest
+
 from calc.telemetria_atribucion import (
     agregar_por_camino,
     integrar_por_segmentos,
@@ -253,3 +255,141 @@ def test_invariante_suma_energia():
         f"Invariante violada: suma segmentos={energia_total_segs:.9f}, "
         f"trapezoid={energia_trapezoid:.9f}"
     )
+
+
+# ── Test h — subdividir_por_mes ───────────────────────────────────────────────
+
+def test_subdividir_por_mes_segmento_unico_mes():
+    """Segmento dentro de un solo mes → sin subdivisión."""
+    from calc.telemetria_atribucion import subdividir_por_mes
+    seg = {"desde": D, "hasta": M, "camino": [1], "completo": True, "energia_kwh": 500.0}
+    result = subdividir_por_mes([seg])
+    assert len(result) == 1
+    assert result[0]["energia_kwh"] == pytest.approx(500.0)
+
+
+def test_subdividir_por_mes_cruza_frontera():
+    """Segmento que cruza frontera de mes → dos sub-segmentos con energía conservada."""
+    from calc.telemetria_atribucion import subdividir_por_mes
+    seg = {
+        "desde": _n("2024-01-15T00:00:00Z"),
+        "hasta": _n("2024-02-15T00:00:00Z"),
+        "camino": [1], "completo": True, "energia_kwh": 1000.0,
+    }
+    result = subdividir_por_mes([seg])
+    assert len(result) == 2
+    suma = sum(s["energia_kwh"] for s in result)
+    assert abs(suma - 1000.0) < 1e-4
+    # La frontera de mes es 2024-02-01T00:00:00+00:00
+    assert result[0]["hasta"].startswith("2024-02-01")
+    assert result[1]["desde"].startswith("2024-02-01")
+
+
+# ── Test i — valorar_segmentos ────────────────────────────────────────────────
+
+def _make_precio(precio_mxn_kwh, fuente="factura_mes_exacto"):
+    return {"precio_mxn_kwh": precio_mxn_kwh, "fuente": fuente, "mes_referencia": "2024-01"}
+
+
+def test_valorar_segmentos_precio_aplicado():
+    """Segmento con camino [ac1] y precio 2.0 MXN/kWh → costo = energia × precio."""
+    from calc.telemetria_atribucion import valorar_segmentos
+    seg = {"desde": D, "hasta": M, "camino": [1], "completo": True, "energia_kwh": 100.0}
+    precios = {(5, 2024, 1): _make_precio(2.0)}
+    contrato_intervals = {1: [{"contrato_id": 5, "intervalo_desde": D, "intervalo_hasta": H}]}
+    result = valorar_segmentos([seg], precios, contrato_intervals)
+    assert result[0]["costo_mxn"] == pytest.approx(200.0)
+    assert result[0]["contrato_id"] == 5
+    assert result[0]["fuente_precio"] == "factura_mes_exacto"
+
+
+def test_valorar_segmentos_camino_vacio_sin_costo():
+    """Segmento con camino vacío → costo_mxn=None, fuente='sin_vigencia'."""
+    from calc.telemetria_atribucion import valorar_segmentos
+    seg = {"desde": D, "hasta": M, "camino": [], "completo": False, "energia_kwh": 100.0}
+    result = valorar_segmentos([seg], {}, {})
+    assert result[0]["costo_mxn"] is None
+    assert result[0]["fuente_precio"] == "sin_vigencia"
+
+
+def test_valorar_segmentos_sin_contrato_vigente():
+    """Acometida sin contrato en acometida_contrato_vigencia → costo_mxn=None."""
+    from calc.telemetria_atribucion import valorar_segmentos
+    seg = {"desde": D, "hasta": M, "camino": [1], "completo": True, "energia_kwh": 100.0}
+    # contrato_intervals vacío para la acometida 1
+    result = valorar_segmentos([seg], {}, {1: []})
+    assert result[0]["costo_mxn"] is None
+    assert result[0]["fuente_precio"] == "sin_contrato"
+
+
+def test_valorar_segmentos_generacion_sin_costo():
+    """Camino que pasa por un nodo de tipo 'generacion' → costo=None."""
+    from calc.telemetria_atribucion import valorar_segmentos
+    seg = {"desde": D, "hasta": M, "camino": [10, 1], "completo": True, "energia_kwh": 100.0}
+    tipos = {10: "generacion", 1: "acometida"}
+    result = valorar_segmentos([seg], {}, {}, tipos_por_nodo=tipos)
+    assert result[0]["costo_mxn"] is None
+    assert result[0]["fuente_precio"] == "generacion"
+
+
+def test_valorar_segmentos_dos_meses_distintos_precios():
+    """Segmento ya dividido por mes: precios distintos por mes → costos distintos."""
+    from calc.telemetria_atribucion import valorar_segmentos
+    seg_ene = {
+        "desde": _n("2024-01-01T00:00:00Z"),
+        "hasta": _n("2024-02-01T00:00:00Z"),
+        "camino": [1], "completo": True, "energia_kwh": 300.0,
+    }
+    seg_feb = {
+        "desde": _n("2024-02-01T00:00:00Z"),
+        "hasta": _n("2024-03-01T00:00:00Z"),
+        "camino": [1], "completo": True, "energia_kwh": 200.0,
+    }
+    precios = {
+        (5, 2024, 1): _make_precio(2.0),
+        (5, 2024, 2): _make_precio(3.0),
+    }
+    contrato_intervals = {1: [{"contrato_id": 5,
+                                "intervalo_desde": _n("2024-01-01T00:00:00Z"),
+                                "intervalo_hasta": _n("2024-03-01T00:00:00Z")}]}
+    result = valorar_segmentos([seg_ene, seg_feb], precios, contrato_intervals)
+    assert result[0]["costo_mxn"] == pytest.approx(600.0)  # 300 × 2.0
+    assert result[1]["costo_mxn"] == pytest.approx(600.0)  # 200 × 3.0
+
+
+# ── Test j — agregar_costo_por_camino ─────────────────────────────────────────
+
+def test_agregar_costo_por_camino_acumula():
+    """Dos segmentos con camino [2, 1]: costos se suman en ambos nodos."""
+    from calc.telemetria_atribucion import agregar_costo_por_camino
+    segs = [
+        {"camino": [2, 1], "energia_kwh": 100.0, "costo_mxn": 200.0},
+        {"camino": [2, 1], "energia_kwh": 100.0, "costo_mxn": 300.0},
+    ]
+    result = agregar_costo_por_camino(segs)
+    assert result[1]["costo_mxn"] == pytest.approx(500.0)
+    assert result[2]["costo_mxn"] == pytest.approx(500.0)
+    assert result[1]["energia_sin_costo_kwh"] == 0.0
+
+
+def test_agregar_costo_por_camino_mix_sin_costo():
+    """Un segmento con costo y otro sin costo: energia_sin_costo_kwh en los nodos compartidos."""
+    from calc.telemetria_atribucion import agregar_costo_por_camino
+    segs = [
+        {"camino": [2, 1], "energia_kwh": 100.0, "costo_mxn": 200.0},
+        {"camino": [2, 1], "energia_kwh": 50.0, "costo_mxn": None},
+    ]
+    result = agregar_costo_por_camino(segs)
+    assert result[1]["costo_mxn"] == pytest.approx(200.0)
+    assert result[1]["energia_sin_costo_kwh"] == pytest.approx(50.0)
+
+
+def test_agregar_costo_por_camino_todos_sin_costo():
+    """Todos los segmentos sin costo: costo_mxn=None en los nodos."""
+    from calc.telemetria_atribucion import agregar_costo_por_camino
+    segs = [
+        {"camino": [1], "energia_kwh": 100.0, "costo_mxn": None},
+    ]
+    result = agregar_costo_por_camino(segs)
+    assert result[1]["costo_mxn"] is None
+    assert result[1]["energia_sin_costo_kwh"] == pytest.approx(100.0)

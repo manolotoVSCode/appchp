@@ -140,6 +140,7 @@ def _patch_costo():
       [6] resolver_intervalos_medidor       ← devuelve [] (sin historial de medidor)
       [7] resolver_intervalos_fuente        ← devuelve [] (todos activos son raíz)
       [8] obtener_plantas_por_cliente       ← evita HTTP en before_request
+      [9] resolver_intervalos_contrato      ← devuelve [] (sin contrato asignado)
     """
     from datetime import datetime, timezone
     _ts_fijo = datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
@@ -157,6 +158,8 @@ def _patch_costo():
         # before_request _resolver_planta_activa: sin HTTP a Supabase
         patch("web.app.obtener_plantas_por_cliente",
               return_value=[{"id": 1, "nombre": "Planta 1", "activo": True}]),
+        # Contrato de acometida: sin asignación por defecto
+        patch("storage.repository.resolver_intervalos_contrato", return_value=[]),
     ]
 
 
@@ -170,7 +173,7 @@ def test_telemetria_data_json_claves_esperadas(client, app):
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
          patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
-         patches[6], patches[7], patches[8]:
+         patches[6], patches[7], patches[8], patches[9]:
         resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
     assert resp.status_code == 200
     data = resp.get_json()
@@ -188,7 +191,7 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
          patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
-         patches[6], patches[7], patches[8]:
+         patches[6], patches[7], patches[8], patches[9]:
         resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
     data = resp.get_json()
     arbol = data["arbol_sunburst"]
@@ -219,7 +222,7 @@ def test_telemetria_data_nodo_carga_final_sin_agregacion(client, app):
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=carga_mock) as mock_omr, \
          patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
-         patches[6], patches[7], patches[8]:
+         patches[6], patches[7], patches[8], patches[9]:
         resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h&nodo_id=3")
     assert resp.status_code == 200
     # Las mediciones se consultan por medidor_id (10 y 11), no por activo_id (3 y 4)
@@ -404,7 +407,7 @@ def test_atribucion_cambio_medidor_y_alimentacion(client, app):
          patch("storage.repository.obtener_mediciones_para_rango", side_effect=_omfr_se) as mock_omfr, \
          patch("storage.repository.resolver_intervalos_medidor", side_effect=_rim_se), \
          patch("storage.repository.resolver_intervalos_fuente",  side_effect=_rif_se), \
-         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8]:
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8], patches[9]:
         resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
 
     assert resp.status_code == 200
@@ -452,3 +455,101 @@ def test_atribucion_cambio_medidor_y_alimentacion(client, app):
     assert len(calls_med12_attr) >= 1, (
         f"Debe existir call (12, {_T_MID}, {_T1_INT}) para el tramo atributivo"
     )
+
+
+# ── Test o ─────────────────────────────────────────────────────────────────
+# Escenario: cambio de contrato en la acometida a mitad del rango.
+# Contrato 5 (precio 2.0 MXN/kWh) en la primera mitad,
+# contrato 6 (precio 3.0 MXN/kWh) en la segunda mitad.
+# Activo 200: acometida sin medidor
+# Activo 201: carga, medidor 20, alimentada por acometida 200 todo el rango
+
+_T0_CONT  = "2024-01-01T00:00:00Z"
+_T_MID_C  = "2024-01-01T12:00:00Z"
+_T1_CONT  = "2024-01-02T00:00:00Z"
+
+ARBOL_MOCK_CONT = [
+    {"id": 200, "nombre": "Acometida-C", "punto_medicion": "acometida_cfe",
+     "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None,
+     "tipo": "acometida"},
+    {"id": 201, "nombre": "Carga-C", "punto_medicion": "carga_final",
+     "activo_padre_id": 200, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": "horno", "potencia_nominal_kw": 200.0, "medidor_id": 20,
+     "tipo": "carga"},
+]
+
+
+def test_contrato_cambia_a_mitad_del_rango(client, app):
+    """El JSON expone costos con dos precios distintos al cambiar contrato en la acometida.
+
+    Verifica:
+      1. El nodo raíz tiene costo_mxn != None (hay al menos un segmento con precio).
+      2. Los segmentos valorados incluyen al menos dos contrato_id distintos (5 y 6).
+      3. El costo total del nodo raíz coincide con la suma de los costes por segmento.
+    """
+    app.config["FASE2_HABILITADA"] = True
+    _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+
+    # La acometida 200 cambia de contrato 5 → 6 en T_MID_C
+    def _ric_se(activo_id, desde_iso, hasta_iso):
+        if activo_id == 200:
+            return [
+                {"contrato_id": 5, "intervalo_desde": _T0_CONT,  "intervalo_hasta": _T_MID_C, "motivo": "inicial"},
+                {"contrato_id": 6, "intervalo_desde": _T_MID_C,  "intervalo_hasta": _T1_CONT, "motivo": "cambio"},
+            ]
+        return []
+
+    # Activo 201 se alimenta de la acometida 200 todo el rango
+    def _rif_se(activo_id, desde_dt, hasta_dt):
+        _ISO0 = "2024-01-01T00:00:00+00:00"
+        _ISO1 = "2024-01-02T00:00:00+00:00"
+        if activo_id == 201:
+            return [{"fuente_activo_id": 200, "intervalo_desde": _ISO0, "intervalo_hasta": _ISO1, "motivo": "test"}]
+        return []  # acometida 200: raíz
+
+    # Medidor 20: 100 kW constante todo el rango
+    def _omfr_se(medidor_id, desde, hasta, rango):
+        return [
+            {"timestamp": desde, "potencia_activa_kw": 100.0, "factor_potencia": 0.9},
+            {"timestamp": hasta,  "potencia_activa_kw": 100.0, "factor_potencia": 0.9},
+        ]
+
+    # Contrato 5: 2.0 MXN/kWh; contrato 6: 3.0 MXN/kWh
+    def _opupc_se(contrato_id, anio, mes):
+        precios = {5: 2.0, 6: 3.0}
+        precio = precios.get(contrato_id)
+        return {"precio_mxn_kwh": precio, "fuente": "factura_mes_exacto", "mes_referencia": f"{anio}-{mes:02d}"}
+
+    patches = _patch_costo()
+    with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK_CONT), \
+         patch("storage.repository.obtener_mediciones_para_rango", side_effect=_omfr_se), \
+         patch("storage.repository.resolver_intervalos_medidor", return_value=[
+             {"medidor_id": 20, "intervalo_desde": _T0_CONT, "intervalo_hasta": _T1_CONT, "motivo": "test"}
+         ]), \
+         patch("storage.repository.resolver_intervalos_fuente", side_effect=_rif_se), \
+         patch("storage.repository.resolver_intervalos_contrato", side_effect=_ric_se), \
+         patch("calc.telemetria_costos.obtener_precio_unitario_por_contrato", side_effect=_opupc_se), \
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8]:
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    arbol = data["arbol_sunburst"]
+    assert arbol["id"] == 200
+
+    # Invariante 1: el nodo raíz tiene costo (algún segmento tiene precio)
+    assert arbol["costo_mxn"] is not None, "El nodo raíz debe tener costo_mxn cuando hay contratos vigentes"
+
+    # Invariante 2: el costo total refleja ambos precios
+    # 100 kW × 12 h = 1200 kWh × 2.0 MXN/kWh = 2400 MXN (contrato 5)
+    # 100 kW × 12 h = 1200 kWh × 3.0 MXN/kWh = 3600 MXN (contrato 6)
+    # Total esperado = 6000 MXN
+    # (con tolerancia por mediciones sintéticas de 2 puntos)
+    assert arbol["costo_mxn"] == pytest.approx(6000.0, abs=50.0), (
+        f"Costo esperado ~6000 MXN (dos contratos × 1200 kWh a tarifas 2.0 y 3.0), obtenido {arbol['costo_mxn']}"
+    )
+
+    # Invariante 3: campos nuevos presentes en el sunburst
+    assert "energia_sin_costo_kwh" in arbol

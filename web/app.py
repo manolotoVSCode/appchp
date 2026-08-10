@@ -3157,6 +3157,7 @@ def create_app() -> Flask:
 
         energia_por_nodo: dict[int, float] = {}
         incompleto_por_nodo: dict[int, bool] = {}
+        _segs_por_hoja: dict[int, list[dict]] = {}
 
         for _aid in todas_hojas_ids:
             _tramos = _rim(_aid, desde_iso, hasta_iso)
@@ -3183,6 +3184,7 @@ def create_app() -> Flask:
 
             _caminos = _rc(_aid, desde_iso, hasta_iso, _resolver_fuente_attr)
             _segs = _ips(_meds_m, _caminos, _bucket_min)
+            _segs_por_hoja[_aid] = _segs
 
             energia_por_nodo[_aid] = round(sum(s["energia_kwh"] for s in _segs), 3)
             _inc = any(not s["completo"] or s["hueco_datos_min"] > 0 for s in _segs)
@@ -3203,8 +3205,84 @@ def create_app() -> Flask:
             generar_sparkline as _gs,
         )
         from storage.repository import obtener_produccion_diaria as _opd
-        from calc.telemetria_costos import calcular_costo_periodo as _ccp
-        costo_info = _ccp(cliente_id, energia_kwh, desde, ahora)
+        from storage.repository import resolver_intervalos_contrato as _ric
+        from calc.telemetria_atribucion import (
+            subdividir_por_mes as _sbm,
+            valorar_segmentos as _vs,
+            agregar_costo_por_camino as _acpc,
+        )
+        from calc.telemetria_costos import obtener_precio_unitario_por_contrato as _opupc
+
+        # Tipos de cada nodo (para detectar 'generacion')
+        _tipos_por_nodo = {a["id"]: a.get("tipo", a.get("punto_medicion", "")) for a in todos}
+
+        # Recolectar todos los segmentos valorados de todas las hojas
+        todos_segs_valorados: list[dict] = []
+
+        # Resolver contratos de cada acometida única en los caminos
+        _acometidas_ids: set[int] = set()
+        for _aid in todas_hojas_ids:
+            for _sc in _segs_por_hoja.get(_aid, []):
+                if _sc.get("camino"):
+                    _acometidas_ids.add(_sc["camino"][-1])
+
+        _contrato_intervals: dict[int, list[dict]] = {
+            _aci: _ric(_aci, desde_iso, hasta_iso)
+            for _aci in _acometidas_ids
+        }
+
+        # Precalcular precios: (contrato_id, anio, mes) → info
+        _precios_cache: dict = {}
+        for _tramos_c in _contrato_intervals.values():
+            for _tc in _tramos_c:
+                _cid = _tc["contrato_id"]
+                if _cid is None:
+                    continue
+                from datetime import datetime as _dtm
+                d0 = _dtm.fromisoformat(_tc["intervalo_desde"].replace("Z", "+00:00"))
+                d1 = _dtm.fromisoformat(_tc["intervalo_hasta"].replace("Z", "+00:00"))
+                # Iterar meses en el tramo
+                _cm = d0.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                while _cm <= d1:
+                    _key = (_cid, _cm.year, _cm.month)
+                    if _key not in _precios_cache:
+                        _precios_cache[_key] = _opupc(_cid, _cm.year, _cm.month)
+                    if _cm.month == 12:
+                        _cm = _cm.replace(year=_cm.year + 1, month=1)
+                    else:
+                        _cm = _cm.replace(month=_cm.month + 1)
+
+        for _aid in todas_hojas_ids:
+            _segs_hoja = _segs_por_hoja.get(_aid, [])
+            _segs_m = _sbm(_segs_hoja)
+            _segs_v = _vs(_segs_m, _precios_cache, _contrato_intervals, _tipos_por_nodo)
+            todos_segs_valorados.extend(_segs_v)
+
+        costo_por_nodo = _acpc(todos_segs_valorados)
+
+        # costo_info para el nodo seleccionado (raíz/acometida o nodo actual)
+        _costo_raiz = costo_por_nodo.get(acometida["id"], {})
+        costo_info = {
+            "costo_mxn": _costo_raiz.get("costo_mxn"),
+            "precio_mxn_kwh": None,
+            "fuente": None,
+            "mes_referencia": None,
+        }
+        # Si hay un único precio en los segmentos del nodo raíz, exponer el precio
+        _precios_raiz = {
+            s["precio_mxn_kwh"]
+            for s in todos_segs_valorados
+            if acometida["id"] in s.get("camino", []) and s.get("precio_mxn_kwh") is not None
+        }
+        if len(_precios_raiz) == 1:
+            _precio_unico = next(iter(_precios_raiz))
+            _fuente_set = {
+                s["fuente_precio"]
+                for s in todos_segs_valorados
+                if acometida["id"] in s.get("camino", []) and s.get("precio_mxn_kwh") is not None
+            }
+            costo_info["precio_mxn_kwh"] = _precio_unico
+            costo_info["fuente"] = next(iter(_fuente_set), None)
 
         # ── Comparativa periodo anterior ───────────────────────────────────
         # Agregar serie anterior y calcular energía
@@ -3237,22 +3315,21 @@ def create_app() -> Flask:
         else:
             energia_delta_pct = None
 
-        costo_ant_info = _ccp(cliente_id, energia_ant, desde_ant, hasta_ant) if disponible_ant else None
+        costo_ant_info = None  # Costo anterior: pendiente de cálculo por segmento (futura entrega)
         costo_ant = costo_ant_info["costo_mxn"] if costo_ant_info else None
         costo_delta_pct = None
         if costo_info.get("costo_mxn") and costo_ant and costo_ant > 0:
             costo_delta_pct = round((costo_info["costo_mxn"] - costo_ant) / costo_ant * 100, 1)
 
         # ── Sunburst con costo por nodo ────────────────────────────────────
-        precio_kwh = costo_info.get("precio_mxn_kwh")
-
-        def _costo_nodo(kwh):
-            return round(kwh * precio_kwh, 2) if precio_kwh is not None else None
 
         def _arbol_sunburst_con_costo(aid: int) -> dict:
             a = por_id.get(aid, {})
             hijos_ids_local = [x["id"] for x in todos if x.get("activo_padre_id") == aid]
             kwh = energia_por_nodo.get(aid, 0.0)
+            _costo_nd = costo_por_nodo.get(aid, {})
+            costo_nd = _costo_nd.get("costo_mxn")
+            energia_sin_costo = _costo_nd.get("energia_sin_costo_kwh", 0.0)
             return {
                 "id":                   aid,
                 "nombre":               a.get("nombre", ""),
@@ -3260,7 +3337,8 @@ def create_app() -> Flask:
                 "tipo_carga":           a.get("tipo_carga"),
                 "potencia_nominal_kw":  a.get("potencia_nominal_kw"),
                 "energia_kwh":          kwh,
-                "costo_mxn":            _costo_nodo(kwh),
+                "costo_mxn":            costo_nd,
+                "energia_sin_costo_kwh": energia_sin_costo,
                 "cobertura_incompleta": incompleto_por_nodo.get(aid, False),
                 "hijos":                [_arbol_sunburst_con_costo(h) for h in hijos_ids_local],
             }

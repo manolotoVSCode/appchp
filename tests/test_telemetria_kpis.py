@@ -193,17 +193,18 @@ def _mock_repo(mock_arbol, mock_meds_act, mock_meds_ant, mock_prod):
     return {
         "storage.repository.get_cliente_con_conteos": MagicMock(side_effect=_mock_get_cliente),
         "storage.repository.obtener_arbol_activos_telemetria": MagicMock(return_value=mock_arbol),
-        "storage.repository.obtener_mediciones_para_rango": MagicMock(side_effect=[
-            mock_meds_act,   # periodo actual (hoja 3)
-            mock_meds_ant,   # periodo anterior (hoja 3)
-        ]),
+        "storage.repository.obtener_mediciones_para_rango": MagicMock(return_value=mock_meds_act),
         "storage.repository.obtener_produccion_diaria": MagicMock(return_value=mock_prod),
         # Ancla temporal sintética: devuelve timestamp fijo para no depender de now()
         "storage.repository.obtener_ultimo_timestamp_cliente": MagicMock(return_value=_ts_fijo),
-        "calc.telemetria_costos.calcular_costo_periodo": MagicMock(return_value={
-            "costo_mxn": 5000.0, "precio_mxn_kwh": 2.5,
-            "fuente": "factura_mes_exacto", "mes_referencia": "2024-01",
-        }),
+        # Pipeline de atribución: sin historial de vigencias
+        "storage.repository.resolver_intervalos_medidor": MagicMock(return_value=[]),
+        "storage.repository.resolver_intervalos_contrato": MagicMock(return_value=[]),
+        "storage.repository.resolver_intervalos_fuente": MagicMock(return_value=[]),
+        # before_request: evitar HTTP a Supabase
+        "web.app.obtener_plantas_por_cliente": MagicMock(
+            return_value=[{"id": 1, "nombre": "Planta 1", "activo": True}]
+        ),
     }
 
 
@@ -213,10 +214,10 @@ def test_g_endpoint_devuelve_kpis_paneles(_client_fase2):
     patches = _mock_repo(_ARBOL, _MEDS, _MEDS, [{"fecha": "2024-01-01", "m2_producidos": 5000.0}])
     with patch.multiple("storage.repository", **{
         k.split(".")[-1]: v for k, v in patches.items() if k.startswith("storage.repository")
-    }), patch("calc.telemetria_costos.calcular_costo_periodo",
-               patches["calc.telemetria_costos.calcular_costo_periodo"]):
+    }), patch("web.app.obtener_plantas_por_cliente",
+               patches["web.app.obtener_plantas_por_cliente"]):
         resp = _client_fase2.get(
-            "/clientes/44/dashboard/telemetria/data?rango=24h",
+            "/clientes/44/planta/1/dashboard/telemetria/data?rango=24h",
             headers={"Accept": "application/json"},
         )
     assert resp.status_code == 200
@@ -235,9 +236,9 @@ def test_h_kpis_flags_aplica_y_oculto(_client_fase2):
     patches = _mock_repo(_ARBOL, _MEDS, _MEDS, [])
     with patch.multiple("storage.repository", **{
         k.split(".")[-1]: v for k, v in patches.items() if k.startswith("storage.repository")
-    }), patch("calc.telemetria_costos.calcular_costo_periodo",
-               patches["calc.telemetria_costos.calcular_costo_periodo"]):
-        resp = _client_fase2.get("/clientes/44/dashboard/telemetria/data?rango=24h")
+    }), patch("web.app.obtener_plantas_por_cliente",
+               patches["web.app.obtener_plantas_por_cliente"]):
+        resp = _client_fase2.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
     data = json.loads(resp.data)
     energeticos = data["kpis_paneles"]["energeticos"]
     # indice_utilizacion_pct ya NO existe en la nueva estructura
@@ -249,14 +250,14 @@ def test_h_kpis_flags_aplica_y_oculto(_client_fase2):
 
 
 def test_i_anterior_null_sin_datos_historicos(_client_fase2):
-    """Si no hay mediciones históricas, los valores 'anterior' y 'delta_pct' son null."""
+    """Si no hay mediciones, los valores 'anterior' y 'delta_pct' son null."""
     _inyectar_sesion(_client_fase2)
-    patches = _mock_repo(_ARBOL, _MEDS, [], [])   # anterior vacío
+    patches = _mock_repo(_ARBOL, [], [], [])   # sin mediciones en ningún periodo
     with patch.multiple("storage.repository", **{
         k.split(".")[-1]: v for k, v in patches.items() if k.startswith("storage.repository")
-    }), patch("calc.telemetria_costos.calcular_costo_periodo",
-               patches["calc.telemetria_costos.calcular_costo_periodo"]):
-        resp = _client_fase2.get("/clientes/44/dashboard/telemetria/data?rango=24h")
+    }), patch("web.app.obtener_plantas_por_cliente",
+               patches["web.app.obtener_plantas_por_cliente"]):
+        resp = _client_fase2.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
     data = json.loads(resp.data)
     kpi = data["kpis_paneles"]["energeticos"]["energia_kwh"]
     assert kpi["anterior"] is None
@@ -363,9 +364,9 @@ def test_l_produccion_solo_en_rango(_client_fase2):
     patches = _mock_repo(_ARBOL, _MEDS, _MEDS, [{"fecha": "2024-01-01", "m2_producidos": 100.0}])
     with patch.multiple("storage.repository", **{
         k.split(".")[-1]: v for k, v in patches.items() if k.startswith("storage.repository")
-    }), patch("calc.telemetria_costos.calcular_costo_periodo",
-               patches["calc.telemetria_costos.calcular_costo_periodo"]):
-        resp = _client_fase2.get("/clientes/44/dashboard/telemetria/data?rango=24h")
+    }), patch("web.app.obtener_plantas_por_cliente",
+               patches["web.app.obtener_plantas_por_cliente"]):
+        resp = _client_fase2.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
     data = json.loads(resp.data)
     produccion = data["kpis_paneles"]["produccion"]
     assert produccion.get("solo_en_rango") == ["30d"]

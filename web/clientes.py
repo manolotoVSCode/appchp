@@ -96,6 +96,9 @@ from storage.repository import (
     declarar_cambio_alimentacion,
     obtener_activos_con_medidor_historico,
     eliminar_activo_permanente,
+    declarar_contrato_acometida,
+    obtener_historial_contrato_acometida,
+    obtener_contrato,
 )
 
 logger = logging.getLogger(__name__)
@@ -3287,11 +3290,27 @@ def activos_planta(cliente_id: int, planta_id: int):
         return _err_activos(planta_o_err)
     planta = planta_o_err
 
+    from storage.repository import get_contratos_por_planta as _gcpp
     cliente = get_cliente_con_conteos(cliente_id)
     activos = obtener_arbol_activos(cliente_id, planta_id)   # planta actual, con medidor_vigente
     todos_activos = obtener_todos_activos_cliente(cliente_id) # todas las plantas
     mediciones = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
     es_admin = user.get("rol") in ("admin", "master_admin")
+
+    # Contratos eléctricos de la planta (para asignación a acometidas)
+    _contratos_planta = _gcpp(planta_id)
+    contratos_electricos_planta = [
+        {"id": c.id, "nombre": c.nombre, "tipo": c.tipo}
+        for c in _contratos_planta
+        if c.tipo in ("electrico_basico", "electrico_calificado")
+    ]
+
+    # Historial de contrato por acometida (bulk, solo activos de tipo acometida)
+    _acometidas = [a for a in activos if a.get("tipo") == "acometida"]
+    hist_contrato_por_activo: dict[int, list] = {
+        a["id"]: obtener_historial_contrato_acometida(a["id"])
+        for a in _acometidas
+    }
 
     # Índice global (todas las plantas) para resolver padres foráneos y detectar ciclos
     todos_por_id: dict[int, dict] = {a["id"]: a for a in todos_activos}
@@ -3364,6 +3383,8 @@ def activos_planta(cliente_id: int, planta_id: int):
         tipos_activo=_TIPOS_ACTIVO,
         es_admin=es_admin,
         nav_active="activos",
+        contratos_electricos_planta=contratos_electricos_planta,
+        hist_contrato_por_activo=hist_contrato_por_activo,
     )
 
 
@@ -3661,6 +3682,57 @@ def activo_cambio_alimentacion(cliente_id: int, planta_id: int, activo_id: int):
         return jsonify({"error": str(exc)}), 422
     except Exception as exc:
         logger.error("Error declarando cambio alimentacion activo_id=%d: %s", activo_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/contrato-acometida", methods=["POST"])
+def activo_asignar_contrato(cliente_id: int, planta_id: int, activo_id: int):
+    """Asigna o cambia el contrato eléctrico vigente de una acometida.
+
+    Body JSON: {contrato_id (int|null), desde (ISO 8601), motivo (str, opcional)}.
+    Solo acometidas. El contrato debe pertenecer a la misma planta.
+    """
+    from flask import jsonify
+    from datetime import datetime, timezone
+
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("planta_id") != planta_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+    if activo.get("tipo") != "acometida":
+        return jsonify({"error": "Solo se puede asignar contrato a activos de tipo acometida"}), 422
+
+    data = request.get_json(silent=True) or {}
+    contrato_id_raw = data.get("contrato_id")
+    desde_str = (data.get("desde") or "").strip()
+    motivo = (data.get("motivo") or "").strip() or None
+
+    contrato_id = int(contrato_id_raw) if contrato_id_raw is not None else None
+
+    if contrato_id is not None:
+        contrato = obtener_contrato(contrato_id)
+        if contrato is None or contrato.get("planta_id") != planta_id:
+            return jsonify({"error": "Contrato no encontrado o no pertenece a esta planta"}), 400
+
+    if not desde_str:
+        return jsonify({"error": "El campo 'desde' es obligatorio"}), 400
+    try:
+        desde = datetime.fromisoformat(desde_str.replace("Z", "+00:00"))
+    except ValueError:
+        return jsonify({"error": "Formato de fecha inválido para 'desde'"}), 400
+
+    try:
+        nueva_fila = declarar_contrato_acometida(activo_id, contrato_id, desde, motivo)
+        return jsonify({"ok": True, "fila": nueva_fila})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 422
+    except Exception as exc:
+        logger.error("Error asignando contrato acometida id=%d: %s", activo_id, exc)
         return jsonify({"error": str(exc)}), 500
 
 
