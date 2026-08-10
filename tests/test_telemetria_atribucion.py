@@ -393,3 +393,67 @@ def test_agregar_costo_por_camino_todos_sin_costo():
     result = agregar_costo_por_camino(segs)
     assert result[1]["costo_mxn"] is None
     assert result[1]["energia_sin_costo_kwh"] == pytest.approx(100.0)
+
+
+# ── Tests filtrar_segmentos_por_rol ──────────────────────────────────────────
+
+def test_k_medidor_sin_fila_rol_todo_carga():
+    """Medidor sin fila de rol (intervalos = un tramo 'carga') → todo a la lista de carga."""
+    from calc.telemetria_atribucion import filtrar_segmentos_por_rol
+    segs = [
+        {"desde": D, "hasta": H, "camino": [1], "completo": True, "energia_kwh": 500.0},
+    ]
+    # intervalos_rol con un solo tramo 'carga' (simulando tabla vacía → default carga)
+    intervalos = [{"rol": "carga", "intervalo_desde": D, "intervalo_hasta": H, "motivo": None}]
+    carga, cab = filtrar_segmentos_por_rol(segs, intervalos)
+    assert len(carga) == 1
+    assert len(cab) == 0
+    assert carga[0]["energia_kwh"] == pytest.approx(500.0)
+
+
+def test_l_medidor_con_rol_interconexion_todo_cabecera():
+    """Medidor con rol interconexion todo el rango → todo a cabecera."""
+    from calc.telemetria_atribucion import filtrar_segmentos_por_rol
+    segs = [
+        {"desde": D, "hasta": H, "camino": [1], "completo": True, "energia_kwh": 500.0},
+    ]
+    intervalos = [{"rol": "interconexion", "intervalo_desde": D, "intervalo_hasta": H, "motivo": None}]
+    carga, cab = filtrar_segmentos_por_rol(segs, intervalos)
+    assert len(carga) == 0
+    assert len(cab) == 1
+    assert cab[0]["energia_kwh"] == pytest.approx(500.0)
+    assert cab[0]["rol"] == "interconexion"
+
+
+def test_m_medidor_cambia_rol_a_mitad_repartido():
+    """Medidor cambia de carga a centro_carga a mitad → energía repartida."""
+    from calc.telemetria_atribucion import filtrar_segmentos_por_rol
+    segs = [
+        {"desde": D, "hasta": H, "camino": [1], "completo": True, "energia_kwh": 1000.0},
+    ]
+    intervalos = [
+        {"rol": "carga", "intervalo_desde": D, "intervalo_hasta": M, "motivo": None},
+        {"rol": "centro_carga", "intervalo_desde": M, "intervalo_hasta": H, "motivo": None},
+    ]
+    carga, cab = filtrar_segmentos_por_rol(segs, intervalos)
+    assert len(carga) >= 1
+    assert len(cab) >= 1
+    total = sum(s["energia_kwh"] for s in carga) + sum(s["energia_kwh"] for s in cab)
+    assert total == pytest.approx(1000.0, abs=1e-4)
+
+
+def test_n_energia_invariante_filtrar_segmentos_por_rol():
+    """Suma energía carga + cabecera == suma energía input."""
+    from calc.telemetria_atribucion import filtrar_segmentos_por_rol
+    segs = [
+        {"desde": D, "hasta": M, "camino": [1], "completo": True, "energia_kwh": 300.0},
+        {"desde": M, "hasta": H, "camino": [2], "completo": True, "energia_kwh": 700.0},
+    ]
+    intervalos = [
+        {"rol": "generacion_neta", "intervalo_desde": D, "intervalo_hasta": M, "motivo": None},
+        {"rol": "carga", "intervalo_desde": M, "intervalo_hasta": H, "motivo": None},
+    ]
+    carga, cab = filtrar_segmentos_por_rol(segs, intervalos)
+    total_input = sum(s["energia_kwh"] for s in segs)
+    total_output = sum(s["energia_kwh"] for s in carga) + sum(s["energia_kwh"] for s in cab)
+    assert total_output == pytest.approx(total_input, abs=1e-4)

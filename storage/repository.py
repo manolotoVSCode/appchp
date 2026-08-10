@@ -3264,3 +3264,221 @@ def obtener_historial_contrato_acometida(activo_id: int) -> list[dict]:
         .execute()
     )
     return resp.data or []
+
+
+# ── Rol temporal de medidor (cabecera vs carga) ──────────────────────────────
+
+_ROLES_VALIDOS = ("carga", "interconexion", "generacion_neta", "centro_carga")
+_ROLES_CABECERA = ("interconexion", "generacion_neta", "centro_carga")
+
+
+def resolver_intervalos_rol(
+    medidor_id: int,
+    desde_iso: str,
+    hasta_iso: str,
+) -> list[dict]:
+    """Intervalos de rol del medidor en [desde_iso, hasta_iso).
+
+    Huecos sin fila (incluido el caso de tabla vacía) se emiten como rol 'carga'.
+    Retorna dicts con: rol, intervalo_desde, intervalo_hasta, motivo.
+    Ordenados por intervalo_desde ASC.
+    """
+    resp = (
+        _supabase.table("medidor_rol_vigencia")
+        .select("rol, vigente_desde, vigente_hasta, motivo")
+        .eq("medidor_id", medidor_id)
+        .lt("vigente_desde", hasta_iso)
+        .or_(f"vigente_hasta.gt.{desde_iso},vigente_hasta.is.null")
+        .order("vigente_desde")
+        .execute()
+    )
+
+    # Recortar extremos
+    filas_recortadas: list[dict] = []
+    for row in (resp.data or []):
+        iv_desde = max(row["vigente_desde"], desde_iso)
+        iv_hasta = min(row["vigente_hasta"], hasta_iso) if row["vigente_hasta"] else hasta_iso
+        if iv_desde < iv_hasta:
+            filas_recortadas.append({
+                "rol":              row["rol"],
+                "intervalo_desde":  iv_desde,
+                "intervalo_hasta":  iv_hasta,
+                "motivo":           row.get("motivo"),
+            })
+
+    # Rellenar huecos con rol 'carga'
+    resultado: list[dict] = []
+    cursor = desde_iso
+    for fila in filas_recortadas:
+        if cursor < fila["intervalo_desde"]:
+            resultado.append({
+                "rol":              "carga",
+                "intervalo_desde":  cursor,
+                "intervalo_hasta":  fila["intervalo_desde"],
+                "motivo":           None,
+            })
+        resultado.append(fila)
+        cursor = fila["intervalo_hasta"]
+
+    if cursor < hasta_iso:
+        resultado.append({
+            "rol":              "carga",
+            "intervalo_desde":  cursor,
+            "intervalo_hasta":  hasta_iso,
+            "motivo":           None,
+        })
+
+    return resultado
+
+
+def declarar_rol_medidor(
+    medidor_id: int,
+    rol: str,
+    desde: "datetime",
+    motivo: "str | None",
+) -> dict:
+    """Declara un cambio de rol para el medidor a partir de `desde`.
+
+    Patrón idéntico a declarar_cambio_alimentacion:
+    1. Valida rol.
+    2. Para roles de cabecera, verifica que no exista otro medidor de la misma
+       planta con ese rol vigente en la fecha `desde`.
+    3. Cierra fila abierta y abre nueva.
+
+    Raises:
+        ValueError: rol inválido o conflicto de unicidad por planta.
+    """
+    from datetime import timezone
+
+    if rol not in _ROLES_VALIDOS:
+        raise ValueError(f"Rol inválido: {rol!r}. Roles válidos: {_ROLES_VALIDOS}")
+
+    # Normalizar a UTC
+    if desde.tzinfo is None:
+        desde = desde.replace(tzinfo=timezone.utc)
+    desde_utc = desde.astimezone(timezone.utc)
+    desde_iso = desde_utc.isoformat()
+
+    # Validar unicidad de roles de cabecera por planta
+    if rol in _ROLES_CABECERA:
+        # Obtener planta_id del medidor
+        resp_med = (
+            _supabase.table("medidores")
+            .select("planta_id")
+            .eq("id", medidor_id)
+            .limit(1)
+            .execute()
+        )
+        if not resp_med.data:
+            raise ValueError(f"Medidor {medidor_id} no encontrado")
+        planta_id = resp_med.data[0].get("planta_id")
+
+        if planta_id is not None:
+            # Buscar otros medidores de la misma planta con ese rol vigente en `desde`
+            resp_otros_med = (
+                _supabase.table("medidores")
+                .select("id")
+                .eq("planta_id", planta_id)
+                .neq("id", medidor_id)
+                .execute()
+            )
+            otros_ids = [m["id"] for m in (resp_otros_med.data or [])]
+
+            for otro_id in otros_ids:
+                resp_conflict = (
+                    _supabase.table("medidor_rol_vigencia")
+                    .select("id, medidor_id")
+                    .eq("medidor_id", otro_id)
+                    .eq("rol", rol)
+                    .lte("vigente_desde", desde_iso)
+                    .or_(f"vigente_hasta.gt.{desde_iso},vigente_hasta.is.null")
+                    .limit(1)
+                    .execute()
+                )
+                if resp_conflict.data:
+                    raise ValueError(
+                        f"Ya existe otro medidor (id={otro_id}) en la misma planta "
+                        f"con rol '{rol}' vigente en {desde_iso}."
+                    )
+
+    # 1. Cerrar fila abierta
+    resp_open = (
+        _supabase.table("medidor_rol_vigencia")
+        .select("id, vigente_desde")
+        .eq("medidor_id", medidor_id)
+        .is_("vigente_hasta", "null")
+        .limit(1)
+        .execute()
+    )
+    fila_abierta = resp_open.data[0] if resp_open.data else None
+
+    if fila_abierta:
+        vd_raw = fila_abierta["vigente_desde"]
+        vd = datetime.fromisoformat(vd_raw) if ("+" in vd_raw or vd_raw.endswith("Z")) \
+            else datetime.fromisoformat(vd_raw).replace(tzinfo=timezone.utc)
+        if vd.tzinfo is None:
+            vd = vd.replace(tzinfo=timezone.utc)
+        if desde_utc <= vd:
+            raise ValueError(
+                f"La fecha de inicio ({desde_iso}) debe ser posterior al "
+                f"vigente_desde de la fila actual ({vd_raw})."
+            )
+        _supabase.table("medidor_rol_vigencia").update(
+            {"vigente_hasta": desde_iso}
+        ).eq("id", fila_abierta["id"]).execute()
+
+    # 2. Abrir nueva fila
+    resp_new = _supabase.table("medidor_rol_vigencia").insert({
+        "medidor_id":     medidor_id,
+        "rol":            rol,
+        "vigente_desde":  desde_iso,
+        "vigente_hasta":  None,
+        "motivo":         motivo or None,
+    }).execute()
+    return resp_new.data[0]
+
+
+def obtener_historial_rol_medidor(medidor_id: int) -> list[dict]:
+    """Historial de roles del medidor ordenado por vigente_desde DESC."""
+    resp = (
+        _supabase.table("medidor_rol_vigencia")
+        .select("*")
+        .eq("medidor_id", medidor_id)
+        .order("vigente_desde", desc=True)
+        .execute()
+    )
+    return resp.data or []
+
+
+def obtener_medidores_cabecera_planta(
+    planta_id: int,
+    desde_iso: str,
+    hasta_iso: str,
+) -> list[dict]:
+    """Medidores con rol de cabecera vigente en [desde_iso, hasta_iso).
+
+    Retorna lista de dicts con: medidor_id, rol, intervalos, nombre.
+    """
+    resp_med = (
+        _supabase.table("medidores")
+        .select("id, nombre")
+        .eq("planta_id", planta_id)
+        .eq("activo", True)
+        .execute()
+    )
+    medidores = resp_med.data or []
+
+    resultado: list[dict] = []
+    for med in medidores:
+        mid = med["id"]
+        intervalos = resolver_intervalos_rol(mid, desde_iso, hasta_iso)
+        tramos_cabecera = [iv for iv in intervalos if iv["rol"] != "carga"]
+        if tramos_cabecera:
+            resultado.append({
+                "medidor_id":  mid,
+                "rol":         tramos_cabecera[0]["rol"],
+                "intervalos":  tramos_cabecera,
+                "nombre":      med.get("nombre", ""),
+            })
+
+    return resultado

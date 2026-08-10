@@ -2204,6 +2204,19 @@ def create_app() -> Flask:
             for fila in filas:
                 clave = fila["clave"]
                 raw = request.form.get(clave, "").strip()
+                # Caso especial: umbral_resto_cargas_pct admite vacío
+                if clave == "umbral_resto_cargas_pct":
+                    if raw == "":
+                        nuevos_valores[clave] = ""
+                        continue
+                    try:
+                        val = Decimal(raw)
+                        if not (Decimal("0") <= val <= Decimal("100")):
+                            raise ValueError("fuera de rango")
+                        nuevos_valores[clave] = str(val)
+                    except (InvalidOperation, ValueError):
+                        errores.append(f"umbral_resto_cargas_pct debe ser 0–100 o vacío")
+                    continue
                 try:
                     val = Decimal(raw)
                     if val <= 0:
@@ -3139,11 +3152,13 @@ def create_app() -> Flask:
         from storage.repository import (
             resolver_intervalos_medidor as _rim,
             resolver_intervalos_fuente as _rif_repo,
+            resolver_intervalos_rol as _rir,
         )
         from calc.telemetria_atribucion import (
             resolver_caminos as _rc,
             integrar_por_segmentos as _ips,
             agregar_por_camino as _apc,
+            filtrar_segmentos_por_rol as _fspr,
         )
         from datetime import datetime as _dt_attr
 
@@ -3155,9 +3170,19 @@ def create_app() -> Flask:
             _h = _dt_attr.fromisoformat(h_iso.replace("Z", "+00:00"))
             return _rif_repo(activo_id, _d, _h)
 
+        # Precalcular intervalos de rol para cada medidor del árbol
+        _medidores_en_arbol: set[int] = {
+            a["medidor_id"] for a in todos if a.get("medidor_id")
+        }
+        _intervalos_rol: dict[int, list[dict]] = {
+            mid: _rir(mid, desde_iso, hasta_iso)
+            for mid in _medidores_en_arbol
+        }
+
         energia_por_nodo: dict[int, float] = {}
         incompleto_por_nodo: dict[int, bool] = {}
         _segs_por_hoja: dict[int, list[dict]] = {}
+        _segs_cabecera: dict[int, list[dict]] = {}
 
         for _aid in todas_hojas_ids:
             _tramos = _rim(_aid, desde_iso, hasta_iso)
@@ -3184,13 +3209,19 @@ def create_app() -> Flask:
 
             _caminos = _rc(_aid, desde_iso, hasta_iso, _resolver_fuente_attr)
             _segs = _ips(_meds_m, _caminos, _bucket_min)
-            _segs_por_hoja[_aid] = _segs
 
-            energia_por_nodo[_aid] = round(sum(s["energia_kwh"] for s in _segs), 3)
-            _inc = any(not s["completo"] or s["hueco_datos_min"] > 0 for s in _segs)
+            # Filtrar segmentos por rol de medidor: solo carga entra en atribución
+            _rol_intervals = _intervalos_rol.get(_medidor_actual, []) if _medidor_actual else []
+            _segs_carga, _segs_cabecera_hoja = _fspr(_segs, _rol_intervals)
+            _segs_por_hoja[_aid] = _segs_carga
+            if _segs_cabecera_hoja:
+                _segs_cabecera.setdefault(_aid, []).extend(_segs_cabecera_hoja)
+
+            energia_por_nodo[_aid] = round(sum(s["energia_kwh"] for s in _segs_carga), 3)
+            _inc = any(not s.get("completo", True) or s.get("hueco_datos_min", 0) > 0 for s in _segs_carga)
             incompleto_por_nodo[_aid] = _inc
 
-            for _nid, _kwh in _apc(_segs).items():
+            for _nid, _kwh in _apc(_segs_carga).items():
                 energia_por_nodo[_nid] = round(energia_por_nodo.get(_nid, 0.0) + _kwh, 3)
                 if _inc:
                     incompleto_por_nodo[_nid] = True
@@ -3344,6 +3375,22 @@ def create_app() -> Flask:
             }
 
         arbol_sunburst = _arbol_sunburst_con_costo(acometida["id"])
+
+        # ── Magnitudes de planta (cabecera) ──────────────────────────────
+        _energia_cabecera: dict[str, float] = {}
+        for _mid_cab, _segs_cab in _segs_cabecera.items():
+            for _s_cab in _segs_cab:
+                _rol_s = _s_cab.get("rol", "carga")
+                _energia_cabecera[_rol_s] = _energia_cabecera.get(_rol_s, 0.0) + float(_s_cab.get("energia_kwh", 0))
+
+        _balance_residuo = None
+        if all(r in _energia_cabecera for r in ("interconexion", "generacion_neta", "centro_carga")):
+            _cc = _energia_cabecera["centro_carga"]
+            _residuo = _cc - _energia_cabecera["interconexion"] - _energia_cabecera["generacion_neta"]
+            _balance_residuo = {
+                "residuo_kwh": round(_residuo, 3),
+                "fraccion_centro_carga": round(_residuo / _cc, 6) if _cc else None,
+            }
 
         # ── KPIs de paneles ────────────────────────────────────────────────
         _N_SPARK = {"24h": 24, "7d": 7, "30d": 30}.get(rango, 24)
@@ -3533,6 +3580,10 @@ def create_app() -> Flask:
             },
             "arbol_sunburst": arbol_sunburst,
             "kpis_paneles": kpis_paneles,
+            "magnitudes_planta": {
+                "energia_cabecera": _energia_cabecera,
+                "balance_residuo": _balance_residuo,
+            },
         })
 
     @app.route("/clientes/<int:cliente_id>/telemetria/produccion", methods=["POST"])

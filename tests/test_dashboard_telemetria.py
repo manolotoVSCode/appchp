@@ -127,6 +127,12 @@ _PATCHES_COSTO = dict(
 )
 
 
+def _default_rir(medidor_id, desde_iso, hasta_iso):
+    """Default resolver_intervalos_rol: todo carga."""
+    return [{"rol": "carga", "intervalo_desde": desde_iso,
+             "intervalo_hasta": hasta_iso, "motivo": None}]
+
+
 def _patch_costo():
     """Retorna context managers de patch para el endpoint /data.
 
@@ -141,6 +147,7 @@ def _patch_costo():
       [7] resolver_intervalos_fuente        ← devuelve [] (todos activos son raíz)
       [8] obtener_plantas_por_cliente       ← evita HTTP en before_request
       [9] resolver_intervalos_contrato      ← devuelve [] (sin contrato asignado)
+      [10] resolver_intervalos_rol          ← devuelve todo como carga
     """
     from datetime import datetime, timezone
     _ts_fijo = datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
@@ -160,6 +167,8 @@ def _patch_costo():
               return_value=[{"id": 1, "nombre": "Planta 1", "activo": True}]),
         # Contrato de acometida: sin asignación por defecto
         patch("storage.repository.resolver_intervalos_contrato", return_value=[]),
+        # Rol de medidor: todo carga por defecto
+        patch("storage.repository.resolver_intervalos_rol", side_effect=_default_rir),
     ]
 
 
@@ -173,7 +182,7 @@ def test_telemetria_data_json_claves_esperadas(client, app):
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
          patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
-         patches[6], patches[7], patches[8], patches[9]:
+         patches[6], patches[7], patches[8], patches[9], patches[10]:
         resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
     assert resp.status_code == 200
     data = resp.get_json()
@@ -191,7 +200,7 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
          patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
-         patches[6], patches[7], patches[8], patches[9]:
+         patches[6], patches[7], patches[8], patches[9], patches[10]:
         resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
     data = resp.get_json()
     arbol = data["arbol_sunburst"]
@@ -222,7 +231,7 @@ def test_telemetria_data_nodo_carga_final_sin_agregacion(client, app):
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=carga_mock) as mock_omr, \
          patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
-         patches[6], patches[7], patches[8], patches[9]:
+         patches[6], patches[7], patches[8], patches[9], patches[10]:
         resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h&nodo_id=3")
     assert resp.status_code == 200
     # Las mediciones se consultan por medidor_id (10 y 11), no por activo_id (3 y 4)
@@ -407,7 +416,7 @@ def test_atribucion_cambio_medidor_y_alimentacion(client, app):
          patch("storage.repository.obtener_mediciones_para_rango", side_effect=_omfr_se) as mock_omfr, \
          patch("storage.repository.resolver_intervalos_medidor", side_effect=_rim_se), \
          patch("storage.repository.resolver_intervalos_fuente",  side_effect=_rif_se), \
-         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8], patches[9]:
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8], patches[9], patches[10]:
         resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
 
     assert resp.status_code == 200
@@ -531,7 +540,7 @@ def test_contrato_cambia_a_mitad_del_rango(client, app):
          patch("storage.repository.resolver_intervalos_fuente", side_effect=_rif_se), \
          patch("storage.repository.resolver_intervalos_contrato", side_effect=_ric_se), \
          patch("calc.telemetria_costos.obtener_precio_unitario_por_contrato", side_effect=_opupc_se), \
-         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8]:
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8], patches[10]:
         resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
 
     assert resp.status_code == 200
@@ -553,3 +562,204 @@ def test_contrato_cambia_a_mitad_del_rango(client, app):
 
     # Invariante 3: campos nuevos presentes en el sunburst
     assert "energia_sin_costo_kwh" in arbol
+
+
+# ── Test p ─────────────────────────────────────────────────────────────────
+def test_medidor_centro_carga_no_altera_raiz(client, app):
+    """Medidor con rol centro_carga → energía del nodo raíz en el sunburst es 0.
+
+    Los segmentos de cabecera no entran en la atribución por camino.
+    Solo alimentan magnitudes_planta.energia_cabecera.
+    """
+    app.config["FASE2_HABILITADA"] = True
+    _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+
+    # Árbol mínimo: acometida 300 → carga 301 (medidor 30)
+    arbol_mock_p = [
+        {"id": 300, "nombre": "Acometida-P", "punto_medicion": "acometida_cfe",
+         "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None,
+         "tipo": "acometida"},
+        {"id": 301, "nombre": "Carga-P", "punto_medicion": "carga_final",
+         "activo_padre_id": 300, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": "horno", "potencia_nominal_kw": 200.0, "medidor_id": 30,
+         "tipo": "carga"},
+    ]
+
+    def _omfr_se(medidor_id, desde, hasta, rango):
+        return [
+            {"timestamp": desde, "potencia_activa_kw": 100.0, "factor_potencia": 0.9},
+            {"timestamp": hasta, "potencia_activa_kw": 100.0, "factor_potencia": 0.9},
+        ]
+
+    # resolver_intervalos_rol: medidor 30 es centro_carga todo el rango
+    def _rir_se(medidor_id, desde_iso, hasta_iso):
+        if medidor_id == 30:
+            return [{"rol": "centro_carga", "intervalo_desde": desde_iso,
+                      "intervalo_hasta": hasta_iso, "motivo": None}]
+        return [{"rol": "carga", "intervalo_desde": desde_iso,
+                  "intervalo_hasta": hasta_iso, "motivo": None}]
+
+    _ISO0 = "2024-01-01T00:00:00+00:00"
+    _ISO1 = "2024-01-02T00:00:00+00:00"
+
+    def _rif_se(activo_id, desde_dt, hasta_dt):
+        if activo_id == 301:
+            return [{"fuente_activo_id": 300, "intervalo_desde": _ISO0,
+                      "intervalo_hasta": _ISO1, "motivo": "test"}]
+        return []
+
+    patches = _patch_costo()
+    with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=arbol_mock_p), \
+         patch("storage.repository.obtener_mediciones_para_rango", side_effect=_omfr_se), \
+         patch("storage.repository.resolver_intervalos_medidor", return_value=[
+             {"medidor_id": 30, "intervalo_desde": "2024-01-01T00:00:00Z",
+              "intervalo_hasta": "2024-01-02T00:00:00Z", "motivo": "test"}
+         ]), \
+         patch("storage.repository.resolver_intervalos_fuente", side_effect=_rif_se), \
+         patch("storage.repository.resolver_intervalos_rol", side_effect=_rir_se), \
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8], patches[9]:
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    arbol = data["arbol_sunburst"]
+
+    # Nodo raíz: energía de carga es 0 (todo fue filtrado como cabecera)
+    assert arbol["energia_kwh"] == pytest.approx(0.0, abs=0.1), (
+        f"Con medidor centro_carga, la energía del sunburst raíz debe ser 0, obtenida {arbol['energia_kwh']}"
+    )
+
+    # magnitudes_planta.energia_cabecera debe contener centro_carga > 0
+    mp = data.get("magnitudes_planta", {})
+    assert mp.get("energia_cabecera", {}).get("centro_carga", 0) > 0, (
+        "La energía del medidor centro_carga debe aparecer en magnitudes_planta.energia_cabecera"
+    )
+
+
+# ── Test q: balance_residuo presente cuando los 3 roles existen ──────────
+def test_residuo_balance_presente(client, app):
+    """Endpoint retorna balance_residuo cuando los 3 roles de cabecera existen."""
+    app.config["FASE2_HABILITADA"] = True
+    _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+
+    # Tres cargas, cada una con un rol de cabecera distinto
+    arbol_mock_q = [
+        {"id": 400, "nombre": "Acometida-Q", "punto_medicion": "acometida_cfe",
+         "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None,
+         "tipo": "acometida"},
+        {"id": 401, "nombre": "Med-Interc", "punto_medicion": "carga_final",
+         "activo_padre_id": 400, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": "medidor_cabecera", "potencia_nominal_kw": None, "medidor_id": 41,
+         "tipo": "carga"},
+        {"id": 402, "nombre": "Med-GenNeta", "punto_medicion": "carga_final",
+         "activo_padre_id": 400, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": "medidor_cabecera", "potencia_nominal_kw": None, "medidor_id": 42,
+         "tipo": "carga"},
+        {"id": 403, "nombre": "Med-CC", "punto_medicion": "carga_final",
+         "activo_padre_id": 400, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": "medidor_cabecera", "potencia_nominal_kw": None, "medidor_id": 43,
+         "tipo": "carga"},
+    ]
+
+    def _omfr_se(medidor_id, desde, hasta, rango):
+        kw_map = {41: 60.0, 42: 40.0, 43: 110.0}
+        kw = kw_map.get(medidor_id, 0.0)
+        return [
+            {"timestamp": desde, "potencia_activa_kw": kw, "factor_potencia": 0.9},
+            {"timestamp": hasta, "potencia_activa_kw": kw, "factor_potencia": 0.9},
+        ]
+
+    def _rir_se(medidor_id, desde_iso, hasta_iso):
+        rol_map = {41: "interconexion", 42: "generacion_neta", 43: "centro_carga"}
+        rol = rol_map.get(medidor_id, "carga")
+        return [{"rol": rol, "intervalo_desde": desde_iso, "intervalo_hasta": hasta_iso, "motivo": None}]
+
+    _ISO0 = "2024-01-01T00:00:00+00:00"
+    _ISO1 = "2024-01-02T00:00:00+00:00"
+
+    def _rif_se(activo_id, desde_dt, hasta_dt):
+        if activo_id in (401, 402, 403):
+            return [{"fuente_activo_id": 400, "intervalo_desde": _ISO0,
+                      "intervalo_hasta": _ISO1, "motivo": "test"}]
+        return []
+
+    patches = _patch_costo()
+    with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=arbol_mock_q), \
+         patch("storage.repository.obtener_mediciones_para_rango", side_effect=_omfr_se), \
+         patch("storage.repository.resolver_intervalos_medidor", return_value=[
+             {"medidor_id": 41, "intervalo_desde": "2024-01-01T00:00:00Z",
+              "intervalo_hasta": "2024-01-02T00:00:00Z", "motivo": "test"}
+         ]), \
+         patch("storage.repository.resolver_intervalos_fuente", side_effect=_rif_se), \
+         patch("storage.repository.resolver_intervalos_rol", side_effect=_rir_se), \
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8], patches[9]:
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    mp = data.get("magnitudes_planta", {})
+    assert mp.get("balance_residuo") is not None, "balance_residuo debe estar presente con los 3 roles"
+    assert "residuo_kwh" in mp["balance_residuo"]
+
+
+# ── Test r: balance_residuo ausente cuando falta un rol ──────────────────
+def test_residuo_balance_ausente(client, app):
+    """Endpoint retorna balance_residuo=None cuando falta un rol de cabecera."""
+    app.config["FASE2_HABILITADA"] = True
+    _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+
+    # Solo un medidor con rol interconexion, sin generacion_neta ni centro_carga
+    arbol_mock_r = [
+        {"id": 500, "nombre": "Acometida-R", "punto_medicion": "acometida_cfe",
+         "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None,
+         "tipo": "acometida"},
+        {"id": 501, "nombre": "Med-I", "punto_medicion": "carga_final",
+         "activo_padre_id": 500, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": "medidor_cabecera", "potencia_nominal_kw": None, "medidor_id": 51,
+         "tipo": "carga"},
+    ]
+
+    def _omfr_se(medidor_id, desde, hasta, rango):
+        return [
+            {"timestamp": desde, "potencia_activa_kw": 100.0, "factor_potencia": 0.9},
+            {"timestamp": hasta, "potencia_activa_kw": 100.0, "factor_potencia": 0.9},
+        ]
+
+    def _rir_se(medidor_id, desde_iso, hasta_iso):
+        if medidor_id == 51:
+            return [{"rol": "interconexion", "intervalo_desde": desde_iso,
+                      "intervalo_hasta": hasta_iso, "motivo": None}]
+        return [{"rol": "carga", "intervalo_desde": desde_iso,
+                  "intervalo_hasta": hasta_iso, "motivo": None}]
+
+    _ISO0 = "2024-01-01T00:00:00+00:00"
+    _ISO1 = "2024-01-02T00:00:00+00:00"
+
+    def _rif_se(activo_id, desde_dt, hasta_dt):
+        if activo_id == 501:
+            return [{"fuente_activo_id": 500, "intervalo_desde": _ISO0,
+                      "intervalo_hasta": _ISO1, "motivo": "test"}]
+        return []
+
+    patches = _patch_costo()
+    with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=arbol_mock_r), \
+         patch("storage.repository.obtener_mediciones_para_rango", side_effect=_omfr_se), \
+         patch("storage.repository.resolver_intervalos_medidor", return_value=[
+             {"medidor_id": 51, "intervalo_desde": "2024-01-01T00:00:00Z",
+              "intervalo_hasta": "2024-01-02T00:00:00Z", "motivo": "test"}
+         ]), \
+         patch("storage.repository.resolver_intervalos_fuente", side_effect=_rif_se), \
+         patch("storage.repository.resolver_intervalos_rol", side_effect=_rir_se), \
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8], patches[9]:
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    mp = data.get("magnitudes_planta", {})
+    assert mp.get("balance_residuo") is None, "balance_residuo debe ser None sin los 3 roles"

@@ -201,6 +201,8 @@ def _mock_repo(mock_arbol, mock_meds_act, mock_meds_ant, mock_prod):
         "storage.repository.resolver_intervalos_medidor": MagicMock(return_value=[]),
         "storage.repository.resolver_intervalos_contrato": MagicMock(return_value=[]),
         "storage.repository.resolver_intervalos_fuente": MagicMock(return_value=[]),
+        "storage.repository.resolver_intervalos_rol": MagicMock(
+            side_effect=lambda mid, d, h: [{"rol": "carga", "intervalo_desde": d, "intervalo_hasta": h, "motivo": None}]),
         # before_request: evitar HTTP a Supabase
         "web.app.obtener_plantas_por_cliente": MagicMock(
             return_value=[{"id": 1, "nombre": "Planta 1", "activo": True}]

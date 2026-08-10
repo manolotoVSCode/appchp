@@ -146,6 +146,8 @@ def test_endpoint_data_nuevas_claves(client, app):
          patch("storage.repository.resolver_intervalos_medidor", return_value=[]), \
          patch("storage.repository.resolver_intervalos_contrato", return_value=[]), \
          patch("storage.repository.resolver_intervalos_fuente", return_value=[]), \
+         patch("storage.repository.resolver_intervalos_rol",
+               side_effect=lambda mid, d, h: [{"rol": "carga", "intervalo_desde": d, "intervalo_hasta": h, "motivo": None}]), \
          patch("storage.repository.obtener_ultimo_timestamp_cliente",
                return_value=datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)), \
          patch("web.app.obtener_plantas_por_cliente",

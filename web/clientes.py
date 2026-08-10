@@ -99,6 +99,8 @@ from storage.repository import (
     declarar_contrato_acometida,
     obtener_historial_contrato_acometida,
     obtener_contrato,
+    declarar_rol_medidor,
+    obtener_historial_rol_medidor,
 )
 
 logger = logging.getLogger(__name__)
@@ -3370,6 +3372,15 @@ def activos_planta(cliente_id: int, planta_id: int):
         for a in todos_activos
     ]
 
+    # Historial de rol por medidor (para activos con medidor vigente)
+    hist_rol_por_medidor: dict[int, list] = {}
+    for a in activos:
+        mv = a.get("medidor_vigente")
+        if mv:
+            mid = mv.get("medidor_id")
+            if mid and mid not in hist_rol_por_medidor:
+                hist_rol_por_medidor[mid] = obtener_historial_rol_medidor(mid)
+
     return render_template(
         "clientes/activos.html",
         cliente=cliente,
@@ -3385,6 +3396,7 @@ def activos_planta(cliente_id: int, planta_id: int):
         nav_active="activos",
         contratos_electricos_planta=contratos_electricos_planta,
         hist_contrato_por_activo=hist_contrato_por_activo,
+        hist_rol_por_medidor=hist_rol_por_medidor,
     )
 
 
@@ -3787,4 +3799,51 @@ def activo_desvincular_medidor(cliente_id: int, planta_id: int, activo_id: int):
         return jsonify({"ok": True})
     except Exception as exc:
         logger.error("Error desvinculando medidor de activo_id=%d: %s", activo_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/medidor-rol", methods=["POST"])
+def activo_declarar_medidor_rol(cliente_id: int, planta_id: int, activo_id: int):
+    """Declara el rol (carga/cabecera) del medidor vinculado al activo.
+
+    Body JSON: {medidor_id (int), rol (str), desde (ISO 8601), motivo (str, opcional)}.
+    """
+    from flask import jsonify
+    from datetime import datetime, timezone
+
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("planta_id") != planta_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+
+    data = request.get_json(silent=True) or {}
+    medidor_id = data.get("medidor_id")
+    rol = (data.get("rol") or "").strip()
+    desde_str = (data.get("desde") or "").strip()
+    motivo = (data.get("motivo") or "").strip() or None
+
+    if not isinstance(medidor_id, int):
+        return jsonify({"error": "medidor_id entero requerido"}), 400
+    if not rol:
+        return jsonify({"error": "El campo 'rol' es obligatorio"}), 400
+    if not desde_str:
+        return jsonify({"error": "El campo 'desde' es obligatorio"}), 400
+
+    try:
+        desde_dt = datetime.fromisoformat(desde_str.replace("Z", "+00:00"))
+    except ValueError:
+        return jsonify({"error": "Formato de fecha inválido para 'desde'"}), 400
+
+    try:
+        nueva_fila = declarar_rol_medidor(medidor_id, rol, desde_dt, motivo)
+        return jsonify({"ok": True, "fila": nueva_fila})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 422
+    except Exception as exc:
+        logger.error("Error declarando rol medidor_id=%d: %s", medidor_id, exc)
         return jsonify({"error": str(exc)}), 500

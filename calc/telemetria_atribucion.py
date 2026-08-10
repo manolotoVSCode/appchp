@@ -434,3 +434,78 @@ def agregar_costo_por_camino(segmentos_valorados: list[dict]) -> "dict[int, dict
         }
         for nid in todos_nodos
     }
+
+
+def filtrar_segmentos_por_rol(
+    segmentos_medidor: list[dict],
+    intervalos_rol: list[dict],
+) -> "tuple[list[dict], list[dict]]":
+    """Separa segmentos de energía entre carga y cabecera según los intervalos de rol.
+
+    Función pura. Cada segmento se interseca con los intervalos de rol; la energía
+    se distribuye proporcionalmente al tiempo en cada sub-tramo resultante.
+
+    Args:
+        segmentos_medidor: lista de dicts con al menos `desde` (str ISO),
+            `hasta` (str ISO), `energia_kwh` (float/Decimal), y campos arbitrarios.
+        intervalos_rol: salida de resolver_intervalos_rol. Cada dict contiene
+            `rol`, `intervalo_desde`, `intervalo_hasta`.
+
+    Returns:
+        Tupla (segmentos_carga, segmentos_cabecera). Invariante energética:
+        sum(carga.energia_kwh) + sum(cabecera.energia_kwh) == sum(input.energia_kwh).
+    """
+    if not segmentos_medidor:
+        return [], []
+
+    # Si no hay intervalos de rol, todo es carga (default)
+    if not intervalos_rol:
+        return list(segmentos_medidor), []
+
+    carga: list[dict] = []
+    cabecera: list[dict] = []
+
+    for seg in segmentos_medidor:
+        seg_desde = _norm(seg.get("desde", ""))
+        seg_hasta = _norm(seg.get("hasta", ""))
+        energia = float(seg.get("energia_kwh", 0.0))
+
+        seg_t0 = _ts(seg_desde)
+        seg_t1 = _ts(seg_hasta)
+        seg_total_s = seg_t1 - seg_t0
+
+        if seg_total_s <= 0:
+            carga.append(seg)
+            continue
+
+        # Encontrar intervalos de rol que solapan con este segmento
+        for iv in intervalos_rol:
+            iv_desde = _norm(iv["intervalo_desde"])
+            iv_hasta = _norm(iv["intervalo_hasta"])
+
+            # Intersección (usar timestamps para comparar, no strings)
+            inter_t0 = max(seg_t0, _ts(iv_desde))
+            inter_t1 = min(seg_t1, _ts(iv_hasta))
+
+            if inter_t0 >= inter_t1:
+                continue
+
+            inter_desde = datetime.fromtimestamp(inter_t0, tz=timezone.utc).isoformat()
+            inter_hasta = datetime.fromtimestamp(inter_t1, tz=timezone.utc).isoformat()
+            frac = (inter_t1 - inter_t0) / seg_total_s
+            sub_kwh = round(energia * frac, 6)
+
+            sub_seg = {
+                **seg,
+                "desde":       inter_desde,
+                "hasta":       inter_hasta,
+                "energia_kwh": sub_kwh,
+                "rol":         iv["rol"],
+            }
+
+            if iv["rol"] == "carga":
+                carga.append(sub_seg)
+            else:
+                cabecera.append(sub_seg)
+
+    return carga, cabecera

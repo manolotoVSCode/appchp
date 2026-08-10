@@ -75,3 +75,19 @@ La función `calcular_baseline_movil(mediciones_historicas)` devuelve la energí
 **Consecuencia actual:** `calcular_kpis_economicos` recibe `baseline_kwh` como parámetro; si el llamante pasa la energía histórica total (que es lo que hace `calcular_baseline_movil`), el resultado de `ahorro_potencial_mxn` puede no ser representativo del ahorro real.
 
 **Condición de cierre:** el usuario define la metodología de baseline. Una vez definida, actualizar `calcular_baseline_movil` y documentarla aquí. Si la metodología requiere datos adicionales (p. ej., producción del año anterior), revisar también el contrato de datos del endpoint `/telemetria/data`.
+
+---
+
+## 5. Schema documentado en el repositorio no es fuente de verdad verificada
+
+**Archivos:** `storage/schema.sql`, `CLAUDE.md`, `storage/migrations/`.
+
+**Estado:** activo.
+
+El repositorio tiene tres fuentes de verdad parciales para el schema de Supabase y ninguna de ellas es completa ni verificada contra producción. `storage/schema.sql` fue actualizado por última vez en v2.25.0 (2026-05-14) y no incluye ninguna tabla añadida desde entonces: `plantas`, `medidores`, `activos_electricos`, `medidor_activo_vigencia`, `activo_alimentacion_vigencia`, `acometida_contrato_vigencia`, `produccion_diaria`, `login_audit`, ni las columnas `planta_id` añadidas a tablas existentes. `CLAUDE.md` documenta el schema en prosa pero tampoco está verificado: el bug de `medidor_activo_vigencia.motivo` (columna ausente en producción que no estaba en ningún DDL del repositorio) se detectó en ejecución, no desde el repositorio. Las migraciones en `storage/migrations/` son la fuente más fiel pero solo cubren cambios incrementales; las tablas `activos_electricos`, `medidor_activo_vigencia` y `activo_alimentacion_vigencia` no tienen DDL de creación en ningún archivo del repositorio.
+
+**Por qué existe:** las primeras tablas de telemetría y activos se crearon directamente en Supabase Studio sin generar una migración versionada.
+
+**Consecuencia:** los tests que usan mocks de Supabase (`unittest.mock.patch`) no ejecutan queries reales y por tanto no detectan divergencias de columnas. Un SELECT de una columna inexistente solo falla en ejecución contra producción o una base de desarrollo real.
+
+**Condición de cierre:** regenerar `storage/schema.sql` desde producción ejecutando `pg_dump --schema-only` (o la introspección equivalente desde Supabase), compararlo con el estado actual del repositorio, y saldar las diferencias. Toda nueva tabla o columna añadida directamente en Supabase debe acompañarse de un archivo de migración en `storage/migrations/` antes del siguiente commit.
