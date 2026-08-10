@@ -2476,6 +2476,24 @@ def obtener_arbol_activos(cliente_id: int, planta_id: int) -> list[dict]:
     return activos
 
 
+def obtener_todos_activos_cliente(cliente_id: int) -> list[dict]:
+    """Todos los activos eléctricos del cliente, sin filtrar por planta.
+
+    Incluye join plantas(id, nombre) para que los llamadores puedan identificar
+    la planta de origen de cada activo sin consultas adicionales.
+    Usado para validación de jerarquía y detección de ciclos entre plantas.
+    """
+    resp = (
+        _supabase.table("activos_electricos")
+        .select("*, plantas(id, nombre)")
+        .eq("cliente_id", cliente_id)
+        .order("planta_id")
+        .order("id")
+        .execute()
+    )
+    return resp.data or []
+
+
 def obtener_activo(activo_id: int) -> dict | None:
     """Activo eléctrico por id. Retorna None si no existe."""
     resp = (

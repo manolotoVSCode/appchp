@@ -82,6 +82,7 @@ from storage.repository import (
     save_modelado_chp_curva,
     get_modelado_chp_curva,
     obtener_arbol_activos,
+    obtener_todos_activos_cliente,
     obtener_activo,
     crear_activo,
     actualizar_activo,
@@ -3275,26 +3276,50 @@ def _err_activos(resultado):
 @clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos")
 def activos_planta(cliente_id: int, planta_id: int):
     """Vista principal del árbol de activos eléctricos de la planta."""
-    from storage.repository import get_cliente_con_conteos as _gcc
     user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
     if user is None:
         return _err_activos(planta_o_err)
     planta = planta_o_err
 
-    cliente = _gcc(cliente_id)
-    activos = obtener_arbol_activos(cliente_id, planta_id)
+    cliente = get_cliente_con_conteos(cliente_id)
+    activos = obtener_arbol_activos(cliente_id, planta_id)   # planta actual, con medidor_vigente
+    todos_activos = obtener_todos_activos_cliente(cliente_id) # todas las plantas
     mediciones = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
     es_admin = user.get("rol") in ("admin", "master_admin")
 
-    # Árbol anidado para el template
-    by_id: dict[int, dict] = {a["id"]: {**a, "hijos": []} for a in activos}
+    # Índice global (todas las plantas) para resolver padres foráneos y detectar ciclos
+    todos_por_id: dict[int, dict] = {a["id"]: a for a in todos_activos}
+
+    # Árbol anidado: sólo activos de la planta actual
+    by_id: dict[int, dict] = {a["id"]: {**a, "hijos": [], "_planta_padre": None, "_padre_nombre": None} for a in activos}
     raices: list[dict] = []
     for nodo in by_id.values():
         padre_id = nodo.get("activo_padre_id")
         if padre_id and padre_id in by_id:
+            # Padre en la misma planta → lo cuelga como hijo
             by_id[padre_id]["hijos"].append(nodo)
+        elif padre_id and padre_id in todos_por_id:
+            # Padre existe pero está en otra planta → nodo aparece como raíz con indicador
+            padre = todos_por_id[padre_id]
+            nodo["_planta_padre"] = padre.get("plantas") or {}
+            nodo["_padre_nombre"] = padre.get("nombre", "")
+            raices.append(nodo)
         else:
             raices.append(nodo)
+
+    # Lista plana para los selectores JS (todos los activos del cliente, con nombre de planta)
+    activos_js = [
+        {
+            "id": a["id"],
+            "nombre": a["nombre"],
+            "tipo": a["tipo"],
+            "activo": a["activo"],
+            "planta_id": a["planta_id"],
+            "planta_nombre": (a.get("plantas") or {}).get("nombre", ""),
+            "misma_planta": a["planta_id"] == planta_id,
+        }
+        for a in todos_activos
+    ]
 
     return render_template(
         "clientes/activos.html",
@@ -3302,7 +3327,7 @@ def activos_planta(cliente_id: int, planta_id: int):
         planta=planta,
         planta_id=planta_id,
         raices=raices,
-        activos_planos=activos,
+        activos_planos=activos_js,
         mediciones=mediciones,
         tipos_activo=_TIPOS_ACTIVO,
         es_admin=es_admin,
@@ -3379,6 +3404,9 @@ def activo_editar(cliente_id: int, planta_id: int, activo_id: int):
     if not nombre:
         return jsonify({"error": "El nombre es obligatorio"}), 400
 
+    _UNSET = object()
+    nuevo_padre_raw = data.get("activo_padre_id", _UNSET)
+
     payload = {
         "nombre":              nombre,
         "capacidad_kva":       data.get("capacidad_kva") or None,
@@ -3386,6 +3414,25 @@ def activo_editar(cliente_id: int, planta_id: int, activo_id: int):
         "tipo_carga":          (data.get("tipo_carga") or None),
         "notas":               (data.get("notas") or None),
     }
+
+    # Padre opcional: sólo valida y añade si el campo viene en el body
+    if nuevo_padre_raw is not _UNSET:
+        nuevo_padre_id = nuevo_padre_raw or None
+        padre = obtener_activo(int(nuevo_padre_id)) if nuevo_padre_id else None
+        if nuevo_padre_id and padre is None:
+            return jsonify({"error": "El activo padre no existe"}), 400
+        if padre and padre.get("cliente_id") != cliente_id:
+            return jsonify({"error": "El padre debe pertenecer al mismo cliente"}), 400
+        if nuevo_padre_id and int(nuevo_padre_id) == activo_id:
+            return jsonify({"error": "Un activo no puede ser su propio padre"}), 422
+        err = _validar_jerarquia_activo(activo["tipo"], padre)
+        if err:
+            return jsonify({"error": err}), 422
+        todos = obtener_todos_activos_cliente(cliente_id)
+        if nuevo_padre_id and _detectar_ciclo(activo_id, int(nuevo_padre_id), todos):
+            return jsonify({"error": "La reasignación crearía un ciclo en la jerarquía"}), 422
+        payload["activo_padre_id"] = int(nuevo_padre_id) if nuevo_padre_id else None
+
     try:
         actualizado = actualizar_activo(activo_id, payload)
         return jsonify({"ok": True, "activo": actualizado})
@@ -3437,8 +3484,8 @@ def activo_reasignar_padre(cliente_id: int, planta_id: int, activo_id: int):
     padre = obtener_activo(int(nuevo_padre_id)) if nuevo_padre_id else None
     if nuevo_padre_id and padre is None:
         return jsonify({"error": "El activo padre no existe"}), 400
-    if padre and (padre.get("cliente_id") != cliente_id or padre.get("planta_id") != planta_id):
-        return jsonify({"error": "El padre debe pertenecer a la misma planta"}), 400
+    if padre and padre.get("cliente_id") != cliente_id:
+        return jsonify({"error": "El padre debe pertenecer al mismo cliente"}), 400
     if nuevo_padre_id and int(nuevo_padre_id) == activo_id:
         return jsonify({"error": "Un activo no puede ser su propio padre"}), 422
 
@@ -3446,7 +3493,8 @@ def activo_reasignar_padre(cliente_id: int, planta_id: int, activo_id: int):
     if err:
         return jsonify({"error": err}), 422
 
-    todos = obtener_arbol_activos(cliente_id, planta_id)
+    # Ciclos se detectan sobre todos los activos del cliente (la cadena puede cruzar plantas)
+    todos = obtener_todos_activos_cliente(cliente_id)
     if nuevo_padre_id and _detectar_ciclo(activo_id, int(nuevo_padre_id), todos):
         return jsonify({"error": "La reasignación crearía un ciclo en la jerarquía"}), 422
 
