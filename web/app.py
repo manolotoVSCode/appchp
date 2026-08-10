@@ -201,19 +201,17 @@ def _pid_de_g() -> int | None:
 
 
 
-def _tipo_suministro(cliente_id: int) -> str | None:
-    """Wrapper de get_tipo_suministro_electrico_seleccionado que auto-inyecta planta_activa_id."""
-    return get_tipo_suministro_electrico_seleccionado(cliente_id, planta_id=_pid_de_g())
+def _tipo_suministro(cliente_id: int, planta_id: int | None = None) -> str | None:
+    """Detecta el tipo de suministro eléctrico activo para el cliente y planta dados."""
+    return get_tipo_suministro_electrico_seleccionado(cliente_id, planta_id=planta_id)
 
 
 def _cargar_facturas_seleccionadas(cliente_id: int, planta_id: int | None = None):
     """Carga facturas CFE y gas seleccionadas del cliente y las formatea para templates.
 
     Retorna (cfe_invoices, gas_invoices, facturas_cfe, facturas_gas).
-    Si planta_id no se provee, lo lee de g.planta_activa_id (before_request).
+    planta_id debe provenir del parámetro de ruta del caller.
     """
-    if planta_id is None:
-        planta_id = _pid_de_g()
     cfe_invoices, gas_invoices = get_facturas_para_dashboard(cliente_id, planta_id=planta_id)
 
     facturas_cfe = [
@@ -245,10 +243,8 @@ def _cargar_facturas_seleccionadas(cliente_id: int, planta_id: int | None = None
 
 def _cargar_facturas_ppa(cliente_id: int, planta_id: int | None = None):
     """Carga facturas PPA y gas seleccionadas. Retorna (ppa_invoices, gas_invoices, facturas_ppa, facturas_gas).
-    Si planta_id no se provee, lo lee de g.planta_activa_id (before_request).
+    planta_id debe provenir del parámetro de ruta del caller.
     """
-    if planta_id is None:
-        planta_id = _pid_de_g()
     ppa_invoices, gas_invoices = get_facturas_ppa_y_gas_para_dashboard(cliente_id, planta_id=planta_id)
 
     facturas_ppa = [
@@ -315,16 +311,15 @@ def _calcular_rango_cogen(cfe_invoices, gas_invoices, ppa_invoices=None) -> str:
     )
 
 
-def _cargar_ultimas_facturas_cogen(cliente_id: int):
+def _cargar_ultimas_facturas_cogen(cliente_id: int, planta_id: int | None = None):
     """Carga las últimas 12 facturas CFE y gas para el dashboard de Cogeneración.
 
     Ignora la selección manual del sidebar; siempre usa las facturas más recientes
-    de la planta activa (si está definida) o del cliente completo.
+    de la planta indicada. planta_id debe provenir del parámetro de ruta.
     Retorna (cfe_invoices, gas_invoices, facturas_cfe, facturas_gas).
     """
-    _pid = _pid_de_g()
-    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12, planta_id=_pid), key=lambda x: x.periodo_inicio)
-    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12, planta_id=_pid), key=lambda x: x.periodo_inicio)
+    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12, planta_id=planta_id), key=lambda x: x.periodo_inicio)
+    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12, planta_id=planta_id), key=lambda x: x.periodo_inicio)
 
     facturas_cfe = [
         {
@@ -353,16 +348,15 @@ def _cargar_ultimas_facturas_cogen(cliente_id: int):
     return cfe_invoices, gas_invoices, facturas_cfe, facturas_gas
 
 
-def _cargar_ultimas_ppa_cogen(cliente_id: int):
+def _cargar_ultimas_ppa_cogen(cliente_id: int, planta_id: int | None = None):
     """Carga las últimas 12 facturas PPA y gas para el dashboard de Cogeneración.
 
     Ignora la selección manual del sidebar; siempre usa las facturas más recientes
-    de la planta activa (si está definida) o del cliente completo.
+    de la planta indicada. planta_id debe provenir del parámetro de ruta.
     Retorna (ppa_invoices, gas_invoices, facturas_ppa, facturas_gas).
     """
-    _pid = _pid_de_g()
-    ppa_invoices = sorted(get_ultimas_ppa_invoices(cliente_id, n=12, planta_id=_pid), key=lambda x: (x.anio, x.mes))
-    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12, planta_id=_pid), key=lambda x: x.periodo_inicio)
+    ppa_invoices = sorted(get_ultimas_ppa_invoices(cliente_id, n=12, planta_id=planta_id), key=lambda x: (x.anio, x.mes))
+    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12, planta_id=planta_id), key=lambda x: x.periodo_inicio)
 
     facturas_ppa = [
         {
@@ -775,11 +769,11 @@ def create_app() -> Flask:
         if err:
             return err
 
-        tipo_suministro = _tipo_suministro(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id, planta_id)
 
         try:
             if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
-                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id, planta_id)
                 historico = None
                 tablas = {}
                 queso = None
@@ -793,7 +787,7 @@ def create_app() -> Flask:
                 num_gas_sel = len(facturas_gas)
                 facturas_cfe_tmpl = facturas_ppa
             else:
-                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id, planta_id)
                 historico = calcular_historico_cfe(cfe_invoices)
                 tablas = calcular_tablas_cfe(cfe_invoices)
                 queso = _calcular_queso(tablas)
@@ -880,7 +874,7 @@ def create_app() -> Flask:
         if err:
             return err
 
-        tipo_suministro = _tipo_suministro(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id, planta_id)
 
         try:
             from decimal import Decimal as _D
@@ -893,7 +887,7 @@ def create_app() -> Flask:
             fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
 
             if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
-                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_ultimas_ppa_cogen(cliente_id)
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_ultimas_ppa_cogen(cliente_id, planta_id)
                 r = calcular_cogen_ppa(
                     ppa_invoices, gas_invoices, CoGenParams(),
                     tipo_cambio=tipo_cambio,
@@ -904,7 +898,7 @@ def create_app() -> Flask:
                 facturas_cfe = []
                 precio_gas_fuente = "ppa"
             else:
-                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_ultimas_facturas_cogen(cliente_id)
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_ultimas_facturas_cogen(cliente_id, planta_id)
                 ppa_invoices = []
                 facturas_ppa = []
                 _precio_manual_str = cliente.get("precio_gas_manual_mxn_gj_pcs")
@@ -1092,11 +1086,11 @@ def create_app() -> Flask:
         if _pid_de_g() != planta_id:
             return jsonify({"error": "no_encontrado"}), 404
 
-        tipo_suministro = _tipo_suministro(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id, planta_id)
 
         try:
             if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
-                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id, planta_id)
                 historico = None
                 tablas = {}
                 queso = None
@@ -1120,7 +1114,7 @@ def create_app() -> Flask:
                 suministrador_ppa = facturas_ppa[0]["suministrador"] if facturas_ppa else ""
                 facturas_elec = facturas_ppa
             else:
-                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id, planta_id)
                 historico = calcular_historico_cfe(cfe_invoices)
                 tablas = calcular_tablas_cfe(cfe_invoices)
                 historico_gas = calcular_historico_gas(gas_invoices)
@@ -1199,11 +1193,11 @@ def create_app() -> Flask:
         if err:
             return err
 
-        tipo_suministro = _tipo_suministro(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id, planta_id)
         if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
             return jsonify({"error": "No aplica a PPA"}), 400
 
-        cfe_invoices, _, _, _ = _cargar_facturas_seleccionadas(cliente_id)
+        cfe_invoices, _, _, _ = _cargar_facturas_seleccionadas(cliente_id, planta_id)
 
         energia = Decimal("0")
         capacidad = Decimal("0")
@@ -1297,7 +1291,7 @@ def create_app() -> Flask:
         if _pid_de_g() != planta_id:
             return jsonify({"error": "no_encontrado"}), 404
 
-        tipo_suministro = _tipo_suministro(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id, planta_id)
 
         try:
             _cfg = {row["clave"]: row["valor"] for row in list_configuracion()}
@@ -1309,7 +1303,7 @@ def create_app() -> Flask:
             fe_gas  = _D(fe_gas_str)  if fe_gas_str  else None
 
             if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
-                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_ultimas_ppa_cogen(cliente_id)
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_ultimas_ppa_cogen(cliente_id, planta_id)
                 r = calcular_cogen_ppa(
                     ppa_invoices, gas_invoices, CoGenParams(),
                     tipo_cambio=tipo_cambio,
@@ -1320,7 +1314,7 @@ def create_app() -> Flask:
                 facturas_cfe = []
                 precio_gas_fuente = "ppa"
             else:
-                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_ultimas_facturas_cogen(cliente_id)
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_ultimas_facturas_cogen(cliente_id, planta_id)
                 ppa_invoices = []
                 facturas_ppa = []
                 _precio_manual_str = cliente.get("precio_gas_manual_mxn_gj_pcs")
@@ -1609,18 +1603,18 @@ def create_app() -> Flask:
         if _pid_de_g() != planta_id:
             abort(404)
 
-        tipo_suministro = _tipo_suministro(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id, planta_id)
 
         try:
             if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
-                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id)
+                ppa_invoices, gas_invoices, facturas_ppa, facturas_gas = _cargar_facturas_ppa(cliente_id, planta_id)
                 cfe_invoices = []
                 facturas_cfe = []
                 tablas = {}
                 historico = None
                 historico_gas = calcular_historico_gas(gas_invoices)
             else:
-                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id)
+                cfe_invoices, gas_invoices, facturas_cfe, facturas_gas = _cargar_facturas_seleccionadas(cliente_id, planta_id)
                 tablas = calcular_tablas_cfe(cfe_invoices)
                 historico = calcular_historico_cfe(cfe_invoices)
                 historico_gas = calcular_historico_gas(gas_invoices)
@@ -1866,7 +1860,7 @@ def create_app() -> Flask:
             eficiencia_caldera=_qparam("eficiencia_caldera", 0.85, 0.50, 0.99),
         )
 
-        tipo_suministro = _tipo_suministro(cliente_id)
+        tipo_suministro = _tipo_suministro(cliente_id, planta_id)
 
         try:
             _cfg = {row["clave"]: row["valor"] for row in list_configuracion()}
@@ -1874,10 +1868,10 @@ def create_app() -> Flask:
             tipo_cambio = _D(tc_str) if tc_str else _D("17.50")
 
             if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
-                ppa_invoices, gas_invoices, _, _ = _cargar_ultimas_ppa_cogen(cliente_id)
+                ppa_invoices, gas_invoices, _, _ = _cargar_ultimas_ppa_cogen(cliente_id, planta_id)
                 r = calcular_cogen_ppa(ppa_invoices, gas_invoices, params, tipo_cambio=tipo_cambio)
             else:
-                cfe_invoices, gas_invoices, _, _ = _cargar_ultimas_facturas_cogen(cliente_id)
+                cfe_invoices, gas_invoices, _, _ = _cargar_ultimas_facturas_cogen(cliente_id, planta_id)
                 _pm_str = cliente.get("precio_gas_manual_mxn_gj_pcs")
                 _pm = _D(_pm_str) if _pm_str else None
                 if len(cfe_invoices) >= 12 and len(gas_invoices) < 12 and _pm:
@@ -2077,7 +2071,7 @@ def create_app() -> Flask:
             return "Gráfica no encontrada.", 404
 
         nombre_tabla = _GRAFICAS[grafica_id]
-        cfe_invoices, gas_invoices, _, _ = _cargar_facturas_seleccionadas(cliente_id)
+        cfe_invoices, gas_invoices, _, _ = _cargar_facturas_seleccionadas(cliente_id, planta_id)
 
         wb = Workbook()
         ws = wb.active
@@ -2891,7 +2885,7 @@ def create_app() -> Flask:
         if _pid_de_g() != planta_id:
             abort(404)
 
-        mediciones = get_mediciones_por_cliente(cliente_id, planta_id=_pid_de_g())
+        mediciones = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
         if not mediciones:
             flash("Este cliente no tiene mediciones cincominutal cargadas.", "warning")
             return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
@@ -2940,7 +2934,7 @@ def create_app() -> Flask:
             abort(404)
 
         from storage.repository import obtener_arbol_medidores as _oam
-        arbol_medidores = _oam(cliente_id, planta_id=_pid_de_g())
+        arbol_medidores = _oam(cliente_id, planta_id=planta_id)
 
         return render_template(
             "telemetria/dashboard.html",
@@ -2978,8 +2972,8 @@ def create_app() -> Flask:
         nodo_id_raw = request.args.get("nodo_id")
         rango = request.args.get("rango", "24h")
 
-        # Cargar árbol filtrado por planta activa
-        todos = _oam(cliente_id, planta_id=_pid_de_g())
+        # Cargar árbol filtrado por planta
+        todos = _oam(cliente_id, planta_id=planta_id)
         if not todos:
             return jsonify({"error": "sin_medidores"}), 404
 
