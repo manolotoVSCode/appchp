@@ -497,18 +497,37 @@ async function toggleMes(contratoId, clienteId, anio, mes, btn, maestroChk, wrap
 }
 
 async function toggleAnio(contratoId, clienteId, anio, chk, wrap) {
-  const seleccionado = chk.checked;
+  // Si el checkbox venía de estado indeterminate (selección parcial), la intención
+  // del usuario es deseleccionar el año, no activarlo. mousedown captura ese estado
+  // antes de que el browser lo altere; lo leemos del dataset.
+  const wasIndeterminate = chk.dataset.wasIndeterminate === "1";
+  const seleccionado = wasIndeterminate ? false : chk.checked;
+
+  // Ajustar el checkbox al intento real si el browser lo puso en checked=true
+  // a partir de indeterminate (el browser cicla indeterminate → checked, pero
+  // queremos indeterminate → unchecked para deselección masiva).
+  if (wasIndeterminate) {
+    chk.checked = false;
+    chk.indeterminate = false;
+  }
+
   if (seleccionado) {
     const disponibles = Array.from(wrap.querySelectorAll(".mes-btn:not(.no-disponible)"));
     const sinSeleccionar = disponibles.filter(b => !b.classList.contains("seleccionado")).length;
     if (contarMesesSeleccionados() + sinSeleccionar > 24) {
       mostrarToastLimite();
-      chk.checked = false;
+      // restaurar estado previo del checkbox
+      if (wasIndeterminate) { chk.indeterminate = true; chk.checked = false; }
+      else { chk.checked = false; }
       return;
     }
   }
+
   const botonesDisponibles = Array.from(wrap.querySelectorAll(".mes-btn:not(.no-disponible)"));
+  // Snapshot de clases previas para restaurar en caso de error
+  const prevClases = botonesDisponibles.map(b => b.className);
   botonesDisponibles.forEach(b => { b.disabled = true; });
+
   try {
     const resp = await fetch(
       `/clientes/${clienteId}/contratos/${contratoId}/seleccion/anio`,
@@ -518,16 +537,35 @@ async function toggleAnio(contratoId, clienteId, anio, chk, wrap) {
         body: JSON.stringify({ anio, seleccionado }),
       }
     );
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    botonesDisponibles.forEach(b => {
-      b.className = seleccionado ? "mes-btn seleccionado" : "mes-btn disponible";
-    });
-    chk.indeterminate = false;
-    chk.checked = seleccionado;
-    document.dispatchEvent(new CustomEvent("dashboardDataChanged", { detail: { source: "mes_toggle" } }));
+    if (!resp.ok) {
+      let msg;
+      try { const data = await resp.json(); msg = data.error; } catch (_) {}
+      if (resp.status === 409) {
+        alert(msg || "Hay meses del tipo eléctrico opuesto seleccionados en esta planta. Deselecciónalos primero.");
+      } else if (resp.status === 400) {
+        alert(msg || "Parámetros incorrectos.");
+      } else {
+        alert(msg || "Error al actualizar la selección (HTTP " + resp.status + ").");
+      }
+      // Restaurar checkbox y botones al estado previo
+      if (wasIndeterminate) { chk.indeterminate = true; chk.checked = false; }
+      else { chk.indeterminate = false; chk.checked = !seleccionado; }
+      botonesDisponibles.forEach((b, i) => { b.className = prevClases[i]; });
+    } else {
+      botonesDisponibles.forEach(b => {
+        b.className = seleccionado ? "mes-btn seleccionado" : "mes-btn disponible";
+      });
+      chk.indeterminate = false;
+      chk.checked = seleccionado;
+      document.dispatchEvent(new CustomEvent("dashboardDataChanged", { detail: { source: "mes_toggle" } }));
+    }
   } catch(e) {
     console.error("toggleAnio:", e);
-    chk.checked = !seleccionado; // revertir
+    alert("Error de red al actualizar la selección.");
+    // Restaurar checkbox y botones al estado previo
+    if (wasIndeterminate) { chk.indeterminate = true; chk.checked = false; }
+    else { chk.indeterminate = false; chk.checked = !seleccionado; }
+    botonesDisponibles.forEach((b, i) => { b.className = prevClases[i]; });
   }
   botonesDisponibles.forEach(b => { b.disabled = false; });
 }
@@ -603,6 +641,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     const mes  = parseInt(btn.dataset.mes, 10);
     const maestroChk = wrap.querySelector(".maestro-anio");
     toggleMes(contratoId, clienteId, anio, mes, btn, maestroChk, wrap);
+  });
+
+  // Captura el estado indeterminate del checkbox ANTES de que el browser lo altere,
+  // para que toggleAnio pueda interpretar correctamente la intención del usuario.
+  sidebar.addEventListener("mousedown", function (e) {
+    if (!e.target.classList.contains("maestro-anio")) return;
+    e.target.dataset.wasIndeterminate = e.target.indeterminate ? "1" : "0";
   });
 
   // Delegación de cambios en checkbox maestro de año
