@@ -2587,6 +2587,37 @@ def crear_activo(data: dict) -> dict:
     return resp.data[0]
 
 
+def obtener_activos_con_medidor_historico(activo_ids: list[int]) -> set[int]:
+    """IDs de activos que tienen al menos una fila en medidor_activo_vigencia,
+    sea activa o cerrada. Usado para determinar elegibilidad de borrado permanente.
+    """
+    if not activo_ids:
+        return set()
+    resp = (
+        _supabase.table("medidor_activo_vigencia")
+        .select("activo_id")
+        .in_("activo_id", activo_ids)
+        .execute()
+    )
+    return {v["activo_id"] for v in (resp.data or [])}
+
+
+def eliminar_activo_permanente(activo_id: int) -> None:
+    """Elimina el activo y su única fila de activo_alimentacion_vigencia.
+
+    El borrado se hace en orden: primero las vigencias de alimentacion (FK sin CASCADE),
+    luego el activo. El llamador es responsable de verificar las condiciones de
+    elegibilidad antes de invocar esta función.
+
+    No borra filas de medidor_activo_vigencia porque la condición de elegibilidad
+    garantiza que no existen; si las hubiera, la FK impediría el borrado del activo.
+    """
+    # 1. Borrar fila(s) de alimentacion (FK activo_alimentacion_vigencia.activo_id no tiene CASCADE)
+    _supabase.table("activo_alimentacion_vigencia").delete().eq("activo_id", activo_id).execute()
+    # 2. Borrar el activo
+    _supabase.table("activos_electricos").delete().eq("id", activo_id).execute()
+
+
 def crear_activo_con_vigencia(data: dict, fuente_activo_id: int | None) -> dict:
     """Crea un activo eléctrico y, si tiene padre, registra la fila inicial de
     activo_alimentacion_vigencia de forma atómica compensada.

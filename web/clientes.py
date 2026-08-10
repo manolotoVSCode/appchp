@@ -94,6 +94,8 @@ from storage.repository import (
     obtener_historial_alimentacion,
     obtener_historiales_alimentacion_bulk,
     declarar_cambio_alimentacion,
+    obtener_activos_con_medidor_historico,
+    eliminar_activo_permanente,
 )
 
 logger = logging.getLogger(__name__)
@@ -3316,6 +3318,25 @@ def activos_planta(cliente_id: int, planta_id: int):
     activo_ids_con_padre = [a["id"] for a in activos if a.get("activo_padre_id")]
     hist_por_activo = obtener_historiales_alimentacion_bulk(activo_ids_con_padre)
 
+    # Elegibilidad de borrado permanente (calculada en bloque para evitar N+1).
+    # Condiciones: sin hijos, sin historial de medidor, y ≤1 fila de alimentacion.
+    activo_ids_planta = [a["id"] for a in activos]
+    _ids_planta_set = set(activo_ids_planta)
+    # Activos de la planta que son padre de algún otro activo del cliente
+    con_hijos: set[int] = {
+        a["activo_padre_id"] for a in todos_activos
+        if a.get("activo_padre_id") in _ids_planta_set
+    }
+    # Activos con alguna fila en medidor_activo_vigencia (historial incluido)
+    con_medidor_hist: set[int] = obtener_activos_con_medidor_historico(activo_ids_planta)
+
+    elegibles_borrar: set[int] = {
+        a["id"] for a in activos
+        if a["id"] not in con_hijos
+        and a["id"] not in con_medidor_hist
+        and len(hist_por_activo.get(a["id"], [])) <= 1
+    }
+
     # Lista plana para los selectores JS (todos los activos del cliente, con nombre de planta)
     activos_js = [
         {
@@ -3338,6 +3359,7 @@ def activos_planta(cliente_id: int, planta_id: int):
         raices=raices,
         activos_planos=activos_js,
         hist_por_activo=hist_por_activo,
+        elegibles_borrar=elegibles_borrar,
         mediciones=mediciones,
         tipos_activo=_TIPOS_ACTIVO,
         es_admin=es_admin,
@@ -3506,6 +3528,67 @@ def activo_reasignar_padre(cliente_id: int, planta_id: int, activo_id: int):
         return jsonify({"error": str(exc)}), 422
     except Exception as exc:
         logger.error("Error reasignando padre activo id=%d: %s", activo_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/eliminar-permanente", methods=["POST"])
+def activo_eliminar_permanente(cliente_id: int, planta_id: int, activo_id: int):
+    """Elimina un activo eléctrico y su única fila de alimentacion_vigencia.
+
+    Solo se permite cuando el activo cumple las tres condiciones:
+    1. Sin activos hijos (ningún activo tiene activo_padre_id = este activo).
+    2. Sin historial en medidor_activo_vigencia (ni filas activas ni cerradas).
+    3. Una sola fila en activo_alimentacion_vigencia (la del alta) o ninguna.
+
+    En cualquier otro caso responde 409 con instrucción de usar desactivar.
+    """
+    from flask import jsonify
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("cliente_id") != cliente_id or activo.get("planta_id") != planta_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+
+    # ── Verificación de condiciones ──────────────────────────────────────────
+    todos = obtener_todos_activos_cliente(cliente_id)
+    hijos = [a for a in todos if a.get("activo_padre_id") == activo_id]
+    if hijos:
+        nombres = ", ".join(a["nombre"] for a in hijos[:3])
+        return jsonify({
+            "error": (
+                f"El activo tiene {len(hijos)} activo(s) hijo(s) ({nombres}…). "
+                "Reasigna o elimina los hijos primero, o desactiva este activo."
+            )
+        }), 409
+
+    con_medidor = obtener_activos_con_medidor_historico([activo_id])
+    if activo_id in con_medidor:
+        return jsonify({
+            "error": (
+                "El activo tiene historial de medidor vinculado. "
+                "Ese registro es parte del histórico de mediciones; desactiva el activo en lugar de eliminarlo."
+            )
+        }), 409
+
+    hist = obtener_historial_alimentacion(activo_id)
+    if len(hist) > 1:
+        return jsonify({
+            "error": (
+                f"El activo tiene {len(hist)} registros de cambio de alimentación. "
+                "Ese histórico no puede descartarse; desactiva el activo en lugar de eliminarlo."
+            )
+        }), 409
+
+    # ── Borrado ──────────────────────────────────────────────────────────────
+    try:
+        eliminar_activo_permanente(activo_id)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        logger.error("Error eliminando activo id=%d: %s", activo_id, exc)
         return jsonify({"error": str(exc)}), 500
 
 

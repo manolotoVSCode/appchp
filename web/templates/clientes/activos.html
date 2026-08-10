@@ -168,8 +168,9 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
   <div class="alert alert-secondary small">Esta planta no tiene activos eléctricos registrados.</div>
   {% else %}
 
-  {% macro render_nodo(nodo, hist) %}
+  {% macro render_nodo(nodo, hist, elegibles) %}
   {% set nodo_hist = hist.get(nodo.id, []) %}
+  {% set puede_borrar = nodo.id in elegibles %}
   <li{% if nodo.hijos %} class="colapsado"{% endif %} id="li-{{ nodo.id }}">
     <div class="nodo-header{% if not nodo.activo %} inactivo{% endif %}" id="nodo-{{ nodo.id }}">
 
@@ -239,11 +240,19 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
                 title="Editar">
           <i class="bi bi-pencil"></i>
         </button>
+        {% if puede_borrar %}
+        <button class="btn btn-danger btn-nodo"
+                onclick="confirmarEliminarPermanente({{ nodo.id }}, '{{ nodo.nombre | e }}')"
+                title="Eliminar permanentemente">
+          <i class="bi bi-trash3"></i>
+        </button>
+        {% else %}
         <button class="btn btn-outline-danger btn-nodo"
                 onclick="confirmarDesactivar({{ nodo.id }}, '{{ nodo.nombre | e }}')"
                 title="Desactivar">
           <i class="bi bi-slash-circle"></i>
         </button>
+        {% endif %}
       </div>
       {% endif %}
     </div>
@@ -279,7 +288,7 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
     {% if nodo.hijos %}
     <ul>
       {% for hijo in nodo.hijos | sort(attribute='nombre') %}
-      {{ render_nodo(hijo, hist) }}
+      {{ render_nodo(hijo, hist, elegibles) }}
       {% endfor %}
     </ul>
     {% endif %}
@@ -288,7 +297,7 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
 
   <ul class="activos-tree mb-4">
     {% for raiz in raices | sort(attribute='nombre') %}
-    {{ render_nodo(raiz, hist_por_activo) }}
+    {{ render_nodo(raiz, hist_por_activo, elegibles_borrar) }}
     {% endfor %}
   </ul>
   {% endif %}
@@ -706,6 +715,19 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
     post(`${baseUrl(id)}/desactivar`, {})
       .then(() => { mostrarToast("Activo desactivado"); setTimeout(() => location.reload(), 1200); })
       .catch(e => alert(`Error: ${e.message}`));
+  };
+
+  // ── Eliminar permanente ───────────────────────────────────────────────────
+
+  window.confirmarEliminarPermanente = function (id, nombre) {
+    if (!confirm(
+      `¿Eliminar permanentemente "${nombre}"?\n\n` +
+      `Esta operación borra el activo y su registro de alta.\n` +
+      `No se puede deshacer.`
+    )) return;
+    post(`${baseUrl(id)}/eliminar-permanente`, {})
+      .then(() => { mostrarToast("Activo eliminado"); setTimeout(() => location.reload(), 1200); })
+      .catch(e => alert(`No se puede eliminar:\n${e.message}`));
   };
 
   // ── Vincular / desvincular medidor ────────────────────────────────────────
