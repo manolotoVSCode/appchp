@@ -614,8 +614,12 @@ def create_app() -> Flask:
             g.planta_activa_id = planta_id_url if planta else None
             g.planta_activa = planta
         else:
-            g.planta_activa_id = None
-            g.planta_activa = None
+            # URL sin /planta/<id>: usar la primera planta como ámbito efectivo.
+            # Garantiza que ninguna consulta corre sin filtro cuando hay plantas
+            # configuradas, y que los enlaces del sidebar incluyen siempre una
+            # planta concreta.
+            g.planta_activa_id = plantas[0]["id"]
+            g.planta_activa = plantas[0]
 
     @app.context_processor
     def _inject_globals():
@@ -661,9 +665,16 @@ def create_app() -> Flask:
         if not id_:
             return {**base, "cliente_activo": None}
 
-        # Usar valor cacheado si es fresco (TTL 60s) y corresponde al mismo cliente
+        # Planta efectiva: g.planta_activa_id ya fue resuelta por _resolver_planta_activa
+        # (nunca None cuando el cliente tiene plantas configuradas).
+        planta_id_cp = getattr(g, "planta_activa_id", None)
+
+        # Usar valor cacheado si es fresco (TTL 60s), corresponde al mismo cliente
+        # Y a la misma planta efectiva. La planta forma parte de la clave porque
+        # los contratos devueltos varían según la planta filtrada.
         cached = session.get("_cp_cache")
         if (cached and cached.get("id") == id_
+                and cached.get("planta_id") == planta_id_cp
                 and time() - cached.get("ts", 0) < 60):
             return {**base, "cliente_activo": cached["data"]}
 
@@ -675,8 +686,6 @@ def create_app() -> Flask:
             session.pop("cliente_activo_logo_url", None)
             session.pop("_cp_cache", None)
             return {**base, "cliente_activo": None}
-        # Filtrar contratos por planta activa (g.planta_activa_id disponible tras before_request)
-        planta_id_cp = getattr(g, "planta_activa_id", None)
         contratos = [asdict(c) for c in get_contratos_por_cliente(id_, planta_id=planta_id_cp)]
         data = {
             "id": id_,
@@ -684,11 +693,7 @@ def create_app() -> Flask:
             "contratos": contratos,
             "logo_url": cliente.get("logo_url"),
         }
-        # No cachear en sesión cuando filtramos por planta (el cache no incluye planta_id)
-        if planta_id_cp is None:
-            session["_cp_cache"] = {"id": id_, "ts": time(), "data": data}
-        else:
-            session.pop("_cp_cache", None)
+        session["_cp_cache"] = {"id": id_, "planta_id": planta_id_cp, "ts": time(), "data": data}
         return {**base, "cliente_activo": data}
 
     @app.context_processor
