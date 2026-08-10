@@ -474,12 +474,24 @@ async function toggleMes(contratoId, clienteId, anio, mes, btn, maestroChk, wrap
         body: JSON.stringify({ anio, mes, seleccionado }),
       }
     );
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    btn.className = seleccionado ? "mes-btn seleccionado" : "mes-btn disponible";
-    if (maestroChk) actualizarMaestro(maestroChk, wrap);
-    document.dispatchEvent(new CustomEvent("dashboardDataChanged", { detail: { source: "mes_toggle" } }));
+    if (!resp.ok) {
+      let msg;
+      try { const data = await resp.json(); msg = data.error; } catch (_) {}
+      if (resp.status === 409) {
+        alert(msg || "Ya hay meses del tipo eléctrico opuesto seleccionados en este cliente. Deselecciónalos primero.");
+      } else if (resp.status === 400) {
+        alert(msg || "No existe factura cargada para ese mes.");
+      } else {
+        alert(msg || "Error al actualizar la selección (HTTP " + resp.status + ").");
+      }
+    } else {
+      btn.className = seleccionado ? "mes-btn seleccionado" : "mes-btn disponible";
+      if (maestroChk) actualizarMaestro(maestroChk, wrap);
+      document.dispatchEvent(new CustomEvent("dashboardDataChanged", { detail: { source: "mes_toggle" } }));
+    }
   } catch(e) {
     console.error("toggleMes:", e);
+    alert("Error de red al actualizar la selección.");
   }
   btn.disabled = false;
 }
