@@ -128,7 +128,19 @@ _PATCHES_COSTO = dict(
 
 
 def _patch_costo():
-    """Retorna context managers de patch para las funciones de costos (sin facturas → N/D)."""
+    """Retorna context managers de patch para el endpoint /data.
+
+    Índices fijos (usado por los tests como patches[N]):
+      [0] obtener_factura_cfe_cliente_mes
+      [1] obtener_ultimas_facturas_cfe
+      [2] obtener_factura_ppa_cliente_mes
+      [3] obtener_ultimas_facturas_ppa
+      [4] obtener_produccion_diaria
+      [5] obtener_ultimo_timestamp_cliente  ← ancla temporal sintética
+      [6] resolver_intervalos_medidor       ← devuelve [] (sin historial de medidor)
+      [7] resolver_intervalos_fuente        ← devuelve [] (todos activos son raíz)
+      [8] obtener_plantas_por_cliente       ← evita HTTP en before_request
+    """
     from datetime import datetime, timezone
     _ts_fijo = datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
     return [
@@ -139,6 +151,12 @@ def _patch_costo():
         patch("storage.repository.obtener_produccion_diaria", return_value=[]),
         # Ancla temporal sintética: evita llamada real a Supabase en tests
         patch("storage.repository.obtener_ultimo_timestamp_cliente", return_value=_ts_fijo),
+        # Pipeline de atribución: sin historial de vigencias → energía cero sin HTTP
+        patch("storage.repository.resolver_intervalos_medidor", return_value=[]),
+        patch("storage.repository.resolver_intervalos_fuente", return_value=[]),
+        # before_request _resolver_planta_activa: sin HTTP a Supabase
+        patch("web.app.obtener_plantas_por_cliente",
+              return_value=[{"id": 1, "nombre": "Planta 1", "activo": True}]),
     ]
 
 
@@ -151,8 +169,9 @@ def test_telemetria_data_json_claves_esperadas(client, app):
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
-         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
-        resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
+         patches[6], patches[7], patches[8]:
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
     assert resp.status_code == 200
     data = resp.get_json()
     for clave in ("nodo_seleccionado", "serie_temporal", "kpis", "arbol_sunburst"):
@@ -168,8 +187,9 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
-         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
-        resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
+         patches[6], patches[7], patches[8]:
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
     data = resp.get_json()
     arbol = data["arbol_sunburst"]
     # El arbol_sunburst empieza en la acometida; sus hijos son transformadores
@@ -198,8 +218,9 @@ def test_telemetria_data_nodo_carga_final_sin_agregacion(client, app):
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
          patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=carga_mock) as mock_omr, \
-         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
-        resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h&nodo_id=3")
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], \
+         patches[6], patches[7], patches[8]:
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h&nodo_id=3")
     assert resp.status_code == 200
     # Las mediciones se consultan por medidor_id (10 y 11), no por activo_id (3 y 4)
     calls = mock_omr.call_args_list
@@ -299,3 +320,135 @@ def test_post_produccion_fase2_deshabilitada_404(client, app):
             json={"anio": 2024, "mes": 6, "m2_mes": 12000.0},
         )
     assert resp.status_code == 404
+
+
+# ── Test n ─────────────────────────────────────────────────────────────────
+# Árbol de integración: acometida 100 → transformador 101 → carga 102 (medidor cambia
+# de 10 → 12 a T_MID); acometida 100 → carga 103 (medidor 11, sin fuente → incompleto).
+_T0_INT  = "2024-01-01T00:00:00Z"
+_T_MID   = "2024-01-01T12:00:00Z"
+_T1_INT  = "2024-01-02T00:00:00Z"
+
+ARBOL_MOCK_INT = [
+    {"id": 100, "nombre": "Acometida", "punto_medicion": "acometida_cfe",
+     "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None},
+    {"id": 101, "nombre": "T-Int", "punto_medicion": "transformador",
+     "activo_padre_id": 100, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": None, "potencia_nominal_kw": 500.0, "medidor_id": None},
+    # medidor_id=12 representa el medidor vigente actual tras el cambio
+    {"id": 102, "nombre": "Carga-A", "punto_medicion": "carga_final",
+     "activo_padre_id": 101, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": "horno", "potencia_nominal_kw": 200.0, "medidor_id": 12},
+    # medidor_id=11, fuente con fuente_activo_id=None → segmento incompleto
+    {"id": 103, "nombre": "Carga-B", "punto_medicion": "carga_final",
+     "activo_padre_id": 100, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": "compresor", "potencia_nominal_kw": 100.0, "medidor_id": 11},
+]
+
+
+def _meds_constantes(desde_iso: str, hasta_iso: str, kw: float) -> list[dict]:
+    """Dos mediciones a los extremos con kW constante (datos sintéticos)."""
+    return [
+        {"timestamp": desde_iso, "potencia_activa_kw": kw, "factor_potencia": 0.90},
+        {"timestamp": hasta_iso,  "potencia_activa_kw": kw, "factor_potencia": 0.90},
+    ]
+
+
+def test_atribucion_cambio_medidor_y_alimentacion(client, app):
+    """Pipeline de atribución: cambio de medidor y fuente sin alimentación.
+
+    Verifica tres invariantes:
+      1. Energía del nodo raíz == energía atribuida por activo 102 (2 × 100 kW × 12 h = 2400 kWh).
+      2. El nodo 103 expone cobertura_incompleta=True en el JSON (fuente_activo_id=None).
+      3. obtener_mediciones_para_rango se invoca con el desde/hasta RECORTADO al tramo,
+         nunca con el rango completo para el medidor 10 (que solo estuvo activo hasta T_MID).
+    """
+    app.config["FASE2_HABILITADA"] = True
+    _injectar_sesion(client, "master_admin", cliente_activo_id=44)
+
+    # ── side_effect: tramos de medidor por activo ──────────────────────────
+    def _rim_se(activo_id, desde_iso, hasta_iso):
+        if activo_id == 102:
+            return [
+                {"medidor_id": 10, "intervalo_desde": _T0_INT,  "intervalo_hasta": _T_MID,   "motivo": "inicial"},
+                {"medidor_id": 12, "intervalo_desde": _T_MID,   "intervalo_hasta": _T1_INT,  "motivo": "cambio"},
+            ]
+        if activo_id == 103:
+            return [{"medidor_id": 11, "intervalo_desde": _T0_INT, "intervalo_hasta": _T1_INT, "motivo": "inicial"}]
+        return []
+
+    # ── side_effect: cadena de alimentación ascendente ────────────────────
+    _ISO0 = "2024-01-01T00:00:00+00:00"
+    _ISO1 = "2024-01-02T00:00:00+00:00"
+
+    def _rif_se(activo_id, desde_dt, hasta_dt):
+        if activo_id == 102:
+            return [{"fuente_activo_id": 101, "intervalo_desde": _ISO0, "intervalo_hasta": _ISO1, "motivo": "test"}]
+        if activo_id == 101:
+            return [{"fuente_activo_id": 100, "intervalo_desde": _ISO0, "intervalo_hasta": _ISO1, "motivo": "test"}]
+        if activo_id == 103:
+            # fuente_activo_id=None → segmento completo=False
+            return [{"fuente_activo_id": None, "intervalo_desde": _ISO0, "intervalo_hasta": _ISO1, "motivo": "test"}]
+        return []  # activo 100: acometida raíz
+
+    # ── side_effect: mediciones por medidor ───────────────────────────────
+    def _omfr_se(medidor_id, desde, hasta, rango):
+        kw_map = {10: 100.0, 12: 100.0, 11: 50.0}
+        kw = kw_map.get(medidor_id, 0.0)
+        return _meds_constantes(desde, hasta, kw)
+
+    patches = _patch_costo()
+    with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK_INT), \
+         patch("storage.repository.obtener_mediciones_para_rango", side_effect=_omfr_se) as mock_omfr, \
+         patch("storage.repository.resolver_intervalos_medidor", side_effect=_rim_se), \
+         patch("storage.repository.resolver_intervalos_fuente",  side_effect=_rif_se), \
+         patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[8]:
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria/data?rango=24h")
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+
+    arbol = data["arbol_sunburst"]
+    assert arbol["id"] == 100, "Raíz del sunburst debe ser la acometida (id=100)"
+
+    # ── Invariante 1: energía de la raíz == energía atribuida por activo 102 ──
+    # Activo 102: dos tramos × 100 kW × 12 h = 2400 kWh
+    # Activo 103: completo=False → camino vacío → no propaga energía a la raíz
+    assert arbol["energia_kwh"] == pytest.approx(2400.0, abs=1.0), (
+        f"Energía raíz esperada 2400 kWh, obtenida {arbol['energia_kwh']}"
+    )
+
+    # ── Invariante 2: nodo 103 expone cobertura_incompleta=True ──────────────
+    def _buscar_nodo(nodo_dict, nodo_id):
+        if nodo_dict["id"] == nodo_id:
+            return nodo_dict
+        for hijo in nodo_dict.get("hijos", []):
+            encontrado = _buscar_nodo(hijo, nodo_id)
+            if encontrado:
+                return encontrado
+        return None
+
+    nodo_103 = _buscar_nodo(arbol, 103)
+    assert nodo_103 is not None, "Activo 103 debe aparecer en arbol_sunburst"
+    assert nodo_103["cobertura_incompleta"] is True, (
+        "Activo 103 tiene fuente_activo_id=None → cobertura_incompleta debe ser True"
+    )
+
+    # ── Invariante 3: _omfr llamada con tramo recortado para medidor 10 ──────
+    calls = mock_omfr.call_args_list
+    # El medidor 10 solo estuvo activo hasta T_MID; la llamada debe usar hasta=T_MID
+    calls_med10 = [c for c in calls if c[0][0] == 10]
+    assert len(calls_med10) >= 1, "Debe existir al menos una llamada a _omfr con medidor_id=10"
+    for c in calls_med10:
+        hasta_arg = c[0][2]
+        assert hasta_arg == _T_MID, (
+            f"Llamada con medidor 10 debe usar hasta={_T_MID} (tramo), "
+            f"no el rango completo. Obtenido: hasta={hasta_arg}"
+        )
+    # El medidor 12 en la atribución debe usar desde=T_MID (tramo recortado)
+    calls_med12_attr = [c for c in calls if c[0][0] == 12 and c[0][1] == _T_MID]
+    assert len(calls_med12_attr) >= 1, (
+        f"Debe existir call (12, {_T_MID}, {_T1_INT}) para el tramo atributivo"
+    )

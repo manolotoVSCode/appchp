@@ -3030,3 +3030,41 @@ def resolver_intervalos_fuente(
             "motivo":           row["motivo"],
         })
     return result
+
+
+def resolver_intervalos_medidor(
+    activo_id: int,
+    desde_iso: str,
+    hasta_iso: str,
+) -> list[dict]:
+    """Lista de intervalos de medidor vigente para el activo en [desde_iso, hasta_iso).
+
+    Misma semántica de recorte que resolver_intervalos_fuente: extremos recortados al
+    rango solicitado, vigente_hasta NULL sustituido por hasta_iso.
+
+    Retorna dicts con exactamente cuatro claves:
+      medidor_id (int), intervalo_desde (str ISO), intervalo_hasta (str ISO), motivo (str).
+    Ordena por intervalo_desde ascendente.
+    Lista vacía si no hay filas que solapen el rango.
+    """
+    resp = (
+        _supabase.table("medidor_activo_vigencia")
+        .select("medidor_id, vigente_desde, vigente_hasta, motivo")
+        .eq("activo_id", activo_id)
+        .lt("vigente_desde", hasta_iso)
+        .or_(f"vigente_hasta.gt.{desde_iso},vigente_hasta.is.null")
+        .order("vigente_desde")
+        .execute()
+    )
+
+    result = []
+    for row in (resp.data or []):
+        iv_desde = max(row["vigente_desde"], desde_iso)
+        iv_hasta = min(row["vigente_hasta"], hasta_iso) if row["vigente_hasta"] else hasta_iso
+        result.append({
+            "medidor_id":      row["medidor_id"],
+            "intervalo_desde": iv_desde,
+            "intervalo_hasta": iv_hasta,
+            "motivo":          row.get("motivo"),
+        })
+    return result

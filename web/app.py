@@ -3131,30 +3131,67 @@ def create_app() -> Flask:
             if total_peso_kw > 0 else 0.0
         )
 
-        # Estructura sunburst: árbol reconstruido desde activos_electricos
-        def _energia_nodo(aid: int) -> float:
-            """Suma trapezoidal de kWh del activo aid.
+        # ── Atribución temporal de energía por alimentación y medidor vigentes ─
+        # Sustituye el recorrido recursivo sobre activo_padre_id. La energía
+        # de cada activo se imputa según la topología vigente en cada instante,
+        # no la topología del momento de consulta. activo_padre_id sigue siendo
+        # la fuente canónica para pintar el árbol; no participa en el cálculo.
+        from storage.repository import (
+            resolver_intervalos_medidor as _rim,
+            resolver_intervalos_fuente as _rif_repo,
+        )
+        from calc.telemetria_atribucion import (
+            resolver_caminos as _rc,
+            integrar_por_segmentos as _ips,
+            agregar_por_camino as _apc,
+        )
+        from datetime import datetime as _dt_attr
 
-            Hojas (carga_final): integra mediciones del medidor vigente.
-            Nodos intermedios: suma recursiva de hijos por activo_padre_id.
-            Activos sin medidor vigente: retorna 0.0 sin consulta adicional.
-            """
-            if por_id.get(aid, {}).get("punto_medicion") == "carga_final":
-                rows = mediciones_por_hoja.get(aid, [])
-                kwh = 0.0
-                for i in range(1, len(rows)):
-                    try:
-                        from datetime import datetime as _dt2
-                        t0 = _dt2.fromisoformat(rows[i-1]["ts"].replace("Z", "+00:00"))
-                        t1 = _dt2.fromisoformat(rows[i]["ts"].replace("Z", "+00:00"))
-                        dt_h = (t1 - t0).total_seconds() / 3600.0
-                        kwh += (rows[i-1]["kw"] + rows[i]["kw"]) / 2.0 * dt_h
-                    except Exception:
-                        pass
-                return round(kwh, 3)
+        _bucket_min = 60 if rango == "30d" else 5
+
+        def _resolver_fuente_attr(activo_id: int, d_iso: str, h_iso: str) -> list[dict]:
+            """Adapta resolver_intervalos_fuente (args datetime) a la interfaz (str, str)."""
+            _d = _dt_attr.fromisoformat(d_iso.replace("Z", "+00:00"))
+            _h = _dt_attr.fromisoformat(h_iso.replace("Z", "+00:00"))
+            return _rif_repo(activo_id, _d, _h)
+
+        energia_por_nodo: dict[int, float] = {}
+        incompleto_por_nodo: dict[int, bool] = {}
+
+        for _aid in todas_hojas_ids:
+            _tramos = _rim(_aid, desde_iso, hasta_iso)
+
+            # Reutilizar mediciones ya fetcheadas cuando el medidor no ha cambiado.
+            _medidor_actual = por_id[_aid].get("medidor_id")
+            if (
+                len(_tramos) == 1
+                and _tramos[0]["medidor_id"] == _medidor_actual
+                and _aid in mediciones_por_hoja
+            ):
+                _meds_m = mediciones_por_hoja[_aid]
             else:
-                hijos_ids = [a["id"] for a in todos if a.get("activo_padre_id") == aid]
-                return round(sum(_energia_nodo(h) for h in hijos_ids), 3)
+                _meds_m = []
+                for _tr in _tramos:
+                    _rr = _omfr(
+                        _tr["medidor_id"],
+                        _tr["intervalo_desde"],
+                        _tr["intervalo_hasta"],
+                        rango,
+                    )
+                    _meds_m.extend(_fmt_rows(_rr))
+                _meds_m.sort(key=lambda r: r["ts"])
+
+            _caminos = _rc(_aid, desde_iso, hasta_iso, _resolver_fuente_attr)
+            _segs = _ips(_meds_m, _caminos, _bucket_min)
+
+            energia_por_nodo[_aid] = round(sum(s["energia_kwh"] for s in _segs), 3)
+            _inc = any(not s["completo"] or s["hueco_datos_min"] > 0 for s in _segs)
+            incompleto_por_nodo[_aid] = _inc
+
+            for _nid, _kwh in _apc(_segs).items():
+                energia_por_nodo[_nid] = round(energia_por_nodo.get(_nid, 0.0) + _kwh, 3)
+                if _inc:
+                    incompleto_por_nodo[_nid] = True
 
         # ── Costo del periodo actual ───────────────────────────────────────
         from calc.telemetria_kpis import (
@@ -3215,16 +3252,17 @@ def create_app() -> Flask:
         def _arbol_sunburst_con_costo(aid: int) -> dict:
             a = por_id.get(aid, {})
             hijos_ids_local = [x["id"] for x in todos if x.get("activo_padre_id") == aid]
-            kwh = _energia_nodo(aid)
+            kwh = energia_por_nodo.get(aid, 0.0)
             return {
-                "id":                  aid,
-                "nombre":              a.get("nombre", ""),
-                "punto_medicion":      a.get("punto_medicion", ""),
-                "tipo_carga":          a.get("tipo_carga"),
-                "potencia_nominal_kw": a.get("potencia_nominal_kw"),
-                "energia_kwh":         kwh,
-                "costo_mxn":           _costo_nodo(kwh),
-                "hijos":               [_arbol_sunburst_con_costo(h) for h in hijos_ids_local],
+                "id":                   aid,
+                "nombre":               a.get("nombre", ""),
+                "punto_medicion":       a.get("punto_medicion", ""),
+                "tipo_carga":           a.get("tipo_carga"),
+                "potencia_nominal_kw":  a.get("potencia_nominal_kw"),
+                "energia_kwh":          kwh,
+                "costo_mxn":            _costo_nodo(kwh),
+                "cobertura_incompleta": incompleto_por_nodo.get(aid, False),
+                "hijos":                [_arbol_sunburst_con_costo(h) for h in hijos_ids_local],
             }
 
         arbol_sunburst = _arbol_sunburst_con_costo(acometida["id"])
@@ -3273,7 +3311,7 @@ def create_app() -> Flask:
         m2_planta_ant = sum(float(r.get("m2_producidos") or 0) for r in prod_ant)
 
         # Energía total de la acometida (para atribuir producción proporcionalmente)
-        energia_total_planta = _energia_nodo(acometida["id"])
+        energia_total_planta = energia_por_nodo.get(acometida["id"], 0.0)
 
         m2_nodo_act = _apn(m2_planta_act, energia_kwh, energia_total_planta)
         m2_nodo_ant = _apn(m2_planta_ant, energia_ant, energia_total_planta)
