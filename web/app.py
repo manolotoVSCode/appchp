@@ -200,6 +200,18 @@ def _pid_de_g() -> int | None:
         return None
 
 
+def _verificar_planta_de_cliente(planta_id: int, cliente_id: int) -> dict:
+    """Verifica que planta_id pertenece a cliente_id.
+
+    Retorna el dict de la planta si es válida. Hace abort(404) si no existe
+    o si pertenece a otro cliente. Usado por rutas con planta_id en la URL.
+    """
+    planta = obtener_planta(planta_id)
+    if planta is None or planta.get("cliente_id") != cliente_id:
+        abort(404)
+    return planta
+
+
 def _tipo_suministro(cliente_id: int) -> str | None:
     """Wrapper de get_tipo_suministro_electrico_seleccionado que auto-inyecta planta_activa_id."""
     return get_tipo_suministro_electrico_seleccionado(cliente_id, planta_id=_pid_de_g())
@@ -768,11 +780,17 @@ def create_app() -> Flask:
         return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
 
     @app.route("/clientes/<int:cliente_id>/dashboard/contabilidad")
-    def cliente_dashboard_contabilidad(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/contabilidad")
+    def cliente_dashboard_contabilidad(cliente_id: int, planta_id: int | None = None):
         """Vista de Contabilidad Energética: histórico eléctrico del cliente."""
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -865,11 +883,17 @@ def create_app() -> Flask:
         )
 
     @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion")
-    def cliente_dashboard_cogeneracion(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/cogeneracion")
+    def cliente_dashboard_cogeneracion(cliente_id: int, planta_id: int | None = None):
         """Vista de Proyecto Cogeneración: análisis de oportunidad de cogeneración."""
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -1064,7 +1088,8 @@ def create_app() -> Flask:
     # ── Endpoints JSON para dashboards (client-side rendering) ─────────────────
 
     @app.route("/clientes/<int:cliente_id>/dashboard/contabilidad/data")
-    def cliente_dashboard_contabilidad_data(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/contabilidad/data")
+    def cliente_dashboard_contabilidad_data(cliente_id: int, planta_id: int | None = None):
         """JSON con todos los datos del dashboard de Contabilidad Energética."""
         from flask import jsonify
         activo_id = session.get("cliente_activo_id")
@@ -1074,6 +1099,11 @@ def create_app() -> Flask:
         cliente = _gcc(cliente_id)
         if cliente is None:
             return jsonify({"error": "no_encontrado"}), 404
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -1162,7 +1192,8 @@ def create_app() -> Flask:
         })
 
     @app.route("/clientes/<int:cliente_id>/dashboard/contabilidad/desglose-costo-total")
-    def cliente_dashboard_contabilidad_desglose(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/contabilidad/desglose-costo-total")
+    def cliente_dashboard_contabilidad_desglose(cliente_id: int, planta_id: int | None = None):
         """Desglose en 4 categorías del costo total del periodo seleccionado.
 
         Solo aplica a CFE GDMTH. Devuelve agregado sobre las facturas
@@ -1173,6 +1204,11 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         tipo_suministro = _tipo_suministro(cliente_id)
         if tipo_suministro == TIPO_ELECTRICO_CALIFICADO:
@@ -1251,7 +1287,8 @@ def create_app() -> Flask:
         })
 
     @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion/data")
-    def cliente_dashboard_cogeneracion_data(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/cogeneracion/data")
+    def cliente_dashboard_cogeneracion_data(cliente_id: int, planta_id: int | None = None):
         """JSON con todos los datos del dashboard de Cogeneración."""
         from flask import jsonify
         from decimal import Decimal as _D
@@ -1263,6 +1300,11 @@ def create_app() -> Flask:
         cliente = _gcc(cliente_id)
         if cliente is None:
             return jsonify({"error": "no_encontrado"}), 404
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -1556,7 +1598,8 @@ def create_app() -> Flask:
         })
 
     @app.route("/clientes/<int:cliente_id>/dashboard/contabilidad/export-datos")
-    def cliente_dashboard_contabilidad_export(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/contabilidad/export-datos")
+    def cliente_dashboard_contabilidad_export(cliente_id: int, planta_id: int | None = None):
         """Descarga Excel con los datos del dashboard de Contabilidad Energética."""
         import io
         from decimal import Decimal
@@ -1567,6 +1610,11 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         tipo_suministro = _tipo_suministro(cliente_id)
 
@@ -1790,7 +1838,8 @@ def create_app() -> Flask:
         )
 
     @app.route("/clientes/<int:cliente_id>/dashboard/cogeneracion/export-datos")
-    def cliente_dashboard_cogeneracion_export(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/cogeneracion/export-datos")
+    def cliente_dashboard_cogeneracion_export(cliente_id: int, planta_id: int | None = None):
         """Descarga Excel con los datos del dashboard de Cogeneración."""
         import io
         from decimal import Decimal as _D
@@ -1801,6 +1850,11 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         # Leer parámetros de slider desde query string
         def _qparam(name, default, lo=0.01, hi=1.0):
@@ -1997,7 +2051,8 @@ def create_app() -> Flask:
         )
 
     @app.route("/clientes/<int:cliente_id>/grafica/<grafica_id>/excel")
-    def cliente_grafica_excel(cliente_id: int, grafica_id: str):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/grafica/<grafica_id>/excel")
+    def cliente_grafica_excel(cliente_id: int, grafica_id: str, planta_id: int | None = None):
         """Descarga Excel con los datos crudos de la gráfica indicada."""
         import io
         import re
@@ -2006,6 +2061,11 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         _GRAFICAS = {
             "ahorro_neto_mensual":    "Cogeneración — Detalle Mensual",
@@ -2820,11 +2880,17 @@ def create_app() -> Flask:
     # ── Dashboard Modelado CHP ────────────────────────────────────────────────
 
     @app.route("/clientes/<int:cliente_id>/dashboard/modelado-chp")
-    def cliente_dashboard_modelado_chp(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/modelado-chp")
+    def cliente_dashboard_modelado_chp(cliente_id: int, planta_id: int | None = None):
         """Vista del dashboard de Modelado CHP con medición cincominutal."""
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         mediciones = get_mediciones_por_cliente(cliente_id, planta_id=_pid_de_g())
         if not mediciones:
@@ -2858,13 +2924,19 @@ def create_app() -> Flask:
     # ── Dashboard Telemetría (Fase 2 D2) ─────────────────────────────────────
 
     @app.route("/clientes/<int:cliente_id>/dashboard/telemetria")
-    def cliente_dashboard_telemetria(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/telemetria")
+    def cliente_dashboard_telemetria(cliente_id: int, planta_id: int | None = None):
         """Vista de Telemetría: árbol de medidores del cliente."""
         if not app.config.get("FASE2_HABILITADA", False):
             abort(404)
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         from storage.repository import obtener_arbol_medidores as _oam
         arbol_medidores = _oam(cliente_id, planta_id=_pid_de_g())
@@ -2877,7 +2949,8 @@ def create_app() -> Flask:
         )
 
     @app.route("/clientes/<int:cliente_id>/dashboard/telemetria/data")
-    def cliente_dashboard_telemetria_data(cliente_id: int):
+    @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>/dashboard/telemetria/data")
+    def cliente_dashboard_telemetria_data(cliente_id: int, planta_id: int | None = None):
         """JSON para el dashboard de telemetría: sunburst, serie temporal y KPIs."""
         from flask import jsonify
         if not app.config.get("FASE2_HABILITADA", False):
@@ -2885,6 +2958,11 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return jsonify({"error": "acceso denegado"}), 403
+        if planta_id is not None:
+            _verificar_planta_de_cliente(planta_id, cliente_id)
+            g.planta_activa_id = planta_id
+            session["planta_activa_id"] = planta_id
+            session.pop("_plantas_cache", None)
 
         from storage.repository import (
             obtener_arbol_medidores as _oam,

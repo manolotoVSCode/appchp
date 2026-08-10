@@ -102,38 +102,33 @@
   <div class="sidebar-sub-header" style="font-size:.65rem;letter-spacing:.06em">Planta activa</div>
   <div class="px-2 pb-1">
     {% for planta in plantas_cliente %}
-    <form method="POST"
-          action="{{ url_for('seleccionar_planta', cliente_id=cliente_activo.id, planta_id=planta.id) }}"
-          style="margin:0">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit"
-              class="w-100 text-start btn btn-sm mb-1
-                     {% if planta.id == planta_activa_id %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-              style="font-size:.75rem;padding:.25rem .6rem;border-radius:.35rem">
-        <i class="bi bi-building me-1" style="font-size:.7rem"></i>{{ planta.nombre }}
-      </button>
-    </form>
+    <a href="{{ url_for('vista_planta', cliente_id=cliente_activo.id, planta_id=planta.id) }}"
+       class="w-100 d-block text-start btn btn-sm mb-1
+              {% if planta.id == planta_activa_id %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+       style="font-size:.75rem;padding:.25rem .6rem;border-radius:.35rem;text-decoration:none">
+      <i class="bi bi-building me-1" style="font-size:.7rem"></i>{{ planta.nombre }}
+    </a>
     {% endfor %}
   </div>
   {% endif %}
   <hr class="sidebar-divider mx-3">
   <div class="sidebar-sub-header">Dashboard</div>
-  <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id) }}"
+  <a href="{{ url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id, planta_id=planta_activa_id) if planta_activa_id else url_for('cliente_dashboard_contabilidad', cliente_id=cliente_activo.id) }}"
      class="sidebar-link-contrato{% if nav_active == 'contabilidad' %} active{% endif %}">
     <i class="bi bi-bar-chart-line"></i>Contabilidad Energética
   </a>
-  <a href="{{ url_for('cliente_dashboard_cogeneracion', cliente_id=cliente_activo.id) }}"
+  <a href="{{ url_for('cliente_dashboard_cogeneracion', cliente_id=cliente_activo.id, planta_id=planta_activa_id) if planta_activa_id else url_for('cliente_dashboard_cogeneracion', cliente_id=cliente_activo.id) }}"
      class="sidebar-link-contrato{% if nav_active == 'cogeneracion' %} active{% endif %}">
     <i class="bi bi-bar-chart-line"></i>Proyecto Cogeneración
   </a>
   {% if mediciones_sidebar %}
-  <a href="{{ url_for('cliente_dashboard_modelado_chp', cliente_id=cliente_activo.id) }}"
+  <a href="{{ url_for('cliente_dashboard_modelado_chp', cliente_id=cliente_activo.id, planta_id=planta_activa_id) if planta_activa_id else url_for('cliente_dashboard_modelado_chp', cliente_id=cliente_activo.id) }}"
      class="sidebar-link-contrato{% if nav_active == 'modelado_chp' %} active{% endif %}">
     <i class="bi bi-cpu"></i>Modelado CHP
   </a>
   {% endif %}
   {% if fase2_habilitada %}
-  <a href="{{ url_for('cliente_dashboard_telemetria', cliente_id=cliente_activo.id) }}"
+  <a href="{{ url_for('cliente_dashboard_telemetria', cliente_id=cliente_activo.id, planta_id=planta_activa_id) if planta_activa_id else url_for('cliente_dashboard_telemetria', cliente_id=cliente_activo.id) }}"
      class="sidebar-link-contrato{% if nav_active == 'telemetria_cliente' %} active{% endif %}">
     <i class="bi bi-activity"></i>Telemetría
     <span class="badge bg-warning text-dark ms-1" style="font-size:.55rem;padding:.15rem .3rem;vertical-align:middle;">Beta</span>
