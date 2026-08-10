@@ -87,10 +87,12 @@ from storage.repository import (
     crear_activo,
     actualizar_activo,
     desactivar_activo,
-    reasignar_activo_padre,
     get_vigencia_activa_activo,
     vincular_medidor_activo,
     desvincular_medidor_activo,
+    obtener_historial_alimentacion,
+    obtener_historiales_alimentacion_bulk,
+    declarar_cambio_alimentacion,
 )
 
 logger = logging.getLogger(__name__)
@@ -3213,6 +3215,7 @@ _PADRES_VALIDOS: dict[str, frozenset] = {
     "subestacion":   frozenset(["acometida", "subestacion"]),
     "transformador": frozenset(["acometida", "subestacion"]),
     "carga":         frozenset(["transformador"]),
+    "generacion":    frozenset(["subestacion", "transformador"]),
 }
 _TIPOS_ACTIVO = list(_PADRES_VALIDOS.keys())
 
@@ -3307,6 +3310,11 @@ def activos_planta(cliente_id: int, planta_id: int):
         else:
             raices.append(nodo)
 
+    # Historial de alimentación por activo (una sola consulta bulk).
+    # Solo activos que tienen activo_padre_id (no acometidas).
+    activo_ids_con_padre = [a["id"] for a in activos if a.get("activo_padre_id")]
+    hist_por_activo = obtener_historiales_alimentacion_bulk(activo_ids_con_padre)
+
     # Lista plana para los selectores JS (todos los activos del cliente, con nombre de planta)
     activos_js = [
         {
@@ -3328,6 +3336,7 @@ def activos_planta(cliente_id: int, planta_id: int):
         planta_id=planta_id,
         raices=raices,
         activos_planos=activos_js,
+        hist_por_activo=hist_por_activo,
         mediciones=mediciones,
         tipos_activo=_TIPOS_ACTIVO,
         es_admin=es_admin,
@@ -3404,9 +3413,9 @@ def activo_editar(cliente_id: int, planta_id: int, activo_id: int):
     if not nombre:
         return jsonify({"error": "El nombre es obligatorio"}), 400
 
-    _UNSET = object()
-    nuevo_padre_raw = data.get("activo_padre_id", _UNSET)
-
+    # activo_padre_id se gestiona exclusivamente vía /cambio-alimentacion.
+    # Si el cliente lo envía aquí se ignora para evitar divergencia con
+    # activo_alimentacion_vigencia.
     payload = {
         "nombre":              nombre,
         "capacidad_kva":       data.get("capacidad_kva") or None,
@@ -3414,24 +3423,6 @@ def activo_editar(cliente_id: int, planta_id: int, activo_id: int):
         "tipo_carga":          (data.get("tipo_carga") or None),
         "notas":               (data.get("notas") or None),
     }
-
-    # Padre opcional: sólo valida y añade si el campo viene en el body
-    if nuevo_padre_raw is not _UNSET:
-        nuevo_padre_id = nuevo_padre_raw or None
-        padre = obtener_activo(int(nuevo_padre_id)) if nuevo_padre_id else None
-        if nuevo_padre_id and padre is None:
-            return jsonify({"error": "El activo padre no existe"}), 400
-        if padre and padre.get("cliente_id") != cliente_id:
-            return jsonify({"error": "El padre debe pertenecer al mismo cliente"}), 400
-        if nuevo_padre_id and int(nuevo_padre_id) == activo_id:
-            return jsonify({"error": "Un activo no puede ser su propio padre"}), 422
-        err = _validar_jerarquia_activo(activo["tipo"], padre)
-        if err:
-            return jsonify({"error": err}), 422
-        todos = obtener_todos_activos_cliente(cliente_id)
-        if nuevo_padre_id and _detectar_ciclo(activo_id, int(nuevo_padre_id), todos):
-            return jsonify({"error": "La reasignación crearía un ciclo en la jerarquía"}), 422
-        payload["activo_padre_id"] = int(nuevo_padre_id) if nuevo_padre_id else None
 
     try:
         actualizado = actualizar_activo(activo_id, payload)
@@ -3499,10 +3490,93 @@ def activo_reasignar_padre(cliente_id: int, planta_id: int, activo_id: int):
         return jsonify({"error": "La reasignación crearía un ciclo en la jerarquía"}), 422
 
     try:
-        actualizado = reasignar_activo_padre(activo_id, int(nuevo_padre_id) if nuevo_padre_id else None)
-        return jsonify({"ok": True, "activo": actualizado})
+        from datetime import datetime, timezone
+        # Reasignar padre pasa por declarar_cambio_alimentacion con fecha=ahora
+        # para mantener consistencia con activo_alimentacion_vigencia.
+        nueva_vigencia = declarar_cambio_alimentacion(
+            activo_id,
+            int(nuevo_padre_id) if nuevo_padre_id else None,
+            datetime.now(timezone.utc),
+            "Reasignación manual de padre",
+        )
+        activo_actualizado = obtener_activo(activo_id)
+        return jsonify({"ok": True, "activo": activo_actualizado, "vigencia": nueva_vigencia})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 422
     except Exception as exc:
         logger.error("Error reasignando padre activo id=%d: %s", activo_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/cambio-alimentacion", methods=["POST"])
+def activo_cambio_alimentacion(cliente_id: int, planta_id: int, activo_id: int):
+    """Declara un cambio de fuente de alimentación para el activo.
+
+    Body JSON: {fuente_activo_id, desde (ISO 8601), motivo (opcional)}.
+
+    Validaciones:
+    - fuente_activo_id existe y pertenece al mismo cliente
+    - fuente_activo_id != activo_id
+    - No genera ciclo en la topología resultante
+    - La jerarquía de tipos hijo→padre es válida
+    - desde es posterior al vigente_desde de la fila abierta actual
+    """
+    from flask import jsonify
+    from datetime import datetime, timezone
+
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("cliente_id") != cliente_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+
+    data = request.get_json(silent=True) or {}
+    fuente_id_raw = data.get("fuente_activo_id")
+    desde_str = (data.get("desde") or "").strip()
+    motivo = (data.get("motivo") or "").strip() or None
+
+    if not fuente_id_raw:
+        return jsonify({"error": "fuente_activo_id es obligatorio"}), 400
+    try:
+        fuente_id = int(fuente_id_raw)
+    except (ValueError, TypeError):
+        return jsonify({"error": "fuente_activo_id debe ser un entero"}), 400
+
+    if fuente_id == activo_id:
+        return jsonify({"error": "El activo no puede ser su propia fuente de alimentación"}), 422
+
+    fuente = obtener_activo(fuente_id)
+    if fuente is None or fuente.get("cliente_id") != cliente_id:
+        return jsonify({"error": "La fuente de alimentación no existe o no pertenece a este cliente"}), 400
+
+    err = _validar_jerarquia_activo(activo["tipo"], fuente)
+    if err:
+        return jsonify({"error": err}), 422
+
+    todos = obtener_todos_activos_cliente(cliente_id)
+    if _detectar_ciclo(activo_id, fuente_id, todos):
+        return jsonify({"error": "El cambio crearía un ciclo en la jerarquía"}), 422
+
+    if not desde_str:
+        return jsonify({"error": "La fecha de inicio (desde) es obligatoria"}), 400
+    try:
+        desde = datetime.fromisoformat(desde_str)
+        if desde.tzinfo is None:
+            desde = desde.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return jsonify({"error": "Fecha de inicio inválida. Use formato ISO 8601 (ej. 2026-01-15T08:00:00)."}), 400
+
+    try:
+        nueva = declarar_cambio_alimentacion(activo_id, fuente_id, desde, motivo)
+        return jsonify({"ok": True, "vigencia": nueva}), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 422
+    except Exception as exc:
+        logger.error("Error declarando cambio alimentacion activo_id=%d: %s", activo_id, exc)
         return jsonify({"error": str(exc)}), 500
 
 

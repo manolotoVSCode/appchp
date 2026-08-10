@@ -8,10 +8,46 @@
 .badge-tipo-subestacion  { background:#2E5C8A; color:#fff; }
 .badge-tipo-transformador{ background:#5B8FB9; color:#fff; }
 .badge-tipo-carga        { background:#A4C8E1; color:#1F3A5F; }
+.badge-tipo-generacion   { background:#198754; color:#fff; }
 .icono-acometida    { color:#f0ad4e; }
 .icono-subestacion  { color:#5B8FB9; }
 .icono-transformador{ color:#31c3c3; }
 .icono-carga        { color:#5cb85c; }
+.icono-generacion   { color:#20c997; }
+
+/* ── Historial de alimentación ── */
+.nodo-historial {
+  margin-top: .3rem;
+  padding-left: 1.5rem;
+}
+.historial-toggle {
+  font-size: .65rem;
+  color: #6c757d;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.historial-tabla {
+  font-size: .68rem;
+  margin-top: .3rem;
+  border-collapse: collapse;
+  width: 100%;
+}
+.historial-tabla th {
+  font-weight: 600;
+  color: #6c757d;
+  text-align: left;
+  padding: .1rem .4rem;
+  border-bottom: 1px solid #dee2e6;
+}
+.historial-tabla td {
+  padding: .1rem .4rem;
+  border-bottom: 1px solid #f0f0f0;
+  color: #333;
+}
+.historial-tabla tr.vigente td { font-weight: 600; color: #0d6efd; }
 
 /* ── Árbol con conectores ── */
 .activos-tree, .activos-tree ul {
@@ -109,6 +145,7 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
   'subestacion':   'bi-building-fill',
   'transformador': 'bi-box-seam-fill',
   'carga':         'bi-plug-fill',
+  'generacion':    'bi-lightning-fill',
 } %}
 
 <div class="container-fluid px-3 py-3" style="max-width: 980px">
@@ -131,7 +168,8 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
   <div class="alert alert-secondary small">Esta planta no tiene activos eléctricos registrados.</div>
   {% else %}
 
-  {% macro render_nodo(nodo) %}
+  {% macro render_nodo(nodo, hist) %}
+  {% set nodo_hist = hist.get(nodo.id, []) %}
   <li{% if nodo.hijos %} class="colapsado"{% endif %} id="li-{{ nodo.id }}">
     <div class="nodo-header{% if not nodo.activo %} inactivo{% endif %}" id="nodo-{{ nodo.id }}">
 
@@ -188,6 +226,14 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
       {# Acciones #}
       {% if es_admin and nodo.activo %}
       <div class="nodo-acciones">
+        {# Cambio de alimentación: solo activos con padre posible (no acometidas) #}
+        {% if nodo.tipo != 'acometida' %}
+        <button class="btn btn-outline-primary btn-nodo"
+                onclick="abrirCambioAlimentacion({{ nodo.id }}, '{{ nodo.nombre | e }}', {{ nodo.activo_padre_id or 'null' }})"
+                title="Declarar cambio de alimentación">
+          <i class="bi bi-arrow-left-right"></i>
+        </button>
+        {% endif %}
         <button class="btn btn-outline-secondary btn-nodo"
                 onclick="abrirEditarActivo({{ nodo.id }}, {{ nodo | tojson | forceescape }})"
                 title="Editar">
@@ -202,11 +248,38 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
       {% endif %}
     </div>
 
+    {# Historial de alimentación: visible si hay más de una fila #}
+    {% if nodo_hist | length > 1 %}
+    <div class="nodo-historial">
+      <button class="historial-toggle" onclick="toggleHistorial('hist-{{ nodo.id }}')">
+        <i class="bi bi-clock-history me-1"></i>{{ nodo_hist | length }} conexiones — ver historial
+      </button>
+      <div id="hist-{{ nodo.id }}" style="display:none">
+        <table class="historial-tabla">
+          <thead><tr><th>Fuente</th><th>Desde</th><th>Hasta</th><th>Motivo</th></tr></thead>
+          <tbody>
+          {% for fila in nodo_hist %}
+          <tr{% if not fila.vigente_hasta %} class="vigente"{% endif %}>
+            <td>
+              {% if fila.fuente %}{{ fila.fuente.nombre }} <span class="text-muted">({{ fila.fuente.tipo }})</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ fila.vigente_desde[:10] if fila.vigente_desde else '—' }}</td>
+            <td>{{ fila.vigente_hasta[:10] if fila.vigente_hasta else '<em>vigente</em>' | safe }}</td>
+            <td>{{ fila.motivo or '' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
     {# Hijos (recursivo) #}
     {% if nodo.hijos %}
     <ul>
       {% for hijo in nodo.hijos | sort(attribute='nombre') %}
-      {{ render_nodo(hijo) }}
+      {{ render_nodo(hijo, hist) }}
       {% endfor %}
     </ul>
     {% endif %}
@@ -215,7 +288,7 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
 
   <ul class="activos-tree mb-4">
     {% for raiz in raices | sort(attribute='nombre') %}
-    {{ render_nodo(raiz) }}
+    {{ render_nodo(raiz, hist_por_activo) }}
     {% endfor %}
   </ul>
   {% endif %}
@@ -281,7 +354,7 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
   </div>
 </div>
 
-{# Modal: editar activo (incluye selector de padre) #}
+{# Modal: editar activo (nombre, capacidades y notas; el padre va por cambio-alimentacion) #}
 <div class="modal fade" id="modalEditarActivo" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -291,17 +364,9 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
       </div>
       <div class="modal-body">
         <input type="hidden" id="editar-activo-id">
-        <input type="hidden" id="editar-activo-tipo">
         <div class="mb-3">
           <label class="form-label form-label-sm fw-semibold">Nombre <span class="text-danger">*</span></label>
           <input id="editar-nombre" type="text" class="form-control form-control-sm">
-        </div>
-        <div class="mb-3">
-          <label class="form-label form-label-sm fw-semibold">Padre</label>
-          <select id="editar-padre" class="form-select form-select-sm">
-            <option value="">— sin padre (raíz) —</option>
-          </select>
-          <div class="form-text">Solo se muestran activos del tipo válido según jerarquía.</div>
         </div>
         <div class="row g-2 mb-3">
           <div class="col-6">
@@ -326,6 +391,43 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-primary btn-sm" onclick="guardarEditarActivo()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: declarar cambio de alimentación #}
+<div class="modal fade" id="modalCambioAlimentacion" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Cambio de alimentación</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="cambio-activo-id">
+        <p class="small text-muted mb-3">Activo: <strong id="cambio-activo-nombre"></strong></p>
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Nueva fuente de alimentación <span class="text-danger">*</span></label>
+          <select id="cambio-fuente-select" class="form-select form-select-sm">
+            <option value="">— seleccionar fuente —</option>
+          </select>
+          <div class="form-text">Solo se muestran activos de tipo válido según jerarquía.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Fecha y hora de inicio <span class="text-danger">*</span></label>
+          <input id="cambio-desde" type="datetime-local" class="form-control form-control-sm">
+          <div class="form-text">Debe ser posterior a la conexión vigente actual.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm">Motivo</label>
+          <input id="cambio-motivo" type="text" class="form-control form-control-sm" placeholder="Ej. Mantenimiento en SE-3, ampliación de planta…">
+        </div>
+        <div id="cambio-error" class="alert alert-danger small py-1 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarCambioAlimentacion()">Declarar cambio</button>
       </div>
     </div>
   </div>
@@ -384,6 +486,7 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
     subestacion:   ["acometida", "subestacion"],
     transformador: ["acometida", "subestacion"],
     carga:         ["transformador"],
+    generacion:    ["subestacion", "transformador"],
   };
 
   // ── Árbol plegable ────────────────────────────────────────────────────────
@@ -497,31 +600,24 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
     }
   };
 
-  // ── Editar activo (incluye padre) ─────────────────────────────────────────
+  // ── Historial de alimentación (toggle inline) ────────────────────────────
+
+  window.toggleHistorial = function (elId) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.style.display = el.style.display === "none" ? "" : "none";
+  };
+
+  // ── Editar activo (solo metadatos; padre va por cambio-alimentacion) ───────
 
   window.abrirEditarActivo = function (id, nodo) {
     document.getElementById("editar-activo-id").value  = id;
-    document.getElementById("editar-activo-tipo").value = nodo.tipo || "";
     document.getElementById("editar-nombre").value     = nodo.nombre || "";
     document.getElementById("editar-kva").value        = nodo.capacidad_kva || "";
     document.getElementById("editar-kw").value         = nodo.potencia_nominal_kw || "";
     document.getElementById("editar-tipo-carga").value = nodo.tipo_carga || "";
     document.getElementById("editar-notas").value      = nodo.notas || "";
     limpiarError("editar-error");
-
-    const padreActualId = nodo.activo_padre_id || null;
-    const tiposValidos = PADRES_VALIDOS[nodo.tipo || ""] || [];
-    const padreGrupo = document.getElementById("editar-padre").closest(".mb-3");
-    const padreSelect = document.getElementById("editar-padre");
-    if (tiposValidos.length === 0) {
-      // Acometida: sin padre posible
-      padreSelect.innerHTML = '<option value="">— sin padre (raíz) —</option>';
-      if (padreGrupo) padreGrupo.style.display = "none";
-    } else {
-      if (padreGrupo) padreGrupo.style.display = "";
-      llenarPadresSelect(padreSelect, nodo.tipo, id, padreActualId);
-    }
-
     bootstrap.Modal.getOrCreateInstance(document.getElementById("modalEditarActivo")).show();
   };
 
@@ -533,22 +629,73 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
     const kw     = parseFloat(document.getElementById("editar-kw").value) || null;
     const tc     = document.getElementById("editar-tipo-carga").value.trim() || null;
     const notas  = document.getElementById("editar-notas").value.trim() || null;
-    const tipo   = document.getElementById("editar-activo-tipo").value;
-    const tiposValidos = PADRES_VALIDOS[tipo] || [];
-
-    const body = { nombre, capacidad_kva: kva, potencia_nominal_kw: kw, tipo_carga: tc, notas };
-    // Incluir padre solo si el tipo admite padre
-    if (tiposValidos.length > 0) {
-      const padreVal = document.getElementById("editar-padre").value;
-      body.activo_padre_id = padreVal ? parseInt(padreVal) : null;
-    }
-
     try {
-      await post(`${baseUrl(id)}/editar`, body);
+      await post(`${baseUrl(id)}/editar`, { nombre, capacidad_kva: kva, potencia_nominal_kw: kw, tipo_carga: tc, notas });
       mostrarToast("Activo actualizado");
       setTimeout(() => location.reload(), 1200);
     } catch (e) {
       mostrarError("editar-error", e.message);
+    }
+  };
+
+  // ── Cambio de alimentación ────────────────────────────────────────────────
+
+  // _tipoActivo almacena el tipo del activo que se está editando en el modal.
+  let _cambioTipoActivo = "";
+
+  window.abrirCambioAlimentacion = function (activoId, nombre, fuenteActualId) {
+    document.getElementById("cambio-activo-id").value = activoId;
+    document.getElementById("cambio-activo-nombre").textContent = nombre;
+    limpiarError("cambio-error");
+
+    // Tipo del activo (necesario para filtrar fuentes válidas)
+    const activo = TODOS_ACTIVOS.find(a => a.id === activoId);
+    _cambioTipoActivo = activo ? activo.tipo : "";
+
+    // Rellenar selector de fuentes
+    const sel = document.getElementById("cambio-fuente-select");
+    llenarPadresSelect(sel, _cambioTipoActivo, activoId, fuenteActualId);
+
+    // Prerellenar fecha con ahora (local, sin segundos)
+    const ahora = new Date();
+    ahora.setSeconds(0, 0);
+    const pad = n => String(n).padStart(2, "0");
+    document.getElementById("cambio-desde").value =
+      `${ahora.getFullYear()}-${pad(ahora.getMonth()+1)}-${pad(ahora.getDate())}T${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`;
+
+    document.getElementById("cambio-motivo").value = "";
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalCambioAlimentacion")).show();
+  };
+
+  window.guardarCambioAlimentacion = async function () {
+    limpiarError("cambio-error");
+    const activoId  = parseInt(document.getElementById("cambio-activo-id").value);
+    const fuenteVal = document.getElementById("cambio-fuente-select").value;
+    const desdeVal  = document.getElementById("cambio-desde").value;
+    const motivo    = document.getElementById("cambio-motivo").value.trim() || null;
+
+    if (!fuenteVal) {
+      mostrarError("cambio-error", "Selecciona una fuente de alimentación.");
+      return;
+    }
+    if (!desdeVal) {
+      mostrarError("cambio-error", "La fecha de inicio es obligatoria.");
+      return;
+    }
+
+    // datetime-local no incluye zona; lo enviamos con sufijo de zona local
+    const desde = new Date(desdeVal).toISOString();
+
+    try {
+      await post(`${baseUrl(activoId)}/cambio-alimentacion`, {
+        fuente_activo_id: parseInt(fuenteVal),
+        desde,
+        motivo,
+      });
+      mostrarToast("Cambio de alimentación declarado");
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      mostrarError("cambio-error", e.message);
     }
   };
 

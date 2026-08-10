@@ -2685,3 +2685,183 @@ def desvincular_medidor_activo(activo_id: int) -> None:
         _supabase.table("medidor_activo_vigencia").update(
             {"vigente_hasta": _date.today().isoformat()}
         ).eq("id", vigencia["id"]).execute()
+
+
+# ── Historial de alimentación de activos ──────────────────────────────────────
+
+def obtener_historial_alimentacion(activo_id: int) -> list[dict]:
+    """Historial de fuentes de alimentación del activo ordenado por vigente_desde DESC.
+
+    Cada fila incluye el campo 'fuente' con id/nombre/tipo del activo fuente.
+    """
+    resp = (
+        _supabase.table("activo_alimentacion_vigencia")
+        .select("*, fuente:fuente_activo_id(id, nombre, tipo)")
+        .eq("activo_id", activo_id)
+        .order("vigente_desde", desc=True)
+        .execute()
+    )
+    return resp.data or []
+
+
+def obtener_historiales_alimentacion_bulk(activo_ids: list[int]) -> dict[int, list[dict]]:
+    """Historial de alimentación de múltiples activos en una sola consulta.
+
+    Retorna dict {activo_id: [filas_ordenadas_desc]}.
+    Los activos sin filas no aparecen en el dict.
+    """
+    if not activo_ids:
+        return {}
+    resp = (
+        _supabase.table("activo_alimentacion_vigencia")
+        .select("*, fuente:fuente_activo_id(id, nombre, tipo)")
+        .in_("activo_id", activo_ids)
+        .order("vigente_desde", desc=True)
+        .execute()
+    )
+    result: dict[int, list[dict]] = {}
+    for row in (resp.data or []):
+        result.setdefault(row["activo_id"], []).append(row)
+    return result
+
+
+def declarar_cambio_alimentacion(
+    activo_id: int,
+    fuente_activo_id: int,
+    desde: "datetime",
+    motivo: str | None,
+) -> dict:
+    """Declara un cambio de fuente de alimentación para el activo.
+
+    Operación compuesta (no transaccional vía REST; ambas escrituras ocurren
+    secuencialmente):
+    1. Cierra la fila abierta (vigente_hasta IS NULL) poniendo vigente_hasta = desde.
+    2. Abre una nueva fila con fuente_activo_id y vigente_desde = desde.
+    3. Actualiza activos_electricos.activo_padre_id = fuente_activo_id.
+
+    Si no existe fila abierta (activo recién creado sin historial previo) simplemente
+    inserta la nueva fila y actualiza activo_padre_id — no hay nada que cerrar.
+
+    Raises:
+        ValueError: si existe fila abierta y desde <= vigente_desde de esa fila.
+    """
+    from datetime import timezone
+
+    # Normalizar a UTC con zona horaria
+    if desde.tzinfo is None:
+        desde = desde.replace(tzinfo=timezone.utc)
+    desde_utc = desde.astimezone(timezone.utc)
+    desde_iso = desde_utc.isoformat()
+
+    # 1. Localizar fila abierta
+    resp_open = (
+        _supabase.table("activo_alimentacion_vigencia")
+        .select("id, vigente_desde")
+        .eq("activo_id", activo_id)
+        .is_("vigente_hasta", "null")
+        .limit(1)
+        .execute()
+    )
+    fila_abierta = resp_open.data[0] if resp_open.data else None
+
+    if fila_abierta:
+        vd_raw = fila_abierta["vigente_desde"]
+        # Parsear con zona horaria para comparación robusta
+        vd = datetime.fromisoformat(vd_raw) if "+" in vd_raw or vd_raw.endswith("Z") \
+            else datetime.fromisoformat(vd_raw).replace(tzinfo=timezone.utc)
+        if vd.tzinfo is None:
+            vd = vd.replace(tzinfo=timezone.utc)
+        if desde_utc <= vd:
+            raise ValueError(
+                f"La fecha de inicio ({desde_iso}) debe ser posterior al "
+                f"vigente_desde de la fila actual ({vd_raw})."
+            )
+        # Cerrar fila abierta
+        _supabase.table("activo_alimentacion_vigencia").update(
+            {"vigente_hasta": desde_iso}
+        ).eq("id", fila_abierta["id"]).execute()
+
+    # 2. Abrir nueva fila
+    resp_new = _supabase.table("activo_alimentacion_vigencia").insert({
+        "activo_id":        activo_id,
+        "fuente_activo_id": fuente_activo_id,
+        "vigente_desde":    desde_iso,
+        "vigente_hasta":    None,
+        "motivo":           motivo or None,
+    }).execute()
+    nueva_fila = resp_new.data[0]
+
+    # 3. Sincronizar activo_padre_id (fuente de verdad para el árbol)
+    _supabase.table("activos_electricos").update(
+        {"activo_padre_id": fuente_activo_id}
+    ).eq("id", activo_id).execute()
+
+    return nueva_fila
+
+
+def resolver_fuente_vigente(activo_id: int, fecha: "datetime") -> dict | None:
+    """Activo fuente vigente del activo en el instante `fecha`.
+
+    Retorna la fila de activo_alimentacion_vigencia cuyo intervalo [vigente_desde, vigente_hasta)
+    contiene a `fecha`, o None si no existe (acometida raíz, o sin historial).
+    """
+    from datetime import timezone
+    if fecha.tzinfo is None:
+        fecha = fecha.replace(tzinfo=timezone.utc)
+    fecha_iso = fecha.astimezone(timezone.utc).isoformat()
+
+    resp = (
+        _supabase.table("activo_alimentacion_vigencia")
+        .select("*, fuente:fuente_activo_id(id, nombre, tipo)")
+        .eq("activo_id", activo_id)
+        .lte("vigente_desde", fecha_iso)
+        .or_(f"vigente_hasta.gt.{fecha_iso},vigente_hasta.is.null")
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def resolver_intervalos_fuente(
+    activo_id: int,
+    desde: "datetime",
+    hasta: "datetime",
+) -> list[dict]:
+    """Lista de intervalos con su fuente dentro del rango [desde, hasta).
+
+    Cada elemento: {fuente_activo_id, intervalo_desde, intervalo_hasta, motivo}.
+    Los extremos están recortados al rango solicitado.
+    Filas ordenadas por intervalo_desde ASC.
+
+    Diseñado para el cálculo de costes por tramo de alimentación.
+    """
+    from datetime import timezone
+    if desde.tzinfo is None:
+        desde = desde.replace(tzinfo=timezone.utc)
+    if hasta.tzinfo is None:
+        hasta = hasta.replace(tzinfo=timezone.utc)
+    desde_iso = desde.astimezone(timezone.utc).isoformat()
+    hasta_iso = hasta.astimezone(timezone.utc).isoformat()
+
+    # Filas que solapan [desde, hasta): vigente_desde < hasta AND (vigente_hasta > desde OR NULL)
+    resp = (
+        _supabase.table("activo_alimentacion_vigencia")
+        .select("fuente_activo_id, vigente_desde, vigente_hasta, motivo")
+        .eq("activo_id", activo_id)
+        .lt("vigente_desde", hasta_iso)
+        .or_(f"vigente_hasta.gt.{desde_iso},vigente_hasta.is.null")
+        .order("vigente_desde")
+        .execute()
+    )
+
+    result = []
+    for row in (resp.data or []):
+        iv_desde = max(row["vigente_desde"], desde_iso)
+        iv_hasta = min(row["vigente_hasta"], hasta_iso) if row["vigente_hasta"] else hasta_iso
+        result.append({
+            "fuente_activo_id": row["fuente_activo_id"],
+            "intervalo_desde":  iv_desde,
+            "intervalo_hasta":  iv_hasta,
+            "motivo":           row["motivo"],
+        })
+    return result
