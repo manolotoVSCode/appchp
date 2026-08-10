@@ -1717,16 +1717,19 @@ def crear_medidor_jerarquico(
     return resp.data[0]
 
 
-def obtener_arbol_medidores(cliente_id: int) -> list[dict]:
-    """Todos los medidores del cliente con limit(20000), orden estable por id."""
-    resp = (
+def obtener_arbol_medidores(cliente_id: int, planta_id: int | None = None) -> list[dict]:
+    """Todos los medidores del cliente con limit(20000), orden estable por id.
+
+    Si planta_id se provee, limita a los medidores de esa planta.
+    """
+    q = (
         _supabase.table("medidores")
         .select("*")
         .eq("cliente_id", cliente_id)
-        .order("id", desc=False)
-        .limit(20000)
-        .execute()
     )
+    if planta_id is not None:
+        q = q.eq("planta_id", planta_id)
+    resp = q.order("id", desc=False).limit(20000).execute()
     return resp.data or []
 
 

@@ -2864,7 +2864,7 @@ def create_app() -> Flask:
             return err
 
         from storage.repository import obtener_arbol_medidores as _oam
-        arbol_medidores = _oam(cliente_id)
+        arbol_medidores = _oam(cliente_id, planta_id=_pid_de_g())
 
         return render_template(
             "telemetria/dashboard.html",
@@ -2894,15 +2894,17 @@ def create_app() -> Flask:
         nodo_id_raw = request.args.get("nodo_id")
         rango = request.args.get("rango", "24h")
 
-        # Cargar árbol completo
-        todos = _oam(cliente_id)
+        # Cargar árbol filtrado por planta activa
+        todos = _oam(cliente_id, planta_id=_pid_de_g())
         if not todos:
             return jsonify({"error": "sin_medidores"}), 404
 
         # Indexar por id
         por_id = {m["id"]: m for m in todos}
 
-        # Acometida raíz: primer medidor sin padre (punto_medicion == 'acometida_cfe')
+        # Acometida raíz: primer medidor con punto_medicion == 'acometida_cfe' de la planta.
+        # Tras el filtro por planta_id, solo hay medidores de la planta activa, por lo que
+        # el primer resultado es siempre el correcto. Si ninguno tiene ese tipo, se usa todos[0].
         acometida = next(
             (m for m in todos if m.get("punto_medicion") == "acometida_cfe"),
             todos[0]
