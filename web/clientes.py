@@ -65,6 +65,7 @@ from storage.repository import (
     get_ultimas_gas_invoices,
     get_ultimas_ppa_invoices,
     get_mediciones_por_cliente,
+    TODAS_LAS_PLANTAS,
     get_medicion,
     create_medicion,
     save_medicion_datos,
@@ -80,6 +81,15 @@ from storage.repository import (
     save_modelado_chp,
     save_modelado_chp_curva,
     get_modelado_chp_curva,
+    obtener_arbol_activos,
+    obtener_activo,
+    crear_activo,
+    actualizar_activo,
+    desactivar_activo,
+    reasignar_activo_padre,
+    get_vigencia_activa_activo,
+    vincular_medidor_activo,
+    desvincular_medidor_activo,
 )
 
 logger = logging.getLogger(__name__)
@@ -464,14 +474,14 @@ def _calcular_cre_params(cliente: dict) -> dict | None:
     # Capacidad nominal: intentar CFE básico, luego PPA
     cap_kw = None
     try:
-        cfe_inv = get_ultimas_cfe_invoices(cliente["id"], n=12)
+        cfe_inv = get_ultimas_cfe_invoices(cliente["id"], n=12, planta_id=TODAS_LAS_PLANTAS)
         if cfe_inv:
             cap_kw = _capacidad_nominal_kw(cfe_inv)
     except Exception:
         pass
     if cap_kw is None:
         try:
-            ppa_inv = get_ultimas_ppa_invoices(cliente["id"], n=12)
+            ppa_inv = get_ultimas_ppa_invoices(cliente["id"], n=12, planta_id=TODAS_LAS_PLANTAS)
             if ppa_inv:
                 cap_kw = _capacidad_nominal_kw_ppa(ppa_inv)
         except Exception:
@@ -2392,13 +2402,13 @@ def modelado_chp_data(cliente_id: int, planta_id: int | None = None):
 
     # consumo_anual_kwh: suma de kWh de las últimas 12 facturas eléctricas
     from decimal import Decimal as _Decimal
-    cfe_inv = get_ultimas_cfe_invoices(cliente_id, n=12)
+    cfe_inv = get_ultimas_cfe_invoices(cliente_id, n=12, planta_id=planta_id)
     if cfe_inv:
         consumo_anual_kwh = float(
             sum(sum(p.consumo_kwh for p in inv.periodos) for inv in cfe_inv)
         )
     else:
-        ppa_inv = get_ultimas_ppa_invoices(cliente_id, n=12)
+        ppa_inv = get_ultimas_ppa_invoices(cliente_id, n=12, planta_id=planta_id)
         consumo_anual_kwh = float(sum(inv.consumo_kwh for inv in ppa_inv))
 
     # capacidad sugerida desde facturas (usada cuando motores_config no tiene kW válidos)
@@ -2428,7 +2438,7 @@ def modelado_chp_data(cliente_id: int, planta_id: int | None = None):
     num_motores = len(motores_config)
 
     # precio_gas_gj para cogen_defaults — promedio ponderado desde facturas, fallback manual
-    gas_inv_def = get_ultimas_gas_invoices(cliente_id, n=12)
+    gas_inv_def = get_ultimas_gas_invoices(cliente_id, n=12, planta_id=planta_id)
     _total_gj_def = sum(float(inv.consumo_total_gj) for inv in gas_inv_def if float(inv.consumo_total_gj) > 0)
     if _total_gj_def > 0:
         _precio_gas_gj = sum(
@@ -2643,8 +2653,8 @@ def modelado_chp_cogen_data(cliente_id: int, planta_id: int | None = None):
     }
 
     # 3. Cargar facturas CFE y gas (últimas 12, igual que cogeneracion/data)
-    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
-    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
+    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12, planta_id=planta_id), key=lambda x: x.periodo_inicio)
+    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12, planta_id=planta_id), key=lambda x: x.periodo_inicio)
 
     if not cfe_invoices:
         return jsonify({"error": "Sin facturas CFE disponibles para calcular cogeneración"}), 422
@@ -2901,8 +2911,8 @@ def modelado_chp_excel(cliente_id: int, planta_id: int | None = None):
         "capacidad_promedio_kw": float(modelado.get("capacidad_promedio_kw") or 0),
     }
 
-    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
-    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
+    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12, planta_id=planta_id), key=lambda x: x.periodo_inicio)
+    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12, planta_id=planta_id), key=lambda x: x.periodo_inicio)
 
     if not cfe_invoices:
         return jsonify({"error": "Sin facturas CFE disponibles"}), 422
@@ -3191,3 +3201,312 @@ def planta_desactivar(cliente_id: int, planta_id: int):
         flash(f"Error al desactivar: {exc}", "danger")
 
     return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+
+
+# ── Activos eléctricos ────────────────────────────────────────────────────────
+
+# Jerarquía válida: tipos de padre permitidos por tipo de hijo.
+# frozenset vacío = no tiene padre válido (raíz).
+_PADRES_VALIDOS: dict[str, frozenset] = {
+    "acometida":     frozenset(),
+    "subestacion":   frozenset(["acometida"]),
+    "transformador": frozenset(["acometida", "subestacion"]),
+    "carga":         frozenset(["transformador"]),
+}
+_TIPOS_ACTIVO = list(_PADRES_VALIDOS.keys())
+
+
+def _validar_jerarquia_activo(tipo_hijo: str, padre: dict | None) -> str | None:
+    """Retorna mensaje de error si la combinación hijo→padre no es válida, None si es OK."""
+    tipos_padre_validos = _PADRES_VALIDOS.get(tipo_hijo, frozenset())
+    if not tipos_padre_validos:
+        if padre is not None:
+            return f"Una {tipo_hijo} no puede tener padre; debe ser nodo raíz."
+        return None
+    if padre is None:
+        return f"Un/a {tipo_hijo} requiere un padre de tipo: {', '.join(sorted(tipos_padre_validos))}."
+    tipo_padre = padre.get("tipo", "")
+    if tipo_padre not in tipos_padre_validos:
+        return (
+            f"Un/a {tipo_hijo} solo puede colgar de: {', '.join(sorted(tipos_padre_validos))}. "
+            f"El padre seleccionado es de tipo '{tipo_padre}'."
+        )
+    return None
+
+
+def _detectar_ciclo(activo_id: int, nuevo_padre_id: int, todos: list[dict]) -> bool:
+    """True si nuevo_padre_id es descendiente de activo_id (ciclo)."""
+    by_id = {a["id"]: a for a in todos}
+    visitado: set[int] = set()
+    cursor_id: int | None = nuevo_padre_id
+    while cursor_id is not None:
+        if cursor_id == activo_id:
+            return True
+        if cursor_id in visitado:
+            break
+        visitado.add(cursor_id)
+        nodo = by_id.get(cursor_id)
+        cursor_id = nodo.get("activo_padre_id") if nodo else None
+    return False
+
+
+def _verificar_planta_activos(cliente_id: int, planta_id: int):
+    """Valida auth, permiso y pertenencia de planta. Retorna (user, planta) o (None, error_tuple)."""
+    from web.auth_permissions import usuario_puede_ver_empresa
+    user = _get_current_user()
+    if not user:
+        return None, ("redirect_login", None)
+    if not usuario_puede_ver_empresa(cliente_id, user):
+        return None, ({"error": "Sin acceso"}, 403)
+    planta = obtener_planta(planta_id)
+    if planta is None or planta.get("cliente_id") != cliente_id:
+        return None, ({"error": "Planta no encontrada"}, 404)
+    return user, planta
+
+
+def _err_activos(resultado):
+    """Materializa el error devuelto por _verificar_planta_activos en una respuesta Flask."""
+    from flask import jsonify, abort as _abort
+    if resultado[0] == "redirect_login":
+        return redirect(url_for("auth.login"))
+    return jsonify(resultado[0]), resultado[1]
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos")
+def activos_planta(cliente_id: int, planta_id: int):
+    """Vista principal del árbol de activos eléctricos de la planta."""
+    from storage.repository import get_cliente_con_conteos as _gcc
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    planta = planta_o_err
+
+    cliente = _gcc(cliente_id)
+    activos = obtener_arbol_activos(cliente_id, planta_id)
+    mediciones = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
+    es_admin = user.get("rol") in ("admin", "master_admin")
+
+    # Árbol anidado para el template
+    by_id: dict[int, dict] = {a["id"]: {**a, "hijos": []} for a in activos}
+    raices: list[dict] = []
+    for nodo in by_id.values():
+        padre_id = nodo.get("activo_padre_id")
+        if padre_id and padre_id in by_id:
+            by_id[padre_id]["hijos"].append(nodo)
+        else:
+            raices.append(nodo)
+
+    return render_template(
+        "clientes/activos.html",
+        cliente=cliente,
+        planta=planta,
+        planta_id=planta_id,
+        raices=raices,
+        activos_planos=activos,
+        mediciones=mediciones,
+        tipos_activo=_TIPOS_ACTIVO,
+        es_admin=es_admin,
+        nav_active="activos",
+    )
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/crear", methods=["POST"])
+def activo_crear(cliente_id: int, planta_id: int):
+    """Crea un activo eléctrico en la planta."""
+    from flask import jsonify
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    data = request.get_json(silent=True) or {}
+    nombre = (data.get("nombre") or "").strip()
+    tipo = (data.get("tipo") or "").strip()
+    padre_id = data.get("activo_padre_id") or None
+
+    if not nombre:
+        return jsonify({"error": "El nombre es obligatorio"}), 400
+    if tipo not in _TIPOS_ACTIVO:
+        return jsonify({"error": f"Tipo inválido. Válidos: {', '.join(_TIPOS_ACTIVO)}"}), 400
+
+    padre = obtener_activo(int(padre_id)) if padre_id else None
+    if padre_id and padre is None:
+        return jsonify({"error": "El activo padre no existe"}), 400
+    if padre and padre.get("cliente_id") != cliente_id:
+        return jsonify({"error": "El padre no pertenece a este cliente"}), 400
+
+    err = _validar_jerarquia_activo(tipo, padre)
+    if err:
+        return jsonify({"error": err}), 422
+
+    payload = {
+        "cliente_id":          cliente_id,
+        "planta_id":           planta_id,
+        "tipo":                tipo,
+        "nombre":              nombre,
+        "activo_padre_id":     padre_id,
+        "capacidad_kva":       data.get("capacidad_kva") or None,
+        "potencia_nominal_kw": data.get("potencia_nominal_kw") or None,
+        "tipo_carga":          (data.get("tipo_carga") or None),
+        "notas":               (data.get("notas") or None),
+        "activo":              True,
+    }
+    try:
+        nuevo = crear_activo(payload)
+        return jsonify({"ok": True, "activo": nuevo}), 201
+    except Exception as exc:
+        logger.error("Error creando activo cliente_id=%d planta_id=%d: %s", cliente_id, planta_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/editar", methods=["POST"])
+def activo_editar(cliente_id: int, planta_id: int, activo_id: int):
+    """Actualiza nombre, capacidad, potencia, tipo_carga y notas de un activo."""
+    from flask import jsonify
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("cliente_id") != cliente_id or activo.get("planta_id") != planta_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+
+    data = request.get_json(silent=True) or {}
+    nombre = (data.get("nombre") or "").strip()
+    if not nombre:
+        return jsonify({"error": "El nombre es obligatorio"}), 400
+
+    payload = {
+        "nombre":              nombre,
+        "capacidad_kva":       data.get("capacidad_kva") or None,
+        "potencia_nominal_kw": data.get("potencia_nominal_kw") or None,
+        "tipo_carga":          (data.get("tipo_carga") or None),
+        "notas":               (data.get("notas") or None),
+    }
+    try:
+        actualizado = actualizar_activo(activo_id, payload)
+        return jsonify({"ok": True, "activo": actualizado})
+    except Exception as exc:
+        logger.error("Error editando activo id=%d: %s", activo_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/desactivar", methods=["POST"])
+def activo_desactivar(cliente_id: int, planta_id: int, activo_id: int):
+    """Baja lógica del activo (activo=False). Cierra su vigencia de medidor si existe."""
+    from flask import jsonify
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("cliente_id") != cliente_id or activo.get("planta_id") != planta_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+
+    try:
+        desvincular_medidor_activo(activo_id)
+        desactivar_activo(activo_id)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        logger.error("Error desactivando activo id=%d: %s", activo_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/reasignar-padre", methods=["POST"])
+def activo_reasignar_padre(cliente_id: int, planta_id: int, activo_id: int):
+    """Cambia el padre de un activo. Valida jerarquía y detecta ciclos."""
+    from flask import jsonify
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("cliente_id") != cliente_id or activo.get("planta_id") != planta_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+
+    data = request.get_json(silent=True) or {}
+    nuevo_padre_id = data.get("activo_padre_id") or None
+
+    padre = obtener_activo(int(nuevo_padre_id)) if nuevo_padre_id else None
+    if nuevo_padre_id and padre is None:
+        return jsonify({"error": "El activo padre no existe"}), 400
+    if padre and (padre.get("cliente_id") != cliente_id or padre.get("planta_id") != planta_id):
+        return jsonify({"error": "El padre debe pertenecer a la misma planta"}), 400
+    if nuevo_padre_id and int(nuevo_padre_id) == activo_id:
+        return jsonify({"error": "Un activo no puede ser su propio padre"}), 422
+
+    err = _validar_jerarquia_activo(activo["tipo"], padre)
+    if err:
+        return jsonify({"error": err}), 422
+
+    todos = obtener_arbol_activos(cliente_id, planta_id)
+    if nuevo_padre_id and _detectar_ciclo(activo_id, int(nuevo_padre_id), todos):
+        return jsonify({"error": "La reasignación crearía un ciclo en la jerarquía"}), 422
+
+    try:
+        actualizado = reasignar_activo_padre(activo_id, int(nuevo_padre_id) if nuevo_padre_id else None)
+        return jsonify({"ok": True, "activo": actualizado})
+    except Exception as exc:
+        logger.error("Error reasignando padre activo id=%d: %s", activo_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/vincular-medidor", methods=["POST"])
+def activo_vincular_medidor(cliente_id: int, planta_id: int, activo_id: int):
+    """Vincula un medidor al activo. Cierra vigencias anteriores del medidor y del activo."""
+    from flask import jsonify
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("cliente_id") != cliente_id or activo.get("planta_id") != planta_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+
+    data = request.get_json(silent=True) or {}
+    medidor_id = data.get("medidor_id")
+    if not isinstance(medidor_id, int):
+        return jsonify({"error": "medidor_id entero requerido"}), 400
+
+    mediciones_planta = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
+    ids_validos = {m["id"] for m in mediciones_planta}
+    if medidor_id not in ids_validos:
+        return jsonify({"error": "El medidor no pertenece a esta planta"}), 400
+
+    try:
+        nueva_vigencia = vincular_medidor_activo(medidor_id, activo_id)
+        return jsonify({"ok": True, "vigencia": nueva_vigencia})
+    except Exception as exc:
+        logger.error("Error vinculando medidor_id=%d a activo_id=%d: %s", medidor_id, activo_id, exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/desvincular-medidor", methods=["POST"])
+def activo_desvincular_medidor(cliente_id: int, planta_id: int, activo_id: int):
+    """Cierra la vigencia activa del activo (desvincula el medidor)."""
+    from flask import jsonify
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+    if user.get("rol") not in ("admin", "master_admin"):
+        return jsonify({"error": "Sin permiso"}), 403
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("cliente_id") != cliente_id or activo.get("planta_id") != planta_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+
+    try:
+        desvincular_medidor_activo(activo_id)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        logger.error("Error desvinculando medidor de activo_id=%d: %s", activo_id, exc)
+        return jsonify({"error": str(exc)}), 500

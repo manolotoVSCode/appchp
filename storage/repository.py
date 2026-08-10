@@ -28,6 +28,28 @@ _supabase: Client = create_client(
     options=ClientOptions(postgrest_client_timeout=30),
 )
 
+# ── Sentinelas de ámbito de planta ───────────────────────────────────────────
+
+class _PlantScope:
+    """Valor sentinela para el ámbito de planta en consultas de repositorio.
+
+    No instanciar directamente: usar TODAS_LAS_PLANTAS o _PLANTA_NO_ESPECIFICADA.
+    """
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def __repr__(self) -> str:
+        return self._name
+
+
+# Pasar como planta_id para indicar que se desea consultar TODAS las plantas
+# del cliente sin filtro. Es el único camino legítimo para agregar.
+TODAS_LAS_PLANTAS: _PlantScope = _PlantScope("TODAS_LAS_PLANTAS")
+
+# Valor por defecto de los parámetros planta_id. Indica que el llamante
+# no especificó ámbito: emite warning en log y no filtra (modo seguro).
+_PLANTA_NO_ESPECIFICADA: _PlantScope = _PlantScope("_PLANTA_NO_ESPECIFICADA")
+
 # ── Retry ante saturación de conexiones HTTP/2 a Supabase ────────────────────
 
 _RETRIES = 3
@@ -698,10 +720,20 @@ def get_contrato_con_conteos(contrato_id: int) -> dict | None:
     }
 
 
-def get_contratos_por_cliente(cliente_id: int, planta_id: int | None = None) -> list[Contrato]:
-    """Devuelve contratos del cliente. Si planta_id se provee, filtra a esa planta."""
+def get_contratos_por_cliente(
+    cliente_id: int, planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA
+) -> list[Contrato]:
+    """Devuelve contratos del cliente.
+
+    planta_id puede ser:
+    - int concreto → filtra a esa planta.
+    - TODAS_LAS_PLANTAS → devuelve contratos de todas las plantas (agregado deliberado).
+    - omitido → emite warning y devuelve todo (comportamiento seguro hacia atrás).
+    """
     q = _supabase.table("contratos").select("*").eq("cliente_id", cliente_id)
-    if planta_id is not None:
+    if planta_id is _PLANTA_NO_ESPECIFICADA:
+        logger.warning("[SCOPE_MISSING] get_contratos_por_cliente: planta_id no especificado")
+    elif planta_id is not TODAS_LAS_PLANTAS:
         q = q.eq("planta_id", planta_id)
     return [_row_to_contrato(r) for r in q.order("nombre").execute().data]
 
@@ -883,15 +915,24 @@ def delete_meses_seleccionados_anio(contrato_id: int, anio: int) -> None:
     ).eq("anio", anio).execute()
 
 
-def get_tipos_electricos_con_meses_seleccionados(cliente_id: int, planta_id: int | None = None) -> list[str]:
+def get_tipos_electricos_con_meses_seleccionados(
+    cliente_id: int, planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA
+) -> list[str]:
     """
     Devuelve lista de tipos de contrato eléctrico que tienen al menos un mes
-    seleccionado para el cliente dado. Si planta_id se provee, limita a esa planta.
+    seleccionado para el cliente dado.
+
+    planta_id puede ser:
+    - int concreto → limita a esa planta.
+    - TODAS_LAS_PLANTAS → consulta todas las plantas (agregado deliberado).
+    - omitido → emite warning y consulta todo (comportamiento seguro hacia atrás).
     """
     from models.contrato import TIPOS_ELECTRICOS
 
     q = _supabase.table("contratos").select("id, tipo").eq("cliente_id", cliente_id).in_("tipo", list(TIPOS_ELECTRICOS))
-    if planta_id is not None:
+    if planta_id is _PLANTA_NO_ESPECIFICADA:
+        logger.warning("[SCOPE_MISSING] get_tipos_electricos_con_meses_seleccionados: planta_id no especificado")
+    elif planta_id is not TODAS_LAS_PLANTAS:
         q = q.eq("planta_id", planta_id)
     contratos = q.execute()
 
@@ -906,7 +947,9 @@ def get_tipos_electricos_con_meses_seleccionados(cliente_id: int, planta_id: int
     return sorted(tipos_con_meses)
 
 
-def get_tipo_suministro_electrico_seleccionado(cliente_id: int, planta_id: int | None = None) -> str | None:
+def get_tipo_suministro_electrico_seleccionado(
+    cliente_id: int, planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA
+) -> str | None:
     """
     Detecta el tipo de suministro eléctrico de los meses seleccionados del cliente.
 
@@ -1044,14 +1087,22 @@ def get_sidebar_data_cliente(cliente_id: int) -> dict[int, list[dict]]:
     return resultado
 
 
-def get_facturas_para_dashboard(cliente_id: int, planta_id: int | None = None) -> tuple[list[CFEInvoice], list[GasInvoice]]:
-    """Carga facturas CFE y gas seleccionadas. Si planta_id se provee, solo considera
-    contratos de esa planta, filtrando los meses seleccionados de otras plantas.
+def get_facturas_para_dashboard(
+    cliente_id: int, planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA
+) -> tuple[list[CFEInvoice], list[GasInvoice]]:
+    """Carga facturas CFE y gas seleccionadas.
+
+    planta_id puede ser:
+    - int concreto → solo considera contratos de esa planta.
+    - TODAS_LAS_PLANTAS → considera todas las plantas (agregado deliberado).
+    - omitido → emite warning y agrega todo (comportamiento seguro hacia atrás).
     """
     seleccionados = get_meses_seleccionados_por_cliente(cliente_id)
     if not seleccionados:
         return [], []
-    if planta_id is not None:
+    if planta_id is _PLANTA_NO_ESPECIFICADA:
+        logger.warning("[SCOPE_MISSING] get_facturas_para_dashboard: planta_id no especificado")
+    elif planta_id is not TODAS_LAS_PLANTAS:
         r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = {row["id"] for row in r.data}
         seleccionados = {(c, a, m) for c, a, m in seleccionados if c in ids_planta}
@@ -1101,18 +1152,22 @@ def delete_gas_factura(factura_id: int) -> None:
 
 
 def get_ultimas_cfe_invoices(
-    cliente_id: int, n: int = 12, planta_id: int | None = None
+    cliente_id: int, n: int = 12, planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA
 ) -> list[CFEInvoice]:
     """Retorna las n facturas CFE más recientes del cliente, sin filtrar por meses seleccionados.
 
-    Si planta_id se provee, limita a los contratos de esa planta (via contratos.planta_id →
-    cfe_facturas.contrato_id). Ordenadas por periodo_inicio DESC y devueltas en orden ASC.
-    Usado por el dashboard de Cogeneración (regla: siempre últimas 12).
+    planta_id puede ser:
+    - int concreto → filtra por esa planta via contratos.planta_id → cfe_facturas.contrato_id.
+    - TODAS_LAS_PLANTAS → devuelve facturas de todas las plantas (agregado deliberado).
+    - omitido → emite warning y devuelve todo (comportamiento seguro hacia atrás).
+    Ordenadas por periodo_inicio DESC y devueltas en orden ASC.
     """
     q = _supabase.table("cfe_facturas").select(
         "*, clientes(nombre, rfc), cfe_periodos(*), cfe_mem_componentes(*)"
     ).eq("cliente_id", cliente_id)
-    if planta_id is not None:
+    if planta_id is _PLANTA_NO_ESPECIFICADA:
+        logger.warning("[SCOPE_MISSING] get_ultimas_cfe_invoices: planta_id no especificado")
+    elif planta_id is not TODAS_LAS_PLANTAS:
         r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = [row["id"] for row in r.data]
         if not ids_planta:
@@ -1123,18 +1178,22 @@ def get_ultimas_cfe_invoices(
 
 
 def get_ultimas_gas_invoices(
-    cliente_id: int, n: int = 12, planta_id: int | None = None
+    cliente_id: int, n: int = 12, planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA
 ) -> list[GasInvoice]:
     """Retorna las n facturas de gas más recientes del cliente, sin filtrar por meses seleccionados.
 
-    Si planta_id se provee, limita a los contratos de esa planta (via contratos.planta_id →
-    gas_facturas.contrato_id). Ordenadas por periodo_inicio DESC y devueltas en orden ASC.
-    Usado por el dashboard de Cogeneración (regla: siempre últimas 12).
+    planta_id puede ser:
+    - int concreto → filtra por esa planta via contratos.planta_id → gas_facturas.contrato_id.
+    - TODAS_LAS_PLANTAS → devuelve facturas de todas las plantas (agregado deliberado).
+    - omitido → emite warning y devuelve todo (comportamiento seguro hacia atrás).
+    Ordenadas por periodo_inicio DESC y devueltas en orden ASC.
     """
     q = _supabase.table("gas_facturas").select(
         "*, clientes(nombre, rfc), gas_conceptos(*)"
     ).eq("cliente_id", cliente_id)
-    if planta_id is not None:
+    if planta_id is _PLANTA_NO_ESPECIFICADA:
+        logger.warning("[SCOPE_MISSING] get_ultimas_gas_invoices: planta_id no especificado")
+    elif planta_id is not TODAS_LAS_PLANTAS:
         r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = [row["id"] for row in r.data]
         if not ids_planta:
@@ -1145,17 +1204,21 @@ def get_ultimas_gas_invoices(
 
 
 def get_ultimas_ppa_invoices(
-    cliente_id: int, n: int = 12, planta_id: int | None = None
+    cliente_id: int, n: int = 12, planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA
 ) -> list["FacturaCalificado"]:
     """Retorna las n facturas PPA más recientes del cliente, sin filtrar por meses seleccionados.
 
-    Si planta_id se provee, limita a los contratos de esa planta (via contratos.planta_id →
-    facturas_electricidad_calificado.contrato_id). Usado por el dashboard de Cogeneración.
+    planta_id puede ser:
+    - int concreto → filtra por esa planta via contratos.planta_id → facturas_electricidad_calificado.contrato_id.
+    - TODAS_LAS_PLANTAS → devuelve facturas de todas las plantas (agregado deliberado).
+    - omitido → emite warning y devuelve todo (comportamiento seguro hacia atrás).
     """
     q = _supabase.table("facturas_electricidad_calificado").select("*").eq(
         "cliente_id", cliente_id
     )
-    if planta_id is not None:
+    if planta_id is _PLANTA_NO_ESPECIFICADA:
+        logger.warning("[SCOPE_MISSING] get_ultimas_ppa_invoices: planta_id no especificado")
+    elif planta_id is not TODAS_LAS_PLANTAS:
         r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = [row["id"] for row in r.data]
         if not ids_planta:
@@ -1279,13 +1342,21 @@ def get_facturas_para_dashboard_calificado(
 
 def get_facturas_ppa_y_gas_para_dashboard(
     cliente_id: int,
-    planta_id: int | None = None,
+    planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA,
 ) -> tuple[list[FacturaCalificado], list[GasInvoice]]:
-    """Carga facturas PPA y gas seleccionadas. Si planta_id se provee, filtra a esa planta."""
+    """Carga facturas PPA y gas seleccionadas.
+
+    planta_id puede ser:
+    - int concreto → solo considera contratos de esa planta.
+    - TODAS_LAS_PLANTAS → considera todas las plantas (agregado deliberado).
+    - omitido → emite warning y agrega todo (comportamiento seguro hacia atrás).
+    """
     seleccionados = get_meses_seleccionados_por_cliente(cliente_id)
     if not seleccionados:
         return [], []
-    if planta_id is not None:
+    if planta_id is _PLANTA_NO_ESPECIFICADA:
+        logger.warning("[SCOPE_MISSING] get_facturas_ppa_y_gas_para_dashboard: planta_id no especificado")
+    elif planta_id is not TODAS_LAS_PLANTAS:
         r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = {row["id"] for row in r.data}
         seleccionados = {(c, a, m) for c, a, m in seleccionados if c in ids_planta}
@@ -1390,17 +1461,24 @@ def set_configuracion(clave: str, valor: str) -> None:
 
 # ── Mediciones cincominutal ────────────────────────────────────────────────────
 
-def get_mediciones_por_cliente(cliente_id: int, planta_id: int | None = None) -> list[dict]:
+def get_mediciones_por_cliente(
+    cliente_id: int, planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA
+) -> list[dict]:
     """Lista de mediciones cargadas para el cliente, ordenadas por anio DESC, mes DESC.
 
-    Si planta_id se especifica, filtra a las mediciones de esa planta.
+    planta_id puede ser:
+    - int concreto → filtra a esa planta.
+    - TODAS_LAS_PLANTAS → devuelve mediciones de todas las plantas (agregado deliberado).
+    - omitido → emite warning y devuelve todo (comportamiento seguro hacia atrás).
     """
     q = (
         _supabase.table("mediciones_cincominutal")
         .select("id, cliente_id, planta_id, anio, mes, nombre, uploaded_at, uploaded_by")
         .eq("cliente_id", cliente_id)
     )
-    if planta_id is not None:
+    if planta_id is _PLANTA_NO_ESPECIFICADA:
+        logger.warning("[SCOPE_MISSING] get_mediciones_por_cliente: planta_id no especificado")
+    elif planta_id is not TODAS_LAS_PLANTAS:
         q = q.eq("planta_id", planta_id)
     return q.order("anio", desc=True).order("mes", desc=True).execute().data or []
 
@@ -1747,17 +1825,24 @@ def crear_medidor_jerarquico(
     return resp.data[0]
 
 
-def obtener_arbol_medidores(cliente_id: int, planta_id: int | None = None) -> list[dict]:
+def obtener_arbol_medidores(
+    cliente_id: int, planta_id: int | _PlantScope = _PLANTA_NO_ESPECIFICADA
+) -> list[dict]:
     """Todos los medidores del cliente con limit(20000), orden estable por id.
 
-    Si planta_id se provee, limita a los medidores de esa planta.
+    planta_id puede ser:
+    - int concreto → limita a los medidores de esa planta.
+    - TODAS_LAS_PLANTAS → devuelve medidores de todas las plantas (agregado deliberado).
+    - omitido → emite warning y devuelve todo (comportamiento seguro hacia atrás).
     """
     q = (
         _supabase.table("medidores")
         .select("*")
         .eq("cliente_id", cliente_id)
     )
-    if planta_id is not None:
+    if planta_id is _PLANTA_NO_ESPECIFICADA:
+        logger.warning("[SCOPE_MISSING] obtener_arbol_medidores: planta_id no especificado")
+    elif planta_id is not TODAS_LAS_PLANTAS:
         q = q.eq("planta_id", planta_id)
     resp = q.order("id", desc=False).limit(20000).execute()
     return resp.data or []
@@ -2347,3 +2432,163 @@ def get_contratos_por_planta(planta_id: int) -> list[Contrato]:
     """Devuelve contratos de una planta específica, ordenados por nombre."""
     r = _supabase.table("contratos").select("*").eq("planta_id", planta_id).order("nombre").execute()
     return [_row_to_contrato(row) for row in r.data]
+
+
+# ── Activos eléctricos ────────────────────────────────────────────────────────
+
+def obtener_arbol_activos(cliente_id: int, planta_id: int) -> list[dict]:
+    """Lista plana de activos eléctricos de la planta con la vigencia de medidor activa.
+
+    planta_id es obligatorio; no acepta sentinel. Usa cliente_id como doble filtro
+    de seguridad para evitar cross-client leakage.
+    Incluye, por cada activo, el campo 'medidor_vigente' (dict o None).
+    """
+    activos_resp = (
+        _supabase.table("activos_electricos")
+        .select("*")
+        .eq("cliente_id", cliente_id)
+        .eq("planta_id", planta_id)
+        .order("id")
+        .execute()
+    )
+    activos = activos_resp.data or []
+
+    if not activos:
+        return []
+
+    activo_ids = [a["id"] for a in activos]
+
+    # Vigencias activas (vigente_hasta IS NULL) de esta planta
+    vigencias_resp = (
+        _supabase.table("medidor_activo_vigencia")
+        .select("*, medidores(*)")
+        .in_("activo_id", activo_ids)
+        .is_("vigente_hasta", "null")
+        .execute()
+    )
+    vigencia_por_activo: dict[int, dict] = {}
+    for v in (vigencias_resp.data or []):
+        vigencia_por_activo[v["activo_id"]] = v
+
+    for a in activos:
+        a["medidor_vigente"] = vigencia_por_activo.get(a["id"])
+
+    return activos
+
+
+def obtener_activo(activo_id: int) -> dict | None:
+    """Activo eléctrico por id. Retorna None si no existe."""
+    resp = (
+        _supabase.table("activos_electricos")
+        .select("*")
+        .eq("id", activo_id)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def crear_activo(data: dict) -> dict:
+    """Crea un activo eléctrico. data debe incluir cliente_id, planta_id, tipo, nombre."""
+    resp = _supabase.table("activos_electricos").insert(data).execute()
+    return resp.data[0]
+
+
+def actualizar_activo(activo_id: int, data: dict) -> dict:
+    """Actualiza campos de un activo eléctrico. Retorna la fila actualizada."""
+    resp = (
+        _supabase.table("activos_electricos")
+        .update(data)
+        .eq("id", activo_id)
+        .execute()
+    )
+    return resp.data[0]
+
+
+def desactivar_activo(activo_id: int) -> None:
+    """Marca activo=False en un activo eléctrico (baja lógica)."""
+    _supabase.table("activos_electricos").update({"activo": False}).eq("id", activo_id).execute()
+
+
+def reasignar_activo_padre(activo_id: int, nuevo_padre_id: int | None) -> dict:
+    """Cambia activo_padre_id de un activo. Retorna la fila actualizada."""
+    resp = (
+        _supabase.table("activos_electricos")
+        .update({"activo_padre_id": nuevo_padre_id})
+        .eq("id", activo_id)
+        .execute()
+    )
+    return resp.data[0]
+
+
+def get_vigencia_activa_activo(activo_id: int) -> dict | None:
+    """Vigencia medidor-activo activa (vigente_hasta IS NULL) para el activo dado."""
+    resp = (
+        _supabase.table("medidor_activo_vigencia")
+        .select("*")
+        .eq("activo_id", activo_id)
+        .is_("vigente_hasta", "null")
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def get_vigencia_activa_medidor(medidor_id: int) -> dict | None:
+    """Vigencia medidor-activo activa (vigente_hasta IS NULL) para el medidor dado."""
+    resp = (
+        _supabase.table("medidor_activo_vigencia")
+        .select("*")
+        .eq("medidor_id", medidor_id)
+        .is_("vigente_hasta", "null")
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else None
+
+
+def vincular_medidor_activo(medidor_id: int, activo_id: int) -> dict:
+    """Cierra la vigencia activa del medidor (si existe) y abre una nueva hacia activo_id.
+
+    Nunca borra filas de vigencia: el historial preserva la atribución de lecturas.
+    Retorna la fila de vigencia recién creada.
+    """
+    from datetime import date as _date
+    hoy = _date.today().isoformat()
+
+    # Cerrar vigencia anterior del medidor en cualquier activo
+    vigencia_previa = get_vigencia_activa_medidor(medidor_id)
+    if vigencia_previa:
+        _supabase.table("medidor_activo_vigencia").update(
+            {"vigente_hasta": hoy}
+        ).eq("id", vigencia_previa["id"]).execute()
+
+    # Cerrar también cualquier vigencia abierta del activo destino
+    # (no debería haber, pero previene inconsistencias)
+    vigencia_activo = get_vigencia_activa_activo(activo_id)
+    if vigencia_activo and vigencia_activo["medidor_id"] != medidor_id:
+        _supabase.table("medidor_activo_vigencia").update(
+            {"vigente_hasta": hoy}
+        ).eq("id", vigencia_activo["id"]).execute()
+
+    # Abrir nueva vigencia
+    resp = _supabase.table("medidor_activo_vigencia").insert({
+        "medidor_id": medidor_id,
+        "activo_id":  activo_id,
+        "vigente_desde": hoy,
+        "vigente_hasta": None,
+    }).execute()
+    return resp.data[0]
+
+
+def desvincular_medidor_activo(activo_id: int) -> None:
+    """Cierra la vigencia activa del activo poniendo vigente_hasta = hoy.
+
+    No borra la fila; el historial queda preservado.
+    """
+    from datetime import date as _date
+    vigencia = get_vigencia_activa_activo(activo_id)
+    if vigencia:
+        _supabase.table("medidor_activo_vigencia").update(
+            {"vigente_hasta": _date.today().isoformat()}
+        ).eq("id", vigencia["id"]).execute()

@@ -1,0 +1,499 @@
+{% extends "clientes/_base.html" %}
+{% block title %}Activos — {{ planta.nombre }} — {{ cliente.nombre }}{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .activo-card { border-left: 3px solid var(--color-primary); background: #fff; }
+  .activo-card.nivel-1 { margin-left: 0; }
+  .activo-card.nivel-2 { margin-left: 1.5rem; border-left-color: #5B8FB9; }
+  .activo-card.nivel-3 { margin-left: 3rem; border-left-color: #A4C8E1; }
+  .activo-card.nivel-4 { margin-left: 4.5rem; border-left-color: #cde; }
+  .activo-card.inactivo { opacity: .5; }
+  .badge-tipo-acometida    { background: #1F3A5F; color: #fff; }
+  .badge-tipo-subestacion  { background: #2E5C8A; color: #fff; }
+  .badge-tipo-transformador{ background: #5B8FB9; color: #fff; }
+  .badge-tipo-carga        { background: #A4C8E1; color: #1F3A5F; }
+  .arbol-connector { width: 1.5rem; flex-shrink: 0; }
+  .btn-activo-accion { font-size: .75rem; padding: .15rem .45rem; }
+  #toast-activos { position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9999; min-width: 260px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-3" style="max-width: 960px">
+
+  {# Cabecera #}
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <div>
+      <h4 class="mb-0 fw-semibold">Activos eléctricos</h4>
+      <div class="text-muted small">{{ planta.nombre }} · {{ cliente.nombre }}</div>
+    </div>
+    {% if es_admin %}
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearActivo">
+      <i class="bi bi-plus-lg me-1"></i>Nuevo activo
+    </button>
+    {% endif %}
+  </div>
+
+  {# Árbol de activos #}
+  {% if not raices %}
+  <div class="alert alert-secondary small">Esta planta no tiene activos eléctricos registrados.</div>
+  {% else %}
+
+  {# Macro recursivo para renderizar nodos #}
+  {% macro render_nodo(nodo, nivel) %}
+  <div class="activo-card shadow-sm rounded mb-2 p-2 nivel-{{ nivel }}{% if not nodo.activo %} inactivo{% endif %}"
+       id="activo-{{ nodo.id }}" data-activo-id="{{ nodo.id }}">
+    <div class="d-flex align-items-start gap-2">
+      <div class="flex-grow-1">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="badge badge-tipo-{{ nodo.tipo }} rounded-pill" style="font-size:.65rem">{{ nodo.tipo }}</span>
+          <span class="fw-semibold small">{{ nodo.nombre }}</span>
+          {% if not nodo.activo %}
+          <span class="badge bg-secondary-subtle text-secondary border rounded-pill" style="font-size:.6rem">Inactivo</span>
+          {% endif %}
+          {% if nodo.capacidad_kva %}
+          <span class="text-muted" style="font-size:.72rem">{{ nodo.capacidad_kva }} kVA</span>
+          {% endif %}
+          {% if nodo.potencia_nominal_kw %}
+          <span class="text-muted" style="font-size:.72rem">{{ nodo.potencia_nominal_kw }} kW</span>
+          {% endif %}
+        </div>
+        {% if nodo.notas %}
+        <div class="text-muted mt-1" style="font-size:.7rem">{{ nodo.notas }}</div>
+        {% endif %}
+        {# Medidor vinculado #}
+        {% if nodo.medidor_vigente %}
+        {% set mv = nodo.medidor_vigente %}
+        <div class="mt-1 d-flex align-items-center gap-1">
+          <i class="bi bi-reception-4 text-success" style="font-size:.75rem"></i>
+          <span class="small text-success" style="font-size:.72rem">
+            {{ mv.medidores.nombre if mv.medidores else ('Medidor #' ~ mv.medidor_id) }}
+          </span>
+          {% if es_admin %}
+          <button class="btn btn-outline-secondary btn-activo-accion ms-1"
+                  onclick="desvinculaActivo({{ nodo.id }})">
+            <i class="bi bi-x-lg" style="font-size:.65rem"></i>
+          </button>
+          {% endif %}
+        </div>
+        {% else %}
+        {% if es_admin and nodo.activo and mediciones %}
+        <button class="btn btn-outline-secondary btn-activo-accion mt-1"
+                onclick="abrirVincularMedidor({{ nodo.id }}, '{{ nodo.nombre | e }}')">
+          <i class="bi bi-link-45deg me-1" style="font-size:.7rem"></i><span style="font-size:.72rem">Vincular medidor</span>
+        </button>
+        {% endif %}
+        {% endif %}
+      </div>
+      {% if es_admin and nodo.activo %}
+      <div class="d-flex gap-1 flex-shrink-0">
+        <button class="btn btn-outline-secondary btn-activo-accion"
+                onclick="abrirEditarActivo({{ nodo.id }}, {{ nodo | tojson | forceescape }})"
+                title="Editar">
+          <i class="bi bi-pencil" style="font-size:.7rem"></i>
+        </button>
+        <button class="btn btn-outline-secondary btn-activo-accion"
+                onclick="abrirReasignarPadre({{ nodo.id }}, '{{ nodo.nombre | e }}', {{ nodo.activo_padre_id or 'null' }})"
+                title="Reasignar padre">
+          <i class="bi bi-diagram-3" style="font-size:.7rem"></i>
+        </button>
+        <button class="btn btn-outline-danger btn-activo-accion"
+                onclick="confirmarDesactivar({{ nodo.id }}, '{{ nodo.nombre | e }}')"
+                title="Desactivar">
+          <i class="bi bi-slash-circle" style="font-size:.7rem"></i>
+        </button>
+      </div>
+      {% endif %}
+    </div>
+    {# Hijos #}
+    {% if nodo.hijos %}
+    <div class="mt-2">
+      {% for hijo in nodo.hijos | sort(attribute='nombre') %}
+      {{ render_nodo(hijo, nivel + 1) }}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endmacro %}
+
+  {% for raiz in raices | sort(attribute='nombre') %}
+  {{ render_nodo(raiz, 1) }}
+  {% endfor %}
+  {% endif %}
+</div>
+
+{# ── Modales ── #}
+
+{# Modal: crear activo #}
+{% if es_admin %}
+<div class="modal fade" id="modalCrearActivo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nuevo activo eléctrico</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Tipo <span class="text-danger">*</span></label>
+          <select id="crear-tipo" class="form-select form-select-sm" onchange="actualizarPadresDisponibles()">
+            <option value="">— seleccionar —</option>
+            {% for t in tipos_activo %}
+            <option value="{{ t }}">{{ t | capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Nombre <span class="text-danger">*</span></label>
+          <input id="crear-nombre" type="text" class="form-control form-control-sm" placeholder="Ej. Acometida principal">
+        </div>
+        <div class="mb-3" id="crear-padre-grupo" style="display:none">
+          <label class="form-label form-label-sm fw-semibold">Padre</label>
+          <select id="crear-padre" class="form-select form-select-sm">
+            <option value="">— sin padre —</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label form-label-sm">Capacidad (kVA)</label>
+            <input id="crear-kva" type="number" step="0.1" min="0" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label form-label-sm">Potencia nominal (kW)</label>
+            <input id="crear-kw" type="number" step="0.1" min="0" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm">Tipo de carga</label>
+          <input id="crear-tipo-carga" type="text" class="form-control form-control-sm" placeholder="Ej. motor, iluminación...">
+        </div>
+        <div class="mb-2">
+          <label class="form-label form-label-sm">Notas</label>
+          <textarea id="crear-notas" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <div id="crear-error" class="alert alert-danger small py-1 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarCrearActivo()">Crear</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: editar activo #}
+<div class="modal fade" id="modalEditarActivo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar activo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editar-activo-id">
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Nombre <span class="text-danger">*</span></label>
+          <input id="editar-nombre" type="text" class="form-control form-control-sm">
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label form-label-sm">Capacidad (kVA)</label>
+            <input id="editar-kva" type="number" step="0.1" min="0" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label form-label-sm">Potencia nominal (kW)</label>
+            <input id="editar-kw" type="number" step="0.1" min="0" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm">Tipo de carga</label>
+          <input id="editar-tipo-carga" type="text" class="form-control form-control-sm">
+        </div>
+        <div class="mb-2">
+          <label class="form-label form-label-sm">Notas</label>
+          <textarea id="editar-notas" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <div id="editar-error" class="alert alert-danger small py-1 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarEditarActivo()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: reasignar padre #}
+<div class="modal fade" id="modalReasignarPadre" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Reasignar padre</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="reasignar-activo-id">
+        <p class="small text-muted mb-2">Activo: <strong id="reasignar-activo-nombre"></strong></p>
+        <label class="form-label form-label-sm fw-semibold">Nuevo padre</label>
+        <select id="reasignar-padre-select" class="form-select form-select-sm">
+          <option value="">— sin padre (raíz) —</option>
+        </select>
+        <div id="reasignar-error" class="alert alert-danger small py-1 d-none mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarReasignarPadre()">Reasignar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: vincular medidor #}
+<div class="modal fade" id="modalVincularMedidor" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Vincular medidor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="vincular-activo-id">
+        <p class="small text-muted mb-2">Activo: <strong id="vincular-activo-nombre"></strong></p>
+        <label class="form-label form-label-sm fw-semibold">Medidor</label>
+        <select id="vincular-medidor-select" class="form-select form-select-sm">
+          {% for m in mediciones %}
+          <option value="{{ m.id }}">{{ m.nombre }} — {{ ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][m.mes-1] }} {{ m.anio }}</option>
+          {% endfor %}
+        </select>
+        <div id="vincular-error" class="alert alert-danger small py-1 d-none mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarVincularMedidor()">Vincular</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# Toast de feedback #}
+<div id="toast-activos" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="polite">
+  <div class="d-flex">
+    <div class="toast-body" id="toast-activos-msg"></div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+"use strict";
+(function () {
+  const CLIENTE_ID = {{ cliente.id }};
+  const PLANTA_ID  = {{ planta_id }};
+  const CSRF       = document.querySelector('meta[name="csrf-token"]')?.content || "";
+
+  // Catálogo de activos para selects
+  const ACTIVOS = {{ activos_planos | tojson }};
+  const PADRES_VALIDOS = {
+    acometida:     [],
+    subestacion:   ["acometida"],
+    transformador: ["acometida", "subestacion"],
+    carga:         ["transformador"],
+  };
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function baseUrl(activoId) {
+    const base = `/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/activos`;
+    return activoId ? `${base}/${activoId}` : base;
+  }
+
+  function mostrarToast(msg, tipo = "success") {
+    const t = document.getElementById("toast-activos");
+    t.className = `toast align-items-center text-bg-${tipo} border-0`;
+    document.getElementById("toast-activos-msg").textContent = msg;
+    bootstrap.Toast.getOrCreateInstance(t, { delay: 3500 }).show();
+  }
+
+  function mostrarError(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.classList.remove("d-none");
+  }
+
+  function limpiarError(elId) {
+    const el = document.getElementById(elId);
+    el.textContent = "";
+    el.classList.add("d-none");
+  }
+
+  async function post(url, body) {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    return data;
+  }
+
+  // ── Crear activo ──────────────────────────────────────────────────────────
+
+  window.actualizarPadresDisponibles = function () {
+    const tipo = document.getElementById("crear-tipo").value;
+    const padreGrupo = document.getElementById("crear-padre-grupo");
+    const padreSelect = document.getElementById("crear-padre");
+    const tiposValidos = PADRES_VALIDOS[tipo] || [];
+
+    if (tiposValidos.length === 0) {
+      padreGrupo.style.display = "none";
+      padreSelect.value = "";
+      return;
+    }
+    padreGrupo.style.display = "";
+    padreSelect.innerHTML = '<option value="">— sin padre —</option>';
+    ACTIVOS.filter(a => tiposValidos.includes(a.tipo) && a.activo).forEach(a => {
+      const opt = document.createElement("option");
+      opt.value = a.id;
+      opt.textContent = `${a.nombre} (${a.tipo})`;
+      padreSelect.appendChild(opt);
+    });
+  };
+
+  window.guardarCrearActivo = async function () {
+    limpiarError("crear-error");
+    const tipo  = document.getElementById("crear-tipo").value;
+    const nombre = document.getElementById("crear-nombre").value.trim();
+    const padre  = document.getElementById("crear-padre").value || null;
+    const kva    = parseFloat(document.getElementById("crear-kva").value) || null;
+    const kw     = parseFloat(document.getElementById("crear-kw").value) || null;
+    const tc     = document.getElementById("crear-tipo-carga").value.trim() || null;
+    const notas  = document.getElementById("crear-notas").value.trim() || null;
+
+    try {
+      await post(`${baseUrl()}/crear`, {
+        tipo, nombre,
+        activo_padre_id: padre ? parseInt(padre) : null,
+        capacidad_kva: kva, potencia_nominal_kw: kw, tipo_carga: tc, notas,
+      });
+      mostrarToast("Activo creado correctamente");
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      mostrarError("crear-error", e.message);
+    }
+  };
+
+  // ── Editar activo ─────────────────────────────────────────────────────────
+
+  window.abrirEditarActivo = function (id, nodo) {
+    document.getElementById("editar-activo-id").value   = id;
+    document.getElementById("editar-nombre").value      = nodo.nombre || "";
+    document.getElementById("editar-kva").value         = nodo.capacidad_kva || "";
+    document.getElementById("editar-kw").value          = nodo.potencia_nominal_kw || "";
+    document.getElementById("editar-tipo-carga").value  = nodo.tipo_carga || "";
+    document.getElementById("editar-notas").value       = nodo.notas || "";
+    limpiarError("editar-error");
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalEditarActivo")).show();
+  };
+
+  window.guardarEditarActivo = async function () {
+    limpiarError("editar-error");
+    const id     = parseInt(document.getElementById("editar-activo-id").value);
+    const nombre = document.getElementById("editar-nombre").value.trim();
+    const kva    = parseFloat(document.getElementById("editar-kva").value) || null;
+    const kw     = parseFloat(document.getElementById("editar-kw").value) || null;
+    const tc     = document.getElementById("editar-tipo-carga").value.trim() || null;
+    const notas  = document.getElementById("editar-notas").value.trim() || null;
+
+    try {
+      await post(`${baseUrl(id)}/editar`, {
+        nombre, capacidad_kva: kva, potencia_nominal_kw: kw, tipo_carga: tc, notas,
+      });
+      mostrarToast("Activo actualizado");
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      mostrarError("editar-error", e.message);
+    }
+  };
+
+  // ── Desactivar activo ─────────────────────────────────────────────────────
+
+  window.confirmarDesactivar = function (id, nombre) {
+    if (!confirm(`¿Desactivar "${nombre}"? Esta operación es reversible desde base de datos.`)) return;
+    post(`${baseUrl(id)}/desactivar`, {})
+      .then(() => { mostrarToast("Activo desactivado"); setTimeout(() => location.reload(), 1200); })
+      .catch(e => alert(`Error: ${e.message}`));
+  };
+
+  // ── Reasignar padre ───────────────────────────────────────────────────────
+
+  window.abrirReasignarPadre = function (id, nombre, padreActualId) {
+    document.getElementById("reasignar-activo-id").value    = id;
+    document.getElementById("reasignar-activo-nombre").textContent = nombre;
+    limpiarError("reasignar-error");
+
+    const activo = ACTIVOS.find(a => a.id === id);
+    const tiposValidos = PADRES_VALIDOS[activo?.tipo || ""] || [];
+    const sel = document.getElementById("reasignar-padre-select");
+    sel.innerHTML = '<option value="">— sin padre (raíz) —</option>';
+    ACTIVOS.filter(a => tiposValidos.includes(a.tipo) && a.activo && a.id !== id).forEach(a => {
+      const opt = document.createElement("option");
+      opt.value  = a.id;
+      opt.textContent = `${a.nombre} (${a.tipo})`;
+      if (a.id === padreActualId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalReasignarPadre")).show();
+  };
+
+  window.guardarReasignarPadre = async function () {
+    limpiarError("reasignar-error");
+    const id       = parseInt(document.getElementById("reasignar-activo-id").value);
+    const padreVal = document.getElementById("reasignar-padre-select").value;
+    const padreId  = padreVal ? parseInt(padreVal) : null;
+
+    try {
+      await post(`${baseUrl(id)}/reasignar-padre`, { activo_padre_id: padreId });
+      mostrarToast("Padre reasignado");
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      mostrarError("reasignar-error", e.message);
+    }
+  };
+
+  // ── Vincular / desvincular medidor ────────────────────────────────────────
+
+  window.abrirVincularMedidor = function (id, nombre) {
+    document.getElementById("vincular-activo-id").value = id;
+    document.getElementById("vincular-activo-nombre").textContent = nombre;
+    limpiarError("vincular-error");
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalVincularMedidor")).show();
+  };
+
+  window.guardarVincularMedidor = async function () {
+    limpiarError("vincular-error");
+    const id         = parseInt(document.getElementById("vincular-activo-id").value);
+    const medidorId  = parseInt(document.getElementById("vincular-medidor-select").value);
+
+    try {
+      await post(`${baseUrl(id)}/vincular-medidor`, { medidor_id: medidorId });
+      mostrarToast("Medidor vinculado");
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      mostrarError("vincular-error", e.message);
+    }
+  };
+
+  window.desvinculaActivo = function (id) {
+    if (!confirm("¿Desvincular el medidor de este activo? La vigencia quedará cerrada en el historial.")) return;
+    post(`${baseUrl(id)}/desvincular-medidor`, {})
+      .then(() => { mostrarToast("Medidor desvinculado"); setTimeout(() => location.reload(), 1200); })
+      .catch(e => alert(`Error: ${e.message}`));
+  };
+
+})();
+</script>
+{% endblock %}

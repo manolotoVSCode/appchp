@@ -28,6 +28,7 @@ from storage.repository import (
     get_cliente_chp_params,
     obtener_plantas_por_cliente,
     obtener_planta,
+    TODAS_LAS_PLANTAS,
 )
 from models.contrato import TIPO_ELECTRICO_CALIFICADO
 from web.error_logger import log_error
@@ -833,7 +834,7 @@ def create_app() -> Flask:
             else:
                 aviso_datos = None
 
-        mediciones_cont = get_mediciones_por_cliente(cliente_id)
+        mediciones_cont = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
         if mediciones_cont and not session.get("medicion_activa_id"):
             session["medicion_activa_id"] = mediciones_cont[0]["id"]
 
@@ -1033,7 +1034,7 @@ def create_app() -> Flask:
         periodo_label = _calcular_periodo_label(cfe_invoices, gas_invoices, ppa_invoices if ppa_invoices else None)
         suministrador_ppa = facturas_ppa[0]["suministrador"] if facturas_ppa else ""
 
-        mediciones_cogen = get_mediciones_por_cliente(cliente_id)
+        mediciones_cogen = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
         if mediciones_cogen and not session.get("medicion_activa_id"):
             session["medicion_activa_id"] = mediciones_cogen[0]["id"]
 

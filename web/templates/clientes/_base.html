@@ -134,6 +134,12 @@
     <span class="badge bg-warning text-dark ms-1" style="font-size:.55rem;padding:.15rem .3rem;vertical-align:middle;">Beta</span>
   </a>
   {% endif %}
+  {% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
+  <a href="{{ url_for('clientes.activos_planta', cliente_id=cliente_activo.id, planta_id=planta_activa_id) }}"
+     class="sidebar-link-contrato{% if nav_active == 'activos' %} active{% endif %}">
+    <i class="bi bi-diagram-3"></i>Asignación de activos
+  </a>
+  {% endif %}
   {% if cliente_activo.contratos %}
   <div class="sidebar-sub-header">Contratos</div>
   <div class="sidebar-contratos" id="sidebar-contratos-{{ cliente_activo.id }}">
