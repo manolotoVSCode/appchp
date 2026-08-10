@@ -2602,6 +2602,18 @@ def obtener_activos_con_medidor_historico(activo_ids: list[int]) -> set[int]:
     return {v["activo_id"] for v in (resp.data or [])}
 
 
+def obtener_historial_medidor_activo(activo_id: int) -> list[dict]:
+    """Historial de medidores vinculados al activo, ordenado por vigente_desde DESC."""
+    resp = (
+        _supabase.table("medidor_activo_vigencia")
+        .select("id, activo_id, medidor_id, vigente_desde, vigente_hasta, motivo")
+        .eq("activo_id", activo_id)
+        .order("vigente_desde", desc=True)
+        .execute()
+    )
+    return resp.data or []
+
+
 def eliminar_activo_permanente(activo_id: int) -> None:
     """Elimina el activo y su única fila de activo_alimentacion_vigencia.
 

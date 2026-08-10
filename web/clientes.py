@@ -101,6 +101,8 @@ from storage.repository import (
     obtener_contrato,
     declarar_rol_medidor,
     obtener_historial_rol_medidor,
+    obtener_historial_medidor_activo,
+    resolver_intervalos_rol,
 )
 
 logger = logging.getLogger(__name__)
@@ -3294,8 +3296,7 @@ def activos_planta(cliente_id: int, planta_id: int):
 
     from storage.repository import get_contratos_por_planta as _gcpp
     cliente = get_cliente_con_conteos(cliente_id)
-    activos = obtener_arbol_activos(cliente_id, planta_id)   # planta actual, con medidor_vigente
-    todos_activos = obtener_todos_activos_cliente(cliente_id) # todas las plantas
+    todos_activos = obtener_todos_activos_cliente(cliente_id)
     mediciones = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
     es_admin = user.get("rol") in ("admin", "master_admin")
 
@@ -3307,57 +3308,6 @@ def activos_planta(cliente_id: int, planta_id: int):
         if c.tipo in ("electrico_basico", "electrico_calificado")
     ]
 
-    # Historial de contrato por acometida (bulk, solo activos de tipo acometida)
-    _acometidas = [a for a in activos if a.get("tipo") == "acometida"]
-    hist_contrato_por_activo: dict[int, list] = {
-        a["id"]: obtener_historial_contrato_acometida(a["id"])
-        for a in _acometidas
-    }
-
-    # Índice global (todas las plantas) para resolver padres foráneos y detectar ciclos
-    todos_por_id: dict[int, dict] = {a["id"]: a for a in todos_activos}
-
-    # Árbol anidado: sólo activos de la planta actual
-    by_id: dict[int, dict] = {a["id"]: {**a, "hijos": [], "_planta_padre": None, "_padre_nombre": None} for a in activos}
-    raices: list[dict] = []
-    for nodo in by_id.values():
-        padre_id = nodo.get("activo_padre_id")
-        if padre_id and padre_id in by_id:
-            # Padre en la misma planta → lo cuelga como hijo
-            by_id[padre_id]["hijos"].append(nodo)
-        elif padre_id and padre_id in todos_por_id:
-            # Padre existe pero está en otra planta → nodo aparece como raíz con indicador
-            padre = todos_por_id[padre_id]
-            nodo["_planta_padre"] = padre.get("plantas") or {}
-            nodo["_padre_nombre"] = padre.get("nombre", "")
-            raices.append(nodo)
-        else:
-            raices.append(nodo)
-
-    # Historial de alimentación por activo (una sola consulta bulk).
-    # Solo activos que tienen activo_padre_id (no acometidas).
-    activo_ids_con_padre = [a["id"] for a in activos if a.get("activo_padre_id")]
-    hist_por_activo = obtener_historiales_alimentacion_bulk(activo_ids_con_padre)
-
-    # Elegibilidad de borrado permanente (calculada en bloque para evitar N+1).
-    # Condiciones: sin hijos, sin historial de medidor, y ≤1 fila de alimentacion.
-    activo_ids_planta = [a["id"] for a in activos]
-    _ids_planta_set = set(activo_ids_planta)
-    # Activos de la planta que son padre de algún otro activo del cliente
-    con_hijos: set[int] = {
-        a["activo_padre_id"] for a in todos_activos
-        if a.get("activo_padre_id") in _ids_planta_set
-    }
-    # Activos con alguna fila en medidor_activo_vigencia (historial incluido)
-    con_medidor_hist: set[int] = obtener_activos_con_medidor_historico(activo_ids_planta)
-
-    elegibles_borrar: set[int] = {
-        a["id"] for a in activos
-        if a["id"] not in con_hijos
-        and a["id"] not in con_medidor_hist
-        and len(hist_por_activo.get(a["id"], [])) <= 1
-    }
-
     # Lista plana para los selectores JS (todos los activos del cliente, con nombre de planta)
     activos_js = [
         {
@@ -3368,36 +3318,163 @@ def activos_planta(cliente_id: int, planta_id: int):
             "planta_id": a["planta_id"],
             "planta_nombre": (a.get("plantas") or {}).get("nombre", ""),
             "misma_planta": a["planta_id"] == planta_id,
+            "activo_padre_id": a.get("activo_padre_id"),
         }
         for a in todos_activos
     ]
 
-    # Historial de rol por medidor (para activos con medidor vigente)
-    hist_rol_por_medidor: dict[int, list] = {}
-    for a in activos:
-        mv = a.get("medidor_vigente")
-        if mv:
-            mid = mv.get("medidor_id")
-            if mid and mid not in hist_rol_por_medidor:
-                hist_rol_por_medidor[mid] = obtener_historial_rol_medidor(mid)
+    # padres_validos como dict serializable para JS
+    padres_validos_json = {k: list(v) for k, v in _PADRES_VALIDOS.items()}
 
     return render_template(
         "clientes/activos.html",
         cliente=cliente,
         planta=planta,
         planta_id=planta_id,
-        raices=raices,
         activos_planos=activos_js,
-        hist_por_activo=hist_por_activo,
-        elegibles_borrar=elegibles_borrar,
         mediciones=mediciones,
         tipos_activo=_TIPOS_ACTIVO,
         es_admin=es_admin,
         nav_active="activos",
         contratos_electricos_planta=contratos_electricos_planta,
-        hist_contrato_por_activo=hist_contrato_por_activo,
-        hist_rol_por_medidor=hist_rol_por_medidor,
+        padres_validos=padres_validos_json,
     )
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/topologia")
+def activos_topologia(cliente_id: int, planta_id: int):
+    """JSON con el árbol de activos y metadatos para el unifilar de edición."""
+    from flask import jsonify
+
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+
+    activos = obtener_arbol_activos(cliente_id, planta_id)
+    todos_activos = obtener_todos_activos_cliente(cliente_id)
+
+    # Armar árbol anidado con hijos
+    by_id = {a["id"]: {**a, "hijos": [], "energia_kwh": None} for a in activos}
+    raices_list = []
+    for nodo in by_id.values():
+        pid = nodo.get("activo_padre_id")
+        if pid and pid in by_id:
+            by_id[pid]["hijos"].append(nodo)
+        else:
+            raices_list.append(nodo)
+
+    raiz = raices_list[0] if raices_list else None
+
+    # padres_validos como dict serializable
+    padres_validos_json = {k: list(v) for k, v in _PADRES_VALIDOS.items()}
+
+    # Indicadores
+    con_medidor = [a["id"] for a in activos if a.get("medidor_vigente")]
+
+    cabecera = {}
+    for a in activos:
+        mv = a.get("medidor_vigente")
+        if mv and mv.get("medidor_id"):
+            mid = mv["medidor_id"]
+            try:
+                from datetime import datetime, timezone, timedelta
+                ahora = datetime.now(timezone.utc)
+                desde_iso = (ahora - timedelta(minutes=1)).isoformat()
+                hasta_iso = ahora.isoformat()
+                intervalos = resolver_intervalos_rol(mid, desde_iso, hasta_iso)
+                for iv in intervalos:
+                    if iv.get("rol") and iv["rol"] != "carga":
+                        cabecera[a["id"]] = iv["rol"]
+                        break
+            except Exception:
+                pass
+
+    sin_contrato = []
+    for a in activos:
+        if a.get("tipo") == "acometida":
+            try:
+                hist = obtener_historial_contrato_acometida(a["id"])
+                if not any(h.get("vigente_hasta") is None for h in hist):
+                    sin_contrato.append(a["id"])
+            except Exception:
+                pass
+
+    todos_js = [
+        {"id": a["id"], "activo_padre_id": a.get("activo_padre_id"), "tipo": a.get("tipo")}
+        for a in todos_activos
+    ]
+
+    return jsonify({
+        "raiz": raiz,
+        "padres_validos": padres_validos_json,
+        "indicadores": {
+            "con_medidor": con_medidor,
+            "cabecera": cabecera,
+            "sin_contrato": sin_contrato,
+        },
+        "todos_activos": todos_js,
+        "es_admin": user.get("rol") in ("admin", "master_admin"),
+    })
+
+
+@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/<int:activo_id>/detalle")
+def activo_detalle(cliente_id: int, planta_id: int, activo_id: int):
+    """JSON con detalle completo de un activo para el panel lateral del unifilar."""
+    from flask import jsonify
+
+    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
+    if user is None:
+        return _err_activos(planta_o_err)
+
+    activo = obtener_activo(activo_id)
+    if activo is None or activo.get("planta_id") != planta_id:
+        return jsonify({"error": "Activo no encontrado"}), 404
+
+    # Historial de alimentación
+    hist_alim = obtener_historial_alimentacion(activo_id) if activo.get("activo_padre_id") else []
+
+    # Historial de medidor
+    try:
+        hist_medidor = obtener_historial_medidor_activo(activo_id)
+    except Exception:
+        hist_medidor = []
+
+    # Historial de contrato (solo acometidas)
+    hist_contrato = []
+    if activo.get("tipo") == "acometida":
+        hist_contrato = obtener_historial_contrato_acometida(activo_id)
+
+    # Historial de rol (si tiene medidor vigente)
+    hist_rol = []
+    activos_planta_list = obtener_arbol_activos(cliente_id, planta_id)
+    mv = None
+    for ap in activos_planta_list:
+        if ap["id"] == activo_id:
+            mv = ap.get("medidor_vigente")
+            break
+    if mv and mv.get("medidor_id"):
+        hist_rol = obtener_historial_rol_medidor(mv["medidor_id"])
+
+    # Elegible para borrado permanente
+    todos = obtener_todos_activos_cliente(cliente_id)
+    hijos = [a for a in todos if a.get("activo_padre_id") == activo_id]
+    con_medidor_hist = obtener_activos_con_medidor_historico([activo_id])
+    hist_alim_check = obtener_historial_alimentacion(activo_id)
+    elegible_borrar = (
+        len(hijos) == 0
+        and activo_id not in con_medidor_hist
+        and len(hist_alim_check) <= 1
+    )
+
+    return jsonify({
+        "activo": activo,
+        "historial_alimentacion": hist_alim,
+        "historial_medidor": hist_medidor,
+        "historial_contrato": hist_contrato,
+        "historial_rol": hist_rol,
+        "elegible_borrar": elegible_borrar,
+        "es_admin": user.get("rol") in ("admin", "master_admin"),
+    })
 
 
 @clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/crear", methods=["POST"])

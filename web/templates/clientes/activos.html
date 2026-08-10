@@ -15,123 +15,32 @@
 .icono-carga        { color:#5cb85c; }
 .icono-generacion   { color:#20c997; }
 
-/* ── Historial de alimentación ── */
-.nodo-historial {
-  margin-top: .3rem;
-  padding-left: 1.5rem;
-}
-.historial-toggle {
-  font-size: .65rem;
-  color: #6c757d;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline dotted;
-}
-.historial-tabla {
-  font-size: .68rem;
-  margin-top: .3rem;
-  border-collapse: collapse;
-  width: 100%;
-}
-.historial-tabla th {
-  font-weight: 600;
-  color: #6c757d;
-  text-align: left;
-  padding: .1rem .4rem;
-  border-bottom: 1px solid #dee2e6;
-}
-.historial-tabla td {
-  padding: .1rem .4rem;
-  border-bottom: 1px solid #f0f0f0;
-  color: #333;
-}
-.historial-tabla tr.vigente td { font-weight: 600; color: #0d6efd; }
+/* ── Unifilar SVG (edición) ── */
+.unifilar-nodo { cursor: pointer; }
+.unifilar-nodo.unifilar-highlight .unifilar-fondo { filter: brightness(0.92); }
+.unifilar-nodo[draggable=true] { cursor: grab; }
+.unifilar-nodo[draggable=true]:active { cursor: grabbing; }
+.unifilar-drop-valido .unifilar-fondo { stroke: #198754 !important; stroke-width: 3 !important; }
+.unifilar-drop-invalido { opacity: 0.35; }
 
-/* ── Árbol con conectores ── */
-.activos-tree, .activos-tree ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.activos-tree > li { padding-left: 0; }
+#activos-detail-panel { min-width: 340px; max-width: 380px; }
+#activos-unifilar-svg-container { overflow-x: auto; flex: 1; min-width: 0; }
 
-.activos-tree ul { padding-left: 1.5rem; }
+.panel-historial-table { font-size: .7rem; }
 
-.activos-tree ul > li {
-  position: relative;
-  padding-left: 1.25rem;
-}
-/* Línea vertical */
-.activos-tree ul > li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  border-left: 1px solid #ccc;
-}
-/* Línea horizontal hacia el nodo */
-.activos-tree ul > li::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 1.05rem;
-  width: 1rem;
-  border-top: 1px solid #ccc;
-}
-/* Último hijo: la línea vertical sólo llega hasta el conector */
-.activos-tree ul > li:last-child::before {
-  height: 1.05rem;
-}
+/* ── Indicadores SVG ── */
+.unifilar-indicador-medidor { fill: #198754; }
+.unifilar-indicador-cabecera-interconexion { fill: #1F3A5F; }
+.unifilar-indicador-cabecera-generacion_neta { fill: #198754; }
+.unifilar-indicador-cabecera-centro_carga { fill: #f59e0b; }
+.unifilar-indicador-sin-contrato { fill: #dc2626; }
 
-/* ── Nodo ── */
-.nodo-header {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  padding: .3rem .5rem;
-  border-radius: .35rem;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  flex-wrap: wrap;
-  min-height: 2.1rem;
-}
-.nodo-header:hover { background: #f8f9fa; }
-.nodo-header.inactivo { opacity: .5; }
-
-.nodo-toggle {
-  width: 1.1rem;
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: #6c757d;
-  font-size: .7rem;
-  line-height: 1;
-}
-.nodo-toggle.sin-hijos { cursor: default; color: transparent; }
-
-.nodo-icono { font-size: .85rem; flex-shrink: 0; }
-.nodo-nombre { font-weight: 600; font-size: .8rem; white-space: nowrap; }
-.nodo-cap { font-size: .7rem; color: #6c757d; white-space: nowrap; }
-.nodo-medidor { font-size: .7rem; white-space: nowrap; }
-.nodo-planta-padre {
-  font-size: .65rem;
-  background: #e0f2fe;
-  color: #0369a1;
-  border: 1px solid #7dd3fc;
-  border-radius: .25rem;
-  padding: .1rem .35rem;
-  white-space: nowrap;
-}
-.nodo-acciones { margin-left: auto; display: flex; gap: .25rem; flex-shrink: 0; }
-.btn-nodo { font-size: .65rem; padding: .15rem .35rem; }
-
-li.colapsado > ul { display: none; }
-li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
+/* ── Líneas SVG (reutilizadas de telemetría) ── */
+.unifilar-linea-normal  { fill:none; stroke:#6b7280; stroke-width:1.5; }
+.unifilar-linea-alta    { fill:none; stroke:#eab308; stroke-width:2; }
+.unifilar-linea-critica { fill:none; stroke:#dc2626; stroke-width:2.5; }
+.unifilar-label       { text-anchor:middle; font-size:13px; fill:#1F3A5F; font-weight:600; }
+.unifilar-label-small { text-anchor:middle; font-size:11px; fill:#374151; }
 
 #toast-activos { position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9999; min-width: 260px; }
 </style>
@@ -139,21 +48,12 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
 
 {% block content %}
 
-{# Diccionarios de icono y color por tipo #}
-{% set ICONO = {
-  'acometida':     'bi-lightning-charge-fill',
-  'subestacion':   'bi-building-fill',
-  'transformador': 'bi-box-seam-fill',
-  'carga':         'bi-plug-fill',
-  'generacion':    'bi-lightning-fill',
-} %}
-
-<div class="container-fluid px-3 py-3" style="max-width: 980px">
+<div class="container-fluid px-3 py-3" style="max-width: 1400px">
 
   {# Cabecera #}
   <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div>
-      <h4 class="mb-0 fw-semibold">Activos eléctricos</h4>
+      <h4 class="mb-0 fw-semibold">Activos electricos</h4>
       <div class="text-muted small">{{ planta.nombre }} · {{ cliente.nombre }}</div>
     </div>
     {% if es_admin %}
@@ -163,262 +63,43 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
     {% endif %}
   </div>
 
-  {# Árbol #}
-  {% if not raices %}
-  <div class="alert alert-secondary small">Esta planta no tiene activos eléctricos registrados.</div>
-  {% else %}
-
-  {% macro render_nodo(nodo, hist, elegibles) %}
-  {% set nodo_hist = hist.get(nodo.id, []) %}
-  {% set puede_borrar = nodo.id in elegibles %}
-  <li{% if nodo.hijos %} class="colapsado"{% endif %} id="li-{{ nodo.id }}">
-    <div class="nodo-header{% if not nodo.activo %} inactivo{% endif %}" id="nodo-{{ nodo.id }}">
-
-      {# Toggle rama #}
-      {% if nodo.hijos %}
-      <button class="nodo-toggle" onclick="toggleRama({{ nodo.id }})" title="Expandir/colapsar">
-        <i class="bi bi-chevron-right toggle-icon" id="chev-{{ nodo.id }}"></i>
-      </button>
-      {% else %}
-      <span class="nodo-toggle sin-hijos" aria-hidden="true"></span>
-      {% endif %}
-
-      {# Icono tipo #}
-      <i class="bi {{ ICONO.get(nodo.tipo, 'bi-circle') }} nodo-icono icono-{{ nodo.tipo }}"></i>
-
-      {# Badge tipo + nombre #}
-      <span class="badge badge-tipo-{{ nodo.tipo }} rounded-pill" style="font-size:.6rem;padding:.15rem .4rem">{{ nodo.tipo }}</span>
-      <span class="nodo-nombre">{{ nodo.nombre }}</span>
-
-      {# Indicador padre en otra planta #}
-      {% if nodo._planta_padre and nodo._planta_padre.nombre %}
-      <span class="nodo-planta-padre" title="El padre '{{ nodo._padre_nombre }}' está instalado en otra planta">
-        <i class="bi bi-arrow-up-right-circle me-1"></i>desde {{ nodo._planta_padre.nombre }}
-      </span>
-      {% endif %}
-
-      {# Capacidad #}
-      {% if nodo.capacidad_kva %}
-      <span class="nodo-cap">{{ nodo.capacidad_kva }} kVA</span>
-      {% elif nodo.potencia_nominal_kw %}
-      <span class="nodo-cap">{{ nodo.potencia_nominal_kw }} kW</span>
-      {% endif %}
-
-      {# Medidor vinculado #}
-      {% if nodo.medidor_vigente %}
-      {% set mv = nodo.medidor_vigente %}
-      <span class="nodo-medidor text-success">
-        <i class="bi bi-reception-4"></i>
-        {{ mv.medidores.nombre if mv.medidores else ('MED #' ~ mv.medidor_id) }}
-      </span>
-      {% if es_admin %}
-      <button class="btn btn-outline-secondary btn-nodo" onclick="desvinculaActivo({{ nodo.id }})" title="Desvincular medidor">
-        <i class="bi bi-x-lg"></i>
-      </button>
-      {% endif %}
-      {% else %}
-      {% if es_admin and nodo.activo and mediciones %}
-      <button class="btn btn-outline-secondary btn-nodo" onclick="abrirVincularMedidor({{ nodo.id }}, '{{ nodo.nombre | e }}')" title="Vincular medidor">
-        <i class="bi bi-link-45deg"></i>
-      </button>
-      {% endif %}
-      {% endif %}
-
-      {# Acciones #}
-      {% if es_admin and nodo.activo %}
-      <div class="nodo-acciones">
-        {# Cambio de alimentación: solo activos con padre posible (no acometidas) #}
-        {% if nodo.tipo != 'acometida' %}
-        <button class="btn btn-outline-primary btn-nodo"
-                onclick="abrirCambioAlimentacion({{ nodo.id }}, '{{ nodo.nombre | e }}', {{ nodo.activo_padre_id or 'null' }})"
-                title="Declarar cambio de alimentación">
-          <i class="bi bi-arrow-left-right"></i>
-        </button>
-        {% endif %}
-        <button class="btn btn-outline-secondary btn-nodo"
-                onclick="abrirEditarActivo({{ nodo.id }}, {{ nodo | tojson | forceescape }})"
-                title="Editar">
-          <i class="bi bi-pencil"></i>
-        </button>
-        {% if puede_borrar %}
-        <button class="btn btn-danger btn-nodo"
-                onclick="confirmarEliminarPermanente({{ nodo.id }}, '{{ nodo.nombre | e }}')"
-                title="Eliminar permanentemente">
-          <i class="bi bi-trash3"></i>
-        </button>
-        {% else %}
-        <button class="btn btn-outline-danger btn-nodo"
-                onclick="confirmarDesactivar({{ nodo.id }}, '{{ nodo.nombre | e }}')"
-                title="Desactivar">
-          <i class="bi bi-slash-circle"></i>
-        </button>
-        {% endif %}
+  {# Layout principal: unifilar + panel lateral #}
+  <div class="d-flex gap-3 align-items-start">
+    {# Contenedor SVG #}
+    <div id="activos-unifilar-wrapper"
+         data-cliente-id="{{ cliente.id }}"
+         data-planta-id="{{ planta_id }}"
+         data-es-admin="{{ 'true' if es_admin else 'false' }}"
+         style="flex:1; min-width:0; overflow-x:auto; border:1px solid #e5e7eb; border-radius:.5rem; background:#fafafa; padding:1rem; min-height:300px;">
+      <div id="activos-unifilar-cargando" class="text-center text-muted py-5">
+        <div class="spinner-border spinner-border-sm me-2"></div>Cargando...
       </div>
-      {% endif %}
+      <svg id="activos-unifilar-svg" xmlns="http://www.w3.org/2000/svg" style="display:none; overflow:visible;"></svg>
     </div>
 
-    {# Historial de alimentación: visible si hay más de una fila #}
-    {% if nodo_hist | length > 1 %}
-    <div class="nodo-historial">
-      <button class="historial-toggle" onclick="toggleHistorial('hist-{{ nodo.id }}')">
-        <i class="bi bi-clock-history me-1"></i>{{ nodo_hist | length }} conexiones — ver historial
-      </button>
-      <div id="hist-{{ nodo.id }}" style="display:none">
-        <table class="historial-tabla">
-          <thead><tr><th>Fuente</th><th>Desde</th><th>Hasta</th><th>Motivo</th></tr></thead>
-          <tbody>
-          {% for fila in nodo_hist %}
-          <tr{% if not fila.vigente_hasta %} class="vigente"{% endif %}>
-            <td>
-              {% if fila.fuente %}{{ fila.fuente.nombre }} <span class="text-muted">({{ fila.fuente.tipo }})</span>
-              {% else %}—{% endif %}
-            </td>
-            <td>{{ fila.vigente_desde[:10] if fila.vigente_desde else '—' }}</td>
-            <td>{{ fila.vigente_hasta[:10] if fila.vigente_hasta else '<em>vigente</em>' | safe }}</td>
-            <td>{{ fila.motivo or '' }}</td>
-          </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    {% endif %}
-
-    {# Historial de contrato: solo para acometidas #}
-    {% if nodo.tipo == 'acometida' %}
-    {% set hist_contrato = hist_contrato_por_activo.get(nodo.id, []) %}
-    <div class="nodo-historial">
-      {% if hist_contrato | length > 0 %}
-      <button class="historial-toggle" onclick="toggleHistorial('hist-contrato-{{ nodo.id }}')">
-        <i class="bi bi-file-earmark-text me-1"></i>Contrato: {{ hist_contrato[0].contrato.nombre if hist_contrato[0].contrato else '—' }} — ver historial
-      </button>
-      <div id="hist-contrato-{{ nodo.id }}" style="display:none">
-        <table class="historial-tabla">
-          <thead><tr><th>Contrato</th><th>Desde</th><th>Hasta</th><th>Motivo</th></tr></thead>
-          <tbody>
-          {% for fila in hist_contrato %}
-          <tr{% if not fila.vigente_hasta %} class="vigente"{% endif %}>
-            <td>
-              {% if fila.contrato %}{{ fila.contrato.nombre }} <span class="text-muted">({{ fila.contrato.tipo }})</span>
-              {% else %}—{% endif %}
-            </td>
-            <td>{{ fila.vigente_desde[:10] if fila.vigente_desde else '—' }}</td>
-            <td>{{ fila.vigente_hasta[:10] if fila.vigente_hasta else '<em>vigente</em>' | safe }}</td>
-            <td>{{ fila.motivo or '' }}</td>
-          </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% endif %}
-      {% if es_admin and nodo.activo %}
-      <div class="mt-1">
-        <button class="historial-toggle" onclick="toggleHistorial('form-contrato-{{ nodo.id }}')">
-          <i class="bi bi-plus-circle me-1"></i>Asignar contrato
-        </button>
-        <div id="form-contrato-{{ nodo.id }}" style="display:none; margin-top:.4rem">
-          <div class="d-flex gap-1 align-items-end flex-wrap">
-            <div>
-              <label class="form-label form-label-sm mb-0">Contrato</label>
-              <select id="contrato-sel-{{ nodo.id }}" class="form-select form-select-sm" style="min-width:160px">
-                <option value="">— sin contrato —</option>
-                {% for c in contratos_electricos_planta %}
-                <option value="{{ c.id }}">{{ c.nombre }} ({{ c.tipo }})</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="form-label form-label-sm mb-0">Desde</label>
-              <input type="datetime-local" id="contrato-desde-{{ nodo.id }}" class="form-control form-control-sm">
-            </div>
-            <div>
-              <label class="form-label form-label-sm mb-0">Motivo</label>
-              <input type="text" id="contrato-motivo-{{ nodo.id }}" class="form-control form-control-sm" placeholder="opcional">
-            </div>
-            <button class="btn btn-outline-primary btn-sm" onclick="asignarContratoAcometida({{ nodo.id }})">Guardar</button>
+    {# Panel de detalle (oculto hasta seleccionar nodo) #}
+    <div id="activos-detail-panel" style="display:none; width:360px; flex-shrink:0;">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center py-2">
+          <strong id="panel-activo-nombre" class="small"></strong>
+          <button class="btn-close btn-sm" id="btn-cerrar-panel" aria-label="Cerrar"></button>
+        </div>
+        <div class="card-body p-2" id="panel-activo-body" style="max-height:70vh; overflow-y:auto;">
+          <div class="text-center text-muted py-3">
+            <div class="spinner-border spinner-border-sm"></div>
           </div>
         </div>
       </div>
-      {% endif %}
     </div>
-    {% endif %}
+  </div>
 
-    {# Historial de rol de medidor: solo si el activo tiene medidor vigente #}
-    {% if nodo.medidor_vigente %}
-    {% set mv_rol = nodo.medidor_vigente %}
-    {% set med_id_rol = mv_rol.medidor_id %}
-    {% set hist_rol = hist_rol_por_medidor.get(med_id_rol, []) if hist_rol_por_medidor is defined else [] %}
-    <div class="nodo-historial">
-      {% if hist_rol | length > 0 %}
-      <button class="historial-toggle" onclick="toggleHistorial('hist-rol-{{ nodo.id }}')">
-        <i class="bi bi-tag me-1"></i>Rol medidor: {{ hist_rol[0].rol }} — ver historial
-      </button>
-      <div id="hist-rol-{{ nodo.id }}" style="display:none">
-        <table class="historial-tabla">
-          <thead><tr><th>Rol</th><th>Desde</th><th>Hasta</th><th>Motivo</th></tr></thead>
-          <tbody>
-          {% for fila in hist_rol %}
-          <tr{% if not fila.vigente_hasta %} class="vigente"{% endif %}>
-            <td>{{ fila.rol }}</td>
-            <td>{{ fila.vigente_desde[:10] if fila.vigente_desde else '—' }}</td>
-            <td>{{ fila.vigente_hasta[:10] if fila.vigente_hasta else '<em>vigente</em>' | safe }}</td>
-            <td>{{ fila.motivo or '' }}</td>
-          </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% endif %}
-      {% if es_admin and nodo.activo %}
-      <div class="mt-1">
-        <button class="historial-toggle" onclick="toggleHistorial('form-rol-{{ nodo.id }}')">
-          <i class="bi bi-plus-circle me-1"></i>Declarar rol
-        </button>
-        <div id="form-rol-{{ nodo.id }}" style="display:none; margin-top:.4rem">
-          <div class="d-flex gap-1 align-items-end flex-wrap">
-            <div>
-              <label class="form-label form-label-sm mb-0">Rol</label>
-              <select id="rol-sel-{{ nodo.id }}" class="form-select form-select-sm" style="min-width:160px">
-                <option value="carga">carga</option>
-                <option value="interconexion">interconexion</option>
-                <option value="generacion_neta">generacion_neta</option>
-                <option value="centro_carga">centro_carga</option>
-              </select>
-            </div>
-            <div>
-              <label class="form-label form-label-sm mb-0">Desde</label>
-              <input type="datetime-local" id="rol-desde-{{ nodo.id }}" class="form-control form-control-sm">
-            </div>
-            <div>
-              <label class="form-label form-label-sm mb-0">Motivo</label>
-              <input type="text" id="rol-motivo-{{ nodo.id }}" class="form-control form-control-sm" placeholder="opcional">
-            </div>
-            <button class="btn btn-outline-primary btn-sm" onclick="declararRolMedidor({{ nodo.id }}, {{ med_id_rol }})">Guardar</button>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-    </div>
-    {% endif %}
-
-    {# Hijos (recursivo) #}
-    {% if nodo.hijos %}
-    <ul>
-      {% for hijo in nodo.hijos | sort(attribute='nombre') %}
-      {{ render_nodo(hijo, hist, elegibles) }}
-      {% endfor %}
-    </ul>
-    {% endif %}
-  </li>
-  {% endmacro %}
-
-  <ul class="activos-tree mb-4">
-    {% for raiz in raices | sort(attribute='nombre') %}
-    {{ render_nodo(raiz, hist_por_activo, elegibles_borrar) }}
-    {% endfor %}
-  </ul>
-  {% endif %}
-
+  {# Leyenda #}
+  <div class="d-flex flex-wrap gap-3 mt-2 small text-muted">
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#198754;margin-right:4px"></span>Con medidor</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#dc2626;margin-right:4px"></span>Sin contrato</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;margin-right:4px"></span>Cabecera</span>
+    {% if es_admin %}<span class="text-muted"><i class="bi bi-arrows-move me-1"></i>Arrastra para reasignar alimentacion</span>{% endif %}
+  </div>
 </div>
 
 {# ── Modales ── #}
@@ -429,14 +110,14 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Nuevo activo eléctrico</h5>
+        <h5 class="modal-title">Nuevo activo electrico</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <div class="mb-3">
           <label class="form-label form-label-sm fw-semibold">Tipo <span class="text-danger">*</span></label>
           <select id="crear-tipo" class="form-select form-select-sm" onchange="actualizarPadresCrear()">
-            <option value="">— seleccionar —</option>
+            <option value="">-- seleccionar --</option>
             {% for t in tipos_activo %}
             <option value="{{ t }}">{{ t | capitalize }}</option>
             {% endfor %}
@@ -449,7 +130,7 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
         <div class="mb-3" id="crear-padre-grupo" style="display:none">
           <label class="form-label form-label-sm fw-semibold">Padre</label>
           <select id="crear-padre" class="form-select form-select-sm">
-            <option value="">— sin padre —</option>
+            <option value="">-- sin padre --</option>
           </select>
         </div>
         <div class="row g-2 mb-3">
@@ -464,7 +145,7 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
         </div>
         <div class="mb-3">
           <label class="form-label form-label-sm">Tipo de carga</label>
-          <input id="crear-tipo-carga" type="text" class="form-control form-control-sm" placeholder="Ej. motor, iluminación…">
+          <input id="crear-tipo-carga" type="text" class="form-control form-control-sm" placeholder="Ej. motor, iluminacion...">
         </div>
         <div class="mb-2">
           <label class="form-label form-label-sm">Notas</label>
@@ -522,32 +203,32 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
   </div>
 </div>
 
-{# Modal: declarar cambio de alimentación #}
+{# Modal: declarar cambio de alimentacion #}
 <div class="modal fade" id="modalCambioAlimentacion" tabindex="-1">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Cambio de alimentación</h5>
+        <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Cambio de alimentacion</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="cambio-activo-id">
         <p class="small text-muted mb-3">Activo: <strong id="cambio-activo-nombre"></strong></p>
         <div class="mb-3">
-          <label class="form-label form-label-sm fw-semibold">Nueva fuente de alimentación <span class="text-danger">*</span></label>
+          <label class="form-label form-label-sm fw-semibold">Nueva fuente de alimentacion <span class="text-danger">*</span></label>
           <select id="cambio-fuente-select" class="form-select form-select-sm">
-            <option value="">— seleccionar fuente —</option>
+            <option value="">-- seleccionar fuente --</option>
           </select>
-          <div class="form-text">Solo se muestran activos de tipo válido según jerarquía.</div>
+          <div class="form-text">Solo se muestran activos de tipo valido segun jerarquia.</div>
         </div>
         <div class="mb-3">
           <label class="form-label form-label-sm fw-semibold">Fecha y hora de inicio <span class="text-danger">*</span></label>
-          <input id="cambio-desde" type="datetime-local" class="form-control form-control-sm">
-          <div class="form-text">Debe ser posterior a la conexión vigente actual.</div>
+          <input id="cambio-desde" type="datetime-local" class="form-control form-control-sm" value="">
+          <div class="form-text">La fecha determina desde cuando se atribuye la energia a la nueva fuente de alimentacion. Debe coincidir con el momento real del cambio fisico, no con la fecha de registro.</div>
         </div>
         <div class="mb-3">
           <label class="form-label form-label-sm">Motivo</label>
-          <input id="cambio-motivo" type="text" class="form-control form-control-sm" placeholder="Ej. Mantenimiento en SE-3, ampliación de planta…">
+          <input id="cambio-motivo" type="text" class="form-control form-control-sm" placeholder="Ej. Mantenimiento en SE-3, ampliacion de planta...">
         </div>
         <div id="cambio-error" class="alert alert-danger small py-1 d-none"></div>
       </div>
@@ -597,324 +278,14 @@ li.colapsado > .nodo-header .toggle-icon { transform: rotate(-90deg); }
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/unifilar-core.js') }}"></script>
 <script>
-"use strict";
-(function () {
-  const CLIENTE_ID = {{ cliente.id }};
-  const PLANTA_ID  = {{ planta_id }};
-  const CSRF       = document.querySelector('meta[name="csrf-token"]')?.content || "";
-
-  // Todos los activos del cliente (incluye otras plantas) para los selectores de padre
-  const TODOS_ACTIVOS = {{ activos_planos | tojson }};
-
-  const PADRES_VALIDOS = {
-    acometida:     [],
-    subestacion:   ["acometida", "subestacion"],
-    transformador: ["acometida", "subestacion"],
-    carga:         ["transformador"],
-    generacion:    ["subestacion", "transformador"],
-  };
-
-  // ── Árbol plegable ────────────────────────────────────────────────────────
-
-  window.toggleRama = function (activoId) {
-    const li    = document.getElementById(`li-${activoId}`);
-    const chev  = document.getElementById(`chev-${activoId}`);
-    if (!li) return;
-    li.classList.toggle("colapsado");
-    const col = li.classList.contains("colapsado");
-    if (chev) {
-      chev.style.transform = col ? "" : "rotate(90deg)";
-    }
-  };
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  function baseUrl(activoId) {
-    const base = `/clientes/${CLIENTE_ID}/planta/${PLANTA_ID}/activos`;
-    return activoId ? `${base}/${activoId}` : base;
-  }
-
-  function mostrarToast(msg, tipo = "success") {
-    const t = document.getElementById("toast-activos");
-    t.className = `toast align-items-center text-bg-${tipo} border-0`;
-    document.getElementById("toast-activos-msg").textContent = msg;
-    bootstrap.Toast.getOrCreateInstance(t, { delay: 3500 }).show();
-  }
-
-  function mostrarError(elId, msg) {
-    const el = document.getElementById(elId);
-    el.textContent = msg;
-    el.classList.remove("d-none");
-  }
-
-  function limpiarError(elId) {
-    const el = document.getElementById(elId);
-    if (!el) return;
-    el.textContent = "";
-    el.classList.add("d-none");
-  }
-
-  async function post(url, body) {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
-      body: JSON.stringify(body),
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-    return data;
-  }
-
-  // ── Selector de padres (reutilizado en Crear y Editar) ───────────────────
-
-  function llenarPadresSelect(selectEl, tipoHijo, excluirId, padreActualId) {
-    const tiposValidos = PADRES_VALIDOS[tipoHijo] || [];
-    selectEl.innerHTML = '<option value="">— sin padre (raíz) —</option>';
-    TODOS_ACTIVOS
-      .filter(a => tiposValidos.includes(a.tipo) && a.activo && a.id !== excluirId)
-      .sort((a, b) => {
-        // Misma planta primero, luego por nombre
-        if (a.misma_planta !== b.misma_planta) return b.misma_planta - a.misma_planta;
-        return a.nombre.localeCompare(b.nombre);
-      })
-      .forEach(a => {
-        const opt = document.createElement("option");
-        opt.value = a.id;
-        const plantaLabel = a.misma_planta ? "" : ` — ${a.planta_nombre}`;
-        opt.textContent = `${a.nombre} (${a.tipo})${plantaLabel}`;
-        if (a.id === padreActualId) opt.selected = true;
-        selectEl.appendChild(opt);
-      });
-  }
-
-  // ── Crear activo ──────────────────────────────────────────────────────────
-
-  window.actualizarPadresCrear = function () {
-    const tipo = document.getElementById("crear-tipo").value;
-    const grupo = document.getElementById("crear-padre-grupo");
-    const sel = document.getElementById("crear-padre");
-    const tiposValidos = PADRES_VALIDOS[tipo] || [];
-    if (tiposValidos.length === 0) {
-      grupo.style.display = "none";
-      sel.value = "";
-      return;
-    }
-    grupo.style.display = "";
-    llenarPadresSelect(sel, tipo, null, null);
-  };
-
-  window.guardarCrearActivo = async function () {
-    limpiarError("crear-error");
-    const tipo   = document.getElementById("crear-tipo").value;
-    const nombre = document.getElementById("crear-nombre").value.trim();
-    const padre  = document.getElementById("crear-padre").value || null;
-    const kva    = parseFloat(document.getElementById("crear-kva").value) || null;
-    const kw     = parseFloat(document.getElementById("crear-kw").value) || null;
-    const tc     = document.getElementById("crear-tipo-carga").value.trim() || null;
-    const notas  = document.getElementById("crear-notas").value.trim() || null;
-    try {
-      await post(`${baseUrl()}/crear`, {
-        tipo, nombre,
-        activo_padre_id: padre ? parseInt(padre) : null,
-        capacidad_kva: kva, potencia_nominal_kw: kw, tipo_carga: tc, notas,
-      });
-      mostrarToast("Activo creado");
-      setTimeout(() => location.reload(), 1200);
-    } catch (e) {
-      mostrarError("crear-error", e.message);
-    }
-  };
-
-  // ── Historial de alimentación (toggle inline) ────────────────────────────
-
-  window.toggleHistorial = function (elId) {
-    const el = document.getElementById(elId);
-    if (!el) return;
-    el.style.display = el.style.display === "none" ? "" : "none";
-  };
-
-  // ── Editar activo (solo metadatos; padre va por cambio-alimentacion) ───────
-
-  window.abrirEditarActivo = function (id, nodo) {
-    document.getElementById("editar-activo-id").value  = id;
-    document.getElementById("editar-nombre").value     = nodo.nombre || "";
-    document.getElementById("editar-kva").value        = nodo.capacidad_kva || "";
-    document.getElementById("editar-kw").value         = nodo.potencia_nominal_kw || "";
-    document.getElementById("editar-tipo-carga").value = nodo.tipo_carga || "";
-    document.getElementById("editar-notas").value      = nodo.notas || "";
-    limpiarError("editar-error");
-    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalEditarActivo")).show();
-  };
-
-  window.guardarEditarActivo = async function () {
-    limpiarError("editar-error");
-    const id     = parseInt(document.getElementById("editar-activo-id").value);
-    const nombre = document.getElementById("editar-nombre").value.trim();
-    const kva    = parseFloat(document.getElementById("editar-kva").value) || null;
-    const kw     = parseFloat(document.getElementById("editar-kw").value) || null;
-    const tc     = document.getElementById("editar-tipo-carga").value.trim() || null;
-    const notas  = document.getElementById("editar-notas").value.trim() || null;
-    try {
-      await post(`${baseUrl(id)}/editar`, { nombre, capacidad_kva: kva, potencia_nominal_kw: kw, tipo_carga: tc, notas });
-      mostrarToast("Activo actualizado");
-      setTimeout(() => location.reload(), 1200);
-    } catch (e) {
-      mostrarError("editar-error", e.message);
-    }
-  };
-
-  // ── Cambio de alimentación ────────────────────────────────────────────────
-
-  // _tipoActivo almacena el tipo del activo que se está editando en el modal.
-  let _cambioTipoActivo = "";
-
-  window.abrirCambioAlimentacion = function (activoId, nombre, fuenteActualId) {
-    document.getElementById("cambio-activo-id").value = activoId;
-    document.getElementById("cambio-activo-nombre").textContent = nombre;
-    limpiarError("cambio-error");
-
-    // Tipo del activo (necesario para filtrar fuentes válidas)
-    const activo = TODOS_ACTIVOS.find(a => a.id === activoId);
-    _cambioTipoActivo = activo ? activo.tipo : "";
-
-    // Rellenar selector de fuentes
-    const sel = document.getElementById("cambio-fuente-select");
-    llenarPadresSelect(sel, _cambioTipoActivo, activoId, fuenteActualId);
-
-    // Prerellenar fecha con ahora (local, sin segundos)
-    const ahora = new Date();
-    ahora.setSeconds(0, 0);
-    const pad = n => String(n).padStart(2, "0");
-    document.getElementById("cambio-desde").value =
-      `${ahora.getFullYear()}-${pad(ahora.getMonth()+1)}-${pad(ahora.getDate())}T${pad(ahora.getHours())}:${pad(ahora.getMinutes())}`;
-
-    document.getElementById("cambio-motivo").value = "";
-    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalCambioAlimentacion")).show();
-  };
-
-  window.guardarCambioAlimentacion = async function () {
-    limpiarError("cambio-error");
-    const activoId  = parseInt(document.getElementById("cambio-activo-id").value);
-    const fuenteVal = document.getElementById("cambio-fuente-select").value;
-    const desdeVal  = document.getElementById("cambio-desde").value;
-    const motivo    = document.getElementById("cambio-motivo").value.trim() || null;
-
-    if (!fuenteVal) {
-      mostrarError("cambio-error", "Selecciona una fuente de alimentación.");
-      return;
-    }
-    if (!desdeVal) {
-      mostrarError("cambio-error", "La fecha de inicio es obligatoria.");
-      return;
-    }
-
-    // datetime-local no incluye zona; lo enviamos con sufijo de zona local
-    const desde = new Date(desdeVal).toISOString();
-
-    try {
-      await post(`${baseUrl(activoId)}/cambio-alimentacion`, {
-        fuente_activo_id: parseInt(fuenteVal),
-        desde,
-        motivo,
-      });
-      mostrarToast("Cambio de alimentación declarado");
-      setTimeout(() => location.reload(), 1200);
-    } catch (e) {
-      mostrarError("cambio-error", e.message);
-    }
-  };
-
-  // ── Desactivar ────────────────────────────────────────────────────────────
-
-  window.confirmarDesactivar = function (id, nombre) {
-    if (!confirm(`¿Desactivar "${nombre}"? Esta operación es reversible desde base de datos.`)) return;
-    post(`${baseUrl(id)}/desactivar`, {})
-      .then(() => { mostrarToast("Activo desactivado"); setTimeout(() => location.reload(), 1200); })
-      .catch(e => alert(`Error: ${e.message}`));
-  };
-
-  // ── Eliminar permanente ───────────────────────────────────────────────────
-
-  window.confirmarEliminarPermanente = function (id, nombre) {
-    if (!confirm(
-      `¿Eliminar permanentemente "${nombre}"?\n\n` +
-      `Esta operación borra el activo y su registro de alta.\n` +
-      `No se puede deshacer.`
-    )) return;
-    post(`${baseUrl(id)}/eliminar-permanente`, {})
-      .then(() => { mostrarToast("Activo eliminado"); setTimeout(() => location.reload(), 1200); })
-      .catch(e => alert(`No se puede eliminar:\n${e.message}`));
-  };
-
-  // ── Vincular / desvincular medidor ────────────────────────────────────────
-
-  window.abrirVincularMedidor = function (id, nombre) {
-    document.getElementById("vincular-activo-id").value = id;
-    document.getElementById("vincular-activo-nombre").textContent = nombre;
-    limpiarError("vincular-error");
-    bootstrap.Modal.getOrCreateInstance(document.getElementById("modalVincularMedidor")).show();
-  };
-
-  window.guardarVincularMedidor = async function () {
-    limpiarError("vincular-error");
-    const id       = parseInt(document.getElementById("vincular-activo-id").value);
-    const medidorId = parseInt(document.getElementById("vincular-medidor-select").value);
-    try {
-      await post(`${baseUrl(id)}/vincular-medidor`, { medidor_id: medidorId });
-      mostrarToast("Medidor vinculado");
-      setTimeout(() => location.reload(), 1200);
-    } catch (e) {
-      mostrarError("vincular-error", e.message);
-    }
-  };
-
-  window.desvinculaActivo = function (id) {
-    if (!confirm("¿Desvincular el medidor de este activo? La vigencia quedará cerrada en el historial.")) return;
-    post(`${baseUrl(id)}/desvincular-medidor`, {})
-      .then(() => { mostrarToast("Medidor desvinculado"); setTimeout(() => location.reload(), 1200); })
-      .catch(e => alert(`Error: ${e.message}`));
-  };
-
-  window.asignarContratoAcometida = async function (id) {
-    const contratoId = document.getElementById(`contrato-sel-${id}`).value || null;
-    const desdeVal   = document.getElementById(`contrato-desde-${id}`).value;
-    const motivo     = document.getElementById(`contrato-motivo-${id}`).value.trim() || null;
-    if (!desdeVal) { alert("La fecha de inicio es obligatoria."); return; }
-    const desde = new Date(desdeVal).toISOString();
-    try {
-      await post(`${baseUrl(id)}/contrato-acometida`, {
-        contrato_id: contratoId ? parseInt(contratoId) : null,
-        desde,
-        motivo,
-      });
-      mostrarToast("Contrato asignado");
-      setTimeout(() => location.reload(), 1200);
-    } catch (e) {
-      alert(`Error: ${e.message}`);
-    }
-  };
-
-  window.declararRolMedidor = async function (activoId, medidorId) {
-    const rol      = document.getElementById(`rol-sel-${activoId}`).value;
-    const desdeVal = document.getElementById(`rol-desde-${activoId}`).value;
-    const motivo   = document.getElementById(`rol-motivo-${activoId}`).value.trim() || null;
-    if (!desdeVal) { alert("La fecha de inicio es obligatoria."); return; }
-    const desde = new Date(desdeVal).toISOString();
-    try {
-      await post(`${baseUrl(activoId)}/medidor-rol`, {
-        medidor_id: medidorId,
-        rol,
-        desde,
-        motivo,
-      });
-      mostrarToast("Rol declarado");
-      setTimeout(() => location.reload(), 1200);
-    } catch (e) {
-      alert(`Error: ${e.message}`);
-    }
-  };
-
-})();
+window.ACTIVOS_UNIFILAR_CONFIG = {
+  clienteId:     {{ cliente.id }},
+  plantaId:      {{ planta_id }},
+  todosActivos:  {{ activos_planos | tojson }},
+  padresValidos: {{ padres_validos | tojson }},
+};
 </script>
+<script src="{{ url_for('static', filename='js/activos-unifilar.js') }}"></script>
 {% endblock %}
