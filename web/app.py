@@ -876,6 +876,12 @@ def create_app() -> Flask:
 
         tipo_suministro = _tipo_suministro(cliente_id, planta_id)
 
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "[DIAG] cogeneracion cliente_id=%s planta_id=%s tipo_suministro=%s",
+            cliente_id, planta_id, tipo_suministro,
+        )
+
         try:
             from decimal import Decimal as _D
             _cfg = {r["clave"]: r["valor"] for r in list_configuracion()}

@@ -1052,7 +1052,7 @@ def get_facturas_para_dashboard(cliente_id: int, planta_id: int | None = None) -
     if not seleccionados:
         return [], []
     if planta_id is not None:
-        r = _supabase.table("contratos").select("id").eq("planta_id", planta_id).execute()
+        r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = {row["id"] for row in r.data}
         seleccionados = {(c, a, m) for c, a, m in seleccionados if c in ids_planta}
         if not seleccionados:
@@ -1113,7 +1113,7 @@ def get_ultimas_cfe_invoices(
         "*, clientes(nombre, rfc), cfe_periodos(*), cfe_mem_componentes(*)"
     ).eq("cliente_id", cliente_id)
     if planta_id is not None:
-        r = _supabase.table("contratos").select("id").eq("planta_id", planta_id).execute()
+        r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = [row["id"] for row in r.data]
         if not ids_planta:
             return []
@@ -1135,7 +1135,7 @@ def get_ultimas_gas_invoices(
         "*, clientes(nombre, rfc), gas_conceptos(*)"
     ).eq("cliente_id", cliente_id)
     if planta_id is not None:
-        r = _supabase.table("contratos").select("id").eq("planta_id", planta_id).execute()
+        r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = [row["id"] for row in r.data]
         if not ids_planta:
             return []
@@ -1156,7 +1156,7 @@ def get_ultimas_ppa_invoices(
         "cliente_id", cliente_id
     )
     if planta_id is not None:
-        r = _supabase.table("contratos").select("id").eq("planta_id", planta_id).execute()
+        r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = [row["id"] for row in r.data]
         if not ids_planta:
             return []
@@ -1286,7 +1286,7 @@ def get_facturas_ppa_y_gas_para_dashboard(
     if not seleccionados:
         return [], []
     if planta_id is not None:
-        r = _supabase.table("contratos").select("id").eq("planta_id", planta_id).execute()
+        r = _supabase.table("contratos").select("id").eq("cliente_id", cliente_id).eq("planta_id", planta_id).execute()
         ids_planta = {row["id"] for row in r.data}
         seleccionados = {(c, a, m) for c, a, m in seleccionados if c in ids_planta}
         if not seleccionados:
