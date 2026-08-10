@@ -549,18 +549,18 @@ def create_app() -> Flask:
             clear_user_session()
             flash("Tu sesión ha sido invalidada por seguridad. Por favor inicia sesión de nuevo.", "warning")
             return redirect(url_for("auth.login"))
-        # usuario_normal solo puede ver su empresa asignada
-        if user and user["rol"] == "usuario_normal":
+        # Bloquear acceso a rutas de clientes ajenos para cualquier usuario
+        # con empresa_id asignada (usuario_normal Y admin restringido).
+        # master_admin siempre pasa: usuario_puede_ver_empresa devuelve True.
+        if user and user.get("empresa_id") and user["rol"] != "master_admin":
             from web.auth_permissions import usuario_puede_ver_empresa
-            empresa_id = user.get("empresa_id")
-            # Bloquear acceso a rutas de clientes que no sean su empresa
             import re as _re
             m = _re.match(r"^/clientes/(\d+)", path)
             if m:
                 cid = int(m.group(1))
                 if not usuario_puede_ver_empresa(cid, user):
                     flash("No tienes acceso a ese cliente.", "danger")
-                    return redirect(url_for("clientes.listado"))
+                    return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
 
     @app.before_request
     def _resolver_planta_activa():
@@ -721,8 +721,7 @@ def create_app() -> Flask:
 
         planta = obtener_planta(planta_id)
         if planta is None or planta.get("cliente_id") != cliente_id:
-            flash("Planta no encontrada.", "warning")
-            return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+            abort(404)
 
         from storage.repository import get_cliente_con_conteos as _gcc
         cliente = _gcc(cliente_id)
