@@ -2480,7 +2480,7 @@ def create_app() -> Flask:
                 empresa_id_legacy = cliente_ids[0] if len(cliente_ids) == 1 else None
             else:
                 cliente_ids = []
-                empresa_id_legacy = None
+                empresa_id_legacy = target.get("empresa_id")  # preservar vínculo existente
             try:
                 _supabase.postgrest.auth(os.environ["SUPABASE_KEY"])
                 _supabase.table("user_profiles").update({

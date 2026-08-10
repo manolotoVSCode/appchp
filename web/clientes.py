@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from web.auth import get_current_user as _get_current_user
-from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario
+from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario, usuario_puede_ver_empresa
 from web.error_logger import log_error
 from calc.excepciones import PeriodoIncompletoError
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
@@ -381,9 +381,9 @@ def _validar_rfc_formato(rfc: str) -> str | None:
 @clientes_bp.route("/")
 def listado():
     user = _get_current_user()
+    if user and user.get("empresa_id") and user.get("rol") != "master_admin":
+        return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
     if user and user.get("rol") == "usuario_normal":
-        if user.get("empresa_id"):
-            return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
         return render_template("error_sin_empresa.html"), 403
     clientes = get_all_clientes_con_conteos()
     if user:
@@ -500,6 +500,13 @@ def ficha(cliente_id: int):
     if cliente is None:
         flash("El cliente solicitado no existe.", "warning")
         return redirect(url_for("clientes.listado"))
+    # Control de acceso
+    user = _get_current_user()
+    if user and not usuario_puede_ver_empresa(cliente_id, user):
+        flash("No tienes acceso a este cliente.", "danger")
+        if user.get("empresa_id"):
+            return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
+        return redirect(url_for("dashboard"))
     # Activar cliente en sesión: sin esto el sidebar no muestra dashboard ni contratos
     session["cliente_activo_id"] = cliente_id
     session["cliente_activo_nombre"] = cliente["nombre"]
@@ -512,7 +519,6 @@ def ficha(cliente_id: int):
             ppa_bloques.setdefault(b["anio"], {})[b["mes"]] = b["bloque_contratado_mwh"]
     except Exception:
         pass
-    user = _get_current_user()
     # Parámetros CRE: solo para admin/master_admin
     cre_params = None
     if user and user.get("rol") in ("master_admin", "admin"):

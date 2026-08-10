@@ -75,32 +75,34 @@ def usuario_puede_crear(user: dict) -> bool:
 
 def usuario_puede_ver_empresa(empresa_id: int, user: dict) -> bool:
     """
-    master_admin y admin ven todas las empresas.
-    usuario_normal: verifica en clientes_ids (multi) o empresa_id (fallback legacy).
+    master_admin ve todas las empresas.
+    Si el usuario tiene empresa_id asignada, solo ve esa empresa.
+    admin sin empresa_id: ve todas las empresas (compatibilidad).
     """
-    if user.get("rol") in (ROL_MASTER_ADMIN, ROL_ADMIN):
+    if user.get("rol") == ROL_MASTER_ADMIN:
         return True
-    clientes_ids = user.get("clientes_ids", [])
-    if clientes_ids:
-        return empresa_id in clientes_ids
-    return user.get("empresa_id") == empresa_id
+    if user.get("empresa_id") is not None:
+        return user.get("empresa_id") == empresa_id
+    if user.get("rol") == ROL_ADMIN:
+        return True
+    return False
 
 
 def filtrar_empresas_para_usuario(clientes: list[dict], user: dict) -> list[dict]:
     """
     Filtra la lista de clientes según el rol del usuario.
-    master_admin/admin: sin filtro.
-    usuario_normal: filtra por clientes_ids (multi) o empresa_id (fallback legacy).
+    master_admin: sin filtro.
+    admin sin empresa_id: sin filtro.
+    Cualquier otro caso: filtra por empresa_id.
     """
-    if user.get("rol") in (ROL_MASTER_ADMIN, ROL_ADMIN):
+    if user.get("rol") == ROL_MASTER_ADMIN:
         return clientes
-    clientes_ids = user.get("clientes_ids", [])
-    if clientes_ids:
-        return [c for c in clientes if c.get("id") in clientes_ids]
     empresa_id = user.get("empresa_id")
-    if empresa_id is None:
-        return []
-    return [c for c in clientes if c.get("id") == empresa_id]
+    if empresa_id is not None:
+        return [c for c in clientes if c.get("id") == empresa_id]
+    if user.get("rol") == ROL_ADMIN:
+        return clientes
+    return []
 
 
 def validar_borrar_usuario(actor: dict, target: dict) -> str | None:

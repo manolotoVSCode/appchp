@@ -87,11 +87,13 @@
   {% endif %}
   {% endif %}
   {% else %}
+  {% if current_user_data.rol == 'master_admin' or not current_user_data.empresa_id %}
   <div class="sidebar-section">Clientes</div>
   <a href="{{ url_for('clientes.listado') }}"
      class="sidebar-link{% if nav_active == 'clientes' %} active{% endif %}">
     <i class="bi bi-people"></i>Listado clientes
   </a>
+  {% endif %}
   {% endif %}
 
   {% if cliente_activo %}
@@ -172,7 +174,7 @@
      class="sidebar-link{% if nav_active == 'configuracion' %} active{% endif %}">
     <i class="bi bi-gear"></i>Configuración
   </a>
-  {% if current_user_data and current_user_data.rol in ('master_admin', 'admin') %}
+  {% if current_user_data and current_user_data.rol == 'master_admin' %}
   <a href="{{ url_for('admin_usuarios') }}"
      class="sidebar-link{% if nav_active == 'usuarios' %} active{% endif %}">
     <i class="bi bi-people-fill"></i>Usuarios
