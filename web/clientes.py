@@ -519,9 +519,9 @@ def ficha(cliente_id: int):
     # usuario_normal y usuario_avanzado solo pueden ver su propio cliente
     if user and user.get("rol") in ("usuario_normal", "usuario_avanzado") and not usuario_puede_ver_empresa(cliente_id, user):
         flash("No tienes acceso a este cliente.", "danger")
-        empresa_id = user.get("empresa_id")
-        if empresa_id:
-            return redirect(url_for("clientes.ficha", cliente_id=empresa_id))
+        empresa_id_actor = user.get("empresa_id") if user is not None else None
+        if empresa_id_actor:
+            return redirect(url_for("clientes.ficha", cliente_id=empresa_id_actor))
         return redirect(url_for("clientes.listado"))
     # Parámetros CRE: para todos los usuarios autenticados con acceso al cliente
     cre_params = None

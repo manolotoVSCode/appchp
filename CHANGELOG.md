@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.87.2] — 2026-08-09
+
+### Fix — AttributeError actor None en ficha() al leer empresa_id
+
+**`web/clientes.py`:**
+- `ficha()`: el guard de acceso de usuario_normal/usuario_avanzado usaba `empresa_id = user.get("empresa_id")` dentro de un `if user and ...`, lo que es seguro; se renombra a `empresa_id_actor` y se añade guard explícito `if user is not None` para mayor claridad y para reemplazar el hot-patch de producción que tenía `actor.get("empresa_id")` sin guard de None, causando `AttributeError: 'NoneType' object has no attribute 'get'`.
+
+---
+
 ## [2.87.1] — 2026-08-09
 
 ### Feat — Admin con empresa_id asignada redirige a su ficha y no ve listado
