@@ -1434,16 +1434,17 @@ def contrato_seleccion_mes(cliente_id: int, contrato_id: int):
             if mes not in meses_con_factura:
                 return jsonify({"error": f"No existe factura para {anio}-{mes:02d} en este contrato"}), 400
 
-            # Bloqueo de mezcla: no mezclar basico y calificado
+            # Bloqueo de mezcla: no mezclar basico y calificado dentro de la misma planta
             if contrato.tipo in TIPOS_ELECTRICOS:
-                tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id)
+                tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id, planta_id=contrato.planta_id)
                 tipo_opuesto = TIPO_ELECTRICO_CALIFICADO if contrato.tipo == TIPO_ELECTRICO_BASICO else TIPO_ELECTRICO_BASICO
                 if tipo_opuesto in tipos_existentes:
+                    planta_ctx = f" en esta planta" if contrato.planta_id else ""
                     if tipo_opuesto == TIPO_ELECTRICO_BASICO:
-                        msg = ("Hay meses de facturas CFE GDMTH seleccionados. "
+                        msg = (f"Hay meses de facturas CFE GDMTH seleccionados{planta_ctx}. "
                                "Deselecciona primero todos los meses de los contratos CFE antes de activar suministro calificado (PPA).")
                     else:
-                        msg = ("Hay meses de facturas calificadas (PPA) seleccionados. "
+                        msg = (f"Hay meses de facturas calificadas (PPA) seleccionados{planta_ctx}. "
                                "Deselecciona primero todos los meses de los contratos PPA antes de activar suministro CFE GDMTH.")
                     return jsonify({"error": msg}), 409
 
@@ -1482,14 +1483,15 @@ def contrato_seleccion_anio(cliente_id: int, contrato_id: int):
     try:
         if seleccionado:
             if contrato.tipo in TIPOS_ELECTRICOS:
-                tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id)
+                tipos_existentes = get_tipos_electricos_con_meses_seleccionados(cliente_id, planta_id=contrato.planta_id)
                 tipo_opuesto = TIPO_ELECTRICO_CALIFICADO if contrato.tipo == TIPO_ELECTRICO_BASICO else TIPO_ELECTRICO_BASICO
                 if tipo_opuesto in tipos_existentes:
+                    planta_ctx = f" en esta planta" if contrato.planta_id else ""
                     if tipo_opuesto == TIPO_ELECTRICO_BASICO:
-                        msg = ("Hay meses de facturas CFE GDMTH seleccionados. "
+                        msg = (f"Hay meses de facturas CFE GDMTH seleccionados{planta_ctx}. "
                                "Deselecciona primero todos los meses de los contratos CFE antes de activar suministro calificado (PPA).")
                     else:
-                        msg = ("Hay meses de facturas calificadas (PPA) seleccionados. "
+                        msg = (f"Hay meses de facturas calificadas (PPA) seleccionados{planta_ctx}. "
                                "Deselecciona primero todos los meses de los contratos PPA antes de activar suministro CFE GDMTH.")
                     return jsonify({"error": msg}), 409
             n = upsert_meses_seleccionados_anio(contrato_id, anio, contrato_tipo=contrato.tipo)
