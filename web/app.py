@@ -317,11 +317,13 @@ def _calcular_rango_cogen(cfe_invoices, gas_invoices, ppa_invoices=None) -> str:
 def _cargar_ultimas_facturas_cogen(cliente_id: int):
     """Carga las últimas 12 facturas CFE y gas para el dashboard de Cogeneración.
 
-    Ignora la selección manual del sidebar; siempre usa las facturas más recientes.
+    Ignora la selección manual del sidebar; siempre usa las facturas más recientes
+    de la planta activa (si está definida) o del cliente completo.
     Retorna (cfe_invoices, gas_invoices, facturas_cfe, facturas_gas).
     """
-    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
-    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
+    _pid = _pid_de_g()
+    cfe_invoices = sorted(get_ultimas_cfe_invoices(cliente_id, n=12, planta_id=_pid), key=lambda x: x.periodo_inicio)
+    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12, planta_id=_pid), key=lambda x: x.periodo_inicio)
 
     facturas_cfe = [
         {
@@ -353,11 +355,13 @@ def _cargar_ultimas_facturas_cogen(cliente_id: int):
 def _cargar_ultimas_ppa_cogen(cliente_id: int):
     """Carga las últimas 12 facturas PPA y gas para el dashboard de Cogeneración.
 
-    Ignora la selección manual del sidebar; siempre usa las facturas más recientes.
+    Ignora la selección manual del sidebar; siempre usa las facturas más recientes
+    de la planta activa (si está definida) o del cliente completo.
     Retorna (ppa_invoices, gas_invoices, facturas_ppa, facturas_gas).
     """
-    ppa_invoices = sorted(get_ultimas_ppa_invoices(cliente_id, n=12), key=lambda x: (x.anio, x.mes))
-    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12), key=lambda x: x.periodo_inicio)
+    _pid = _pid_de_g()
+    ppa_invoices = sorted(get_ultimas_ppa_invoices(cliente_id, n=12, planta_id=_pid), key=lambda x: (x.anio, x.mes))
+    gas_invoices = sorted(get_ultimas_gas_invoices(cliente_id, n=12, planta_id=_pid), key=lambda x: x.periodo_inicio)
 
     facturas_ppa = [
         {
@@ -2822,7 +2826,7 @@ def create_app() -> Flask:
         if err:
             return err
 
-        mediciones = get_mediciones_por_cliente(cliente_id)
+        mediciones = get_mediciones_por_cliente(cliente_id, planta_id=_pid_de_g())
         if not mediciones:
             flash("Este cliente no tiene mediciones cincominutal cargadas.", "warning")
             return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))

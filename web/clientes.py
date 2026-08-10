@@ -840,9 +840,9 @@ def contrato_nuevo(cliente_id: int):
             planta_id_sel=planta_id,
         )
 
-    # GET — preseleccionar la planta activa de la sesión si existe
-    from flask import session as _sess
-    planta_id_default = _sess.get("planta_activa_id")
+    # GET — preseleccionar la planta activa si existe
+    from flask import g as _g
+    planta_id_default = getattr(_g, "planta_activa_id", None)
     return render_template(
         "clientes/contratos/nuevo.html",
         cliente=cliente,
