@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.87.1] — 2026-08-09
+
+### Feat — Admin con empresa_id asignada redirige a su ficha y no ve listado
+
+**`web/auth.py`:**
+- Post-login: si el rol es `admin` y tiene `empresa_id`, redirige directamente a la ficha del cliente asignado (antes de evaluar `?next=` o `last_cliente_id`).
+
+**`web/clientes.py`:**
+- `listado()`: admin con `empresa_id` es redirigido a la ficha de su cliente si intenta acceder a `/clientes` manualmente.
+
+**`web/templates/clientes/_base.html`:**
+- Enlace "Listado clientes" visible solo para `master_admin` o `admin` sin `empresa_id`. Admin con `empresa_id` ve "Mi Cliente" (enlace directo a su ficha) en lugar del listado.
+
+---
+
 ## [2.87.0] — 2026-08-09
 
 ### Feat — Rol usuario_avanzado: permisos admin restringidos a su cliente

@@ -222,6 +222,10 @@ def login():
                         "auth/login.html",
                         error="Sin cliente asignado. Contacta al administrador.",
                     )
+                if user and user["rol"] == ROL_ADMIN:
+                    empresa_id = session.get("_empresa_id")
+                    if empresa_id:
+                        return redirect(url_for("clientes.ficha", cliente_id=empresa_id))
                 raw_next = request.args.get("next", "")
                 if _es_url_segura(raw_next):
                     return redirect(raw_next)

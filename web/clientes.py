@@ -386,6 +386,8 @@ def listado():
         if user.get("empresa_id"):
             return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
         return render_template("error_sin_empresa.html"), 403
+    if user and user.get("rol") == "admin" and user.get("empresa_id"):
+        return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
     clientes = get_all_clientes_con_conteos()
     if user:
         clientes = filtrar_empresas_para_usuario(clientes, user)
