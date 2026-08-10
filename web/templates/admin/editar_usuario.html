@@ -26,9 +26,10 @@
         <label for="ed_rol" class="form-label fw-semibold">Rol</label>
         <select id="ed_rol" name="rol" class="form-select" onchange="toggleEmpresaField(this.value)">
           <option value="admin" {% if form_rol == 'admin' %}selected{% endif %}>Administrador</option>
+          <option value="usuario_avanzado" {% if form_rol == 'usuario_avanzado' %}selected{% endif %}>Usuario Avanzado</option>
           <option value="usuario_normal" {% if form_rol == 'usuario_normal' %}selected{% endif %}>Cliente</option>
         </select>
-        <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve su empresa asignada.</div>
+        <div class="form-text">Admin ve todos los clientes. Usuario Avanzado opera sobre su cliente asignado con permisos completos. Cliente tiene acceso de solo lectura.</div>
       </div>
       {% else %}
       <div class="mb-3">
@@ -39,7 +40,7 @@
       </div>
       {% endif %}
 
-      <div class="mb-3" id="empresa-field" style="{{ '' if form_rol == 'usuario_normal' else 'display:none' }}">
+      <div class="mb-3" id="empresa-field" style="{{ '' if form_rol in ('usuario_normal', 'usuario_avanzado') else 'display:none' }}">
         <label class="form-label fw-semibold">Clientes asignados</label>
         <div class="border rounded p-3" style="max-height:300px;overflow-y:auto">
           {% for c in clientes %}
@@ -85,7 +86,7 @@
 
 <script>
 function toggleEmpresaField(rol) {
-  document.getElementById('empresa-field').style.display = (rol === 'usuario_normal') ? '' : 'none';
+  document.getElementById('empresa-field').style.display = (rol === 'usuario_normal' || rol === 'usuario_avanzado') ? '' : 'none';
 }
 </script>
 {% endblock %}

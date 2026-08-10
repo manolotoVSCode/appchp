@@ -9,6 +9,7 @@ from web.auth import (
     ROL_MASTER_ADMIN,
     ROL_ADMIN,
     ROL_USUARIO_NORMAL,
+    ROL_USUARIO_AVANZADO,
     get_current_user,
     is_authenticated,
 )
@@ -76,10 +77,13 @@ def usuario_puede_crear(user: dict) -> bool:
 def usuario_puede_ver_empresa(empresa_id: int, user: dict) -> bool:
     """
     master_admin y admin ven todas las empresas.
+    usuario_avanzado: solo su empresa_id.
     usuario_normal: verifica en clientes_ids (multi) o empresa_id (fallback legacy).
     """
     if user.get("rol") in (ROL_MASTER_ADMIN, ROL_ADMIN):
         return True
+    if user.get("rol") == ROL_USUARIO_AVANZADO:
+        return user.get("empresa_id") == empresa_id
     clientes_ids = user.get("clientes_ids", [])
     if clientes_ids:
         return empresa_id in clientes_ids
@@ -87,10 +91,10 @@ def usuario_puede_ver_empresa(empresa_id: int, user: dict) -> bool:
 
 
 def usuario_puede_escribir_en_cliente(user: dict, cliente_id: int) -> bool:
-    """admin/master_admin: sí. usuario_normal: solo si tiene acceso al cliente."""
+    """admin/master_admin: sí. usuario_avanzado/usuario_normal: solo si es su cliente."""
     if user.get("rol") in (ROL_MASTER_ADMIN, ROL_ADMIN):
         return True
-    if user.get("rol") == ROL_USUARIO_NORMAL:
+    if user.get("rol") in (ROL_USUARIO_AVANZADO, ROL_USUARIO_NORMAL):
         return usuario_puede_ver_empresa(cliente_id, user)
     return False
 
@@ -99,10 +103,16 @@ def filtrar_empresas_para_usuario(clientes: list[dict], user: dict) -> list[dict
     """
     Filtra la lista de clientes según el rol del usuario.
     master_admin/admin: sin filtro.
+    usuario_avanzado: solo su empresa_id.
     usuario_normal: filtra por clientes_ids (multi) o empresa_id (fallback legacy).
     """
     if user.get("rol") in (ROL_MASTER_ADMIN, ROL_ADMIN):
         return clientes
+    if user.get("rol") == ROL_USUARIO_AVANZADO:
+        empresa_id = user.get("empresa_id")
+        if empresa_id is None:
+            return []
+        return [c for c in clientes if c.get("id") == empresa_id]
     clientes_ids = user.get("clientes_ids", [])
     if clientes_ids:
         return [c for c in clientes if c.get("id") in clientes_ids]

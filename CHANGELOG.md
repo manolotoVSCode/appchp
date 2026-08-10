@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.87.0] — 2026-08-09
+
+### Feat — Rol usuario_avanzado: permisos admin restringidos a su cliente
+
+**`web/auth.py`:**
+- Añadida constante `ROL_USUARIO_AVANZADO = "usuario_avanzado"` y agregada a `ROLES_VALIDOS`.
+- `set_user_session`: usuario_avanzado recibe `_clientes_ids = [empresa_id]` para que las guards de acceso funcionen correctamente.
+- Login: usuario_avanzado es redirigido a la ficha de su empresa al iniciar sesión (no al listado).
+
+**`web/auth_permissions.py`:**
+- `usuario_puede_ver_empresa`: usuario_avanzado → True solo si `empresa_id` coincide.
+- `usuario_puede_escribir_en_cliente`: usuario_avanzado incluido (mismos permisos que usuario_normal pero con acceso a write).
+- `filtrar_empresas_para_usuario`: usuario_avanzado filtra a su única empresa.
+
+**`web/app.py`:**
+- `_label_rol`: añadida etiqueta "Usuario Avanzado".
+- `before_request`: usuario_avanzado bloqueado de rutas de otros clientes (redirect a su ficha, no al listado).
+- `dashboard()`: usuario_avanzado redirige a la ficha de su empresa.
+- `_verificar_cliente_activo`: acepta usuario_avanzado igual que usuario_normal.
+- `vista_planta`: guard extendida a usuario_avanzado.
+- `admin_usuarios_crear` / `admin_usuarios_editar`: aceptan rol "usuario_avanzado" y capturan `empresa_id` del formulario.
+
+**`web/clientes.py`:**
+- `listado()`: usuario_avanzado redirigido a su ficha (no ve el listado global).
+- `ficha()`: guard extendida a usuario_avanzado (redirect si accede a otro cliente).
+
+**`web/templates/clientes/_base.html`:**
+- Sidebar: elif para usuario_avanzado muestra "Mi Cliente" (enlace a su ficha) en lugar de "Listado clientes".
+- Footer: badge "Usuario Avanzado" en verde claro (#A5D6A7).
+
+**`web/templates/admin/usuarios.html`** y **`editar_usuario.html`:**
+- Opción "Usuario Avanzado" añadida al select de rol (visible para master_admin).
+- `toggleEmpresaField` actualizado para mostrar el selector de cliente también para usuario_avanzado.
+
+**`tests/test_usuario_avanzado.py`** (nuevo):
+- 9 tests: ficha propio cliente → 200; otro cliente → redirect; listado → redirect a su ficha; editar → 302; contrato nuevo → no 403; medición subir → no 403; borrar cliente → 302 sin borrar; planta nueva → no 403; ficha completa visible.
+
+**SQL de migración** (ejecutar manualmente en Supabase):
+```sql
+UPDATE user_profiles SET rol = 'usuario_avanzado' WHERE email = 'iberica@chpmex.com';
+```
+
+---
+
 ## [2.86.3] — 2026-08-09
 
 ### Fix — Persiste hot-patches de producción: modelos CFE/Gas + template ficha

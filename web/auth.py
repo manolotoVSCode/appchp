@@ -29,7 +29,8 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 ROL_MASTER_ADMIN = "master_admin"
 ROL_ADMIN = "admin"
 ROL_USUARIO_NORMAL = "usuario_normal"
-ROLES_VALIDOS = {ROL_MASTER_ADMIN, ROL_ADMIN, ROL_USUARIO_NORMAL}
+ROL_USUARIO_AVANZADO = "usuario_avanzado"
+ROLES_VALIDOS = {ROL_MASTER_ADMIN, ROL_ADMIN, ROL_USUARIO_NORMAL, ROL_USUARIO_AVANZADO}
 
 
 # ── Helpers de sesión ─────────────────────────────────────────────────────────
@@ -62,6 +63,9 @@ def set_user_session(user_id: str, email: str, rol: str, empresa_id: int | None,
             session["_empresa_id"] = ids[0]
         else:
             session["_empresa_id"] = empresa_id  # puede quedar NULL
+    elif rol == ROL_USUARIO_AVANZADO:
+        # usuario_avanzado opera sobre un único cliente (empresa_id)
+        session["_clientes_ids"] = [empresa_id] if empresa_id else []
     else:
         session["_clientes_ids"] = []
 
@@ -209,6 +213,14 @@ def login():
                     return render_template(
                         "auth/login.html",
                         error="Sin clientes asignados. Contacta al administrador.",
+                    )
+                if user and user["rol"] == ROL_USUARIO_AVANZADO:
+                    empresa_id = session.get("_empresa_id")
+                    if empresa_id:
+                        return redirect(url_for("clientes.ficha", cliente_id=empresa_id))
+                    return render_template(
+                        "auth/login.html",
+                        error="Sin cliente asignado. Contacta al administrador.",
                     )
                 raw_next = request.args.get("next", "")
                 if _es_url_segura(raw_next):

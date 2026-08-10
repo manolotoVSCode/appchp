@@ -97,7 +97,7 @@ def _verificar_cliente_activo(cliente_id: int):
         current_user_data = _gcu()
         clientes_ids = session.get("_clientes_ids", [])
         if (current_user_data
-                and current_user_data.get("rol") == "usuario_normal"
+                and current_user_data.get("rol") in ("usuario_normal", "usuario_avanzado")
                 and cliente_id in clientes_ids):
             session["cliente_activo_id"] = cliente_id
             session["_empresa_id"] = cliente_id
@@ -497,7 +497,7 @@ def create_app() -> Flask:
 
     @app.template_filter("label_rol")
     def _label_rol(rol: str) -> str:
-        return {"master_admin": "Super Admin", "admin": "Administrador", "usuario_normal": "Cliente"}.get(rol, rol)
+        return {"master_admin": "Super Admin", "admin": "Administrador", "usuario_normal": "Cliente", "usuario_avanzado": "Usuario Avanzado"}.get(rol, rol)
 
     @app.template_filter("abreviar_con_cliente")
     def _abreviar_con_cliente(nombre_contrato: str, nombre_cliente: str) -> str:
@@ -549,17 +549,18 @@ def create_app() -> Flask:
             clear_user_session()
             flash("Tu sesión ha sido invalidada por seguridad. Por favor inicia sesión de nuevo.", "warning")
             return redirect(url_for("auth.login"))
-        # usuario_normal solo puede ver su empresa asignada
-        if user and user["rol"] == "usuario_normal":
+        # usuario_normal y usuario_avanzado solo pueden ver su empresa asignada
+        if user and user["rol"] in ("usuario_normal", "usuario_avanzado"):
             from web.auth_permissions import usuario_puede_ver_empresa
-            empresa_id = user.get("empresa_id")
-            # Bloquear acceso a rutas de clientes que no sean su empresa
             import re as _re
             m = _re.match(r"^/clientes/(\d+)", path)
             if m:
                 cid = int(m.group(1))
                 if not usuario_puede_ver_empresa(cid, user):
                     flash("No tienes acceso a ese cliente.", "danger")
+                    empresa_id = user.get("empresa_id")
+                    if empresa_id:
+                        return redirect(url_for("clientes.ficha", cliente_id=empresa_id))
                     return redirect(url_for("clientes.listado"))
 
     @app.before_request
@@ -702,7 +703,12 @@ def create_app() -> Flask:
 
     @app.route("/")
     def dashboard():
-        """Redirige al listado de clientes."""
+        """Redirige al listado de clientes (o a la ficha propia para usuario_avanzado)."""
+        user = get_current_user()
+        if user and user.get("rol") == "usuario_avanzado":
+            empresa_id = user.get("empresa_id")
+            if empresa_id:
+                return redirect(url_for("clientes.ficha", cliente_id=empresa_id))
         return redirect(url_for("clientes.listado"))
 
     @app.route("/clientes/<int:cliente_id>/planta/<int:planta_id>")
@@ -712,11 +718,14 @@ def create_app() -> Flask:
         if not user:
             return redirect(url_for("auth.login"))
 
-        # usuario_normal solo puede ver su propia empresa
-        if user.get("rol") == "usuario_normal":
-            empresa_id = user.get("empresa_id")
-            if empresa_id != cliente_id:
+        # usuario_normal y usuario_avanzado solo pueden ver su propia empresa
+        if user.get("rol") in ("usuario_normal", "usuario_avanzado"):
+            from web.auth_permissions import usuario_puede_ver_empresa as _upve
+            if not _upve(cliente_id, user):
                 flash("No tienes acceso a este cliente.", "danger")
+                empresa_id = user.get("empresa_id")
+                if empresa_id:
+                    return redirect(url_for("clientes.ficha", cliente_id=empresa_id))
                 return redirect(url_for("clientes.listado"))
 
         planta = obtener_planta(planta_id)
@@ -2275,11 +2284,16 @@ def create_app() -> Flask:
         nombre_nuevo = request.form.get("nombre", "").strip() or None
         apellido_nuevo = request.form.get("apellido", "").strip() or None
 
-        # Multi-cliente para usuario_normal
+        # Multi-cliente para usuario_normal; empresa_id fija para usuario_avanzado
         if rol == "usuario_normal":
             cliente_ids_raw = request.form.getlist("cliente_ids")
             cliente_ids = [int(x) for x in cliente_ids_raw if x.isdigit()]
             empresa_id = cliente_ids[0] if len(cliente_ids) == 1 else None
+        elif rol == "usuario_avanzado":
+            cliente_ids_raw = request.form.getlist("cliente_ids")
+            ids_raw = [int(x) for x in cliente_ids_raw if x.isdigit()]
+            empresa_id = ids_raw[0] if ids_raw else None
+            cliente_ids = []  # usuario_avanzado no usa tabla usuario_clientes
         else:
             cliente_ids = []
             empresa_id = None
@@ -2288,7 +2302,7 @@ def create_app() -> Flask:
         if not email or "@" not in email:
             flash("Email inválido.", "danger")
             return redirect(url_for("admin_usuarios"))
-        if rol not in ("admin", "usuario_normal"):
+        if rol not in ("admin", "usuario_normal", "usuario_avanzado"):
             flash("Rol no válido.", "danger")
             return redirect(url_for("admin_usuarios"))
         # admin solo puede crear usuario_normal
@@ -2466,7 +2480,7 @@ def create_app() -> Flask:
         if request.method == "POST":
             if actor_puede_cambiar_rol:
                 rol = request.form.get("rol", "").strip()
-                if rol not in ("admin", "usuario_normal"):
+                if rol not in ("admin", "usuario_normal", "usuario_avanzado"):
                     flash("Rol no válido.", "danger")
                     return redirect(url_for("admin_usuarios_editar", user_id=user_id))
             else:
@@ -2478,6 +2492,11 @@ def create_app() -> Flask:
                 cliente_ids = [int(x) for x in cliente_ids_raw if x.isdigit()]
                 # empresa_id legacy: apuntar al único si hay exactamente uno
                 empresa_id_legacy = cliente_ids[0] if len(cliente_ids) == 1 else None
+            elif rol == "usuario_avanzado":
+                cliente_ids_raw = request.form.getlist("cliente_ids")
+                ids_raw = [int(x) for x in cliente_ids_raw if x.isdigit()]
+                empresa_id_legacy = ids_raw[0] if ids_raw else None
+                cliente_ids = []  # usuario_avanzado no usa tabla usuario_clientes
             else:
                 cliente_ids = []
                 empresa_id_legacy = None

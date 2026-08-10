@@ -164,10 +164,11 @@
             <select id="cr_rol" name="rol" class="form-select" onchange="toggleEmpresaField(this.value)">
               {% if current_user_data.rol == 'master_admin' %}
               <option value="admin">Administrador</option>
+              <option value="usuario_avanzado">Usuario Avanzado</option>
               {% endif %}
               <option value="usuario_normal">Cliente</option>
             </select>
-            <div class="form-text">El admin ve todos los clientes. El usuario_normal solo ve los clientes asignados.</div>
+            <div class="form-text">Admin ve todos los clientes. Usuario Avanzado opera sobre su cliente asignado con permisos completos. Cliente tiene acceso de solo lectura.</div>
           </div>
           <div class="mb-3" id="empresa-field" style="display:none">
             <label class="form-label fw-semibold">Clientes asignados</label>
@@ -250,7 +251,7 @@
 
 <script>
 function toggleEmpresaField(rol) {
-  document.getElementById('empresa-field').style.display = (rol === 'usuario_normal') ? '' : 'none';
+  document.getElementById('empresa-field').style.display = (rol === 'usuario_normal' || rol === 'usuario_avanzado') ? '' : 'none';
 }
 
 function togglePasswordField(showField) {
