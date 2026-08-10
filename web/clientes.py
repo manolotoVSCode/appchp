@@ -85,6 +85,7 @@ from storage.repository import (
     obtener_todos_activos_cliente,
     obtener_activo,
     crear_activo,
+    crear_activo_con_vigencia,
     actualizar_activo,
     desactivar_activo,
     get_vigencia_activa_activo,
@@ -3387,7 +3388,7 @@ def activo_crear(cliente_id: int, planta_id: int):
         "activo":              True,
     }
     try:
-        nuevo = crear_activo(payload)
+        nuevo = crear_activo_con_vigencia(payload, fuente_activo_id=int(padre_id) if padre_id else None)
         return jsonify({"ok": True, "activo": nuevo}), 201
     except Exception as exc:
         logger.error("Error creando activo cliente_id=%d planta_id=%d: %s", cliente_id, planta_id, exc)

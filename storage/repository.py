@@ -2587,6 +2587,140 @@ def crear_activo(data: dict) -> dict:
     return resp.data[0]
 
 
+def crear_activo_con_vigencia(data: dict, fuente_activo_id: int | None) -> dict:
+    """Crea un activo eléctrico y, si tiene padre, registra la fila inicial de
+    activo_alimentacion_vigencia de forma atómica compensada.
+
+    Si la inserción de la vigencia falla, el activo recién creado se borra
+    antes de propagar la excepción. Así ninguna ruta de fallo deja un activo
+    con activo_padre_id sin su fila de alimentación correspondiente.
+
+    Args:
+        data:             payload para activos_electricos (ya debe incluir activo_padre_id).
+        fuente_activo_id: valor de activo_padre_id cuando se crea con padre; None para
+                          activos raíz. Cuando es None no se crea ninguna fila de vigencia.
+
+    Returns:
+        La fila insertada en activos_electricos.
+    """
+    from datetime import timezone
+
+    # 1. Crear el activo
+    resp = _supabase.table("activos_electricos").insert(data).execute()
+    nuevo = resp.data[0]
+    activo_id = nuevo["id"]
+
+    if fuente_activo_id is None:
+        # Activo raíz (acometida u otro sin padre): no necesita vigencia.
+        return nuevo
+
+    # 2. Crear la fila de vigencia. Si falla → borrar el activo y propagar.
+    ahora_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        _supabase.table("activo_alimentacion_vigencia").insert({
+            "activo_id":        activo_id,
+            "fuente_activo_id": fuente_activo_id,
+            "vigente_desde":    ahora_iso,
+            "vigente_hasta":    None,
+            "motivo":           "Alta del activo",
+        }).execute()
+    except Exception as exc:
+        # Compensación: borrar el activo para no dejarlo huérfano.
+        try:
+            _supabase.table("activos_electricos").delete().eq("id", activo_id).execute()
+        except Exception as del_exc:
+            logger.error(
+                "crear_activo_con_vigencia: fallo al compensar DELETE activo id=%d: %s",
+                activo_id, del_exc,
+            )
+        raise RuntimeError(
+            f"Activo creado pero la vigencia de alimentación falló ({exc}). "
+            "El activo ha sido eliminado. Intente de nuevo."
+        ) from exc
+
+    return nuevo
+
+
+def verificar_consistencia_alimentacion(cliente_id: int) -> list[dict]:
+    """Compara activo_padre_id de cada activo con la fuente abierta en
+    activo_alimentacion_vigencia y devuelve la lista de discrepancias.
+
+    Casos detectados:
+    - activo_padre_id no nulo pero sin fila abierta en vigencia.
+    - activo_padre_id no nulo pero la fila abierta apunta a una fuente diferente.
+    - Fila abierta con fuente_activo_id no nulo pero activo_padre_id es nulo.
+
+    El resultado está pensado para diagnóstico post-intervención manual en BD;
+    no se expone como ruta pública.
+    """
+    # Todos los activos del cliente
+    resp_activos = (
+        _supabase.table("activos_electricos")
+        .select("id, nombre, tipo, planta_id, activo_padre_id, activo")
+        .eq("cliente_id", cliente_id)
+        .execute()
+    )
+    activos = resp_activos.data or []
+    if not activos:
+        return []
+
+    activo_ids = [a["id"] for a in activos]
+
+    # Filas abiertas de vigencia para esos activos
+    resp_vig = (
+        _supabase.table("activo_alimentacion_vigencia")
+        .select("activo_id, fuente_activo_id")
+        .in_("activo_id", activo_ids)
+        .is_("vigente_hasta", "null")
+        .execute()
+    )
+    # Índice: activo_id → fuente_activo_id (solo la primera fila abierta por activo)
+    vigente_por_activo: dict[int, int | None] = {
+        v["activo_id"]: v["fuente_activo_id"]
+        for v in (resp_vig.data or [])
+    }
+
+    discrepancias: list[dict] = []
+    for a in activos:
+        aid          = a["id"]
+        padre_id     = a.get("activo_padre_id")
+        fuente_id    = vigente_por_activo.get(aid)  # None si no hay fila abierta
+        en_vigencia  = aid in vigente_por_activo
+
+        if padre_id is not None and not en_vigencia:
+            discrepancias.append({
+                "activo_id":    aid,
+                "nombre":       a["nombre"],
+                "tipo":         a["tipo"],
+                "planta_id":    a["planta_id"],
+                "discrepancia": "activo_padre_id definido pero sin fila abierta en vigencia",
+                "activo_padre_id": padre_id,
+                "fuente_vigente":  None,
+            })
+        elif padre_id is not None and fuente_id != padre_id:
+            discrepancias.append({
+                "activo_id":    aid,
+                "nombre":       a["nombre"],
+                "tipo":         a["tipo"],
+                "planta_id":    a["planta_id"],
+                "discrepancia": "activo_padre_id difiere de la fuente vigente",
+                "activo_padre_id": padre_id,
+                "fuente_vigente":  fuente_id,
+            })
+        elif padre_id is None and en_vigencia and fuente_id is not None:
+            discrepancias.append({
+                "activo_id":    aid,
+                "nombre":       a["nombre"],
+                "tipo":         a["tipo"],
+                "planta_id":    a["planta_id"],
+                "discrepancia": "fila de vigencia abierta pero activo_padre_id es nulo",
+                "activo_padre_id": None,
+                "fuente_vigente":  fuente_id,
+            })
+
+    return discrepancias
+
+
 def actualizar_activo(activo_id: int, data: dict) -> dict:
     """Actualiza campos de un activo eléctrico. Retorna la fila actualizada."""
     resp = (
