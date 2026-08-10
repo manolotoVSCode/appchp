@@ -170,11 +170,14 @@ def _mock_get_cliente(cid):
 
 _ARBOL = [
     {"id": 1, "nombre": "Acometida", "punto_medicion": "acometida_cfe",
-     "medidor_padre_id": None, "cliente_id": 44, "tipo_carga": None, "potencia_nominal_kw": None},
+     "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None},
     {"id": 2, "nombre": "T-1.1", "punto_medicion": "transformador",
-     "medidor_padre_id": 1, "cliente_id": 44, "tipo_carga": None, "potencia_nominal_kw": 500.0},
+     "activo_padre_id": 1, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": None, "potencia_nominal_kw": 500.0, "medidor_id": None},
     {"id": 3, "nombre": "CBT-Horno", "punto_medicion": "carga_final",
-     "medidor_padre_id": 2, "cliente_id": 44, "tipo_carga": "horno_tunel", "potencia_nominal_kw": 200.0},
+     "activo_padre_id": 2, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": "horno_tunel", "potencia_nominal_kw": 200.0, "medidor_id": 20},
 ]
 
 _MEDS = [
@@ -189,8 +192,7 @@ def _mock_repo(mock_arbol, mock_meds_act, mock_meds_ant, mock_prod):
     _ts_fijo = datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
     return {
         "storage.repository.get_cliente_con_conteos": MagicMock(side_effect=_mock_get_cliente),
-        "storage.repository.obtener_arbol_medidores": MagicMock(return_value=mock_arbol),
-        "storage.repository.obtener_descendientes_ids": MagicMock(return_value=[3]),
+        "storage.repository.obtener_arbol_activos_telemetria": MagicMock(return_value=mock_arbol),
         "storage.repository.obtener_mediciones_para_rango": MagicMock(side_effect=[
             mock_meds_act,   # periodo actual (hoja 3)
             mock_meds_ant,   # periodo anterior (hoja 3)

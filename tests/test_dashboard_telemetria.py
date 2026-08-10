@@ -5,13 +5,17 @@ from unittest.mock import patch, MagicMock
 
 ARBOL_MOCK = [
     {"id": 1, "nombre": "Acometida CFE-1", "punto_medicion": "acometida_cfe",
-     "medidor_padre_id": None, "cliente_id": 44, "tipo_carga": None, "potencia_nominal_kw": None},
+     "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None},
     {"id": 2, "nombre": "T-1.1", "punto_medicion": "transformador",
-     "medidor_padre_id": 1, "cliente_id": 44, "tipo_carga": None, "potencia_nominal_kw": 500.0},
+     "activo_padre_id": 1, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": None, "potencia_nominal_kw": 500.0, "medidor_id": None},
     {"id": 3, "nombre": "Horno 1", "punto_medicion": "carga_final",
-     "medidor_padre_id": 2, "cliente_id": 44, "tipo_carga": "horno_tunel", "potencia_nominal_kw": 200.0},
+     "activo_padre_id": 2, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": "horno_tunel", "potencia_nominal_kw": 200.0, "medidor_id": 10},
     {"id": 4, "nombre": "Horno 2", "punto_medicion": "carga_final",
-     "medidor_padre_id": 2, "cliente_id": 44, "tipo_carga": "horno_tunel", "potencia_nominal_kw": 250.0},
+     "activo_padre_id": 2, "cliente_id": 44, "planta_id": 1,
+     "tipo_carga": "horno_tunel", "potencia_nominal_kw": 250.0, "medidor_id": 11},
 ]
 
 MEDICIONES_MOCK = [
@@ -19,8 +23,6 @@ MEDICIONES_MOCK = [
     {"timestamp": "2024-01-01T00:15:00Z", "potencia_activa_kw": 120.0, "factor_potencia": 0.91},
     {"timestamp": "2024-01-01T00:30:00Z", "potencia_activa_kw": 110.0, "factor_potencia": 0.89},
 ]
-
-DESC_IDS_MOCK = [3, 4]  # Hijos de T-1.1
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -147,8 +149,7 @@ def test_telemetria_data_json_claves_esperadas(client, app):
     _injectar_sesion(client, "master_admin", cliente_activo_id=44)
     patches = _patch_costo()
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
-         patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
-         patch("storage.repository.obtener_descendientes_ids", return_value=DESC_IDS_MOCK), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
          patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
@@ -165,8 +166,7 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
     _injectar_sesion(client, "master_admin", cliente_activo_id=44)
     patches = _patch_costo()
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
-         patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
-         patch("storage.repository.obtener_descendientes_ids", return_value=DESC_IDS_MOCK), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
          patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h")
@@ -178,7 +178,7 @@ def test_telemetria_data_sunburst_consistencia_energia(client, app):
         energia_t = t["energia_kwh"]
         if energia_t > 0:
             diff_pct = abs(suma_cargas - energia_t) / energia_t * 100
-            assert diff_pct < 0.1, f"Transformador {t['nombre']}: {diff_pct:.4f}% de desviación"
+            assert diff_pct < 0.1, f"Activo {t['nombre']}: {diff_pct:.4f}% de desviación"
 
 
 # ── Test g ─────────────────────────────────────────────────────────────────
@@ -196,20 +196,17 @@ def test_telemetria_data_nodo_carga_final_sin_agregacion(client, app):
     carga_mock = MEDICIONES_MOCK
     patches = _patch_costo()
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
-         patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
-         patch("storage.repository.obtener_descendientes_ids", return_value=[]), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
          patch("storage.repository.obtener_mediciones_para_rango", return_value=carga_mock) as mock_omr, \
          patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
         resp = client.get("/clientes/44/dashboard/telemetria/data?rango=24h&nodo_id=3")
     assert resp.status_code == 200
-    # El medidor 3 debe consultarse (periodo actual + comparativa)
+    # Las mediciones se consultan por medidor_id (10 y 11), no por activo_id (3 y 4)
     calls = mock_omr.call_args_list
     consulted_ids = {c[0][0] for c in calls}
-    assert 3 in consulted_ids, "El medidor 3 debe consultarse"
-    # El medidor 4 también se consulta para completar el sunburst del árbol completo
-    assert 4 in consulted_ids, "El medidor 4 debe consultarse para el sunburst"
-    # Solo medidores válidos del árbol
-    assert consulted_ids <= {3, 4}, f"Solo deben consultarse medidores 3 y 4, no {consulted_ids}"
+    assert 10 in consulted_ids, "El medidor 10 (activo 3) debe consultarse"
+    assert 11 in consulted_ids, "El medidor 11 (activo 4) debe consultarse para el sunburst"
+    assert consulted_ids <= {10, 11}, f"Solo deben consultarse medidores 10 y 11, no {consulted_ids}"
 
 
 # ── Test h ─────────────────────────────────────────────────────────────────

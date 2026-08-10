@@ -136,9 +136,11 @@ def test_endpoint_data_nuevas_claves(client, app):
 
     ARBOL_MOCK = [
         {"id": 1, "nombre": "Acometida CFE-1", "punto_medicion": "acometida_cfe",
-         "medidor_padre_id": None, "cliente_id": 44, "tipo_carga": None, "potencia_nominal_kw": None},
+         "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": None, "potencia_nominal_kw": None, "medidor_id": None},
         {"id": 2, "nombre": "Horno 1", "punto_medicion": "carga_final",
-         "medidor_padre_id": 1, "cliente_id": 44, "tipo_carga": "horno_tunel", "potencia_nominal_kw": 200.0},
+         "activo_padre_id": 1, "cliente_id": 44, "planta_id": 1,
+         "tipo_carga": "horno_tunel", "potencia_nominal_kw": 200.0, "medidor_id": 30},
     ]
     MEDICIONES_MOCK = [
         {"timestamp": "2024-01-01T00:00:00Z", "potencia_activa_kw": 100.0, "factor_potencia": 0.90},
@@ -150,9 +152,8 @@ def test_endpoint_data_nuevas_claves(client, app):
     with patch("storage.repository.get_cliente_con_conteos",
                return_value={"id": 44, "nombre": "Iberica", "num_cfe": 12,
                              "num_gas": 12, "num_electricidad": 12, "contratos": []}), \
-         patch("storage.repository.obtener_arbol_medidores", return_value=ARBOL_MOCK), \
-         patch("storage.repository.obtener_descendientes_ids", return_value=[2]), \
-         patch("storage.repository.obtener_mediciones_recientes", return_value=MEDICIONES_MOCK), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
+         patch("storage.repository.obtener_mediciones_para_rango", return_value=MEDICIONES_MOCK), \
          patch("storage.repository.obtener_factura_cfe_cliente_mes", return_value=None), \
          patch("storage.repository.obtener_ultimas_facturas_cfe", return_value=[]), \
          patch("storage.repository.obtener_factura_ppa_cliente_mes", return_value=None), \

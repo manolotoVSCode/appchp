@@ -2937,14 +2937,14 @@ def create_app() -> Flask:
         if _pid_de_g() != planta_id:
             abort(404)
 
-        from storage.repository import obtener_arbol_medidores as _oam
-        arbol_medidores = _oam(cliente_id, planta_id=planta_id)
+        from storage.repository import obtener_arbol_activos_telemetria as _oaat
+        arbol_activos = _oaat(cliente_id, planta_id)
 
         return render_template(
             "telemetria/dashboard.html",
             cliente=cliente,
             planta_id=planta_id,
-            arbol_medidores=arbol_medidores,
+            arbol_medidores=arbol_activos,   # nombre de variable preservado para el guard del template
             nav_active="telemetria_cliente",
         )
 
@@ -2967,8 +2967,7 @@ def create_app() -> Flask:
             return jsonify({"error": "no_encontrado"}), 404
 
         from storage.repository import (
-            obtener_arbol_medidores as _oam,
-            obtener_descendientes_ids as _odi,
+            obtener_arbol_activos_telemetria as _oaat,
             obtener_mediciones_para_rango as _omfr,
         )
         from calc.telemetria_kpis import determinar_periodo_anterior as _dpa
@@ -2977,102 +2976,62 @@ def create_app() -> Flask:
         nodo_id_raw = request.args.get("nodo_id")
         rango = request.args.get("rango", "24h")
 
-        # Cargar árbol filtrado por planta
-        todos = _oam(cliente_id, planta_id=planta_id)
+        # Cargar árbol desde activos_electricos (fuente canónica)
+        todos = _oaat(cliente_id, planta_id)
         if not todos:
             return jsonify({"error": "sin_medidores"}), 404
 
-        # Indexar por id
-        por_id = {m["id"]: m for m in todos}
+        # Indexar por activo_id
+        por_id = {a["id"]: a for a in todos}
 
-        # Acometida raíz: primer medidor con punto_medicion == 'acometida_cfe' de la planta.
-        # Tras el filtro por planta_id, solo hay medidores de la planta activa, por lo que
-        # el primer resultado es siempre el correcto. Si ninguno tiene ese tipo, se usa todos[0].
+        # Raíz: primer activo de tipo acometida_cfe; fallback a todos[0]
         acometida = next(
-            (m for m in todos if m.get("punto_medicion") == "acometida_cfe"),
+            (a for a in todos if a.get("punto_medicion") == "acometida_cfe"),
             todos[0]
         )
 
-        # Calcular ruta de breadcrumbs (hacia arriba), inyectando subestaciones virtuales
-        def _breadcrumbs(nodo_dict):
-            ruta = []
+        # Descendientes de un activo (BFS sobre activo_padre_id en la lista plana)
+        def _descendientes(activo_id: int) -> list[int]:
+            result: list[int] = []
+            cola = [activo_id]
+            while cola:
+                cur = cola.pop()
+                hijos = [a["id"] for a in todos if a.get("activo_padre_id") == cur]
+                result.extend(hijos)
+                cola.extend(hijos)
+            return result
+
+        # Breadcrumbs: camino hacia la raíz usando activo_padre_id
+        def _breadcrumbs(nodo_dict: dict) -> list[dict]:
+            ruta: list[dict] = []
             cur = nodo_dict
             while cur:
                 ruta.append({"id": cur["id"], "nombre": cur["nombre"]})
-                padre_id = cur.get("medidor_padre_id")
+                padre_id = cur.get("activo_padre_id")
                 cur = por_id.get(padre_id) if padre_id else None
-            ruta = list(reversed(ruta))
-            # Inyectar nodo virtual SE-N entre el padre y cada transformador T-N.*
-            result = []
-            for idx, seg in enumerate(ruta):
-                result.append(seg)
-                if idx + 1 < len(ruta):
-                    nxt_id = ruta[idx + 1]["id"]
-                    nxt = por_id.get(nxt_id, {})
-                    nxt_nombre = nxt.get("nombre", "")
-                    if (nxt_nombre.startswith("T-") and "." in nxt_nombre
-                            and nxt.get("medidor_padre_id") == seg["id"]):
-                        se_num = nxt_nombre.split("-")[1].split(".")[0]
-                        result.append({"id": f"grupo:SE-{se_num}", "nombre": f"SE-{se_num}"})
-            return result
+            return list(reversed(ruta))
 
-        # --- Nodo virtual de subestación ---
-        # El frontend envía "grupo:SE-N" para subestaciones que no existen como medidor.
-        # Se agrega sobre sus transformadores hijo (T-N.*) y las cargas_final de estos.
-        _nodo_virtual = None  # dict con id, nombre, punto_medicion, ruta_breadcrumbs si es virtual
+        # Resolver nodo seleccionado (siempre id entero; no hay nodos virtuales)
+        nodo_id = int(nodo_id_raw) if nodo_id_raw else acometida["id"]
+        nodo = por_id.get(nodo_id, acometida)
 
-        if nodo_id_raw and nodo_id_raw.startswith("grupo:"):
-            codigo_se = nodo_id_raw[len("grupo:"):]  # ej. "SE-4"
-            # Número de SE: "SE-4" → "4"
-            se_num = codigo_se.split("-")[-1] if "-" in codigo_se else codigo_se
-            prefijo_tx = f"T-{se_num}."
-            # Transformadores de esta SE
-            txs = [m for m in todos if (m.get("nombre") or "").startswith(prefijo_tx)]
-            hojas_ids_nodo = []
-            for tx in txs:
-                desc_ids = _odi(tx["id"])
-                hojas_ids_nodo += [
-                    mid for mid in desc_ids
-                    if por_id.get(mid, {}).get("punto_medicion") == "carga_final"
-                ]
-            if not hojas_ids_nodo and txs:
-                hojas_ids_nodo = [txs[0]["id"]]
-            elif not hojas_ids_nodo:
-                hojas_ids_nodo = [acometida["id"]]
-            _nodo_virtual = {
-                "id": nodo_id_raw,
-                "nombre": codigo_se,
-                "punto_medicion": "subestacion_virtual",
-                "ruta_breadcrumbs": [
-                    {"id": acometida["id"], "nombre": acometida["nombre"]},
-                    {"id": nodo_id_raw, "nombre": codigo_se},
-                ],
-            }
-            nodo = acometida  # referencia interna no usada en JSON cuando hay _nodo_virtual
+        # Hojas de lectura del nodo seleccionado:
+        # cargas con medidor vigente bajo ese nodo (inclusive si el nodo mismo es carga)
+        if nodo.get("punto_medicion") == "carga_final":
+            hojas_ids_nodo = [nodo_id] if nodo.get("medidor_id") else []
         else:
-            nodo_id = int(nodo_id_raw) if nodo_id_raw else None
-            if nodo_id is None:
-                nodo_id = acometida["id"]
-            nodo = por_id.get(nodo_id, acometida)
+            desc_ids = _descendientes(nodo_id)
+            hojas_ids_nodo = [
+                aid for aid in desc_ids
+                if por_id.get(aid, {}).get("punto_medicion") == "carga_final"
+                and por_id.get(aid, {}).get("medidor_id")
+            ]
 
-            # Hojas del nodo seleccionado: determinan KPIs, serie y comparativa
-            if nodo.get("punto_medicion") == "carga_final":
-                hojas_ids_nodo = [nodo_id]
-            else:
-                desc_ids = _odi(nodo_id)
-                hojas_ids_nodo = [
-                    mid for mid in desc_ids
-                    if por_id.get(mid, {}).get("punto_medicion") == "carga_final"
-                ]
-                if not hojas_ids_nodo:
-                    hojas_ids_nodo = [nodo_id]
-
-        # Todas las hojas del árbol completo: necesarias para que el sunburst
-        # muestre energía correcta en todos los nodos, independientemente del
-        # nodo seleccionado.
-        todas_hojas_ids = [m["id"] for m in todos if m.get("punto_medicion") == "carga_final"]
-        if not todas_hojas_ids:
-            todas_hojas_ids = hojas_ids_nodo
+        # Todas las cargas con medidor del árbol completo (para sunburst correcto)
+        todas_hojas_ids = [
+            a["id"] for a in todos
+            if a.get("punto_medicion") == "carga_final" and a.get("medidor_id")
+        ]
 
         # Calcular ventana temporal.
         # DEUDA TÉCNICA: usa max(timestamp) como ancla para que la demo con datos
@@ -3100,9 +3059,11 @@ def create_app() -> Flask:
         # Fetch secuencial por medidor: actual + anterior en la misma iteración.
         # Serializado deliberadamente para no saturar el pool de sockets de Supabase
         # (Errno 11 EAGAIN bajo carga concurrente en Render free tier).
+        # mediciones_por_hoja se indexa por activo_id; las lecturas se consultan
+        # con el medidor_id vigente del activo (resuelto en obtener_arbol_activos_telemetria).
         todas_hojas_set = set(todas_hojas_ids)
         hojas_nodo_set = set(hojas_ids_nodo)
-        all_medidores = list(todas_hojas_set | hojas_nodo_set)
+        all_activos_hoja = list(todas_hojas_set | hojas_nodo_set)
 
         def _fmt_rows(rows):
             return [
@@ -3114,33 +3075,23 @@ def create_app() -> Flask:
                 for r in rows
             ]
 
-        mediciones_por_hoja = {}
-        mediciones_ant = {}
-        for hid in all_medidores:
-            if hid in todas_hojas_set:
-                mediciones_por_hoja[hid] = _fmt_rows(_omfr(hid, desde_iso, hasta_iso, rango))
-            if hid in hojas_nodo_set:
-                mediciones_ant[hid] = _fmt_rows(_omfr(hid, desde_ant_iso, hasta_ant_iso, rango))
-
-        # Diagnóstico: contar filas por hoja para detectar ventanas vacías
-        _n_filas_total = sum(len(v) for v in mediciones_por_hoja.values())
-        # Si todas las hojas están vacías, el sunburst mostrará 0 kWh
-        # (datos fuera del rango de fechas — re-ejecutar seed_iberica.py --forzar)
-
-        # Garantizar que hojas_ids_nodo esté cubierto en mediciones_por_hoja
-        # (edge case: nodo seleccionado es un tx sin cargas hijo — fallback a nodo_id
-        # que no es carga_final y por tanto no está en todas_hojas_ids)
-        ids_sin_datos = [hid for hid in hojas_ids_nodo if hid not in mediciones_por_hoja]
-        for hid in ids_sin_datos:
-            rows = _omfr(hid, desde_iso, hasta_iso, rango)
-            mediciones_por_hoja[hid] = [
-                {
-                    "ts": r["timestamp"],
-                    "kw": float(r.get("potencia_activa_kw") or 0),
-                    "fp": float(r.get("factor_potencia") or 0),
-                }
-                for r in rows
-            ]
+        mediciones_por_hoja: dict[int, list] = {}
+        mediciones_ant: dict[int, list] = {}
+        for aid in all_activos_hoja:
+            medidor_id = por_id[aid].get("medidor_id")
+            if not medidor_id:
+                # Activo sin medidor vigente → energía cero; sin consulta
+                mediciones_por_hoja[aid] = []
+                mediciones_ant[aid] = []
+                continue
+            if aid in todas_hojas_set:
+                mediciones_por_hoja[aid] = _fmt_rows(
+                    _omfr(medidor_id, desde_iso, hasta_iso, rango)
+                )
+            if aid in hojas_nodo_set:
+                mediciones_ant[aid] = _fmt_rows(
+                    _omfr(medidor_id, desde_ant_iso, hasta_ant_iso, rango)
+                )
 
         # Agregar serie temporal: sumar kW solo de las hojas del nodo seleccionado
         from collections import defaultdict
@@ -3180,11 +3131,16 @@ def create_app() -> Flask:
             if total_peso_kw > 0 else 0.0
         )
 
-        # Estructura sunburst: reconstruir árbol desde todos los medidores
-        def _energia_nodo(mid):
-            """Suma de kWh de las hojas descendientes del nodo mid."""
-            if por_id.get(mid, {}).get("punto_medicion") == "carga_final":
-                rows = mediciones_por_hoja.get(mid, [])
+        # Estructura sunburst: árbol reconstruido desde activos_electricos
+        def _energia_nodo(aid: int) -> float:
+            """Suma trapezoidal de kWh del activo aid.
+
+            Hojas (carga_final): integra mediciones del medidor vigente.
+            Nodos intermedios: suma recursiva de hijos por activo_padre_id.
+            Activos sin medidor vigente: retorna 0.0 sin consulta adicional.
+            """
+            if por_id.get(aid, {}).get("punto_medicion") == "carga_final":
+                rows = mediciones_por_hoja.get(aid, [])
                 kwh = 0.0
                 for i in range(1, len(rows)):
                     try:
@@ -3197,7 +3153,7 @@ def create_app() -> Flask:
                         pass
                 return round(kwh, 3)
             else:
-                hijos_ids = [m["id"] for m in todos if m.get("medidor_padre_id") == mid]
+                hijos_ids = [a["id"] for a in todos if a.get("activo_padre_id") == aid]
                 return round(sum(_energia_nodo(h) for h in hijos_ids), 3)
 
         # ── Costo del periodo actual ───────────────────────────────────────
@@ -3256,19 +3212,19 @@ def create_app() -> Flask:
         def _costo_nodo(kwh):
             return round(kwh * precio_kwh, 2) if precio_kwh is not None else None
 
-        def _arbol_sunburst_con_costo(mid):
-            m = por_id.get(mid, {})
-            hijos_ids_local = [x["id"] for x in todos if x.get("medidor_padre_id") == mid]
-            kwh = _energia_nodo(mid)
+        def _arbol_sunburst_con_costo(aid: int) -> dict:
+            a = por_id.get(aid, {})
+            hijos_ids_local = [x["id"] for x in todos if x.get("activo_padre_id") == aid]
+            kwh = _energia_nodo(aid)
             return {
-                "id": mid,
-                "nombre": m.get("nombre", ""),
-                "punto_medicion": m.get("punto_medicion", ""),
-                "tipo_carga": m.get("tipo_carga"),
-                "potencia_nominal_kw": m.get("potencia_nominal_kw"),
-                "energia_kwh": kwh,
-                "costo_mxn": _costo_nodo(kwh),
-                "hijos": [_arbol_sunburst_con_costo(h) for h in hijos_ids_local],
+                "id":                  aid,
+                "nombre":              a.get("nombre", ""),
+                "punto_medicion":      a.get("punto_medicion", ""),
+                "tipo_carga":          a.get("tipo_carga"),
+                "potencia_nominal_kw": a.get("potencia_nominal_kw"),
+                "energia_kwh":         kwh,
+                "costo_mxn":           _costo_nodo(kwh),
+                "hijos":               [_arbol_sunburst_con_costo(h) for h in hijos_ids_local],
             }
 
         arbol_sunburst = _arbol_sunburst_con_costo(acometida["id"])
@@ -3432,7 +3388,7 @@ def create_app() -> Flask:
         }
 
         return jsonify({
-            "nodo_seleccionado": _nodo_virtual if _nodo_virtual else {
+            "nodo_seleccionado": {
                 "id": nodo["id"],
                 "nombre": nodo["nombre"],
                 "punto_medicion": nodo.get("punto_medicion"),

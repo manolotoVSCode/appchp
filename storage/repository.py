@@ -2476,6 +2476,81 @@ def obtener_arbol_activos(cliente_id: int, planta_id: int) -> list[dict]:
     return activos
 
 
+_TIPO_A_PUNTO_MEDICION: dict[str, str] = {
+    "acometida":     "acometida_cfe",
+    "subestacion":   "subestacion",
+    "transformador": "transformador",
+    "carga":         "carga_final",
+}
+
+
+def obtener_arbol_activos_telemetria(cliente_id: int, planta_id: int) -> list[dict]:
+    """Lista plana de activos de una planta, enriquecida para el dashboard de telemetría.
+
+    planta_id es obligatorio (no acepta sentinel).
+
+    Cada elemento contiene:
+      id               — id del activo (int)
+      nombre           — nombre del activo
+      punto_medicion   — tipo mapeado al contrato JS: acometida_cfe | subestacion |
+                         transformador | carga_final
+      potencia_nominal_kw
+      capacidad_kva
+      tipo_carga
+      activo_padre_id  — FK para reconstruir jerarquía en memoria
+      cliente_id
+      planta_id
+      medidor_id       — medidor_id vigente (vigente_hasta IS NULL) o None si no existe.
+                         Solo los activos de tipo carga pueden tener lecturas.
+
+    Activos sin vigencia activa en medidor_activo_vigencia → medidor_id = None.
+    La energía de esos nodos es cero; siguen apareciendo en el árbol.
+    """
+    activos_resp = (
+        _supabase.table("activos_electricos")
+        .select("id, nombre, tipo, potencia_nominal_kw, capacidad_kva, tipo_carga, "
+                "activo_padre_id, cliente_id, planta_id, activo")
+        .eq("cliente_id", cliente_id)
+        .eq("planta_id", planta_id)
+        .eq("activo", True)
+        .order("id")
+        .execute()
+    )
+    activos = activos_resp.data or []
+    if not activos:
+        return []
+
+    activo_ids = [a["id"] for a in activos]
+
+    # Vigencias activas (vigente_hasta IS NULL) de esta planta
+    vigencias_resp = (
+        _supabase.table("medidor_activo_vigencia")
+        .select("activo_id, medidor_id")
+        .in_("activo_id", activo_ids)
+        .is_("vigente_hasta", "null")
+        .execute()
+    )
+    medidor_por_activo: dict[int, int] = {}
+    for v in (vigencias_resp.data or []):
+        medidor_por_activo[v["activo_id"]] = v["medidor_id"]
+
+    resultado = []
+    for a in activos:
+        resultado.append({
+            "id":                  a["id"],
+            "nombre":              a["nombre"],
+            "punto_medicion":      _TIPO_A_PUNTO_MEDICION.get(a["tipo"], a["tipo"]),
+            "potencia_nominal_kw": a.get("potencia_nominal_kw"),
+            "capacidad_kva":       a.get("capacidad_kva"),
+            "tipo_carga":          a.get("tipo_carga"),
+            "activo_padre_id":     a.get("activo_padre_id"),
+            "cliente_id":          a["cliente_id"],
+            "planta_id":           a["planta_id"],
+            "medidor_id":          medidor_por_activo.get(a["id"]),
+        })
+    return resultado
+
+
 def obtener_todos_activos_cliente(cliente_id: int) -> list[dict]:
     """Todos los activos eléctricos del cliente, sin filtrar por planta.
 

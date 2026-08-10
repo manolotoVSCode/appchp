@@ -696,34 +696,17 @@
   // ── Motor de layout ────────────────────────────────────────────────────────
 
   /**
-   * Agrupa transformadores por SE derivada del nombre (regex /^T-(\d+)/).
-   * Devuelve nodos SE virtuales con IDs string "grupo:SE-N".
-   */
-  function _agruparPorSE(transformadores) {
-    const grupos = new Map();
-    transformadores.forEach((tx) => {
-      const m = tx.nombre.match(/^T-(\d+)/);
-      const key = m ? m[1] : "X";
-      if (!grupos.has(key)) grupos.set(key, []);
-      grupos.get(key).push(tx);
-    });
-    return Array.from(grupos.entries()).map(([num, txs]) => ({
-      id: `grupo:SE-${num}`,
-      nombre: `SE-${num}`,
-      punto_medicion: "subestacion",
-      energia_kwh: txs.reduce((s, t) => s + (t.energia_kwh || 0), 0),
-      potencia_nominal_kw: txs.reduce((s, t) => s + (t.potencia_nominal_kw || 0), 0),
-      costo_mxn: txs.reduce((s, t) => s + (t.costo_mxn || 0), 0),
-      hijos: txs,
-    }));
-  }
-
-  /**
-   * renderUnifilar — layout vertical fijo 4 niveles.
-   * Nivel 0: Acometida (centrada)
-   * Nivel 1: Subestaciones virtuales SE (agrupan Txs por prefijo T-N)
-   * Nivel 2: Transformadores (distribuidos uniformemente)
-   * Nivel 3: CBTs (1:1 con cada Tx, alineados verticalmente)
+   * renderUnifilar — layout vertical recursivo, N niveles.
+   *
+   * El árbol llega del servidor con subestaciones reales (acometida_cfe →
+   * subestacion → subestacion → transformador → carga_final).
+   * No hay nodos virtuales "grupo:SE-N".
+   *
+   * Algoritmo:
+   *   1. Recolectar hojas (nodos sin hijos) y distribuirlas en X uniformemente.
+   *   2. Asignar X a nodos internos como promedio de sus hijos (bottom-up).
+   *   3. Asignar Y según profundidad (top-down), con altura fija por nivel.
+   *   4. Dibujar recursivamente nodo → hijos, línea padre→hijo antes de cada hijo.
    */
   function _renderUnifilar(raiz) {
     if (!raiz) return;
@@ -732,77 +715,109 @@
     svg.innerHTML = "";
 
     const wrapper = $("unifilar-wrapper");
-    const wrapW  = wrapper ? wrapper.clientWidth - 48 : 900;
+    const wrapW = wrapper ? wrapper.clientWidth - 48 : 900;
 
-    const gruposSE    = _agruparPorSE(raiz.hijos || []);
-    const todosLosTxs = gruposSE.flatMap((se) => se.hijos);
-    const nTx = Math.max(todosLosTxs.length, 1);
+    // ── 1. Calcular profundidades ──────────────────────────────────────────
+    const profMap = new Map();
+    function _calcProf(nodo, prof) {
+      profMap.set(nodo.id, prof);
+      (nodo.hijos || []).forEach(h => _calcProf(h, prof + 1));
+    }
+    _calcProf(raiz, 0);
+    const maxProf = Math.max(...profMap.values());
 
-    const svgW = Math.max(wrapW, nTx * MIN_SEP + PAD_X * 2);
+    // ── 2. Recolectar hojas (nodos sin hijos) ─────────────────────────────
+    const hojas = [];
+    function _recogerHojas(nodo) {
+      if (!nodo.hijos || nodo.hijos.length === 0) hojas.push(nodo);
+      else nodo.hijos.forEach(_recogerHojas);
+    }
+    _recogerHojas(raiz);
+    const nHojas = Math.max(hojas.length, 1);
 
-    // Y de cada nivel (centros)
-    const yAcom = PAD_Y + H_ACOM / 2;
-    const ySE   = yAcom + NIVEL_H;
-    const yTx   = ySE   + NIVEL_H;
-    const yCbt  = yTx   + NIVEL_H;
-    const svgH  = yCbt  + H_CBT / 2 + PAD_Y;
+    const svgW = Math.max(wrapW, nHojas * MIN_SEP + PAD_X * 2);
 
+    // ── 3. Asignar X ──────────────────────────────────────────────────────
+    const xMap = new Map();
+    const pasoHoja = svgW / (nHojas + 1);
+    hojas.forEach((h, i) => xMap.set(h.id, pasoHoja * (i + 1)));
+
+    function _asignarX(nodo) {
+      if (!nodo.hijos || nodo.hijos.length === 0) return;
+      nodo.hijos.forEach(_asignarX);
+      const xs = nodo.hijos.map(h => xMap.get(h.id)).filter(x => x != null);
+      if (xs.length > 0) xMap.set(nodo.id, xs.reduce((a, b) => a + b, 0) / xs.length);
+    }
+    _asignarX(raiz);
+    if (!xMap.has(raiz.id)) xMap.set(raiz.id, svgW / 2);
+
+    // ── 4. Y según profundidad ─────────────────────────────────────────────
+    // Altura "media" de cada tipo: distancia desde el borde superior del nivel al centro del símbolo
+    function _hMedia(nodo) {
+      switch (nodo.punto_medicion) {
+        case "acometida_cfe": return H_ACOM / 2;
+        case "subestacion":   return H_SE / 2;
+        case "transformador": return R_TX + 6;     // centro entre los dos círculos
+        case "carga_final":   return H_CBT / 2;
+        default:              return H_SE / 2;
+      }
+    }
+    // Borde inferior del símbolo respecto a cy
+    function _hBajo(nodo) {
+      switch (nodo.punto_medicion) {
+        case "acometida_cfe": return H_ACOM / 2;
+        case "subestacion":   return H_SE / 2;
+        case "transformador": return R_TX + 6;
+        case "carga_final":   return H_CBT / 2;
+        default:              return H_SE / 2;
+      }
+    }
+    function _cy(nodo) {
+      return PAD_Y + profMap.get(nodo.id) * NIVEL_H + _hMedia(nodo);
+    }
+
+    const svgH = PAD_Y + (maxProf + 1) * NIVEL_H + PAD_Y;
     svg.setAttribute("width",   svgW);
     svg.setAttribute("height",  svgH);
     svg.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
 
-    // X de cada Tx: distribuidos uniformemente sobre el ancho del SVG
-    const pasoTx = svgW / (nTx + 1);
-    const txXmap = new Map();
-    todosLosTxs.forEach((tx, i) => txXmap.set(tx.id, pasoTx * (i + 1)));
+    // ── 5. Dibujo recursivo ────────────────────────────────────────────────
+    function _dibujar(nodo, svgEl) {
+      const cx = xMap.get(nodo.id) ?? svgW / 2;
+      const cy = _cy(nodo);
+      const sel = _nodoId === nodo.id;
+      let outPt;
 
-    // Nivel 0: Acometida
-    const aX = svgW / 2;
-    const gA = _crearGrupoNodo(raiz.id, "acometida_cfe");
-    const { x: aOutX, y: aOutY } =
-      _dibujarAcometida(gA, raiz, aX, yAcom, _nodoId === raiz.id);
-    svg.appendChild(gA);
+      const g = _crearGrupoNodo(nodo.id, nodo.punto_medicion);
+      switch (nodo.punto_medicion) {
+        case "acometida_cfe":
+          outPt = _dibujarAcometida(g, nodo, cx, cy, sel);
+          break;
+        case "subestacion":
+          outPt = _dibujarSE(g, nodo, cx, cy, sel);
+          break;
+        case "transformador":
+          outPt = _dibujarTransformador(g, nodo, cx, cy, sel);
+          break;
+        case "carga_final":
+          outPt = _dibujarCBT(g, nodo, cx, cy, sel);
+          break;
+        default:
+          outPt = _dibujarSE(g, nodo, cx, cy, sel);
+      }
+      svgEl.appendChild(g);
 
-
-    // Niveles 1-3: SE → Tx → CBT
-    gruposSE.forEach((se) => {
-      // SE se centra en el promedio X de sus Txs hijos
-      const seXs = se.hijos.map((tx) => txXmap.get(tx.id));
-      const seX  = seXs.reduce((a, b) => a + b, 0) / seXs.length;
-
-      // Línea Acometida → SE
-      _dibujarLinea(svg, aOutX, aOutY, seX, ySE - H_SE / 2,
-        se.energia_kwh, se.potencia_nominal_kw);
-
-      // Símbolo SE
-      const gSE = _crearGrupoNodo(se.id, "subestacion");
-      _dibujarSE(gSE, se, seX, ySE, String(_nodoId) === se.id);
-      svg.appendChild(gSE);
-
-      // Cada Tx hijo de esta SE
-      se.hijos.forEach((tx) => {
-        const txX = txXmap.get(tx.id);
-
-        // Línea SE → Tx
-        _dibujarLinea(svg, seX, ySE + H_SE / 2, txX, yTx - R_TX - 6,
-          tx.energia_kwh, tx.potencia_nominal_kw);
-
-        // Símbolo Tx
-        const gTx = _crearGrupoNodoVisual(tx.id);
-        _dibujarTransformador(gTx, tx, txX, yTx, _nodoId === tx.id);
-        svg.appendChild(gTx);
-
-        // CBT hijo (1:1)
-        const cbt = (tx.hijos || [])[0];
-        if (cbt) {
-          _dibujarLinea(svg, txX, yTx + R_TX + 6, txX, yCbt - H_CBT / 2,
-            cbt.energia_kwh, cbt.potencia_nominal_kw);
-          const gCBT = _crearGrupoNodo(cbt.id, "carga_final");
-          _dibujarCBT(gCBT, cbt, txX, yCbt, _nodoId === cbt.id);
-          svg.appendChild(gCBT);
-        }
+      (nodo.hijos || []).forEach(hijo => {
+        const hx  = xMap.get(hijo.id) ?? svgW / 2;
+        const hcy = _cy(hijo);
+        const hTopY = hcy - _hMedia(hijo);
+        _dibujarLinea(svgEl, outPt.x, outPt.y, hx, hTopY,
+          hijo.energia_kwh, hijo.potencia_nominal_kw);
+        _dibujar(hijo, svgEl);
       });
-    });
+    }
+
+    _dibujar(raiz, svg);
   }
 
   /**
@@ -845,15 +860,15 @@
     return g;
   }
 
-  /** Maneja click en un nodo del unifilar. */
+  /** Maneja click en un nodo del unifilar. Todos los ids son enteros. */
   function _handleClickNodo(id, tipo) {
-    _nodoId = typeof id === "string" && id.startsWith("grupo:") ? id : parseInt(id, 10);
+    _nodoId = parseInt(id, 10);
     fetchDatos();
   }
 
   // ── Controles ──────────────────────────────────────────────────────────────
   function setNodo(id) {
-    _nodoId = typeof id === "string" && id.startsWith("grupo:") ? id : parseInt(id, 10);
+    _nodoId = parseInt(id, 10);
     fetchDatos();
   }
 
