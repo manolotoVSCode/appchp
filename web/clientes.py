@@ -527,14 +527,12 @@ def ficha(cliente_id: int):
         except Exception:
             pass
     plantas = obtener_plantas_por_cliente(cliente_id, solo_activas=False)
-    contratos = get_contratos_por_cliente(cliente_id)
     resp = make_response(render_template(
         "clientes/ficha.html",
         cliente=cliente,
         ppa_bloques=ppa_bloques,
         cre_params=cre_params,
         plantas=plantas,
-        contratos=contratos,
     ))
     if user and user.get("rol") in ("master_admin", "admin"):
         resp.set_cookie("last_cliente_id", str(cliente_id),

@@ -620,7 +620,7 @@ def create_app() -> Flask:
             "app_version": _APP_VERSION,
         }
         try:
-            base["mediciones_sidebar"] = _get_mediciones(id_) if id_ else []
+            base["mediciones_sidebar"] = _get_mediciones(id_, planta_id=_pid_de_g()) if id_ else []
         except Exception:
             base["mediciones_sidebar"] = []
         # Inyectar lista de clientes para usuario_normal (sidebar dinámico)
@@ -712,12 +712,12 @@ def create_app() -> Flask:
         if not user:
             return redirect(url_for("auth.login"))
 
-        # usuario_normal solo puede ver su propia empresa
-        if user.get("rol") == "usuario_normal":
-            empresa_id = user.get("empresa_id")
-            if empresa_id != cliente_id:
-                flash("No tienes acceso a este cliente.", "danger")
-                return redirect(url_for("clientes.listado"))
+        from web.auth_permissions import usuario_puede_ver_empresa
+        if not usuario_puede_ver_empresa(cliente_id, user):
+            flash("No tienes acceso a este cliente.", "danger")
+            if user.get("empresa_id"):
+                return redirect(url_for("clientes.ficha", cliente_id=user["empresa_id"]))
+            return redirect(url_for("dashboard"))
 
         planta = obtener_planta(planta_id)
         if planta is None or planta.get("cliente_id") != cliente_id:
