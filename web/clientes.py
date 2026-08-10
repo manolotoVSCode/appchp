@@ -3210,7 +3210,7 @@ def planta_desactivar(cliente_id: int, planta_id: int):
 # frozenset vacío = no tiene padre válido (raíz).
 _PADRES_VALIDOS: dict[str, frozenset] = {
     "acometida":     frozenset(),
-    "subestacion":   frozenset(["acometida"]),
+    "subestacion":   frozenset(["acometida", "subestacion"]),
     "transformador": frozenset(["acometida", "subestacion"]),
     "carga":         frozenset(["transformador"]),
 }
