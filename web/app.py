@@ -2953,12 +2953,50 @@ def create_app() -> Flask:
         from storage.repository import obtener_arbol_activos_telemetria as _oaat
         arbol_activos = _oaat(cliente_id, planta_id)
 
+        from web.clientes import _TIPOS_ACTIVO as _ta, _PADRES_VALIDOS as _pv
+        from storage.repository import (
+            obtener_todos_activos_cliente as _otac2,
+            get_mediciones_por_cliente as _gmpc2,
+            get_contratos_por_planta as _gcpp2,
+        )
+        from web.auth import get_current_user as _gcu2
+        from models.contrato import TIPO_ELECTRICO_BASICO as _teb, TIPO_ELECTRICO_CALIFICADO as _tec
+        _user2 = _gcu2()
+        _es_admin = _user2 and _user2.get("rol") in ("admin", "master_admin")
+        _todos2 = _otac2(cliente_id)
+        _meds2 = _gmpc2(cliente_id, planta_id=planta_id)
+        _contratos2 = [
+            {"id": c.id, "nombre": c.nombre}
+            for c in _gcpp2(planta_id)
+            if c.tipo in (_teb, _tec)
+        ]
+        _activos_js2 = [
+            {
+                "id": a["id"],
+                "nombre": a["nombre"],
+                "tipo": a["tipo"],
+                "activo": a["activo"],
+                "planta_id": a["planta_id"],
+                "planta_nombre": (a.get("plantas") or {}).get("nombre", ""),
+                "misma_planta": a["planta_id"] == planta_id,
+                "activo_padre_id": a.get("activo_padre_id"),
+            }
+            for a in _todos2
+        ]
+        _padres_validos_js2 = {k: list(v) for k, v in _pv.items()}
+
         return render_template(
             "telemetria/dashboard.html",
             cliente=cliente,
             planta_id=planta_id,
-            arbol_medidores=arbol_activos,   # nombre de variable preservado para el guard del template
+            arbol_medidores=arbol_activos,
             nav_active="telemetria_cliente",
+            es_admin=_es_admin,
+            activos_planos=_activos_js2,
+            mediciones=_meds2,
+            tipos_activo=_ta,
+            padres_validos=_padres_validos_js2,
+            contratos_electricos_planta=_contratos2,
         )
 
     @app.route("/clientes/<int:cliente_id>/dashboard/telemetria/data")
@@ -3183,6 +3221,7 @@ def create_app() -> Flask:
         incompleto_por_nodo: dict[int, bool] = {}
         _segs_por_hoja: dict[int, list[dict]] = {}
         _segs_cabecera: dict[int, list[dict]] = {}
+        _caminos_por_hoja: dict[int, list[dict]] = {}
 
         for _aid in todas_hojas_ids:
             _tramos = _rim(_aid, desde_iso, hasta_iso)
@@ -3208,6 +3247,7 @@ def create_app() -> Flask:
                 _meds_m.sort(key=lambda r: r["ts"])
 
             _caminos = _rc(_aid, desde_iso, hasta_iso, _resolver_fuente_attr)
+            _caminos_por_hoja[_aid] = _caminos
             _segs = _ips(_meds_m, _caminos, _bucket_min)
 
             # Filtrar segmentos por rol de medidor: solo carga entra en atribución
@@ -3354,6 +3394,43 @@ def create_app() -> Flask:
 
         # ── Sunburst con costo por nodo ────────────────────────────────────
 
+        def _extraer_cadena_tramos(caminos_list: list[dict]) -> list[dict]:
+            """Agrupa caminos consecutivos iguales en tramos con fechas."""
+            if not caminos_list:
+                return []
+            tramos: list[dict] = []
+            prev_key: tuple = ()
+            t_desde = ""
+            t_hasta = ""
+            for seg in caminos_list:
+                camino = seg.get("camino") or []
+                key = tuple(camino)
+                if key != prev_key:
+                    if prev_key and prev_key != ():
+                        tramos.append({
+                            "camino_ids": list(prev_key),
+                            "camino_nombres": [
+                                por_id.get(cid, {}).get("nombre", str(cid))
+                                for cid in prev_key
+                            ],
+                            "desde": t_desde,
+                            "hasta": t_hasta,
+                        })
+                    prev_key = key
+                    t_desde = seg.get("desde", "")
+                t_hasta = seg.get("hasta", "")
+            if prev_key and prev_key != ():
+                tramos.append({
+                    "camino_ids": list(prev_key),
+                    "camino_nombres": [
+                        por_id.get(cid, {}).get("nombre", str(cid))
+                        for cid in prev_key
+                    ],
+                    "desde": t_desde,
+                    "hasta": t_hasta,
+                })
+            return tramos
+
         def _arbol_sunburst_con_costo(aid: int) -> dict:
             a = por_id.get(aid, {})
             hijos_ids_local = [x["id"] for x in todos if x.get("activo_padre_id") == aid]
@@ -3361,6 +3438,7 @@ def create_app() -> Flask:
             _costo_nd = costo_por_nodo.get(aid, {})
             costo_nd = _costo_nd.get("costo_mxn")
             energia_sin_costo = _costo_nd.get("energia_sin_costo_kwh", 0.0)
+            _cadena = _extraer_cadena_tramos(_caminos_por_hoja.get(aid, []))
             return {
                 "id":                   aid,
                 "nombre":               a.get("nombre", ""),
@@ -3371,6 +3449,7 @@ def create_app() -> Flask:
                 "costo_mxn":            costo_nd,
                 "energia_sin_costo_kwh": energia_sin_costo,
                 "cobertura_incompleta": incompleto_por_nodo.get(aid, False),
+                "cadena_tramos":        _cadena,
                 "hijos":                [_arbol_sunburst_con_costo(h) for h in hijos_ids_local],
             }
 

@@ -1,10 +1,17 @@
 {% extends "clientes/_base.html" %}
 {% block title %}Telemetría — {{ cliente.nombre }}{% endblock %}
 
+{% block extra_styles %}
+<style>
+.panel-historial-table { font-size: .7rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div id="dashboard-telemetria-root"
      data-cliente-id="{{ cliente.id }}"
      data-planta-id="{{ planta_id }}"
+     data-es-admin="{{ 'true' if es_admin else 'false' }}"
      data-endpoint="{{ url_for('cliente_dashboard_telemetria_data', cliente_id=cliente.id, planta_id=planta_id) }}">
 
   <div class="d-flex align-items-center mb-4 gap-3">
@@ -20,6 +27,11 @@
       </div>
     </div>
     <div class="d-flex align-items-center gap-2">
+      {% if es_admin %}
+      <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearActivo">
+        <i class="bi bi-plus-lg me-1"></i>Nuevo activo
+      </button>
+      {% endif %}
       <div class="btn-group btn-group-sm" role="group" id="rango-selector">
         <button type="button" class="btn btn-outline-primary active" data-rango="24h">24h</button>
         <button type="button" class="btn btn-outline-primary" data-rango="7d">7d</button>
@@ -59,17 +71,30 @@
     <button class="btn btn-sm btn-outline-danger ms-2" id="btn-reintentar">Reintentar</button>
   </div>
 
+  <!-- Leyenda (visible solo en admin) -->
+  {% if es_admin %}
+  <div class="d-flex flex-wrap gap-3 mb-2 small text-muted">
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#198754;margin-right:4px"></span>Con medidor</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#dc2626;margin-right:4px"></span>Sin contrato</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;margin-right:4px"></span>Cabecera</span>
+    <span><i class="bi bi-arrows-move me-1"></i>Arrastra para reasignar alimentacion</span>
+    <span class="text-primary"><i class="bi bi-hand-index me-1"></i>Click en nodo para ver detalle y editar</span>
+  </div>
+  {% endif %}
+
   <!-- Unifilar SVG -->
   <div id="unifilar-wrapper" style="position:relative;min-height:500px;
        overflow-x:auto;background:#f8fafc;border-radius:8px;padding:24px;
        margin-bottom:1rem">
     <svg id="unifilarSvg" xmlns="http://www.w3.org/2000/svg"
          style="min-height:268px;overflow:visible"></svg>
+    {% if not es_admin %}
     <p class="unifilar-nota" style="text-align:center;font-size:.75rem;
        color:#6b7280;margin-top:12px;margin-bottom:0">
       Cargas mostradas en naranja son representativas y se ajustarán en la
       visita técnica.
     </p>
+    {% endif %}
   </div>
 
   <!-- Fila inferior: gráfica temporal + KPIs -->
@@ -119,11 +144,213 @@
 
   {% endif %}
 </div>
+
+{# ── Toast ── #}
+<div id="toast-telemetria" class="toast align-items-center text-bg-success border-0"
+     role="alert" aria-live="polite"
+     style="position:fixed;bottom:1.25rem;right:1.25rem;z-index:9999;min-width:260px;">
+  <div class="d-flex">
+    <div class="toast-body"></div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+  </div>
+</div>
+
+{# ── Modales (solo admin) ── #}
+{% if es_admin %}
+
+{# Modal: crear activo #}
+<div class="modal fade" id="modalCrearActivo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Nuevo activo electrico</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Tipo <span class="text-danger">*</span></label>
+          <select id="crear-tipo" class="form-select form-select-sm" onchange="actualizarPadresCrear()">
+            <option value="">-- seleccionar --</option>
+            {% for t in tipos_activo %}
+            <option value="{{ t }}">{{ t | capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Nombre <span class="text-danger">*</span></label>
+          <input id="crear-nombre" type="text" class="form-control form-control-sm" placeholder="Ej. Acometida principal">
+        </div>
+        <div class="mb-3" id="crear-padre-grupo" style="display:none">
+          <label class="form-label form-label-sm fw-semibold">Padre</label>
+          <select id="crear-padre" class="form-select form-select-sm">
+            <option value="">-- sin padre --</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label form-label-sm">Capacidad (kVA)</label>
+            <input id="crear-kva" type="number" step="0.1" min="0" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label form-label-sm">Potencia nominal (kW)</label>
+            <input id="crear-kw" type="number" step="0.1" min="0" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm">Tipo de carga</label>
+          <input id="crear-tipo-carga" type="text" class="form-control form-control-sm" placeholder="Ej. motor, iluminacion...">
+        </div>
+        <div class="mb-2">
+          <label class="form-label form-label-sm">Notas</label>
+          <textarea id="crear-notas" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <div id="crear-error" class="alert alert-danger small py-1 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarCrearActivo()">Crear</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: editar activo #}
+<div class="modal fade" id="modalEditarActivo" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Editar activo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editar-activo-id">
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Nombre <span class="text-danger">*</span></label>
+          <input id="editar-nombre" type="text" class="form-control form-control-sm">
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label form-label-sm">Capacidad (kVA)</label>
+            <input id="editar-kva" type="number" step="0.1" min="0" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label form-label-sm">Potencia nominal (kW)</label>
+            <input id="editar-kw" type="number" step="0.1" min="0" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm">Tipo de carga</label>
+          <input id="editar-tipo-carga" type="text" class="form-control form-control-sm">
+        </div>
+        <div class="mb-2">
+          <label class="form-label form-label-sm">Notas</label>
+          <textarea id="editar-notas" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <div id="editar-error" class="alert alert-danger small py-1 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarEditarActivo()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: cambio de alimentacion #}
+<div class="modal fade" id="modalCambioAlimentacion" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Cambio de alimentacion</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="cambio-activo-id">
+        <p class="small text-muted mb-3">Activo: <strong id="cambio-activo-nombre"></strong></p>
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Nueva fuente de alimentacion <span class="text-danger">*</span></label>
+          <select id="cambio-fuente-select" class="form-select form-select-sm">
+            <option value="">-- seleccionar fuente --</option>
+          </select>
+          <div class="form-text">Solo se muestran activos de tipo valido segun jerarquia.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm fw-semibold">Fecha y hora de inicio <span class="text-danger">*</span></label>
+          <input id="cambio-desde" type="datetime-local" class="form-control form-control-sm" value="">
+          <div class="form-text">La fecha determina desde cuando se atribuye la energia a la nueva fuente.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label form-label-sm">Motivo</label>
+          <input id="cambio-motivo" type="text" class="form-control form-control-sm" placeholder="Ej. Mantenimiento en SE-3...">
+        </div>
+        <div id="cambio-error" class="alert alert-danger small py-1 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarCambioAlimentacion()">Declarar cambio</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: vincular medidor #}
+<div class="modal fade" id="modalVincularMedidor" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Vincular medidor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="vincular-activo-id">
+        <p class="small text-muted mb-2">Activo: <strong id="vincular-activo-nombre"></strong></p>
+        <label class="form-label form-label-sm fw-semibold">Medidor</label>
+        <select id="vincular-medidor-select" class="form-select form-select-sm">
+          {% for m in mediciones %}
+          <option value="{{ m.id }}">{{ m.nombre }}</option>
+          {% endfor %}
+        </select>
+        <div id="vincular-error" class="alert alert-danger small py-1 d-none mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="guardarVincularMedidor()">Vincular</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal: detalle de activo #}
+<div class="modal fade" id="modalActivoDetalle" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title small" id="modal-activo-titulo"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3" id="modal-activo-body" style="max-height:70vh;overflow-y:auto;">
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/telemetria.css') }}">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/unifilar-core.js') }}"></script>
+{% if es_admin %}
+<script>
+window.ACTIVOS_UNIFILAR_CONFIG = {
+  clienteId:    {{ cliente.id }},
+  plantaId:     {{ planta_id }},
+  todosActivos: {{ activos_planos | tojson }},
+  padresValidos: {{ padres_validos | tojson }},
+};
+</script>
+<script src="{{ url_for('static', filename='js/activos-unifilar.js') }}"></script>
+{% endif %}
 <script src="{{ url_for('static', filename='js/dashboard-telemetria.js') }}"></script>
 {% endblock %}

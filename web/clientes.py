@@ -3286,60 +3286,6 @@ def _err_activos(resultado):
     return jsonify(resultado[0]), resultado[1]
 
 
-@clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos")
-def activos_planta(cliente_id: int, planta_id: int):
-    """Vista principal del árbol de activos eléctricos de la planta."""
-    user, planta_o_err = _verificar_planta_activos(cliente_id, planta_id)
-    if user is None:
-        return _err_activos(planta_o_err)
-    planta = planta_o_err
-
-    from storage.repository import get_contratos_por_planta as _gcpp
-    cliente = get_cliente_con_conteos(cliente_id)
-    todos_activos = obtener_todos_activos_cliente(cliente_id)
-    mediciones = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
-    es_admin = user.get("rol") in ("admin", "master_admin")
-
-    # Contratos eléctricos de la planta (para asignación a acometidas)
-    _contratos_planta = _gcpp(planta_id)
-    contratos_electricos_planta = [
-        {"id": c.id, "nombre": c.nombre, "tipo": c.tipo}
-        for c in _contratos_planta
-        if c.tipo in ("electrico_basico", "electrico_calificado")
-    ]
-
-    # Lista plana para los selectores JS (todos los activos del cliente, con nombre de planta)
-    activos_js = [
-        {
-            "id": a["id"],
-            "nombre": a["nombre"],
-            "tipo": a["tipo"],
-            "activo": a["activo"],
-            "planta_id": a["planta_id"],
-            "planta_nombre": (a.get("plantas") or {}).get("nombre", ""),
-            "misma_planta": a["planta_id"] == planta_id,
-            "activo_padre_id": a.get("activo_padre_id"),
-        }
-        for a in todos_activos
-    ]
-
-    # padres_validos como dict serializable para JS
-    padres_validos_json = {k: list(v) for k, v in _PADRES_VALIDOS.items()}
-
-    return render_template(
-        "clientes/activos.html",
-        cliente=cliente,
-        planta=planta,
-        planta_id=planta_id,
-        activos_planos=activos_js,
-        mediciones=mediciones,
-        tipos_activo=_TIPOS_ACTIVO,
-        es_admin=es_admin,
-        nav_active="activos",
-        contratos_electricos_planta=contratos_electricos_planta,
-        padres_validos=padres_validos_json,
-    )
-
 
 @clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/activos/topologia")
 def activos_topologia(cliente_id: int, planta_id: int):

@@ -8,8 +8,10 @@
   const root = document.getElementById("dashboard-telemetria-root");
   if (!root) return;
 
-  const CLIENTE_ID = root.dataset.clienteId;
-  const ENDPOINT   = root.dataset.endpoint;
+  const CLIENTE_ID  = root.dataset.clienteId;
+  const ENDPOINT    = root.dataset.endpoint;
+  const PLANTA_ID_DT = root.dataset.plantaId;
+  const ES_ADMIN_DT  = root.dataset.esAdmin === "true";
 
   let _rango        = "24h";
   let _nodoId       = null;   // nodo cuyo time-series se muestra en la gráfica
@@ -525,17 +527,18 @@
   // ════════════════════════════════════════════════════════════════════════════
 
   function _renderUnifilar(raiz) {
+    if (typeof ActivosUnifilar !== "undefined") {
+      ActivosUnifilar.renderUnifilar(raiz, _nodoId);
+      return;
+    }
+    // Fallback for non-admin (no activos-unifilar.js loaded)
     if (!raiz) return;
     var svg = $("unifilarSvg");
     var wrapper = $("unifilar-wrapper");
-    if (!svg || !wrapper) return;
-    if (typeof UnifilarCore === "undefined") return;
+    if (!svg || !wrapper || typeof UnifilarCore === "undefined") return;
     UnifilarCore.renderUnifilar(raiz, svg, wrapper, {
       nodoSeleccionadoId: _nodoId,
-      onClickNodo: function (id) {
-        _nodoId = parseInt(id, 10);
-        fetchDatos();
-      },
+      onClickNodo: function (id) { _nodoId = parseInt(id, 10); fetchDatos(); },
       modoEdicion: false,
     });
   }
@@ -571,5 +574,29 @@
   });
 
   // ── Init ───────────────────────────────────────────────────────────────────
+  // Inicializar módulo de edición de activos
+  if (typeof ActivosUnifilar !== "undefined") {
+    var _auCfg = window.ACTIVOS_UNIFILAR_CONFIG || {};
+    ActivosUnifilar.init({
+      clienteId:      CLIENTE_ID,
+      plantaId:       PLANTA_ID_DT,
+      esAdmin:        ES_ADMIN_DT,
+      svgId:          "unifilarSvg",
+      wrapperId:      "unifilar-wrapper",
+      loadingId:      null,
+      toastId:        "toast-telemetria",
+      todosActivos:   _auCfg.todosActivos   || [],
+      padresValidos:  _auCfg.padresValidos  || {},
+      topologiaUrl:   ES_ADMIN_DT
+        ? "/clientes/" + CLIENTE_ID + "/planta/" + PLANTA_ID_DT + "/activos/topologia"
+        : null,
+      onNodoSeleccionado: function (id) {
+        _nodoId = id;
+        fetchDatos();
+      },
+      onRecargar: fetchDatos,
+    });
+  }
+
   fetchDatos();
 })();

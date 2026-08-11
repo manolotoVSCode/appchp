@@ -3,6 +3,8 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
+PLANTA_MOCK_TD = {"id": 1, "nombre": "Planta Norte", "activo": True}
+
 ARBOL_MOCK = [
     {"id": 1, "nombre": "Acometida CFE-1", "punto_medicion": "acometida_cfe",
      "activo_padre_id": None, "cliente_id": 44, "planta_id": 1,
@@ -16,6 +18,14 @@ ARBOL_MOCK = [
     {"id": 4, "nombre": "Horno 2", "punto_medicion": "carga_final",
      "activo_padre_id": 2, "cliente_id": 44, "planta_id": 1,
      "tipo_carga": "horno_tunel", "potencia_nominal_kw": 250.0, "medidor_id": 11},
+]
+
+# Activos planos para la vista HTML (sin punto_medicion — tabla activos_electricos)
+ACTIVOS_PLANOS_MOCK = [
+    {"id": a["id"], "nombre": a["nombre"], "tipo": a.get("punto_medicion", "carga"),
+     "activo": True, "planta_id": 1, "plantas": {"nombre": "Planta Norte"},
+     "activo_padre_id": a["activo_padre_id"]}
+    for a in ARBOL_MOCK
 ]
 
 MEDICIONES_MOCK = [
@@ -62,6 +72,19 @@ def _injectar_sesion(client, rol, empresa_id=44, cliente_activo_id=44, clientes_
         sess["_session_version"] = 1
         sess["_activo_check"] = {"user_id": "mock-uuid", "ts": now, "activo": True}
         sess["_sv_check"] = {"user_id": "mock-uuid", "ts": now, "version": 1}
+        # Cache de plantas y context_processor para evitar llamadas a Supabase en
+        # before_request (_resolver_planta_activa) y context_processor (_inject_globals)
+        sess["_plantas_cache"] = {
+            "cliente_id": cliente_activo_id, "ts": now,
+            "plantas": [PLANTA_MOCK_TD],
+        }
+        sess["_cp_cache"] = {
+            "id": cliente_activo_id, "planta_id": 1, "ts": now,
+            "data": {
+                "id": cliente_activo_id, "nombre": "Iberica Tiles",
+                "contratos": [], "logo_url": None,
+            },
+        }
 
 
 def _mock_get_cliente_con_conteos(cid):
@@ -78,9 +101,12 @@ def test_telemetria_usuario_normal_empresa_propia_200(client, app):
     _injectar_sesion(client, "usuario_normal", empresa_id=44,
                      cliente_activo_id=44, clientes_ids=[44])
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
-         patch("storage.repository._supabase") as sb:
-        sb.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = ARBOL_MOCK
-        resp = client.get("/clientes/44/dashboard/telemetria")
+         patch("web.app.obtener_plantas_por_cliente", return_value=[PLANTA_MOCK_TD]), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
+         patch("storage.repository.obtener_todos_activos_cliente", return_value=ACTIVOS_PLANOS_MOCK), \
+         patch("storage.repository.get_mediciones_por_cliente", return_value=[]), \
+         patch("storage.repository.get_contratos_por_planta", return_value=[]):
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria")
     assert resp.status_code == 200
 
 
@@ -100,9 +126,12 @@ def test_telemetria_master_admin_cualquier_cliente_200(client, app):
     app.config["FASE2_HABILITADA"] = True
     _injectar_sesion(client, "master_admin", empresa_id=None, cliente_activo_id=44)
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
-         patch("storage.repository._supabase") as sb:
-        sb.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = ARBOL_MOCK
-        resp = client.get("/clientes/44/dashboard/telemetria")
+         patch("web.app.obtener_plantas_por_cliente", return_value=[PLANTA_MOCK_TD]), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ARBOL_MOCK), \
+         patch("storage.repository.obtener_todos_activos_cliente", return_value=ACTIVOS_PLANOS_MOCK), \
+         patch("storage.repository.get_mediciones_por_cliente", return_value=[]), \
+         patch("storage.repository.get_contratos_por_planta", return_value=[]):
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria")
     assert resp.status_code == 200
 
 
@@ -111,9 +140,7 @@ def test_telemetria_fase2_deshabilitada_404(client, app):
     """Con FASE2_HABILITADA=False la ruta devuelve 404."""
     app.config["FASE2_HABILITADA"] = False
     _injectar_sesion(client, "master_admin", cliente_activo_id=44)
-    with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
-         patch("storage.repository._supabase") as sb:
-        sb.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = []
+    with patch("web.app.obtener_plantas_por_cliente", return_value=[PLANTA_MOCK_TD]):
         resp = client.get("/clientes/44/dashboard/telemetria")
     assert resp.status_code == 404
 
@@ -248,9 +275,12 @@ def test_telemetria_sin_medidores_estado_vacio_200(client, app):
     app.config["FASE2_HABILITADA"] = True
     _injectar_sesion(client, "master_admin", cliente_activo_id=44)
     with patch("storage.repository.get_cliente_con_conteos", side_effect=_mock_get_cliente_con_conteos), \
-         patch("storage.repository._supabase") as sb:
-        sb.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value.data = []
-        resp = client.get("/clientes/44/dashboard/telemetria")
+         patch("web.app.obtener_plantas_por_cliente", return_value=[PLANTA_MOCK_TD]), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=[]), \
+         patch("storage.repository.obtener_todos_activos_cliente", return_value=[]), \
+         patch("storage.repository.get_mediciones_por_cliente", return_value=[]), \
+         patch("storage.repository.get_contratos_por_planta", return_value=[]):
+        resp = client.get("/clientes/44/planta/1/dashboard/telemetria")
     assert resp.status_code == 200
     assert "aún no tiene medidores" in resp.get_data(as_text=True)
 

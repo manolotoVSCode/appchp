@@ -41,6 +41,7 @@ def app(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://fake.supabase.co")
     monkeypatch.setenv("SUPABASE_KEY", "fake_key")
     monkeypatch.setenv("SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("FASE2_HABILITADA", "true")
     from web.app import create_app
     flask_app = create_app()
     flask_app.config["TESTING"] = True
@@ -84,17 +85,37 @@ def _inject_session(client, rol="admin", empresa_id=44, clientes_ids=None):
         }
 
 
-# ── Test a: GET /activos responde 200 ─────────────────────────────────────────
+# ── Test a: GET /telemetria responde 200 para admin ───────────────────────────
 
 def test_activos_planta_200(client, app):
-    """La pagina de activos responde 200."""
-    with patch("web.clientes.get_cliente_con_conteos", return_value=CLIENTE_MOCK), \
-         patch("web.clientes.obtener_planta", return_value=PLANTA_MOCK), \
-         patch("web.clientes.obtener_todos_activos_cliente", return_value=TODOS_ACTIVOS), \
-         patch("web.clientes.get_mediciones_por_cliente", return_value=[]), \
+    """El dashboard de telemetria (que integra los activos) responde 200 para admin."""
+    app.config["FASE2_HABILITADA"] = True
+    from time import time
+    now = time()
+    with client.session_transaction() as sess:
+        sess["_user_id"] = "mock-uuid"
+        sess["_user_email"] = "test@test.com"
+        sess["_user_rol"] = "admin"
+        sess["_empresa_id"] = 44
+        sess["_access_token"] = "mock-token"
+        sess["cliente_activo_id"] = 44
+        sess["_session_version"] = 1
+        sess["_activo_check"] = {"user_id": "mock-uuid", "ts": now, "activo": True}
+        sess["_sv_check"] = {"user_id": "mock-uuid", "ts": now, "version": 1}
+        sess["_plantas_cache"] = {
+            "cliente_id": 44, "ts": now,
+            "plantas": [PLANTA_MOCK],
+        }
+        sess["_cp_cache"] = {
+            "id": 44, "planta_id": 10, "ts": now,
+            "data": {"id": 44, "nombre": "Iberica Tiles", "contratos": [], "logo_url": None},
+        }
+    with patch("storage.repository.get_cliente_con_conteos", return_value=CLIENTE_MOCK), \
+         patch("storage.repository.obtener_arbol_activos_telemetria", return_value=ACTIVOS_PLANTA), \
+         patch("storage.repository.obtener_todos_activos_cliente", return_value=TODOS_ACTIVOS), \
+         patch("storage.repository.get_mediciones_por_cliente", return_value=[]), \
          patch("storage.repository.get_contratos_por_planta", return_value=[]):
-        _inject_session(client, "admin")
-        resp = client.get("/clientes/44/planta/10/activos")
+        resp = client.get("/clientes/44/planta/10/dashboard/telemetria")
     assert resp.status_code == 200
 
 
