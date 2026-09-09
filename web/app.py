@@ -875,6 +875,9 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if session.get("_user_rol") == "usuario_normal":
+            flash("No tienes acceso al Proyecto Cogeneración.", "warning")
+            return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
 
         tipo_suministro = _tipo_suministro(cliente_id, planta_id)
 
@@ -1281,6 +1284,8 @@ def create_app() -> Flask:
 
         activo_id = session.get("cliente_activo_id")
         if activo_id != cliente_id:
+            return jsonify({"error": "no_autorizado"}), 403
+        if session.get("_user_rol") == "usuario_normal":
             return jsonify({"error": "no_autorizado"}), 403
         from storage.repository import get_cliente_con_conteos as _gcc
         cliente = _gcc(cliente_id)
@@ -1840,6 +1845,9 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if session.get("_user_rol") == "usuario_normal":
+            flash("No tienes acceso al Proyecto Cogeneración.", "warning")
+            return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
         if planta_id is None:
             _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
             if not _pg:
@@ -2577,7 +2585,11 @@ def create_app() -> Flask:
 
             return redirect(url_for("admin_usuarios"))
 
-        clientes_list = get_all_clientes_con_conteos()
+        try:
+            clientes_list = get_all_clientes_con_conteos()
+        except Exception as _exc_cl:
+            logger.error("Error cargando clientes en editar_usuario %s: %s", user_id, _exc_cl)
+            clientes_list = []
         from storage.repository import get_clientes_de_usuario as _gcdu
         clientes_asignados = _gcdu(user_id)
         clientes_asignados_ids = [c["id"] for c in clientes_asignados]
@@ -2893,6 +2905,9 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if session.get("_user_rol") == "usuario_normal":
+            flash("No tienes acceso al Modelado CHP.", "warning")
+            return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
         if planta_id is None:
             _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
             if not _pg:
@@ -2942,6 +2957,9 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return err
+        if session.get("_user_rol") == "usuario_normal":
+            flash("No tienes acceso a Telemetría.", "warning")
+            return redirect(url_for("cliente_dashboard_contabilidad", cliente_id=cliente_id))
         if planta_id is None:
             _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
             if not _pg:
@@ -3009,6 +3027,8 @@ def create_app() -> Flask:
         cliente, err = _verificar_cliente_activo(cliente_id)
         if err:
             return jsonify({"error": "acceso denegado"}), 403
+        if session.get("_user_rol") == "usuario_normal":
+            return jsonify({"error": "no_autorizado"}), 403
         if planta_id is None:
             _pg = getattr(g, "plantas_cliente", []) or obtener_plantas_por_cliente(cliente_id)
             if not _pg:

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from web.auth import get_current_user as _get_current_user
-from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, filtrar_empresas_para_usuario, usuario_puede_ver_empresa
+from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, usuario_puede_gestionar_contratos, filtrar_empresas_para_usuario, usuario_puede_ver_empresa
 from web.error_logger import log_error
 from calc.excepciones import PeriodoIncompletoError
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
@@ -992,7 +992,7 @@ def contrato_editar(cliente_id: int, contrato_id: int):
 @clientes_bp.route("/<int:cliente_id>/contratos/<int:contrato_id>/borrar", methods=["POST"])
 def contrato_borrar(cliente_id: int, contrato_id: int):
     user = _get_current_user()
-    if not usuario_puede_borrar(user or {}):
+    if not usuario_puede_gestionar_contratos(user or {}):
         log_error("negocio", "No tienes permisos para borrar contratos.")
         flash("No tienes permisos para borrar contratos.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
@@ -1375,7 +1375,7 @@ def contrato_factura_borrar(cliente_id: int, contrato_id: int, factura_id: int):
     from flask import Response, jsonify
 
     user = _get_current_user()
-    if not usuario_puede_borrar(user or {}):
+    if not usuario_puede_gestionar_contratos(user or {}):
         log_error("negocio", "No tienes permisos para borrar facturas.")
         flash("No tienes permisos para borrar facturas.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
@@ -1831,7 +1831,7 @@ def factura_calificado_borrar(cliente_id: int, contrato_id: int, factura_id: int
     from flask import Response
 
     user = _get_current_user()
-    if not usuario_puede_borrar(user or {}):
+    if not usuario_puede_gestionar_contratos(user or {}):
         log_error("negocio", "No tienes permisos para borrar facturas.")
         flash("No tienes permisos para borrar facturas.", "danger")
         return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))

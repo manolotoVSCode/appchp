@@ -68,6 +68,11 @@ def usuario_puede_borrar(user: dict) -> bool:
     return user.get("rol") in (ROL_MASTER_ADMIN, ROL_ADMIN)
 
 
+def usuario_puede_gestionar_contratos(user: dict) -> bool:
+    """Todos los roles autenticados pueden subir, editar y borrar contratos y facturas."""
+    return user.get("rol") in (ROL_MASTER_ADMIN, ROL_ADMIN, ROL_USUARIO_NORMAL)
+
+
 def usuario_puede_crear(user: dict) -> bool:
     """master_admin y admin pueden crear clientes."""
     return user.get("rol") in (ROL_MASTER_ADMIN, ROL_ADMIN)
