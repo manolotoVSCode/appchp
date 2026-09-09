@@ -681,7 +681,12 @@ def create_app() -> Flask:
             session.pop("cliente_activo_logo_url", None)
             session.pop("_cp_cache", None)
             return {**base, "cliente_activo": None}
-        contratos = [asdict(c) for c in get_contratos_por_cliente(id_, planta_id=planta_id_cp)]
+        try:
+            from storage.repository import TODAS_LAS_PLANTAS as _TODAS
+            _scope = planta_id_cp if planta_id_cp is not None else _TODAS
+            contratos = [asdict(c) for c in get_contratos_por_cliente(id_, planta_id=_scope)]
+        except Exception:
+            contratos = []
         data = {
             "id": id_,
             "nombre": cliente["nombre"],
