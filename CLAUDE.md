@@ -275,7 +275,7 @@ FACTURAS DE ELECTRICIDAD CALIFICADA (PPA)
 
 Tabla: facturas_electricidad_calificado. Modelo: models/factura_calificado.py (FacturaCalificado). Campos: id, contrato_id, cliente_id, suministrador, rpu, serie_folio, periodo_inicio, periodo_fin, dias_facturados, anio, mes, nombre_canonico, consumo_kwh, precio_unitario_mxn_kwh, subtotal_mxn, iva_mxn, total_mxn, excedente_detectado, advertencias, pdf_url, parser_version, created_at. Todos los campos numéricos se almacenan como TEXT en Supabase y se convierten a Decimal al leer.
 
-Nombre canónico: CALIFICADO-{AAAA}-{MM:02d}-{suministrador_slug} (snake_case del suministrador, o "sin_suministrador" si está vacío).
+Nombre canónico: "{YYYY} {MES} CALIFICADO {SUMINISTRADOR}" — mismo estilo que CFE/gas. Ejemplo: "2025 ABRIL CALIFICADO GENERACION INDUSTRIAL". Generado por `generar_nombre_canonico_calificado` en `calc/nombre_canonico.py`. Mes determinado por `mes_asociado`. Suministrador normalizado sin acentos, en mayúsculas; "SIN SUMINISTRADOR" si está vacío.
 
 Excedente: consumo_kwh > bloque_contratado_mwh × 1000 × 1.10 (el bloque en ppa_bloques_mensuales está en MWh; comparar en la misma unidad).
 

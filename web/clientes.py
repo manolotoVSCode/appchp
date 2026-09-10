@@ -15,6 +15,7 @@ from web.auth import get_current_user as _get_current_user
 from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, usuario_puede_gestionar_contratos, usuario_puede_gestionar_plantas, filtrar_empresas_para_usuario, usuario_puede_ver_empresa
 from web.error_logger import log_error
 from calc.excepciones import PeriodoIncompletoError
+from calc.nombre_canonico import generar_nombre_canonico_calificado
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
 from parsers.cfe import get_cfe_parser
@@ -1636,7 +1637,7 @@ def _validar_y_parsear_factura_calificado(form, contrato_id, cliente_id, excluir
     anio = periodo_fin.year
     mes = periodo_fin.month
     consumo_mwh = consumo_kwh / Decimal("1000")
-    nombre_canonico = f"{anio:04d}-{mes:02d}"
+    nombre_canonico = generar_nombre_canonico_calificado(periodo_inicio, periodo_fin, suministrador)
 
     # Verificar duplicado solo en modo crear
     if excluir_factura_id is None:

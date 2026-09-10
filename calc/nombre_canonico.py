@@ -34,6 +34,26 @@ def _nombre_gas(año: int, mes: int, nombre_proveedor: str | None) -> str:
     return f"{año} {_MESES[mes]} {proveedor}"
 
 
+def _nombre_calificado(año: int, mes: int, suministrador: str | None) -> str:
+    raw = (suministrador or "").strip()
+    proveedor = _normalizar_proveedor(raw) if raw else "SIN SUMINISTRADOR"
+    return f"{año} {_MESES[mes]} CALIFICADO {proveedor}"
+
+
+def generar_nombre_canonico_calificado(
+    periodo_inicio: date,
+    periodo_fin: date,
+    suministrador: str | None,
+) -> str:
+    """Devuelve el nombre canónico de una factura de electricidad calificada.
+
+    Formato: "YYYY MES CALIFICADO SUMINISTRADOR"
+    Ejemplo: "2025 ABRIL CALIFICADO GENERACION INDUSTRIAL"
+    """
+    año, mes = mes_asociado(periodo_inicio, periodo_fin)
+    return _nombre_calificado(año, mes, suministrador)
+
+
 def generar_nombre_canonico(factura: CFEInvoice | GasInvoice) -> str:
     """Devuelve el nombre canónico de una factura CFE o gas.
 
