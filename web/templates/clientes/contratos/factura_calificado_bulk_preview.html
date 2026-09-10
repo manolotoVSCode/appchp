@@ -1,0 +1,165 @@
+{% extends "clientes/_base.html" %}
+{% set nav_active = "contrato" %}
+{% set contrato_activo_id = contrato.id %}
+{% block title %}Confirmar facturas — {{ contrato.nombre }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <a href="{{ url_for('clientes.factura_calificado_upload', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+     class="btn btn-sm btn-outline-secondary">← Volver a subir</a>
+  <nav aria-label="breadcrumb" class="mb-0">
+    <ol class="breadcrumb mb-0 small">
+      <li class="breadcrumb-item">
+        <a href="{{ url_for('clientes.ficha', cliente_id=cliente.id) }}">{{ cliente.nombre }}</a>
+      </li>
+      <li class="breadcrumb-item">
+        <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}">{{ contrato.nombre }}</a>
+      </li>
+      <li class="breadcrumb-item active">Confirmar facturas</li>
+    </ol>
+  </nav>
+</div>
+
+<h4 class="fw-bold mb-1" style="color:var(--color-primary-dark)">Confirmar importación en bloque</h4>
+<p class="text-muted small mb-4">
+  Revisa los resultados del análisis. Marca las facturas que deseas guardar y confirma.
+  Las filas con error no se pueden seleccionar; las marcadas como "Ya registrada" están deseleccionadas por defecto.
+</p>
+
+{% set ok_count = resultados | selectattr("invoice") | selectattr("error", "none") | list | length %}
+{% set err_count = resultados | selectattr("invoice", "none") | list | length %}
+
+{% if err_count %}
+<div class="alert alert-warning small py-2 mb-3">
+  {{ err_count }} archivo(s) no se pudieron procesar y aparecen resaltados en la tabla.
+</div>
+{% endif %}
+
+<form action="{{ url_for('clientes.factura_calificado_bulk_guardar', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+      method="POST" id="bulk-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="facturas_count" value="{{ resultados | length }}">
+
+  {% for r in resultados %}
+  {% set i = loop.index0 %}
+  {# Campos ocultos siempre presentes (la selección los activa o ignora) #}
+  <input type="hidden" name="filename_{{ i }}"              value="{{ r.filename }}">
+  {% if r.form_data %}
+  <input type="hidden" name="suministrador_{{ i }}"         value="{{ r.form_data.suministrador }}">
+  <input type="hidden" name="rpu_{{ i }}"                   value="{{ r.form_data.rpu }}">
+  <input type="hidden" name="serie_folio_{{ i }}"           value="{{ r.form_data.serie_folio }}">
+  <input type="hidden" name="periodo_inicio_{{ i }}"        value="{{ r.form_data.periodo_inicio }}">
+  <input type="hidden" name="periodo_fin_{{ i }}"           value="{{ r.form_data.periodo_fin }}">
+  <input type="hidden" name="consumo_kwh_{{ i }}"           value="{{ r.form_data.consumo_kwh }}">
+  <input type="hidden" name="precio_unitario_mxn_kwh_{{ i }}" value="{{ r.form_data.precio_unitario_mxn_kwh }}">
+  <input type="hidden" name="subtotal_mxn_{{ i }}"          value="{{ r.form_data.subtotal_mxn }}">
+  <input type="hidden" name="iva_mxn_{{ i }}"               value="{{ r.form_data.iva_mxn }}">
+  <input type="hidden" name="total_mxn_{{ i }}"             value="{{ r.form_data.total_mxn }}">
+  {% endif %}
+  {% endfor %}
+
+  <div class="table-responsive mb-4">
+    <table class="table table-hover align-middle small shadow-sm">
+      <thead class="table-light">
+        <tr>
+          <th style="width:2.5rem">
+            <input type="checkbox" id="chk-all" title="Seleccionar/deseleccionar todos los válidos">
+          </th>
+          <th>Archivo</th>
+          <th>Periodo</th>
+          <th class="text-end">Consumo kWh</th>
+          <th class="text-end">Precio MXN/kWh</th>
+          <th class="text-end">Subtotal MXN</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in resultados %}
+        {% set i = loop.index0 %}
+        {% set tiene_error = r.invoice is none %}
+        <tr class="{% if tiene_error %}table-danger{% elif r.ya_existe %}table-warning{% endif %}">
+          <td>
+            {% if not tiene_error %}
+            <input type="checkbox"
+                   class="row-chk"
+                   name="include_{{ i }}"
+                   value="1"
+                   {% if not r.ya_existe %}checked{% endif %}>
+            {% else %}
+            <input type="checkbox" disabled title="No se puede guardar: error de parseo">
+            {% endif %}
+          </td>
+          <td class="font-monospace text-break" style="max-width:220px">{{ r.filename }}</td>
+          <td class="text-nowrap">
+            {% if r.invoice %}
+              {{ r.invoice.periodo_inicio.strftime("%d/%m/%Y") }} –
+              {{ r.invoice.periodo_fin.strftime("%d/%m/%Y") }}
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            {% if r.invoice %}{{ "{:,.0f}".format(r.invoice.consumo_kwh) }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            {% if r.invoice %}{{ r.invoice.precio_unitario_mxn_kwh }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            {% if r.invoice %}${{ "{:,.2f}".format(r.invoice.subtotal_mxn) }}{% else %}—{% endif %}
+          </td>
+          <td>
+            {% if tiene_error %}
+              <span class="badge bg-danger">Error</span>
+              <span class="text-danger small ms-1">{{ r.error }}</span>
+            {% elif r.ya_existe %}
+              <span class="badge bg-warning text-dark">Ya registrada</span>
+            {% elif r.invoice.advertencias %}
+              <span class="badge bg-warning text-dark">Advertencias</span>
+              <ul class="mb-0 ps-3 mt-1">
+                {% for adv in r.invoice.advertencias %}
+                <li class="text-warning small">{{ adv }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <span class="badge bg-success">Listo</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="d-flex gap-2 align-items-center">
+    <button type="submit" id="btn-guardar" class="btn btn-primary">
+      Guardar seleccionadas (<span id="selected-count">{{ ok_count }}</span>)
+    </button>
+    <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=contrato.id) }}"
+       class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const chkAll = document.getElementById("chk-all");
+  const rowChks = Array.from(document.querySelectorAll(".row-chk"));
+  const countSpan = document.getElementById("selected-count");
+
+  function actualizarContador() {
+    const n = rowChks.filter(c => c.checked).length;
+    countSpan.textContent = n;
+    document.getElementById("btn-guardar").disabled = n === 0;
+    chkAll.checked = rowChks.length > 0 && rowChks.every(c => c.checked);
+    chkAll.indeterminate = !chkAll.checked && rowChks.some(c => c.checked);
+  }
+
+  rowChks.forEach(c => c.addEventListener("change", actualizarContador));
+  chkAll.addEventListener("change", function () {
+    rowChks.forEach(c => { c.checked = chkAll.checked; });
+    actualizarContador();
+  });
+
+  actualizarContador();
+})();
+</script>
+{% endblock %}

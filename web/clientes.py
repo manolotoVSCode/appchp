@@ -1909,9 +1909,9 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
             contrato_activo_id=contrato_activo_id,
         )
 
-    # POST — procesar archivo
-    file = request.files.get("factura")
-    if not file or not file.filename:
+    # POST — procesar archivos (uno o varios)
+    files = [f for f in request.files.getlist("facturas") if f and f.filename]
+    if not files:
         return render_template(
             "clientes/contratos/factura_calificado_upload.html",
             cliente=cliente,
@@ -1921,75 +1921,198 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
             error="No se seleccionó ningún archivo.",
         )
 
-    if not file.filename.lower().endswith(".pdf"):
+    no_pdf = [f.filename for f in files if not f.filename.lower().endswith(".pdf")]
+    if no_pdf:
         return render_template(
             "clientes/contratos/factura_calificado_upload.html",
             cliente=cliente,
             contrato=contrato,
             nav_active=nav_active,
             contrato_activo_id=contrato_activo_id,
-            error="El archivo debe ser un PDF (.pdf).",
+            error=f"Solo se aceptan archivos PDF: {', '.join(no_pdf)}",
         )
 
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            file.save(tmp.name)
-            tmp_path = Path(tmp.name)
+    def _invoice_to_form_data(inv):
+        return {
+            "suministrador": inv.suministrador or "",
+            "rpu": inv.rpu or "",
+            "serie_folio": inv.serie_folio or "",
+            "periodo_inicio": inv.periodo_inicio.isoformat(),
+            "periodo_fin": inv.periodo_fin.isoformat(),
+            "consumo_kwh": str(inv.consumo_kwh),
+            "precio_unitario_mxn_kwh": str(inv.precio_unitario_mxn_kwh),
+            "subtotal_mxn": str(inv.subtotal_mxn),
+            "iva_mxn": str(inv.iva_mxn) if inv.iva_mxn is not None else "",
+            "total_mxn": str(inv.total_mxn) if inv.total_mxn is not None else "",
+        }
 
-        parser_class = _parser_registry.auto_detect(tmp_path)
-        if parser_class is None:
+    # Caso único: flujo existente con preview editable
+    if len(files) == 1:
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                files[0].save(tmp.name)
+                tmp_path = Path(tmp.name)
+
+            parser_class = _parser_registry.auto_detect(tmp_path)
+            if parser_class is None:
+                return render_template(
+                    "clientes/contratos/factura_calificado_upload.html",
+                    cliente=cliente,
+                    contrato=contrato,
+                    nav_active=nav_active,
+                    contrato_activo_id=contrato_activo_id,
+                    error="Formato de factura no reconocido. El sistema acepta facturas de: "
+                          + ", ".join(e.nombre for e in _parser_registry.todos()),
+                )
+
+            invoice = parser_class().parse(tmp_path)
+            return render_template(
+                "clientes/contratos/factura_calificado_preview.html",
+                cliente=cliente,
+                contrato=contrato,
+                nav_active=nav_active,
+                contrato_activo_id=contrato_activo_id,
+                invoice=invoice,
+                form_data=_invoice_to_form_data(invoice),
+            )
+        except Exception as exc:
+            logger.error(
+                "Error parseando factura calificada para contrato %d: %s: %s",
+                contrato_id, type(exc).__name__, exc, exc_info=True,
+            )
             return render_template(
                 "clientes/contratos/factura_calificado_upload.html",
                 cliente=cliente,
                 contrato=contrato,
                 nav_active=nav_active,
                 contrato_activo_id=contrato_activo_id,
-                error="Formato de factura no reconocido. El sistema acepta facturas de: "
-                      + ", ".join(e.nombre for e in _parser_registry.todos()),
+                error="No se pudo extraer los datos del PDF. Revise que el archivo no esté dañado o protegido.",
             )
+        finally:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
 
-        invoice = parser_class().parse(tmp_path)
+    # Caso múltiple: parsear todos y mostrar tabla de confirmación
+    existing = get_facturas_calificado_por_contrato(contrato_id)
+    existing_set = {(f.get("anio"), f.get("mes")) for f in existing}
 
-        form_data = {
-            "suministrador": invoice.suministrador or "",
-            "rpu": invoice.rpu or "",
-            "serie_folio": invoice.serie_folio or "",
-            "periodo_inicio": invoice.periodo_inicio.isoformat(),
-            "periodo_fin": invoice.periodo_fin.isoformat(),
-            "consumo_kwh": str(invoice.consumo_kwh),
-            "precio_unitario_mxn_kwh": str(invoice.precio_unitario_mxn_kwh),
-            "subtotal_mxn": str(invoice.subtotal_mxn),
-            "iva_mxn": str(invoice.iva_mxn) if invoice.iva_mxn is not None else "",
-            "total_mxn": str(invoice.total_mxn) if invoice.total_mxn is not None else "",
+    resultados = []
+    tmp_paths = []
+    try:
+        for file in files:
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                file.save(tmp.name)
+                tmp_path = Path(tmp.name)
+            tmp_paths.append(tmp_path)
+
+            try:
+                parser_class = _parser_registry.auto_detect(tmp_path)
+                if parser_class is None:
+                    resultados.append({
+                        "filename": file.filename,
+                        "invoice": None,
+                        "form_data": None,
+                        "error": "Formato no reconocido",
+                        "ya_existe": False,
+                    })
+                    continue
+
+                invoice = parser_class().parse(tmp_path)
+                anio = invoice.periodo_fin.year
+                mes = invoice.periodo_fin.month
+                resultados.append({
+                    "filename": file.filename,
+                    "invoice": invoice,
+                    "form_data": _invoice_to_form_data(invoice),
+                    "error": None,
+                    "ya_existe": (anio, mes) in existing_set,
+                })
+            except Exception as exc:
+                logger.error(
+                    "Error parseando '%s' contrato %d: %s: %s",
+                    file.filename, contrato_id, type(exc).__name__, exc,
+                )
+                resultados.append({
+                    "filename": file.filename,
+                    "invoice": None,
+                    "form_data": None,
+                    "error": str(exc) or "Error desconocido al parsear el PDF",
+                    "ya_existe": False,
+                })
+    finally:
+        for p in tmp_paths:
+            p.unlink(missing_ok=True)
+
+    return render_template(
+        "clientes/contratos/factura_calificado_bulk_preview.html",
+        cliente=cliente,
+        contrato=contrato,
+        nav_active=nav_active,
+        contrato_activo_id=contrato_activo_id,
+        resultados=resultados,
+    )
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/factura_calificado/bulk",
+    methods=["POST"],
+)
+def factura_calificado_bulk_guardar(cliente_id: int, contrato_id: int):
+    from flask import Response
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    if isinstance(resultado, Response):
+        return resultado
+
+    count = int(request.form.get("facturas_count", 0))
+    guardadas = 0
+    errores = []
+
+    for i in range(count):
+        if request.form.get(f"include_{i}") != "1":
+            continue
+
+        filename = request.form.get(f"filename_{i}", f"Factura {i + 1}")
+        form_slice = {
+            "rpu":                    request.form.get(f"rpu_{i}", ""),
+            "suministrador":          request.form.get(f"suministrador_{i}", ""),
+            "serie_folio":            request.form.get(f"serie_folio_{i}", ""),
+            "periodo_inicio":         request.form.get(f"periodo_inicio_{i}", ""),
+            "periodo_fin":            request.form.get(f"periodo_fin_{i}", ""),
+            "consumo_kwh":            request.form.get(f"consumo_kwh_{i}", ""),
+            "precio_unitario_mxn_kwh": request.form.get(f"precio_unitario_mxn_kwh_{i}", ""),
+            "subtotal_mxn":           request.form.get(f"subtotal_mxn_{i}", ""),
+            "iva_mxn":                request.form.get(f"iva_mxn_{i}", ""),
+            "total_mxn":              request.form.get(f"total_mxn_{i}", ""),
         }
 
-        return render_template(
-            "clientes/contratos/factura_calificado_preview.html",
-            cliente=cliente,
-            contrato=contrato,
-            nav_active=nav_active,
-            contrato_activo_id=contrato_activo_id,
-            invoice=invoice,
-            form_data=form_data,
-        )
+        datos, error = _validar_y_parsear_factura_calificado(form_slice, contrato_id, cliente_id)
+        if error:
+            errores.append(f"{filename}: {error}")
+            continue
 
-    except Exception as exc:
-        logger.error(
-            "Error parseando factura calificada para contrato %d: %s: %s",
-            contrato_id, type(exc).__name__, exc, exc_info=True,
-        )
-        return render_template(
-            "clientes/contratos/factura_calificado_upload.html",
-            cliente=cliente,
-            contrato=contrato,
-            nav_active=nav_active,
-            contrato_activo_id=contrato_activo_id,
-            error="No se pudo extraer los datos del PDF. Revise que el archivo no esté dañado o protegido.",
-        )
-    finally:
-        if tmp_path is not None:
-            tmp_path.unlink(missing_ok=True)
+        try:
+            create_factura_calificado(contrato_id, cliente_id, datos)
+            guardadas += 1
+        except Exception as exc:
+            logger.error("Error guardando factura bulk contrato %d i=%d: %s", contrato_id, i, exc)
+            errores.append(f"{filename}: error al guardar ({exc})")
+
+    if guardadas:
+        flash(f"{guardadas} factura(s) guardada(s) correctamente.", "success")
+    for msg in errores:
+        flash(msg, "warning")
+
+    return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
 
 
 # ── Datos PPA del cliente ──────────────────────────────────────────────────────
