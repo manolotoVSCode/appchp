@@ -19,7 +19,7 @@ from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
 from parsers.cfe import get_cfe_parser
 from parsers.gas import get_gas_parser
-from parsers.electricidad_calificado.gin import GINParser
+from parsers.registry import registry as _parser_registry
 from storage.repository import (
     get_all_clientes_con_conteos,
     get_cliente_con_conteos,
@@ -1939,7 +1939,19 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
             file.save(tmp.name)
             tmp_path = Path(tmp.name)
 
-        invoice = GINParser().parse(tmp_path)
+        parser_class = _parser_registry.auto_detect(tmp_path)
+        if parser_class is None:
+            return render_template(
+                "clientes/contratos/factura_calificado_upload.html",
+                cliente=cliente,
+                contrato=contrato,
+                nav_active=nav_active,
+                contrato_activo_id=contrato_activo_id,
+                error="Formato de factura no reconocido. El sistema acepta facturas de: "
+                      + ", ".join(e.nombre for e in _parser_registry.todos()),
+            )
+
+        invoice = parser_class().parse(tmp_path)
 
         form_data = {
             "suministrador": invoice.suministrador or "",
@@ -1966,7 +1978,7 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
 
     except Exception as exc:
         logger.error(
-            "Error parseando factura calificada GIN para contrato %d: %s: %s",
+            "Error parseando factura calificada para contrato %d: %s: %s",
             contrato_id, type(exc).__name__, exc, exc_info=True,
         )
         return render_template(
@@ -1975,7 +1987,7 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
             contrato=contrato,
             nav_active=nav_active,
             contrato_activo_id=contrato_activo_id,
-            error="No se pudo extraer los datos del PDF. Verifique que el archivo corresponde a una factura GIN válida.",
+            error="No se pudo extraer los datos del PDF. Revise que el archivo no esté dañado o protegido.",
         )
     finally:
         if tmp_path is not None:
