@@ -62,7 +62,7 @@ RE_UUID = re.compile(
 # [^0-9]+ cubre cualquier texto descriptivo sin dígitos (e.g. "Consumo de Energía Eléctrica").
 # La unidad puede aparecer como KWH, KWh, kwh — manejado por IGNORECASE.
 RE_CONSUMO = re.compile(
-    r'83101800\s+[^0-9]+([\d,]+\.?\d*)\s+KWH\s+([\d.]+)\s+([\d,]+\.\d{2})',
+    r'83101800\s+[^0-9]*([\d,]+\.?\d*)\s+KWH\s+([\d.]+)\s+([\d,]+\.\d{2})',
     re.IGNORECASE,
 )
 
