@@ -10,11 +10,17 @@ from parsers.electricidad_calificado.gin_gif import GINGIFParser, GINInvoice
 from parsers.registry import registry
 
 FIXTURE = Path("tests/fixtures/calificado/GIN_GIF_2025_02_FEBRERO.pdf")
+FIXTURE_ABR2025 = Path("tests/fixtures/calificado/GIN_GIF_2025_04_ABRIL.pdf")
 
 
 @pytest.fixture
 def invoice() -> GINInvoice:
     return GINGIFParser().parse(FIXTURE)
+
+
+@pytest.fixture
+def invoice_abr() -> GINInvoice:
+    return GINGIFParser().parse(FIXTURE_ABR2025)
 
 
 # ---------------------------------------------------------------------------
@@ -119,3 +125,67 @@ def test_registry_get_gin_gif():
     entrada = registry.get("GIN_GIF")
     assert entrada is not None
     assert entrada.rfc_emisor == "GIN040707G89"
+
+
+# ---------------------------------------------------------------------------
+# Variante Abril 2025 (RAZÓN SOCIAL: / RFC: prefijos, PERIODO uppercase, RPU)
+# ---------------------------------------------------------------------------
+
+def test_abr_devuelve_gin_invoice(invoice_abr):
+    assert isinstance(invoice_abr, GINInvoice)
+
+
+def test_abr_suministrador(invoice_abr):
+    assert invoice_abr.suministrador == "GENERACION INDUSTRIAL"
+
+
+def test_abr_rfc_suministrador(invoice_abr):
+    assert invoice_abr.rfc_suministrador == "GIN040707G89"
+
+
+def test_abr_rfc_receptor(invoice_abr):
+    assert invoice_abr.rfc_receptor == "ITI170630377"
+
+
+def test_abr_serie_folio(invoice_abr):
+    assert invoice_abr.serie_folio == "GIF-0522"
+
+
+def test_abr_fecha_factura(invoice_abr):
+    assert invoice_abr.fecha_factura == date(2025, 5, 9)
+
+
+def test_abr_periodo_inicio(invoice_abr):
+    assert invoice_abr.periodo_inicio == date(2025, 4, 1)
+
+
+def test_abr_periodo_fin(invoice_abr):
+    assert invoice_abr.periodo_fin == date(2025, 4, 30)
+
+
+def test_abr_rpu(invoice_abr):
+    assert invoice_abr.rpu == "052200951158"
+
+
+def test_abr_consumo_kwh(invoice_abr):
+    assert invoice_abr.consumo_kwh == Decimal("2792802")
+
+
+def test_abr_precio_unitario(invoice_abr):
+    assert invoice_abr.precio_unitario_mxn_kwh == Decimal("2.0103")
+
+
+def test_abr_subtotal_mxn(invoice_abr):
+    assert invoice_abr.subtotal_mxn == Decimal("5614344.10")
+
+
+def test_abr_iva_mxn(invoice_abr):
+    assert invoice_abr.iva_mxn == Decimal("898295.06")
+
+
+def test_abr_total_mxn(invoice_abr):
+    assert invoice_abr.total_mxn == Decimal("6512639.16")
+
+
+def test_abr_sin_advertencias(invoice_abr):
+    assert invoice_abr.advertencias == []

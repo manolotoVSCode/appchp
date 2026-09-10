@@ -13,26 +13,31 @@ from parsers.electricidad_calificado.gin import GINInvoice
 # ---------------------------------------------------------------------------
 # Regex — Formato GIF (GIN 2025, plantilla nueva)
 #
-# Texto característico (pdfplumber):
-#   GENERACION INDUSTRIAL
-#   GIN040707G89 SERIE: GIF          ← RFC y SERIE en la misma línea
-#   FOLIO: 0129
-#   FECHA: 2025-03-11T12:23:06
-#   R.F.C.: ITI170630377             ← receptor con prefijo "R.F.C.:"
-#   Periodo de facturación: del 2025-02-01 al 2025-02-28   ← fechas ISO
-#   83101800 Consumo de Energía Eléctrica 1,839,201.0000 KWH 2.1239 3,906,276.39
-#   IMPORTE CON LETRA SUBTOTAL
-#   $3,906,276.39                    ← importe en línea propia
-#   IMPUESTOS TRASLADADOS $625,004.22
-#   ... TOTAL
-#   $4,531,280.61
-#   FOLIO FISCAL: 22584568-2805-4167-9C85-92FECDFA01C7
+# Variante A (Feb 2025):                    Variante B (Abr 2025):
+#   GENERACION INDUSTRIAL                     RAZÓN SOCIAL: GENERACION INDUSTRIAL
+#   GIN040707G89 SERIE: GIF                   RFC: GIN040707G89 SERIE: GIF
+#   FOLIO: 0129                               FOLIO: 0522
+#   FECHA: 2025-03-11T12:23:06                FECHA: 2025-05-09T15:34:42
+#   R.F.C.: ITI170630377                      R.F.C.: ITI170630377
+#   Periodo de facturación: del ...           PERIODO DE FACTURACIÓN: DEL ...
+#   83101800 ... KWH ...                      83101800 ... KWH ...
+#   (sin RPU)                                 RPU 052200951158
+#   IMPORTE CON LETRA SUBTOTAL                IMPORTE CON LETRA SUBTOTAL
+#   $...                                      $...
+#   FOLIO FISCAL: ...                         FOLIO FISCAL: ...
 # ---------------------------------------------------------------------------
 
-RE_EMISOR_NOMBRE = re.compile(r'^(GENERACION\s+INDUSTRIAL[^\n]*)', re.IGNORECASE | re.MULTILINE)
+# Nombre emisor: con o sin prefijo "RAZÓN SOCIAL:"
+RE_EMISOR_NOMBRE = re.compile(
+    r'(?:RAZ[OÓ]N\s+SOCIAL:\s*)?(GENERACION\s+INDUSTRIAL\b[^\n]*)',
+    re.IGNORECASE | re.MULTILINE,
+)
 
-# RFC emisor: aparece al inicio de línea seguido de " SERIE:"
-RE_EMISOR_RFC = re.compile(r'^([A-Z&]{3,4}\d{6}[A-Z0-9]{3})\s+SERIE:', re.MULTILINE | re.IGNORECASE)
+# RFC emisor: con o sin prefijo "RFC:" — siempre seguido de " SERIE:"
+RE_EMISOR_RFC = re.compile(
+    r'(?:RFC:\s*)?([A-Z&]{3,4}\d{6}[A-Z0-9]{3})\s+SERIE:',
+    re.IGNORECASE,
+)
 
 # RFC receptor: precedido por "R.F.C.:"
 RE_RECEPTOR_RFC = re.compile(r'R\.F\.C\.\s*:\s*([A-Z&]{3,4}\d{6}[A-Z0-9]{3})', re.IGNORECASE)
@@ -46,11 +51,14 @@ RE_FOLIO = re.compile(r'FOLIO(?!\s+FISCAL):\s*(\d+)', re.IGNORECASE)
 # Fecha de emisión
 RE_FECHA = re.compile(r'FECHA:\s*(\d{4}-\d{2}-\d{2})T', re.IGNORECASE)
 
-# Periodo en fechas ISO
+# Periodo en fechas ISO — cubre "Periodo de facturación: del" y "PERIODO DE FACTURACIÓN: DEL"
 RE_PERIODO = re.compile(
-    r'Periodo de facturaci[oó]n:\s*del\s+(\d{4}-\d{2}-\d{2})\s+al\s+(\d{4}-\d{2}-\d{2})',
+    r'PERIODO\s+DE\s+FACTURACI[OÓoó]N:\s*DEL?\s+(\d{4}-\d{2}-\d{2})\s+AL?\s+(\d{4}-\d{2}-\d{2})',
     re.IGNORECASE,
 )
+
+# RPU: opcional — "RPU 052200951158" en línea propia (ausente en algunas facturas)
+RE_RPU = re.compile(r'^RPU\s+(\d+)', re.MULTILINE | re.IGNORECASE)
 
 # UUID: etiqueta explícita en este formato
 RE_UUID = re.compile(
@@ -206,6 +214,10 @@ class GINGIFParser(InvoiceParser):
         else:
             advertencias.append("Campo no encontrado: total_mxn")
 
+        # --- RPU (opcional) ---
+        m = RE_RPU.search(texto)
+        rpu = m.group(1) if m else None
+
         return GINInvoice(
             suministrador=suministrador,
             rfc_suministrador=rfc_suministrador,
@@ -215,7 +227,7 @@ class GINGIFParser(InvoiceParser):
             fecha_factura=fecha_factura,
             periodo_inicio=periodo_inicio,
             periodo_fin=periodo_fin,
-            rpu=None,   # No presente en formato GIF
+            rpu=rpu,
             consumo_kwh=consumo_kwh,
             precio_unitario_mxn_kwh=precio_unitario_mxn_kwh,
             subtotal_mxn=subtotal_mxn,
