@@ -1557,7 +1557,7 @@ def _validar_y_parsear_factura_calificado(form, contrato_id, cliente_id, excluir
     from decimal import Decimal, InvalidOperation
     from storage.repository import get_ppa_bloques_mensuales
 
-    rpu = form.get("rpu", "").strip()
+    rpu = form.get("rpu", "").strip() or None
     suministrador = form.get("suministrador", "").strip() or None
     serie_folio = form.get("serie_folio", "").strip() or None
     periodo_inicio_str = form.get("periodo_inicio", "").strip()
@@ -1569,9 +1569,7 @@ def _validar_y_parsear_factura_calificado(form, contrato_id, cliente_id, excluir
     total_str = form.get("total_mxn", "").strip()
 
     error = None
-    if not rpu:
-        error = "El RPU es obligatorio."
-    elif not periodo_inicio_str:
+    if not periodo_inicio_str:
         error = "El periodo de inicio es obligatorio."
     elif not periodo_fin_str:
         error = "El periodo de fin es obligatorio."
