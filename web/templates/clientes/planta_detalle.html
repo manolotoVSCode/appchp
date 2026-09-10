@@ -15,7 +15,7 @@
   {% if planta.direccion_planta %}
   <span class="text-muted small ms-1">— {{ planta.direccion_planta }}</span>
   {% endif %}
-  {% if es_admin %}
+  {% if puede_gestionar_contratos %}
   <a href="{{ url_for('clientes.planta_editar', cliente_id=cliente.id, planta_id=planta.id) }}"
      class="btn btn-sm btn-outline-primary ms-auto">Editar planta</a>
   {% endif %}
@@ -53,7 +53,7 @@
 <div class="mt-4">
   <div class="d-flex align-items-center justify-content-between mb-2">
     <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Contratos</h5>
-    {% if es_admin %}
+    {% if puede_gestionar_contratos %}
     <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}"
        class="btn btn-sm btn-primary">+ Nuevo contrato</a>
     {% endif %}
@@ -68,7 +68,7 @@
           <th>Tipo</th>
           <th>Identificador</th>
           <th>Notas</th>
-          {% if es_admin %}<th class="text-end">Acciones</th>{% endif %}
+          {% if puede_gestionar_contratos %}<th class="text-end">Acciones</th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -86,7 +86,7 @@
           </td>
           <td class="font-monospace">{{ c.identificador_real }}</td>
           <td class="text-muted">{{ c.notas or "—" }}</td>
-          {% if es_admin %}
+          {% if puede_gestionar_contratos %}
           <td class="text-end">
             <a href="{{ url_for('clientes.contrato_ficha', cliente_id=cliente.id, contrato_id=c.id) }}"
                class="btn btn-outline-secondary btn-sm">Ver</a>
@@ -105,7 +105,7 @@
   <div class="card shadow-sm">
     <div class="card-body text-center text-muted py-4">
       Sin contratos en esta planta.
-      {% if es_admin %}
+      {% if puede_gestionar_contratos %}
       <a href="{{ url_for('clientes.contrato_nuevo', cliente_id=cliente.id) }}">Crear primer contrato</a>
       {% endif %}
     </div>
@@ -186,6 +186,37 @@
   {% endif %}
 </div>
 
+{% if puede_gestionar_contratos %}
+<!-- Modal borrar contrato -->
+<div class="modal fade" id="modalBorrarContrato" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-danger">
+        <h5 class="modal-title text-danger">Borrar contrato</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Esta acción borrará permanentemente el contrato
+          <strong id="nombreContratoModal"></strong>.
+          Las facturas vinculadas quedarán sin contrato asignado.
+          <strong>No se puede deshacer.</strong>
+        </p>
+        <label class="form-label fw-semibold">Para confirmar, escriba el nombre exacto del contrato:</label>
+        <input type="text" id="inputConfirmacionContrato" class="form-control" placeholder="">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="POST" id="formBorrarContrato" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="confirmacion" id="hiddenConfirmacionContrato">
+          <button type="submit" id="btnBorrarContrato" class="btn btn-danger" disabled>Borrar permanentemente</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% if es_admin %}
 <!-- Modal borrar medición individual -->
 <div class="modal fade" id="modalBorrarMedicion" tabindex="-1">
@@ -227,38 +258,41 @@
   </div>
 </div>
 
-<!-- Modal borrar contrato -->
-<div class="modal fade" id="modalBorrarContrato" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header border-danger">
-        <h5 class="modal-title text-danger">Borrar contrato</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <p>Esta acción borrará permanentemente el contrato
-          <strong id="nombreContratoModal"></strong>.
-          Las facturas vinculadas quedarán sin contrato asignado.
-          <strong>No se puede deshacer.</strong>
-        </p>
-        <label class="form-label fw-semibold">Para confirmar, escriba el nombre exacto del contrato:</label>
-        <input type="text" id="inputConfirmacionContrato" class="form-control" placeholder="">
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <form method="POST" id="formBorrarContrato" style="display:inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="hidden" name="confirmacion" id="hiddenConfirmacionContrato">
-          <button type="submit" id="btnBorrarContrato" class="btn btn-danger" disabled>Borrar permanentemente</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
+{% if puede_gestionar_contratos %}
+<script>
+(function () {
+  const CLIENTE_ID = {{ cliente.id }};
+
+  // ── Modal borrar contrato ────────────────────────────────────────────────────
+  const modalBorrarContrato = document.getElementById("modalBorrarContrato");
+  if (modalBorrarContrato) {
+    let esperadoContrato = "";
+    modalBorrarContrato.addEventListener("show.bs.modal", function (event) {
+      const btn = event.relatedTarget;
+      const contratoId = btn.getAttribute("data-contrato-id");
+      esperadoContrato = btn.getAttribute("data-contrato-nombre");
+      document.getElementById("nombreContratoModal").textContent = esperadoContrato;
+      document.getElementById("inputConfirmacionContrato").value = "";
+      document.getElementById("inputConfirmacionContrato").placeholder = esperadoContrato;
+      document.getElementById("hiddenConfirmacionContrato").value = "";
+      document.getElementById("btnBorrarContrato").disabled = true;
+      document.getElementById("formBorrarContrato").action =
+        `/clientes/{{ cliente.id }}/contratos/${contratoId}/borrar`;
+    });
+    document.getElementById("inputConfirmacionContrato").addEventListener("input", function () {
+      const coincide = this.value === esperadoContrato;
+      document.getElementById("hiddenConfirmacionContrato").value = this.value;
+      document.getElementById("btnBorrarContrato").disabled = !coincide;
+    });
+  }
+})();
+</script>
+{% endif %}
+
 {% if es_admin %}
 <script>
 (function () {
@@ -420,28 +454,6 @@
     });
   }
 
-  // ── Modal borrar contrato ────────────────────────────────────────────────────
-  const modalBorrarContrato = document.getElementById("modalBorrarContrato");
-  if (modalBorrarContrato) {
-    let esperadoContrato = "";
-    modalBorrarContrato.addEventListener("show.bs.modal", function (event) {
-      const btn = event.relatedTarget;
-      const contratoId = btn.getAttribute("data-contrato-id");
-      esperadoContrato = btn.getAttribute("data-contrato-nombre");
-      document.getElementById("nombreContratoModal").textContent = esperadoContrato;
-      document.getElementById("inputConfirmacionContrato").value = "";
-      document.getElementById("inputConfirmacionContrato").placeholder = esperadoContrato;
-      document.getElementById("hiddenConfirmacionContrato").value = "";
-      document.getElementById("btnBorrarContrato").disabled = true;
-      document.getElementById("formBorrarContrato").action =
-        `/clientes/{{ cliente.id }}/contratos/${contratoId}/borrar`;
-    });
-    document.getElementById("inputConfirmacionContrato").addEventListener("input", function () {
-      const coincide = this.value === esperadoContrato;
-      document.getElementById("hiddenConfirmacionContrato").value = this.value;
-      document.getElementById("btnBorrarContrato").disabled = !coincide;
-    });
-  }
 })();
 </script>
 {% endif %}

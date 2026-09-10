@@ -745,6 +745,7 @@ def create_app() -> Flask:
         contratos = get_contratos_por_cliente(cliente_id, planta_id=planta_id)
         mediciones = get_mediciones_por_cliente(cliente_id, planta_id=planta_id)
         es_admin = user.get("rol") in ("admin", "master_admin")
+        puede_gestionar_contratos = user.get("rol") in ("admin", "master_admin", "usuario_normal")
 
         return render_template(
             "clientes/planta_detalle.html",
@@ -753,6 +754,7 @@ def create_app() -> Flask:
             contratos=contratos,
             mediciones=mediciones,
             es_admin=es_admin,
+            puede_gestionar_contratos=puede_gestionar_contratos,
         )
 
     @app.route("/clientes/<int:cliente_id>/dashboard")

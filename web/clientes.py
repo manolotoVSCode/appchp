@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 from web.auth import get_current_user as _get_current_user
-from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, usuario_puede_gestionar_contratos, filtrar_empresas_para_usuario, usuario_puede_ver_empresa
+from web.auth_permissions import usuario_puede_borrar, usuario_puede_crear, usuario_puede_gestionar_contratos, usuario_puede_gestionar_plantas, filtrar_empresas_para_usuario, usuario_puede_ver_empresa
 from web.error_logger import log_error
 from calc.excepciones import PeriodoIncompletoError
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
@@ -3085,7 +3085,7 @@ def activar_cliente(cliente_id: int):
 @clientes_bp.route("/<int:cliente_id>/planta/nueva", methods=["GET", "POST"])
 def planta_nueva(cliente_id: int):
     user = _get_current_user()
-    if not usuario_puede_crear(user or {}):
+    if not usuario_puede_gestionar_plantas(user or {}):
         flash("No tienes permisos para crear plantas.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 
@@ -3136,7 +3136,7 @@ def planta_nueva(cliente_id: int):
 @clientes_bp.route("/<int:cliente_id>/planta/<int:planta_id>/editar", methods=["GET", "POST"])
 def planta_editar(cliente_id: int, planta_id: int):
     user = _get_current_user()
-    if not usuario_puede_crear(user or {}):
+    if not usuario_puede_gestionar_plantas(user or {}):
         flash("No tienes permisos para editar plantas.", "danger")
         return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
 

@@ -432,7 +432,7 @@
 <div class="mt-5">
   <div class="d-flex align-items-center justify-content-between mb-2">
     <h5 class="fw-semibold mb-0" style="color:var(--color-primary-dark)">Plantas</h5>
-    {% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
+    {% if current_user_data %}
     <a href="{{ url_for('clientes.planta_nueva', cliente_id=cliente.id) }}"
        class="btn btn-sm btn-primary">+ Nueva planta</a>
     {% endif %}
@@ -490,7 +490,7 @@
   </div>
   {% else %}
   <p class="text-muted small">Sin plantas registradas.
-    {% if current_user_data and current_user_data.rol in ('admin', 'master_admin') %}
+    {% if current_user_data %}
     <a href="{{ url_for('clientes.planta_nueva', cliente_id=cliente.id) }}">Crear primera planta</a>
     {% endif %}
   </p>
