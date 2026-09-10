@@ -58,9 +58,11 @@ RE_UUID = re.compile(
     re.IGNORECASE,
 )
 
-# Consumo: "... Consumo de Energía Eléctrica <kwh> KWH <precio> <importe>"
+# Consumo: ancla en código de producto CFDI 83101800 (fijo), descripción flexible.
+# [^0-9]+ cubre cualquier texto descriptivo sin dígitos (e.g. "Consumo de Energía Eléctrica").
+# La unidad puede aparecer como KWH, KWh, kwh — manejado por IGNORECASE.
 RE_CONSUMO = re.compile(
-    r'Consumo de Energ[íi]a El[eé]ctrica\s+([\d,]+\.?\d*)\s+KWH\s+([\d.]+)\s+([\d,]+\.\d{2})',
+    r'83101800\s+[^0-9]+([\d,]+\.?\d*)\s+KWH\s+([\d.]+)\s+([\d,]+\.\d{2})',
     re.IGNORECASE,
 )
 
@@ -165,7 +167,14 @@ class GINGIFParser(InvoiceParser):
         # --- Consumo ---
         m = RE_CONSUMO.search(texto)
         if not m:
-            raise ValueError("No se encontró la línea de consumo KWH en el PDF GIN-GIF")
+            # Diagnóstico: extraer la línea que contiene 83101800 para el log
+            linea_diag = next(
+                (l.strip() for l in texto.splitlines() if "83101800" in l), "—"
+            )
+            raise ValueError(
+                f"No se encontró la línea de consumo KWH en el PDF GIN-GIF. "
+                f"Línea con código 83101800: {linea_diag!r}"
+            )
 
         consumo_kwh = _clean_decimal(m.group(1)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
         precio_unitario_mxn_kwh = Decimal(m.group(2))
