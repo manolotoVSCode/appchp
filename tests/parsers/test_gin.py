@@ -10,6 +10,7 @@ from parsers.electricidad_calificado.gin import GINParser, GINInvoice
 
 FIXTURE = Path("tests/fixtures/calificado/GIN_2024_09_SEPTIEMBRE.pdf")
 FIXTURE_MAYO = Path("tests/fixtures/calificado/GIN_2024_05_MAYO.pdf")
+FIXTURE_ENE2025 = Path("tests/fixtures/calificado/GIN_2025_01_ENERO.pdf")
 
 
 @pytest.fixture
@@ -142,3 +143,74 @@ def test_mayo_total_mxn(invoice_mayo):
 
 def test_mayo_sin_advertencias(invoice_mayo):
     assert invoice_mayo.advertencias == []
+
+
+# ---------------------------------------------------------------------------
+# Tests factura enero 2025 (folio con guión: GI01-001953)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def invoice_ene2025() -> GINInvoice:
+    parser = GINParser()
+    return parser.parse(FIXTURE_ENE2025)
+
+
+def test_ene2025_parser_devuelve_gin_invoice(invoice_ene2025):
+    assert isinstance(invoice_ene2025, GINInvoice)
+
+
+def test_ene2025_rfc_suministrador(invoice_ene2025):
+    assert invoice_ene2025.rfc_suministrador == "GIN040707G89"
+
+
+def test_ene2025_rfc_receptor(invoice_ene2025):
+    assert invoice_ene2025.rfc_receptor == "ITI170630377"
+
+
+def test_ene2025_serie_folio(invoice_ene2025):
+    # Formato 2025: guión como separador entre serie y folio
+    assert invoice_ene2025.serie_folio == "GI01-001953"
+
+
+def test_ene2025_folio_fiscal(invoice_ene2025):
+    assert invoice_ene2025.folio_fiscal == "9305435A-CCED-414F-8E09-244659D89101"
+
+
+def test_ene2025_fecha_factura(invoice_ene2025):
+    assert invoice_ene2025.fecha_factura == date(2025, 2, 11)
+
+
+def test_ene2025_periodo_inicio(invoice_ene2025):
+    assert invoice_ene2025.periodo_inicio == date(2025, 1, 1)
+
+
+def test_ene2025_periodo_fin(invoice_ene2025):
+    assert invoice_ene2025.periodo_fin == date(2025, 1, 31)
+
+
+def test_ene2025_rpu(invoice_ene2025):
+    assert invoice_ene2025.rpu == "52200951158"
+
+
+def test_ene2025_consumo_kwh(invoice_ene2025):
+    assert invoice_ene2025.consumo_kwh == Decimal("2438725")
+
+
+def test_ene2025_precio_unitario(invoice_ene2025):
+    assert invoice_ene2025.precio_unitario_mxn_kwh == Decimal("2.115100")
+
+
+def test_ene2025_subtotal_mxn(invoice_ene2025):
+    assert invoice_ene2025.subtotal_mxn == Decimal("5158147.25")
+
+
+def test_ene2025_iva_mxn(invoice_ene2025):
+    assert invoice_ene2025.iva_mxn == Decimal("825303.56")
+
+
+def test_ene2025_total_mxn(invoice_ene2025):
+    assert invoice_ene2025.total_mxn == Decimal("5983450.81")
+
+
+def test_ene2025_sin_advertencias(invoice_ene2025):
+    assert invoice_ene2025.advertencias == []

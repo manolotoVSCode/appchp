@@ -33,8 +33,8 @@ RE_EMISOR_NOMBRE = re.compile(r'^(GENERACION\s+INDUSTRIAL[^\n]*)', re.IGNORECASE
 # Línea ejemplo: "ITI170630377 Fecha 2024-10-09T00:00:00"
 RE_RECEPTOR_RFC = re.compile(r'^([A-Z&]{3,4}\d{6}[A-Z0-9]{3})\s+Fecha\b', re.MULTILINE)
 
-# Serie-Folio: "Serie - Folio GI01 01312"
-RE_SERIE_FOLIO = re.compile(r'Serie\s*-\s*Folio\s+([A-Z]{2,4}\d{2})\s+(\d{4,})', re.IGNORECASE)
+# Serie-Folio: "Serie - Folio GI01 01312" (2024, espacio) o "Serie - Folio GI01-001953" (2025, guión)
+RE_SERIE_FOLIO = re.compile(r'Serie\s*-\s*Folio\s+([A-Z]{2,4}\d{2})([-\s]+)(\d{4,})', re.IGNORECASE)
 
 # UUID CFDI — puede aparecer partido en dos líneas; se normaliza el texto
 RE_UUID = re.compile(
@@ -113,7 +113,7 @@ def _clean_decimal(s: str) -> Decimal:
 class GINParser(InvoiceParser):
     """Parser para facturas de electricidad calificada — emisor GIN (Generación Industrial)."""
 
-    VERSION = "1.0.0"
+    VERSION = "1.1.0"
 
     def parse(self, pdf_path: Path) -> GINInvoice:
         pdf_path = Path(pdf_path)
@@ -173,7 +173,9 @@ class GINParser(InvoiceParser):
         serie_folio: str | None = None
         m_sf = RE_SERIE_FOLIO.search(texto)
         if m_sf:
-            serie_folio = f"{m_sf.group(1)} {m_sf.group(2)}"
+            # Preservar el separador original: guión o espacio según la factura
+            sep = "-" if "-" in m_sf.group(2) else " "
+            serie_folio = f"{m_sf.group(1)}{sep}{m_sf.group(3)}"
         else:
             advertencias.append("Campo no encontrado: serie_folio")
 
