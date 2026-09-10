@@ -290,13 +290,31 @@ Funciones de repositorio (storage/repository.py): create_factura_calificado, get
 
 Sidebar y selección de meses: get_sidebar_data_contrato y get_meses_con_factura reciben contrato_tipo y despachan a la tabla correcta según sea electrico_basico o electrico_calificado. La selección de meses funciona igual que para contratos CFE.
 
-## Parser de facturas calificadas (GIN)
+## Parser de facturas calificadas (GIN y GIN-GIF)
 
 Módulo `parsers/electricidad_calificado/gin.py`. Clase `GINParser` hereda de `InvoiceParser`. Retorna dataclass `GINInvoice` con 15 campos: suministrador, rfc_suministrador, rfc_receptor, serie_folio, folio_fiscal, fecha_factura (date|None), periodo_inicio (date), periodo_fin (date), rpu, consumo_kwh (Decimal), precio_unitario_mxn_kwh (Decimal), subtotal_mxn (Decimal), iva_mxn (Decimal|None), total_mxn (Decimal|None), advertencias (list[str]). VERSION = "1.0.0". Fixture real: `tests/fixtures/calificado/GIN_2024_09_SEPTIEMBRE.pdf` (septiembre 2024, IBERICA TILES, GIN040707G89). Validado con 16 tests en `tests/parsers/test_gin.py`.
 
+Módulo `parsers/electricidad_calificado/gin_gif.py`. Clase `GINGIFParser`, dos variantes (Feb 2025 y Abr 2025). Fixtures: `GIN_GIF_2025_02_FEBRERO.pdf` y `GIN_GIF_2025_04_ABRIL.pdf`. Tests: `tests/parsers/test_gin_gif.py` (35 tests).
+
+## Parser de estados de cuenta NX Energía (NXE)
+
+Módulo `parsers/electricidad_calificado/nxe.py`. Clase `NXEParser` hereda de `InvoiceParser`. Retorna dataclass `NXEInvoice` (en `models/nxe_invoice.py`) con 27 campos. No es CFDI — es un estado de cuenta mensual. RFC emisor: NEN230613SE2.
+
+Campos principales: documento_ref, suministrador, rfc_suministrador, periodo_inicio/fin, 7 parámetros contratados, energia_consumida_kwh (campo principal de consumo), precio_monocomico_mxn_kwh (precio unitario), 5 categorías del resumen (cargo_energia_mxn, cargo_potencia_mxn, cargo_cel_mxn, cargos_regulados_mxn, ajustes_penalizaciones_mxn), cobro_total_mxn (total), detalle_diario (list[dict] con ≤31 días fusionando Tablas 1.1+1.2+1.3).
+
+Tabla de persistencia: `facturas_nxe`. Campos numéricos guardados como TEXT. Detalle diario como JSONB. UNIQUE(contrato_id, anio, mes). Funciones de repositorio: `create_factura_nxe`, `get_factura_nxe`, `get_facturas_nxe_por_contrato`, `delete_factura_nxe`. Modelo de dominio: `models/factura_nxe.py` (FacturaNXE).
+
+Las funciones `get_meses_con_factura` y `get_sidebar_data_contrato` consultan ambas tablas (`facturas_electricidad_calificado` y `facturas_nxe`) para contratos de tipo `electrico_calificado`. `get_sidebar_data_cliente` también incluye `facturas_nxe`.
+
+Nombre canónico: mismo formato que GIN → `"YYYY MES CALIFICADO NX ENERGIA S.A. DE C.V."` generado por `generar_nombre_canonico_calificado`.
+
+Fixture pendiente: `tests/fixtures/calificado/NXE_2025_08_AGOSTO.pdf` (copiar de "08.- Factura Ibérica Tiles Planta 1 definitivo_Agosto25_NXE.pdf"). Tests en `tests/parsers/test_nxe.py` (19 tests, skipif si no existe fixture).
+
+Registry: clave `"NXE"`, firma `r"NEN230613SE2"`.
+
 ## Upload de PDF calificado
 
-Ruta `GET/POST /<cliente_id>/contratos/<contrato_id>/factura_calificado/upload`. Parsea PDF con `GINParser`, muestra preview de campos editables en template `factura_calificado_preview.html`, usuario confirma y datos se guardan vía POST a endpoint `factura_calificado_crear` (existente). Template `factura_calificado_upload.html` para el formulario de carga. Botón "+ Subir factura PPA (PDF)" añadido a la ficha del contrato calificado.
+Ruta `GET/POST /<cliente_id>/contratos/<contrato_id>/factura_calificado/upload`. El parser se auto-detecta con `registry.auto_detect()`. Si el resultado es `NXEInvoice` (isinstance), muestra preview en `factura_nxe_preview.html` (solo lectura, con JSON serializado en campo oculto) y POST a `factura_nxe_guardar`. Si es `GINInvoice`, muestra `factura_calificado_preview.html` (editable) y POST a `factura_calificado_crear`. Ambos flujos soportan múltiples PDFs (bulk). En la ficha del contrato, las facturas NXE aparecen en sección separada "Facturas NX Energía" con botón de borrado directo (sin modal). Ruta de borrado: `POST /<cliente_id>/contratos/<contrato_id>/factura_nxe/<factura_id>/borrar` → `factura_nxe_borrar`.
 
 ## Bloqueo de mezcla CFE/PPA
 
@@ -402,14 +420,19 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.82.0 — D7-B completo. Pendiente del usuario: validar si
-fórmula pct_costo_especifico=100/m² es intencional.
-Pendiente: ejecutar migrations en Supabase:
-  - 202606_usuario_clientes.sql
-  - 202607_telemetria_jerarquia.sql
-  - 202608_produccion_diaria.sql
-  - 202609_mediciones_5min_horarias.sql
-  - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
+Último tema resuelto: v2.83.0 — Stack NXE completo: parser NXEParser, modelo
+FacturaNXE, tabla facturas_nxe, funciones repositorio, rutas web, templates
+factura_nxe_preview.html y sección en ficha contrato, 19 tests (skip si no fixture).
+Pendiente del usuario:
+  - Copiar "08.- Factura Ibérica Tiles Planta 1 definitivo_Agosto25_NXE.pdf"
+    a tests/fixtures/calificado/NXE_2025_08_AGOSTO.pdf y ejecutar tests.
+  - Ejecutar migration 202610_facturas_nxe.sql en Supabase.
+  - Ejecutar migrations previas aún pendientes:
+    - 202606_usuario_clientes.sql
+    - 202607_telemetria_jerarquia.sql
+    - 202608_produccion_diaria.sql
+    - 202609_mediciones_5min_horarias.sql
+    - ALTER TABLE clientes ADD COLUMN IF NOT EXISTS chp_session_params JSONB;
 
 ### Activos eléctricos
 Último tema resuelto: sistema de declaración de cambios de alimentación completo.

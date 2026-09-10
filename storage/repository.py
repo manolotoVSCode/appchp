@@ -16,6 +16,7 @@ from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.gas_invoice import GasInvoice, GasConcepto
 from models.contrato import Contrato, TIPO_ELECTRICO_CALIFICADO
 from models.factura_calificado import FacturaCalificado
+from models.factura_nxe import FacturaNXE
 from calc.nombre_canonico import generar_nombre_canonico
 from calc.periodo import mes_asociado as _mes_asociado
 from calc.modelado_chp import MODELADO_CHP_VERSION as _MODELADO_CHP_VERSION
@@ -866,14 +867,17 @@ def get_anios_con_facturas_por_contrato(contrato_id: int) -> list[int]:
 def get_meses_con_factura(contrato_id: int, anio: int, contrato_tipo: str = "") -> set[int]:
     """Retorna conjunto de meses (1-12) con al menos una factura en ese contrato/año.
 
-    Si contrato_tipo es 'electrico_calificado', consulta facturas_electricidad_calificado.
-    En cualquier otro caso consulta cfe_facturas + gas_facturas (comportamiento por defecto).
+    Si contrato_tipo es 'electrico_calificado', consulta facturas_electricidad_calificado
+    y facturas_nxe (union). En cualquier otro caso consulta cfe_facturas + gas_facturas.
     """
     if contrato_tipo == TIPO_ELECTRICO_CALIFICADO:
         cal = _supabase.table("facturas_electricidad_calificado").select("mes").eq(
             "contrato_id", contrato_id
         ).eq("anio", anio).not_.is_("mes", "null").execute()
-        return {r["mes"] for r in cal.data}
+        nxe = _supabase.table("facturas_nxe").select("mes").eq(
+            "contrato_id", contrato_id
+        ).eq("anio", anio).not_.is_("mes", "null").execute()
+        return {r["mes"] for r in cal.data} | {r["mes"] for r in nxe.data}
     cfe = _supabase.table("cfe_facturas").select("mes").eq("contrato_id", contrato_id).eq(
         "anio", anio
     ).not_.is_("mes", "null").execute()
@@ -980,11 +984,17 @@ def get_sidebar_data_contrato(contrato_id: int, contrato_tipo: str = "") -> list
     meses_por_anio: dict[int, set[int]] = defaultdict(set)
 
     if contrato_tipo == TIPO_ELECTRICO_CALIFICADO:
-        # Query 1: facturas calificado para este contrato
+        # Query 1: facturas calificado GIN/GIF para este contrato
         cal = _supabase.table("facturas_electricidad_calificado").select("anio, mes").eq(
             "contrato_id", contrato_id
         ).not_.is_("anio", "null").not_.is_("mes", "null").execute()
         for r in cal.data:
+            meses_por_anio[r["anio"]].add(r["mes"])
+        # Query 2: facturas NXE para este contrato
+        nxe = _supabase.table("facturas_nxe").select("anio, mes").eq(
+            "contrato_id", contrato_id
+        ).not_.is_("anio", "null").not_.is_("mes", "null").execute()
+        for r in nxe.data:
             meses_por_anio[r["anio"]].add(r["mes"])
     else:
         # Query 1: todos los (anio, mes) con factura CFE para este contrato
@@ -1048,8 +1058,17 @@ def get_sidebar_data_cliente(cliente_id: int) -> dict[int, list[dict]]:
     except Exception:
         cal_data = []
 
+    # Query 4 (adicional): todos los (contrato_id, anio, mes) NXE del cliente
+    try:
+        nxe = _supabase.table("facturas_nxe").select("contrato_id, anio, mes").eq(
+            "cliente_id", cliente_id
+        ).not_.is_("contrato_id", "null").not_.is_("anio", "null").not_.is_("mes", "null").execute()
+        nxe_data = nxe.data
+    except Exception:
+        nxe_data = []
+
     # Combinar todas las fuentes para determinar contrato_ids y agrupar meses con factura
-    todas = cfe.data + gas.data + cal_data
+    todas = cfe.data + gas.data + cal_data + nxe_data
     contrato_ids = {r["contrato_id"] for r in todas}
     if not contrato_ids:
         return {}
@@ -1321,6 +1340,100 @@ def update_factura_calificado(factura_id: int, datos: dict) -> None:
 def delete_factura_calificado(factura_id: int) -> None:
     """Borra una factura calificada por id."""
     _supabase.table("facturas_electricidad_calificado").delete().eq("id", factura_id).execute()
+
+
+# ── Facturas NXE (NX Energía — estado de cuenta mensual) ──────────────────────
+
+def _row_to_factura_nxe(row: dict) -> FacturaNXE:
+    """Convierte una fila de Supabase en un objeto FacturaNXE."""
+    def _d(v) -> Decimal | None:
+        return Decimal(str(v)) if v is not None else None
+
+    from datetime import datetime as _dt
+    return FacturaNXE(
+        id=row["id"],
+        contrato_id=row["contrato_id"],
+        cliente_id=row["cliente_id"],
+        documento_ref=row.get("documento_ref"),
+        suministrador=row.get("suministrador") or "NX ENERGIA S.A. DE C.V.",
+        rfc_suministrador=row.get("rfc_suministrador"),
+        periodo_inicio=date.fromisoformat(row["periodo_inicio"]) if isinstance(row["periodo_inicio"], str) else row["periodo_inicio"],
+        periodo_fin=date.fromisoformat(row["periodo_fin"]) if isinstance(row["periodo_fin"], str) else row["periodo_fin"],
+        anio=row.get("anio"),
+        mes=row.get("mes"),
+        nombre_canonico=row.get("nombre_canonico"),
+        precio_energia_usd_mwh=_d(row.get("precio_energia_usd_mwh")),
+        tipo_cambio_mxn_usd=_d(row.get("tipo_cambio_mxn_usd")),
+        precio_cels_usd=_d(row.get("precio_cels_usd")),
+        precio_potencia_usd_kwmes=_d(row.get("precio_potencia_usd_kwmes")),
+        factor_potencia_pct=_d(row.get("factor_potencia_pct")),
+        energia_contratada_kwh=_d(row.get("energia_contratada_kwh")),
+        potencia_contratada_kwmes=_d(row.get("potencia_contratada_kwmes")),
+        energia_consumida_kwh=Decimal(str(row["energia_consumida_kwh"])),
+        desviacion_pct=_d(row.get("desviacion_pct")),
+        precio_monocomico_mxn_kwh=_d(row.get("precio_monocomico_mxn_kwh")),
+        cargo_energia_mxn=_d(row.get("cargo_energia_mxn")),
+        cargo_potencia_mxn=_d(row.get("cargo_potencia_mxn")),
+        cargo_cel_mxn=_d(row.get("cargo_cel_mxn")),
+        cargos_regulados_mxn=_d(row.get("cargos_regulados_mxn")),
+        ajustes_penalizaciones_mxn=_d(row.get("ajustes_penalizaciones_mxn")),
+        cobro_total_mxn=Decimal(str(row["cobro_total_mxn"])),
+        cobro_energia_no_consumida_usd=_d(row.get("cobro_energia_no_consumida_usd")),
+        cobro_exceso_consumo_usd=_d(row.get("cobro_exceso_consumo_usd")),
+        costo_desvios_pdp_mxn=_d(row.get("costo_desvios_pdp_mxn")),
+        costo_reliquidaciones_mxn=_d(row.get("costo_reliquidaciones_mxn")),
+        tarifas_reguladas_mxn=_d(row.get("tarifas_reguladas_mxn")),
+        cargo_servicios_mem_mxn=_d(row.get("cargo_servicios_mem_mxn")),
+        detalle_diario=row.get("detalle_diario") or [],
+        advertencias=row.get("advertencias") or [],
+        pdf_url=row.get("pdf_url"),
+        parser_version=row.get("parser_version"),
+        created_at=row.get("created_at"),
+    )
+
+
+def create_factura_nxe(contrato_id: int, cliente_id: int, datos: dict) -> int:
+    """Inserta una nueva factura NXE. Devuelve el id asignado."""
+    _DECIMAL_FIELDS = {
+        "precio_energia_usd_mwh", "tipo_cambio_mxn_usd", "precio_cels_usd",
+        "precio_potencia_usd_kwmes", "factor_potencia_pct", "energia_contratada_kwh",
+        "potencia_contratada_kwmes", "energia_consumida_kwh", "desviacion_pct",
+        "precio_monocomico_mxn_kwh", "cargo_energia_mxn", "cargo_potencia_mxn",
+        "cargo_cel_mxn", "cargos_regulados_mxn", "ajustes_penalizaciones_mxn",
+        "cobro_total_mxn", "cobro_energia_no_consumida_usd", "cobro_exceso_consumo_usd",
+        "costo_desvios_pdp_mxn", "costo_reliquidaciones_mxn",
+        "tarifas_reguladas_mxn", "cargo_servicios_mem_mxn",
+    }
+    row: dict = {"contrato_id": contrato_id, "cliente_id": cliente_id}
+    for k, v in datos.items():
+        if k in _DECIMAL_FIELDS and isinstance(v, Decimal):
+            row[k] = str(v)
+        else:
+            row[k] = v
+    result = _supabase.table("facturas_nxe").insert(row).execute()
+    return result.data[0]["id"]
+
+
+def get_factura_nxe(factura_id: int) -> FacturaNXE | None:
+    """Devuelve una factura NXE por id, o None si no existe."""
+    result = _supabase.table("facturas_nxe").select("*").eq("id", factura_id).execute()
+    if not result.data:
+        return None
+    return _row_to_factura_nxe(result.data[0])
+
+
+def get_facturas_nxe_por_contrato(contrato_id: int) -> list[dict]:
+    """Devuelve campos básicos de las facturas NXE del contrato (para la ficha)."""
+    result = _supabase.table("facturas_nxe").select(
+        "id, nombre_canonico, documento_ref, periodo_inicio, periodo_fin, "
+        "energia_consumida_kwh, cobro_total_mxn"
+    ).eq("contrato_id", contrato_id).order("periodo_inicio").execute()
+    return result.data
+
+
+def delete_factura_nxe(factura_id: int) -> None:
+    """Borra una factura NXE por id."""
+    _supabase.table("facturas_nxe").delete().eq("id", factura_id).execute()
 
 
 def get_facturas_para_dashboard_calificado(

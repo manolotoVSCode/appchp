@@ -95,10 +95,14 @@ def _registrar_parsers() -> None:
     ├──────────────┼────────────────────────────────────────────────────────────┤
     │ GIN_GIF      │ GIN formato GIF (2025). "SERIE: GIF / FOLIO: NNNN".        │
     │              │ Periodo en fechas ISO. Sin RPU. Importes con $.            │
+    ├──────────────┼────────────────────────────────────────────────────────────┤
+    │ NXE          │ NX Energía estado de cuenta mensual. RFC NEN230613SE2.     │
+    │              │ No es CFDI. Cabecera "FACTURA - Mes AA". 5 categorías.     │
     └──────────────┴────────────────────────────────────────────────────────────┘
     """
     from parsers.electricidad_calificado.gin import GINParser
     from parsers.electricidad_calificado.gin_gif import GINGIFParser
+    from parsers.electricidad_calificado.nxe import NXEParser
 
     registry.registrar(ParserEntry(
         clave="GIN_A",
@@ -118,6 +122,16 @@ def _registrar_parsers() -> None:
         descripcion="Facturas 2025. 'SERIE: GIF / FOLIO: NNNN'. Periodo en fechas ISO. Sin RPU.",
         parser_class=GINGIFParser,
         firma=r"Periodo de facturaci[oó]n:\s*del\s+\d{4}-\d{2}-\d{2}\s+al\s+\d{4}-\d{2}-\d{2}",
+    ))
+
+    registry.registrar(ParserEntry(
+        clave="NXE",
+        nombre="NX Energía — Estado de cuenta mensual",
+        proveedor="NX ENERGIA S.A. DE C.V.",
+        rfc_emisor="NEN230613SE2",
+        descripcion="Estado de cuenta mensual. Cabecera 'FACTURA - Mes AA'. No es CFDI. 5 categorías de cargo.",
+        parser_class=NXEParser,
+        firma=r"NEN230613SE2",
     ))
 
 

@@ -212,7 +212,7 @@
 {% if facturas_calificado %}
 <div class="card shadow-sm mt-3">
   <div class="card-header fw-semibold small text-muted">
-    Facturas calificadas PPA ({{ facturas_calificado|length }})
+    Facturas calificadas PPA — GIN ({{ facturas_calificado|length }})
     <span class="fw-normal text-muted ms-1" style="font-size:.7rem">— La selección de meses se gestiona desde el sidebar</span>
   </div>
   <div class="table-responsive">
@@ -242,6 +242,46 @@
                     data-factura-id="{{ f.id }}"
                     data-factura-nombre="{{ f.nombre_canonico or 'sin nombre (id ' ~ f.id ~ ')' }}"
                     onclick="confirmarBorrarCalificado(this)">&#128465;</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if facturas_nxe %}
+<div class="card shadow-sm mt-3">
+  <div class="card-header fw-semibold small text-muted">
+    Facturas NX Energía ({{ facturas_nxe|length }})
+    <span class="fw-normal text-muted ms-1" style="font-size:.7rem">— La selección de meses se gestiona desde el sidebar</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Referencia</th>
+          <th>Periodo</th>
+          <th class="text-end">Consumo kWh</th>
+          <th class="text-end">Total MXN</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in facturas_nxe %}
+        <tr>
+          <td class="font-monospace small">{{ f.nombre_canonico or f.documento_ref or "—" }}</td>
+          <td class="small text-muted">{{ f.periodo_inicio }} – {{ f.periodo_fin }}</td>
+          <td class="text-end small">{{ "{:,.0f}".format(f.energia_consumida_kwh|float) }}</td>
+          <td class="text-end small">${{ "{:,.2f}".format(f.cobro_total_mxn|float) }}</td>
+          <td class="text-end">
+            <form action="{{ url_for('clientes.factura_nxe_borrar', cliente_id=cliente.id, contrato_id=contrato.id, factura_id=f.id) }}"
+                  method="POST" style="display:inline"
+                  onsubmit="return confirm('¿Borrar esta factura NXE?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2">&#128465;</button>
+            </form>
           </td>
         </tr>
         {% endfor %}

@@ -18,6 +18,7 @@ from calc.excepciones import PeriodoIncompletoError
 from calc.nombre_canonico import generar_nombre_canonico_calificado
 from models.cfe_invoice import CFEInvoice, CFEConsumoHorario, MEMComponente
 from models.contrato import TIPOS_VALIDOS, TIPOS_ELECTRICOS, TIPO_ELECTRICO_BASICO, TIPO_ELECTRICO_CALIFICADO
+from models.nxe_invoice import NXEInvoice
 from parsers.cfe import get_cfe_parser
 from parsers.gas import get_gas_parser
 from parsers.registry import registry as _parser_registry
@@ -60,6 +61,9 @@ from storage.repository import (
     get_factura_calificado,
     update_factura_calificado,
     delete_factura_calificado,
+    create_factura_nxe,
+    get_facturas_nxe_por_contrato,
+    delete_factura_nxe,
     get_tipos_electricos_con_meses_seleccionados,
     update_precio_gas_manual,
     get_ultimas_cfe_invoices,
@@ -902,6 +906,10 @@ def contrato_ficha(cliente_id: int, contrato_id: int):
         facturas_calificado = get_facturas_calificado_por_contrato(contrato_id)
     except Exception:
         facturas_calificado = []
+    try:
+        facturas_nxe = get_facturas_nxe_por_contrato(contrato_id)
+    except Exception:
+        facturas_nxe = []
 
     return render_template(
         "clientes/contratos/ficha.html",
@@ -910,6 +918,7 @@ def contrato_ficha(cliente_id: int, contrato_id: int):
         facturas_cfe=facturas_cfe,
         facturas_gas=facturas_gas,
         facturas_calificado=facturas_calificado,
+        facturas_nxe=facturas_nxe,
     )
 
 
@@ -1876,7 +1885,152 @@ def factura_calificado_borrar(cliente_id: int, contrato_id: int, factura_id: int
     ))
 
 
-# ── Upload PDF factura calificada (GIN) ────────────────────────────────────────
+# ── Facturas NXE (NX Energía — estado de cuenta mensual) ─────────────────────
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/factura_nxe/guardar",
+    methods=["POST"],
+)
+def factura_nxe_guardar(cliente_id: int, contrato_id: int):
+    """Recibe el JSON de un NXEInvoice parseado y lo persiste en facturas_nxe."""
+    from flask import Response
+
+    user = _get_current_user()
+    if not usuario_puede_gestionar_contratos(user or {}):
+        flash("No tienes permisos para guardar facturas.", "danger")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    if isinstance(resultado, Response):
+        return resultado
+    contrato = resultado
+
+    if contrato.tipo != TIPO_ELECTRICO_CALIFICADO:
+        flash("Este contrato no es de tipo eléctrico calificado.", "warning")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    raw = request.form.get("invoice_json", "")
+    if not raw:
+        flash("No se recibieron datos de la factura.", "danger")
+        return redirect(url_for("clientes.factura_calificado_upload", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    try:
+        data = _json.loads(raw)
+    except _json.JSONDecodeError:
+        flash("Error al leer los datos de la factura.", "danger")
+        return redirect(url_for("clientes.factura_calificado_upload", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    from datetime import date as _date
+    periodo_inicio = _date.fromisoformat(data["periodo_inicio"])
+    periodo_fin = _date.fromisoformat(data["periodo_fin"])
+
+    from calc.nombre_canonico import generar_nombre_canonico_calificado
+    nombre_canonico = generar_nombre_canonico_calificado(
+        periodo_inicio, periodo_fin, data.get("suministrador")
+    )
+    anio = periodo_inicio.year
+    mes = periodo_inicio.month
+
+    # Verificar duplicado
+    existing_nxe = get_facturas_nxe_por_contrato(contrato_id)
+    for f in existing_nxe:
+        if f.get("anio") == anio and f.get("mes") == mes:
+            flash(f"Ya existe una factura NXE para {anio}/{mes:02d} en este contrato.", "warning")
+            return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    def _d(v) -> Decimal | None:
+        return Decimal(v) if v is not None else None
+
+    datos = {
+        "documento_ref": data.get("documento_ref"),
+        "suministrador": data.get("suministrador", "NX ENERGIA S.A. DE C.V."),
+        "rfc_suministrador": data.get("rfc_suministrador"),
+        "periodo_inicio": periodo_inicio.isoformat(),
+        "periodo_fin": periodo_fin.isoformat(),
+        "anio": anio,
+        "mes": mes,
+        "nombre_canonico": nombre_canonico,
+        "precio_energia_usd_mwh": data.get("precio_energia_usd_mwh"),
+        "tipo_cambio_mxn_usd": data.get("tipo_cambio_mxn_usd"),
+        "precio_cels_usd": data.get("precio_cels_usd"),
+        "precio_potencia_usd_kwmes": data.get("precio_potencia_usd_kwmes"),
+        "factor_potencia_pct": data.get("factor_potencia_pct"),
+        "energia_contratada_kwh": data.get("energia_contratada_kwh"),
+        "potencia_contratada_kwmes": data.get("potencia_contratada_kwmes"),
+        "energia_consumida_kwh": data["energia_consumida_kwh"],
+        "desviacion_pct": data.get("desviacion_pct"),
+        "precio_monocomico_mxn_kwh": data.get("precio_monocomico_mxn_kwh"),
+        "cargo_energia_mxn": data.get("cargo_energia_mxn"),
+        "cargo_potencia_mxn": data.get("cargo_potencia_mxn"),
+        "cargo_cel_mxn": data.get("cargo_cel_mxn"),
+        "cargos_regulados_mxn": data.get("cargos_regulados_mxn"),
+        "ajustes_penalizaciones_mxn": data.get("ajustes_penalizaciones_mxn"),
+        "cobro_total_mxn": data["cobro_total_mxn"],
+        "cobro_energia_no_consumida_usd": data.get("cobro_energia_no_consumida_usd"),
+        "cobro_exceso_consumo_usd": data.get("cobro_exceso_consumo_usd"),
+        "costo_desvios_pdp_mxn": data.get("costo_desvios_pdp_mxn"),
+        "costo_reliquidaciones_mxn": data.get("costo_reliquidaciones_mxn"),
+        "tarifas_reguladas_mxn": data.get("tarifas_reguladas_mxn"),
+        "cargo_servicios_mem_mxn": data.get("cargo_servicios_mem_mxn"),
+        "detalle_diario": data.get("detalle_diario", []),
+        "advertencias": data.get("advertencias", []),
+        "parser_version": data.get("parser_version"),
+    }
+
+    try:
+        factura_id = create_factura_nxe(contrato_id, cliente_id, datos)
+        logger.info("Factura NXE guardada: id=%d, contrato_id=%d", factura_id, contrato_id)
+        flash("Factura NXE guardada correctamente.", "success")
+    except Exception as exc:
+        logger.error("Error guardando factura NXE contrato %d: %s", contrato_id, exc, exc_info=True)
+        flash(f"Error al guardar: {exc}", "danger")
+
+    return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+
+@clientes_bp.route(
+    "/<int:cliente_id>/contratos/<int:contrato_id>/factura_nxe/<int:factura_id>/borrar",
+    methods=["POST"],
+)
+def factura_nxe_borrar(cliente_id: int, contrato_id: int, factura_id: int):
+    from flask import Response
+
+    user = _get_current_user()
+    if not usuario_puede_gestionar_contratos(user or {}):
+        flash("No tienes permisos para borrar facturas.", "danger")
+        return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+    cliente = get_cliente_con_conteos(cliente_id)
+    if cliente is None:
+        flash("El cliente solicitado no existe.", "warning")
+        return redirect(url_for("clientes.listado"))
+
+    resultado = _verificar_acceso_contrato(contrato_id, cliente_id)
+    if resultado is None:
+        flash("El contrato solicitado no existe.", "warning")
+        return redirect(url_for("clientes.ficha", cliente_id=cliente_id))
+    if isinstance(resultado, Response):
+        return resultado
+
+    try:
+        delete_factura_nxe(factura_id)
+        flash("Factura NXE borrada.", "success")
+    except Exception as exc:
+        logger.error("Error borrando factura NXE id=%d: %s", factura_id, exc)
+        flash(f"Error al borrar: {exc}", "danger")
+
+    return redirect(url_for("clientes.contrato_ficha", cliente_id=cliente_id, contrato_id=contrato_id))
+
+
+# ── Upload PDF factura calificada (GIN / NXE) ──────────────────────────────────
 
 @clientes_bp.route(
     "/<int:cliente_id>/contratos/<int:contrato_id>/factura_calificado/upload",
@@ -1947,6 +2101,44 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
             "total_mxn": str(inv.total_mxn) if inv.total_mxn is not None else "",
         }
 
+    def _nxe_invoice_to_json(inv: NXEInvoice) -> str:
+        """Serializa NXEInvoice a JSON para el campo oculto del formulario de confirmación."""
+        def _s(v) -> str | None:
+            return str(v) if v is not None else None
+
+        return _json.dumps({
+            "documento_ref": inv.documento_ref,
+            "suministrador": inv.suministrador,
+            "rfc_suministrador": inv.rfc_suministrador,
+            "periodo_inicio": inv.periodo_inicio.isoformat(),
+            "periodo_fin": inv.periodo_fin.isoformat(),
+            "precio_energia_usd_mwh": _s(inv.precio_energia_usd_mwh),
+            "tipo_cambio_mxn_usd": _s(inv.tipo_cambio_mxn_usd),
+            "precio_cels_usd": _s(inv.precio_cels_usd),
+            "precio_potencia_usd_kwmes": _s(inv.precio_potencia_usd_kwmes),
+            "factor_potencia_pct": _s(inv.factor_potencia_pct),
+            "energia_contratada_kwh": _s(inv.energia_contratada_kwh),
+            "potencia_contratada_kwmes": _s(inv.potencia_contratada_kwmes),
+            "energia_consumida_kwh": str(inv.energia_consumida_kwh),
+            "desviacion_pct": _s(inv.desviacion_pct),
+            "precio_monocomico_mxn_kwh": _s(inv.precio_monocomico_mxn_kwh),
+            "cargo_energia_mxn": _s(inv.cargo_energia_mxn),
+            "cargo_potencia_mxn": _s(inv.cargo_potencia_mxn),
+            "cargo_cel_mxn": _s(inv.cargo_cel_mxn),
+            "cargos_regulados_mxn": _s(inv.cargos_regulados_mxn),
+            "ajustes_penalizaciones_mxn": _s(inv.ajustes_penalizaciones_mxn),
+            "cobro_total_mxn": str(inv.cobro_total_mxn),
+            "cobro_energia_no_consumida_usd": _s(inv.cobro_energia_no_consumida_usd),
+            "cobro_exceso_consumo_usd": _s(inv.cobro_exceso_consumo_usd),
+            "costo_desvios_pdp_mxn": _s(inv.costo_desvios_pdp_mxn),
+            "costo_reliquidaciones_mxn": _s(inv.costo_reliquidaciones_mxn),
+            "tarifas_reguladas_mxn": _s(inv.tarifas_reguladas_mxn),
+            "cargo_servicios_mem_mxn": _s(inv.cargo_servicios_mem_mxn),
+            "detalle_diario": inv.detalle_diario,
+            "advertencias": inv.advertencias,
+            "parser_version": inv.parser_version,
+        })
+
     # Caso único: flujo existente con preview editable
     if len(files) == 1:
         tmp_path = None
@@ -1968,6 +2160,18 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
                 )
 
             invoice = parser_class().parse(tmp_path)
+
+            if isinstance(invoice, NXEInvoice):
+                return render_template(
+                    "clientes/contratos/factura_nxe_preview.html",
+                    cliente=cliente,
+                    contrato=contrato,
+                    nav_active=nav_active,
+                    contrato_activo_id=contrato_activo_id,
+                    invoice=invoice,
+                    invoice_json=_nxe_invoice_to_json(invoice),
+                )
+
             return render_template(
                 "clientes/contratos/factura_calificado_preview.html",
                 cliente=cliente,
@@ -1996,7 +2200,11 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
 
     # Caso múltiple: parsear todos y mostrar tabla de confirmación
     existing = get_facturas_calificado_por_contrato(contrato_id)
-    existing_set = {(f.get("anio"), f.get("mes")) for f in existing}
+    existing_nxe = get_facturas_nxe_por_contrato(contrato_id)
+    existing_set = (
+        {(f.get("anio"), f.get("mes")) for f in existing}
+        | {(f.get("anio"), f.get("mes")) for f in existing_nxe}
+    )
 
     resultados = []
     tmp_paths = []
@@ -2022,10 +2230,12 @@ def factura_calificado_upload(cliente_id: int, contrato_id: int):
                 invoice = parser_class().parse(tmp_path)
                 anio = invoice.periodo_fin.year
                 mes = invoice.periodo_fin.month
+                es_nxe = isinstance(invoice, NXEInvoice)
                 resultados.append({
                     "filename": file.filename,
                     "invoice": invoice,
-                    "form_data": _invoice_to_form_data(invoice),
+                    "form_data": _nxe_invoice_to_json(invoice) if es_nxe else _invoice_to_form_data(invoice),
+                    "tipo": "nxe" if es_nxe else "gin",
                     "error": None,
                     "ya_existe": (anio, mes) in existing_set,
                 })
