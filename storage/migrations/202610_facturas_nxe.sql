@@ -2,10 +2,12 @@
 -- Crea la tabla facturas_nxe para estados de cuenta de NX Energía S.A. de C.V.
 -- No es un CFDI. Contiene parámetros contratados, 5 categorías de resumen y detalle diario JSONB.
 
-CREATE TABLE IF NOT EXISTS facturas_nxe (
+SET search_path = public;
+
+CREATE TABLE IF NOT EXISTS public.facturas_nxe (
     id                              SERIAL PRIMARY KEY,
-    contrato_id                     INTEGER NOT NULL REFERENCES contratos(id) ON DELETE CASCADE,
-    cliente_id                      INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    contrato_id                     INTEGER NOT NULL REFERENCES public.contratos(id) ON DELETE CASCADE,
+    cliente_id                      INTEGER NOT NULL REFERENCES public.clientes(id) ON DELETE CASCADE,
     -- Identificación
     documento_ref                   TEXT,
     suministrador                   TEXT NOT NULL DEFAULT 'NX ENERGIA S.A. DE C.V.',
@@ -53,6 +55,6 @@ CREATE TABLE IF NOT EXISTS facturas_nxe (
     UNIQUE(contrato_id, anio, mes)
 );
 
-CREATE INDEX IF NOT EXISTS idx_facturas_nxe_cliente  ON facturas_nxe(cliente_id);
-CREATE INDEX IF NOT EXISTS idx_facturas_nxe_contrato ON facturas_nxe(contrato_id);
-CREATE INDEX IF NOT EXISTS idx_facturas_nxe_anio_mes ON facturas_nxe(anio, mes);
+CREATE INDEX IF NOT EXISTS idx_facturas_nxe_cliente  ON public.facturas_nxe(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_facturas_nxe_contrato ON public.facturas_nxe(contrato_id);
+CREATE INDEX IF NOT EXISTS idx_facturas_nxe_anio_mes ON public.facturas_nxe(anio, mes);
