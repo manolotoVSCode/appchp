@@ -89,6 +89,71 @@ def _table_data_rows(table: list[list] | None) -> list[list]:
     return [row for row in table if _is_date_row(row)]
 
 
+def _rows_tabla13_from_text(text: str) -> list[list]:
+    """
+    Extrae filas de datos de Tabla 1.3 desde texto plano de la página.
+    Produce listas de 10 elementos (misma estructura que extract_table),
+    con None en la columna basura (índice 7).
+    Los valores monetarios pueden tener espacios inyectados (p.ej. "$ 2 ,385,418.75").
+    """
+    rows: list[list] = []
+    for m in _RE_DATE_LINE.finditer(text):
+        date_str = m.group(1)
+        rest = m.group(2)
+        amts = [(s + v) for s, v in _RE_AMT.findall(rest)]
+        if len(amts) < 6:
+            continue
+        # 8 importes en texto → cols 1..6 (energia..pdp), None en col 7, cols 8..9 (total, reliq)
+        row: list = [date_str] + amts[:6] + [None]
+        if len(amts) >= 7:
+            row.append(amts[6])   # col 8: total
+        else:
+            row.append(None)
+        if len(amts) >= 8:
+            row.append(amts[7])   # col 9: reliquidaciones
+        else:
+            row.append(None)
+        rows.append(row)
+    return rows
+
+
+def _rows_tabla11_from_text(text: str) -> list[list]:
+    """
+    Extrae filas de datos de Tabla 1.1 desde texto plano (valores sin signo $).
+    Produce listas de 5 elementos: [fecha, pron_mwh, consumo_sin_perd, consumo_con_perd, perd_tec].
+    """
+    rows: list[list] = []
+    for m in _RE_DATE_LINE.finditer(text):
+        date_str = m.group(1)
+        rest = m.group(2)
+        vals = re.findall(r'[\d,]+\.\d+', rest)
+        if not vals:
+            continue
+        rows.append([date_str] + vals)
+    return rows
+
+
+def _rows_tabla12_from_text(text: str) -> list[list]:
+    """
+    Extrae filas de datos de Tabla 1.2 desde texto plano.
+    Produce listas de 7 elementos: [fecha, perd_tec_no_tec, dist, trans, sc_no_mem, oper, gsi].
+    Los valores pueden tener $ o ser decimales sin $.
+    """
+    rows: list[list] = []
+    for m in _RE_DATE_LINE.finditer(text):
+        date_str = m.group(1)
+        rest = m.group(2)
+        # Tabla 1.2 puede tener $ o no según la versión del PDF
+        if '$' in rest:
+            amts = [(s + v) for s, v in _RE_AMT.findall(rest)]
+        else:
+            amts = re.findall(r'-?[\d,]+\.\d+', rest)
+        if not amts:
+            continue
+        rows.append([date_str] + list(amts))
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Regexes — página 1
 # ---------------------------------------------------------------------------
@@ -105,57 +170,94 @@ RE_PRECIO_ENERGIA    = re.compile(r'Precio\s+Energ[íi]a\s*\([^)]*\)\s*\$\s*([\d
 RE_TIPO_CAMBIO       = re.compile(r'Tipo\s+de\s+Cambio\s+\$\s*([\d.]+)', re.IGNORECASE)
 RE_PRECIO_CELS       = re.compile(r'Precio\s+CELS?\s*\([^)]*\)\s*\$\s*([\d.]+)', re.IGNORECASE)
 RE_PRECIO_POTENCIA   = re.compile(r'Precio\s+de\s+Potencia\s*\([^)]*\)\s*\$\s*([\d.]+)', re.IGNORECASE)
-RE_FACTOR_POTENCIA   = re.compile(r'Factor\s+de\s+Potencia\s+([\d.]+)%', re.IGNORECASE)
 RE_PRECIO_MONOCOMICO = re.compile(r'Precio\s+Mon[oó]mico\s*\([^)]*\)\s*\$\s*([\d.]+)', re.IGNORECASE)
-RE_TARIFAS_REG       = re.compile(r'Monto\s+de\s+las\s+Tarifas\s+Reguladas\s*\([^)]*\)\s*\$([\d,]+)', re.IGNORECASE)
-RE_SERV_COMP         = re.compile(r'Costo\s+por\s+Servicios\s+Complementarios\s*\([^)]*\)\s*\$([\d,]+)', re.IGNORECASE)
 RE_PAGO_PROV_CEL     = re.compile(r'Pago\s+Provisional\s+CEL\s*\([^)]*\)\s*\$\s*([\d,]+\.\d{2})', re.IGNORECASE)
 RE_REQ_CELS          = re.compile(r'Requerimiento\s+de\s+CELs?\s+estimado\s*\([^)]*\)\s*([\d.]+)', re.IGNORECASE)
 
-# Valores standalone con contexto (el layout de dos columnas separa etiqueta de valor)
+# Layout de dos columnas: en página 1 las columnas se entrelazan.
+# Los siguientes campos tienen el valor en la línea SIGUIENTE a la etiqueta.
+
+# "Factor de Potencia\n93.03%"
+RE_FACTOR_POTENCIA = re.compile(r'Factor\s+de\s+Potencia\s*\n\s*([\d.]+)%', re.IGNORECASE)
+
+# "Energía Contratada (KWh) <junk-col-derecha>\n2,608,522 (USD/CEL)"
 RE_ENERGIA_CONTRATADA = re.compile(
-    r'([\d,]+)\s*\n\s*Precio\s+de\s+referencia\s+por\s+CELs', re.IGNORECASE,
+    r'Energ[íi]a\s+Contratada\s*\([^)]*\)[^\n]*\n\s*([\d,]+)', re.IGNORECASE,
 )
+
+# "Energía Consumida (KWh) <junk>\n2,413,311 estimado"
 RE_ENERGIA_CONSUMIDA_CTX = re.compile(
-    r'([\d,]+)\s*\n\s*Requerimiento\s+de\s+CELs', re.IGNORECASE,
+    r'Energ[íi]a\s+Consumida\s*\([^)]*\)[^\n]*\n\s*([\d,]+)', re.IGNORECASE,
 )
+
+# "Desviación de consumo vs energía contratada $1,197,088\n-7.48% Reguladas (MXN)"
+# El porcentaje aparece en la línea siguiente; el monto (tarifas_reguladas) en la misma.
 RE_DESVIACION = re.compile(
-    r'(-?\d+[\.,]\d+)%\s*\n\s*Monto\s+de\s+las\s+Tarifas', re.IGNORECASE,
+    r'Desviaci[oó]n\s+de\s+consumo[^\n]*\n\s*(-?\d+[\.,]\d+)%', re.IGNORECASE,
+)
+RE_TARIFAS_REG = re.compile(
+    r'Desviaci[oó]n\s+de\s+consumo[^\n]*\$([\d,]+)', re.IGNORECASE,
+)
+
+# "Cobro por energía no consumida (2.5.2) $312,879\n$ 991.07 Complementarios (MXN)"
+# El importe del cobro (servicios MEM / cargos regulados) aparece en la misma línea;
+# el cobro_energia_no_consumida es el valor antes de "Complementarios" en la línea sig.
+RE_SERV_COMP = re.compile(
+    r'Cobro\s+por\s+energ[íi]a\s+no\s+consumida[^\n]*\$([\d,]+)', re.IGNORECASE,
 )
 RE_COBRO_NO_CONSUMIDA = re.compile(
-    r'\$\s*([\d,]+\.\d{2})\s*\n\s*Costo\s+por\s+Servicios\s+Complementarios', re.IGNORECASE,
+    r'\$\s*([\d,]+\.\d{2})\s+Complementarios', re.IGNORECASE,
 )
+
 RE_COBRO_EXCESO_CERO = re.compile(
-    r'Costo\s+por\s+Servicios.*?\n\s*\$\s*-\s*\n', re.IGNORECASE | re.DOTALL,
+    r'\$\s*-\s*\n', re.IGNORECASE,
 )
 
-# Bloque de cola: secuencia de valores después de "Precio Monómico ... $ X.XXXX"
-# Captura: potencia_contratada, precio_mensual_potencia, pago_provisional_potencia,
-#          costo_pdp, costo_reliquidaciones, cobro_total
-RE_TAIL_BLOCK = re.compile(
-    r'Precio\s+Mon[oó]mico\s*\([^)]*\)\s*\$\s*[\d.]+\s*\n'
-    r'\s*([\d,]+)\s*\n'               # 1: potencia_contratada
-    r'\s*\$\s*([\d.]+)\s*\n'          # 2: precio_mensual_potencia
-    r'\s*\$\s*([\d,]+\.\d{2})\s*\n'   # 3: pago_provisional_potencia
-    r'\s*\$([\d,]+)\s*\n'             # 4: costo_pdp
-    r'\s*\$([\d,]+)\s*\n'             # 5: costo_reliquidaciones
-    r'\s*\$\s*([\d,]+\.\d{2})',       # 6: cobro_total
-    re.IGNORECASE,
+# Campos etiquetados en la parte inferior de la página 1 (una sola línea cada uno)
+# "Potencia Contratada (KWmes) 2,609"
+RE_POTENCIA_CONTRATADA_CTX = re.compile(
+    r'Potencia\s+Contratada\s*\([^)]*\)\s+([\d,]+)', re.IGNORECASE,
+)
+# "Costo de desvíos (PDP) (MXN) $30,840"
+RE_COSTO_PDP = re.compile(
+    r'Costo\s+de\s+desv[íi]os[^$\n]*\$\s*([\d,]+)', re.IGNORECASE,
+)
+# "Costo por Reliquidaciones (MXN) $19,720"
+RE_COSTO_RELIQ = re.compile(
+    r'Costo\s+por\s+Reliquidaciones\s*\([^)]*\)\s*\$\s*([\d,]+)', re.IGNORECASE,
+)
+# "Cobro total (MXN) $ 5,111,624.74"
+RE_COBRO_TOTAL = re.compile(
+    r'Cobro\s+total\s*\([^)]*\)\s*\$\s*([\d,]+\.\d{2})', re.IGNORECASE,
 )
 
-# Regex de respaldo para totales de Tabla 1.3 (texto plano)
+# Regex de respaldo para totales de Tabla 1.3 (texto plano de página 6)
 RE_TOTALES_13 = re.compile(
+    # Los valores pueden tener espacios inyectados por el renderizador PDF, p.ej. "$ 2 ,385,418.75"
+    # [\d][\d\s,]* captura el número con espacios; _clean() los elimina después.
     r'[Tt]otales\s+'
-    r'\$\s*([\d,]+\.\d{2})\s+'   # 1: cargo_energia
-    r'\$\s*([\d,]+\.\d{2})\s+'   # 2: cargo_cel
-    r'\$\s*([\d,]+\.\d{2})\s+'   # 3: cargo_potencia
-    r'\$\s*([\d,]+\.\d{2})\s+'   # 4: cargos_regulados
-    r'\$\s*([\d,]+\.\d{2})\s+'   # 5: cargo_servicios_mem
-    r'\$\s*([\d,]+\.\d{2})\s+'   # 6: desvios_pdp
-    r'\$\s*([\d,]+\.\d{2})\s+'   # 7: cobro_total
-    r'\$\s*([\d,]+)',             # 8: reliquidaciones
+    r'\$\s*([\d][\d\s,]*\.\d{2})\s+'   # 1: cargo_energia
+    r'\$\s*([\d][\d\s,]*\.\d{2})\s+'   # 2: cargo_cel
+    r'\$\s*([\d][\d\s,]*\.\d{2})\s+'   # 3: cargo_potencia
+    r'\$\s*([\d][\d\s,]*\.\d{2})\s+'   # 4: cargos_regulados
+    r'\$\s*([\d][\d\s,]*\.\d{2})\s+'   # 5: cargo_servicios_mem
+    r'\$\s*([\d][\d\s,]*\.\d{2})\s+'   # 6: desvios_pdp
+    r'\$\s*([\d][\d\s,]*\.\d{2})\s+'   # 7: cobro_total
+    r'\$\s*([\d][\d\s,]*(?:\.\d+)?)',   # 8: reliquidaciones (puede venir sin decimales)
     re.IGNORECASE,
 )
+
+# ---------------------------------------------------------------------------
+# Regexes y helpers para parseo de datos diarios desde texto (pdfplumber
+# sólo extrae la cabecera como tabla; los datos vienen del texto plano)
+# ---------------------------------------------------------------------------
+
+# Línea con fecha DD/MM/YYYY seguida del resto de la fila
+_RE_DATE_LINE = re.compile(r'^(\d{2}/\d{2}/\d{4})\s+(.*)', re.MULTILINE)
+
+# Importe en formato "$ 1,234.56", "$ 1 ,234.56", "-$ 1,234.56", "$ -"
+# Captura: (signo, parte_numérica) — signo puede ser '' o '-'
+_RE_AMT = re.compile(r'(-?)\$\s*([\d][\d\s,]*(?:\.\d+)?|-)')
 
 # Respaldo consumo desde Tabla 1.1 texto
 RE_TOTALES_11 = re.compile(
@@ -194,6 +296,7 @@ class NXEParser(InvoiceParser):
 
             texto_p1 = paginas[0].extract_text() or "" if n > 0 else ""
             texto_p3 = paginas[2].extract_text() or "" if n > 2 else ""
+            texto_p4 = paginas[3].extract_text() or "" if n > 3 else ""
             texto_p6 = paginas[5].extract_text() or "" if n > 5 else ""
 
             tabla_11 = paginas[2].extract_table() if n > 2 else None
@@ -273,23 +376,28 @@ class NXEParser(InvoiceParser):
         if RE_COBRO_EXCESO_CERO.search(texto_p1):
             cobro_exceso_consumo_usd = Decimal("0")
 
-        # Bloque de cola: potencia_contratada, precio_mensual_potencia,
-        # pago_provisional_potencia, costo_pdp, costo_reliquidaciones, cobro_total
+        # Campos individuales de la parte inferior de la página 1
         potencia_contratada_kwmes: Decimal | None = None
-        costo_desvios_pdp_mxn: Decimal | None = None
-        costo_reliquidaciones_mxn: Decimal | None = None
-        cobro_total_mxn: Decimal | None = None
-
-        m = RE_TAIL_BLOCK.search(texto_p1)
+        m = RE_POTENCIA_CONTRATADA_CTX.search(texto_p1)
         if m:
             potencia_contratada_kwmes = _clean(m.group(1))
-            # m.group(2) = precio_mensual_potencia (ya tenemos de PRECIO_POTENCIA)
-            # m.group(3) = pago_provisional_potencia (informativo)
-            costo_desvios_pdp_mxn    = _clean(m.group(4))
-            costo_reliquidaciones_mxn = _clean(m.group(5))
-            cobro_total_mxn           = _clean(m.group(6))
         else:
-            advertencias.append("Bloque de cola no encontrado; PDP, reliquidaciones y cobro_total desde Tabla 1.3")
+            advertencias.append("Campo no encontrado: potencia_contratada_kwmes")
+
+        costo_desvios_pdp_mxn: Decimal | None = None
+        m = RE_COSTO_PDP.search(texto_p1)
+        if m:
+            costo_desvios_pdp_mxn = _clean(m.group(1))
+
+        costo_reliquidaciones_mxn: Decimal | None = None
+        m = RE_COSTO_RELIQ.search(texto_p1)
+        if m:
+            costo_reliquidaciones_mxn = _clean(m.group(1))
+
+        cobro_total_mxn: Decimal | None = None
+        m = RE_COBRO_TOTAL.search(texto_p1)
+        if m:
+            cobro_total_mxn = _clean(m.group(1))
 
         # ── Tabla 1.3 — TOTALES (fuente principal de los 5 componentes) ───────
         cargo_energia_mxn: Decimal | None = None
@@ -300,38 +408,38 @@ class NXEParser(InvoiceParser):
 
         totals_13 = _extract_totals_row(tabla_13)
 
-        if totals_13 and len(totals_13) >= 8:
-            # Columnas: [Fecha, Energía, CEL, Potencia, Reg, ServMEM, PDP, (Otras?), Total, Reliq]
-            # Buscamos por posición: primeras 8 columnas de datos después de Fecha
-            cols = [c for c in totals_13[1:] if c is not None and str(c).strip() not in ("", "None")]
-            if len(cols) >= 7:
-                cargo_energia_mxn  = _clean(cols[0])
-                cargo_cel_mxn      = _clean(cols[1])
-                cargo_potencia_mxn = _clean(cols[2])
-                t_reg              = _clean(cols[3])   # Tarifas Reguladas (tabla 1.3)
-                t_mem              = _clean(cols[4])   # Cargo Servicios MEM
-                t_pdp              = _clean(cols[5])   # Desvíos MEM (PDP)
-                # Total (Mes vencido) está antes de Reliquidaciones
-                t_total            = _clean(cols[6])
-                t_reliq            = _clean(cols[7]) if len(cols) > 7 else Decimal("0")
+        # Tabla 1.3 tiene 10 columnas (índices 0-9):
+        # [0]=Fecha, [1]=Energía, [2]=CEL, [3]=Potencia, [4]=Cargos Regulados,
+        # [5]=Cargo Servicios MEM, [6]=Desvíos MEM (PDP), [7]=columna basura,
+        # [8]=Total (Mes vencido), [9]=Reliquidaciones CENACE
+        if totals_13 and len(totals_13) >= 9:
+            cargo_energia_mxn  = _clean(totals_13[1])
+            cargo_cel_mxn      = _clean(totals_13[2])
+            cargo_potencia_mxn = _clean(totals_13[3])
+            t_reg              = _clean(totals_13[4])
+            t_mem              = _clean(totals_13[5])
+            t_pdp              = _clean(totals_13[6])
+            # totals_13[7] = columna basura — se omite
+            t_total            = _clean(totals_13[8]) if len(totals_13) > 8 else None
+            t_reliq            = _clean(totals_13[9]) if len(totals_13) > 9 else Decimal("0")
 
-                if cobro_total_mxn is None:
-                    cobro_total_mxn = t_total
-                if costo_desvios_pdp_mxn is None:
-                    costo_desvios_pdp_mxn = t_pdp
-                if costo_reliquidaciones_mxn is None:
-                    costo_reliquidaciones_mxn = t_reliq or Decimal("0")
-                if tarifas_reguladas_mxn is None and t_reg is not None:
-                    tarifas_reguladas_mxn = t_reg
-                if cargo_servicios_mem_mxn is None and t_mem is not None:
-                    cargo_servicios_mem_mxn = t_mem
+            if cobro_total_mxn is None:
+                cobro_total_mxn = t_total
+            if costo_desvios_pdp_mxn is None:
+                costo_desvios_pdp_mxn = t_pdp
+            if costo_reliquidaciones_mxn is None:
+                costo_reliquidaciones_mxn = t_reliq or Decimal("0")
+            if tarifas_reguladas_mxn is None and t_reg is not None:
+                tarifas_reguladas_mxn = t_reg
+            if cargo_servicios_mem_mxn is None and t_mem is not None:
+                cargo_servicios_mem_mxn = t_mem
 
-                # 5 categorías
-                reg_total = (tarifas_reguladas_mxn or Decimal("0")) + (cargo_servicios_mem_mxn or Decimal("0"))
-                cargos_regulados_mxn = reg_total
-                pdp = costo_desvios_pdp_mxn or Decimal("0")
-                reliq = costo_reliquidaciones_mxn or Decimal("0")
-                ajustes_penalizaciones_mxn = pdp + reliq
+            # 5 categorías
+            reg_total = (tarifas_reguladas_mxn or Decimal("0")) + (cargo_servicios_mem_mxn or Decimal("0"))
+            cargos_regulados_mxn = reg_total
+            pdp = costo_desvios_pdp_mxn or Decimal("0")
+            reliq = costo_reliquidaciones_mxn or Decimal("0")
+            ajustes_penalizaciones_mxn = pdp + reliq
 
         # Fallback: regex sobre texto plano de página 6
         if cargo_energia_mxn is None:
@@ -383,11 +491,28 @@ class NXEParser(InvoiceParser):
             raise ValueError("No se pudo extraer cobro_total_mxn del PDF NXE")
 
         # ── 5 categorías: cálculo final ───────────────────────────────────────
-        # Si no se obtuvieron desde la tabla, intentar calcular
         if cargos_regulados_mxn is None:
             cargos_regulados_mxn = (tarifas_reguladas_mxn or Decimal("0")) + (cargo_servicios_mem_mxn or Decimal("0"))
-        if ajustes_penalizaciones_mxn is None:
-            ajustes_penalizaciones_mxn = (costo_desvios_pdp_mxn or Decimal("0")) + (costo_reliquidaciones_mxn or Decimal("0"))
+
+        # ajustes incluye los cargos en USD convertidos a MXN (cobro_energia_no_consumida,
+        # cobro_exceso_consumo) más los cargos MXN directos (PDP, reliquidaciones).
+        # Documentado en CLAUDE.md: "Detalle dentro de ajustes".
+        _cobro_no_consumida_mxn = (
+            cobro_energia_no_consumida_usd * tipo_cambio_mxn_usd
+            if cobro_energia_no_consumida_usd is not None and tipo_cambio_mxn_usd is not None
+            else Decimal("0")
+        )
+        _cobro_exceso_mxn = (
+            cobro_exceso_consumo_usd * tipo_cambio_mxn_usd
+            if cobro_exceso_consumo_usd is not None and tipo_cambio_mxn_usd is not None
+            else Decimal("0")
+        )
+        ajustes_penalizaciones_mxn = (
+            _cobro_no_consumida_mxn
+            + _cobro_exceso_mxn
+            + (costo_desvios_pdp_mxn or Decimal("0"))
+            + (costo_reliquidaciones_mxn or Decimal("0"))
+        )
 
         # ── Validación de 5 categorías vs cobro_total ─────────────────────────
         if all(v is not None for v in [cargo_energia_mxn, cargo_potencia_mxn, cargo_cel_mxn,
@@ -402,7 +527,10 @@ class NXEParser(InvoiceParser):
                 )
 
         # ── Detalle diario ────────────────────────────────────────────────────
-        detalle_diario = _build_detalle_diario(tabla_11, tabla_12, tabla_13, advertencias)
+        detalle_diario = _build_detalle_diario(
+            tabla_11, tabla_12, tabla_13, advertencias,
+            texto_p3=texto_p3, texto_p4=texto_p4, texto_p6=texto_p6,
+        )
 
         return NXEInvoice(
             documento_ref=documento_ref,
@@ -447,12 +575,20 @@ def _build_detalle_diario(
     tabla_12: list[list] | None,
     tabla_13: list[list] | None,
     advertencias: list[str],
+    *,
+    texto_p3: str = "",
+    texto_p4: str = "",
+    texto_p6: str = "",
 ) -> list[dict]:
-    """Fusiona las tres tablas diarias por fecha. Devuelve lista de dicts."""
+    """Fusiona las tres tablas diarias por fecha. Devuelve lista de dicts.
 
-    rows_11 = _table_data_rows(tabla_11)
-    rows_12 = _table_data_rows(tabla_12)
-    rows_13 = _table_data_rows(tabla_13)
+    Si pdfplumber sólo extrae la cabecera como tabla (sin filas de datos),
+    recurre al texto plano de la página para extraer las filas manualmente.
+    """
+
+    rows_11 = _table_data_rows(tabla_11) or _rows_tabla11_from_text(texto_p3)
+    rows_12 = _table_data_rows(tabla_12) or _rows_tabla12_from_text(texto_p4)
+    rows_13 = _table_data_rows(tabla_13) or _rows_tabla13_from_text(texto_p6)
 
     if not rows_11 and not rows_13:
         advertencias.append("Tablas de detalle diario no encontradas o vacías")
@@ -494,6 +630,8 @@ def _build_detalle_diario(
         }
 
     # Tabla 1.3: Monto a liquidar
+    # Columnas fijas: [0]=Fecha, [1]=Energía, [2]=CEL, [3]=Potencia, [4]=Regulados,
+    # [5]=ServMEM, [6]=PDP, [7]=basura, [8]=Total, [9]=Reliquidaciones
     for row in rows_13:
         fecha_str = (row[0] or "").strip()
         d = _parse_date_dmy(fecha_str)
@@ -501,17 +639,16 @@ def _build_detalle_diario(
             continue
         key = d.isoformat()
         by_date.setdefault(key, {"fecha": key})
-        # Columnas: Energía, CEL, Potencia, Regulados, ServMEM, PDP, (Otras), Total, Reliq
-        cols = [c for c in row[1:] if c is not None]
         by_date[key]["t13"] = {
-            "cargo_energia_mxn":         _s(_clean(cols[0] if len(cols) > 0 else None)),
-            "cargo_cel_mxn":             _s(_clean(cols[1] if len(cols) > 1 else None)),
-            "cargo_potencia_mxn":        _s(_clean(cols[2] if len(cols) > 2 else None)),
-            "cargos_regulados_mxn":      _s(_clean(cols[3] if len(cols) > 3 else None)),
-            "cargo_servicios_mem_mxn":   _s(_clean(cols[4] if len(cols) > 4 else None)),
-            "desvios_pdp_mxn":           _s(_clean(cols[5] if len(cols) > 5 else None)),
-            "total_mes_vencido_mxn":     _s(_clean(cols[6] if len(cols) > 6 else None)),
-            "reliquidaciones_cenace_mxn": _s(_clean(cols[7] if len(cols) > 7 else None)),
+            "cargo_energia_mxn":          _s(_clean(row[1] if len(row) > 1 else None)),
+            "cargo_cel_mxn":              _s(_clean(row[2] if len(row) > 2 else None)),
+            "cargo_potencia_mxn":         _s(_clean(row[3] if len(row) > 3 else None)),
+            "cargos_regulados_mxn":       _s(_clean(row[4] if len(row) > 4 else None)),
+            "cargo_servicios_mem_mxn":    _s(_clean(row[5] if len(row) > 5 else None)),
+            "desvios_pdp_mxn":            _s(_clean(row[6] if len(row) > 6 else None)),
+            # row[7] = columna basura — se omite
+            "total_mes_vencido_mxn":      _s(_clean(row[8] if len(row) > 8 else None)),
+            "reliquidaciones_cenace_mxn": _s(_clean(row[9] if len(row) > 9 else None)),
         }
 
     return [by_date[k] for k in sorted(by_date)]
