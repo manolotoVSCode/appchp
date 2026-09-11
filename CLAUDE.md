@@ -420,14 +420,13 @@ Esta sección la mantiene Claude Code. Se actualiza en cada commit.
 Permite retomar cualquier chat sin reconstruir contexto.
 
 ### Nuevas funcionalidades
-Último tema resuelto: v2.83.0 — Stack NXE completo: parser NXEParser, modelo
-FacturaNXE, tabla facturas_nxe, funciones repositorio, rutas web, templates
-factura_nxe_preview.html y sección en ficha contrato, 19 tests (skip si no fixture).
+Último tema resuelto: v2.84.0 — NXEParser corregido para layout real del PDF.
+El PDF agosto 2025 tiene dos columnas entrelazadas en página 1 y tablas que
+pdfplumber sólo extrae como cabecera. El parser ahora usa regexes individuales
+etiquetados, parseo de filas desde texto plano y ajustes_penalizaciones incluye
+cobro_energia_no_consumida_usd × tipo_cambio. 19/19 tests pasan.
 Pendiente del usuario:
-  - Copiar "08.- Factura Ibérica Tiles Planta 1 definitivo_Agosto25_NXE.pdf"
-    a tests/fixtures/calificado/NXE_2025_08_AGOSTO.pdf y ejecutar tests.
-  - Ejecutar migration 202610_facturas_nxe.sql en Supabase.
-  - Ejecutar migrations previas aún pendientes:
+  - Ejecutar migrations aún pendientes en Supabase:
     - 202606_usuario_clientes.sql
     - 202607_telemetria_jerarquia.sql
     - 202608_produccion_diaria.sql
